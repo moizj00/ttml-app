@@ -12,13 +12,14 @@ interface BrandLogoProps {
   variant?: "light" | "dark" | "sidebar";
 }
 
-const LOGO_MAIN = "/logo-main.png";
+const LOGO_FULL = "/logo-full.png";
+const LOGO_ICON = "/logo-icon-badge.png";
 
 const SIZE_CONFIG: Record<BrandLogoSize, { h: number; mobileH: number }> = {
   sm: { h: 36, mobileH: 28 },
-  md: { h: 44, mobileH: 38 },
-  lg: { h: 52, mobileH: 40 },
-  xl: { h: 60, mobileH: 44 },
+  md: { h: 44, mobileH: 32 },
+  lg: { h: 52, mobileH: 36 },
+  xl: { h: 60, mobileH: 40 },
 };
 
 function BrandLogoContent({
@@ -29,17 +30,34 @@ function BrandLogoContent({
 }: Omit<BrandLogoProps, "href" | "className">) {
   const config = SIZE_CONFIG[size];
 
+  if (iconOnly) {
+    return (
+      <img
+        src={LOGO_ICON}
+        alt="Talk to My Lawyer"
+        style={{ height: config.mobileH }}
+        className={cn(
+          "object-contain flex-shrink-0 block",
+          variant === "dark" && "brightness-0 invert"
+        )}
+      />
+    );
+  }
+
   if (hideWordmarkOnMobile) {
     return (
       <>
         <img
-          src={LOGO_MAIN}
+          src={LOGO_FULL}
           alt="Talk to My Lawyer"
           style={{ height: config.mobileH }}
-          className="object-contain flex-shrink-0 block md:hidden max-w-[120px] ml-[20px] mr-[20px]"
+          className={cn(
+            "object-contain flex-shrink-0 block md:hidden",
+            variant === "dark" && "brightness-0 invert"
+          )}
         />
         <img
-          src={LOGO_MAIN}
+          src={LOGO_FULL}
           alt="Talk to My Lawyer"
           style={{ height: config.h }}
           className={cn(
@@ -53,9 +71,9 @@ function BrandLogoContent({
 
   return (
     <img
-      src={LOGO_MAIN}
+      src={LOGO_FULL}
       alt="Talk to My Lawyer"
-      style={{ height: iconOnly ? config.mobileH : config.h }}
+      style={{ height: config.h }}
       className={cn(
         "object-contain flex-shrink-0 block max-w-full",
         variant === "dark" && "brightness-0 invert"
