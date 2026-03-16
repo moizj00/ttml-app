@@ -375,8 +375,8 @@ export default function AppLayout({
       {/* Main Content */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-64">
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <header className="sticky top-0 z-20 flex h-12 sm:h-14 items-center justify-between gap-2 sm:gap-3 border-b border-border bg-card px-3 sm:px-4 lg:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
               className="shrink-0 text-muted-foreground hover:text-foreground lg:hidden"
@@ -416,7 +416,7 @@ export default function AppLayout({
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))]">
                 <div className="flex items-center justify-between px-3 py-2 border-b">
                   <span className="font-semibold text-sm">Notifications</span>
                   {unreadCount > 0 && (
@@ -462,7 +462,7 @@ export default function AppLayout({
         </header>
 
         {/* Page Content */}
-        <main id="main-content" className="flex-1 overflow-x-hidden p-4 lg:p-6">
+        <main id="main-content" className="flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6">
           {children}
         </main>
       </div>
