@@ -1116,8 +1116,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
       };
       const safeNext = getSafeRelativePath(next);
       const safeIntent = intent === "signup" ? "signup" : "login";
-      // Attorney role is NOT self-assignable via OAuth — only admin can grant it
-      const safeRole = ["subscriber", "employee"].includes(String(role))
+      const ALLOWED_OAUTH_ROLES = ["subscriber", "employee"];
+      if (role && !ALLOWED_OAUTH_ROLES.includes(String(role))) {
+        res.status(400).json({ error: "Invalid role. Only 'subscriber' or 'employee' roles are allowed." });
+        return;
+      }
+      const safeRole = role && ALLOWED_OAUTH_ROLES.includes(String(role))
         ? String(role)
         : undefined;
       const redirectUrl = new URL(`${origin}/api/auth/callback`);

@@ -169,17 +169,49 @@ describe("Auth API Integration Tests", () => {
     });
   });
 
-  describe("GET /api/auth/google — OAuth initiation", () => {
-    it("returns a redirect URL for Google OAuth", async () => {
-      const res = await fetch(`${BASE_URL}/api/auth/google`, {
-        redirect: "manual",
+  describe("POST /api/auth/google — OAuth initiation", () => {
+    it("initiates Google OAuth flow for valid request", async () => {
+      await delay(200);
+      const { status, data } = await post("/api/auth/google", {
+        intent: "login",
       });
-      if (res.status === 429) { console.warn("Rate limited — skipping"); return; }
-      expect(res.status === 302 || res.status === 200).toBe(true);
-      if (res.status === 302) {
-        const location = res.headers.get("location");
-        expect(location).toContain("accounts.google.com");
-      }
+      if (skipIfRateLimited(status)) return;
+      expect(status).toBe(200);
+      expect(data.url).toBeTruthy();
+      expect(String(data.url)).toContain("supabase.co/auth/v1/authorize");
+    });
+
+    it("rejects attorney role in OAuth signup with 400", async () => {
+      await delay(200);
+      const { status, data } = await post("/api/auth/google", {
+        intent: "signup",
+        role: "attorney",
+      });
+      if (skipIfRateLimited(status)) return;
+      expect(status).toBe(400);
+      expect(data.error).toContain("Invalid role");
+    });
+
+    it("rejects admin role in OAuth signup with 400", async () => {
+      await delay(200);
+      const { status, data } = await post("/api/auth/google", {
+        intent: "signup",
+        role: "admin",
+      });
+      if (skipIfRateLimited(status)) return;
+      expect(status).toBe(400);
+      expect(data.error).toContain("Invalid role");
+    });
+
+    it("accepts subscriber role in OAuth signup", async () => {
+      await delay(200);
+      const { status, data } = await post("/api/auth/google", {
+        intent: "signup",
+        role: "subscriber",
+      });
+      if (skipIfRateLimited(status)) return;
+      expect(status).toBe(200);
+      expect(data.url).toBeTruthy();
     });
   });
 
