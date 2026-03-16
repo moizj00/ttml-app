@@ -12,42 +12,53 @@ interface BrandLogoProps {
   variant?: "light" | "dark" | "sidebar";
 }
 
-const LOGO_ICON = "/logo-icon-badge.png";
-const LOGO_COMBINED = "/logo-full.png";
+const LOGO_MAIN = "/logo-main.png";
 
-const SIZE_CONFIG: Record<BrandLogoSize, { iconH: number; combinedH: number }> = {
-  sm: { iconH: 32, combinedH: 36 },
-  md: { iconH: 40, combinedH: 44 },
-  lg: { iconH: 48, combinedH: 52 },
-  xl: { iconH: 56, combinedH: 60 },
+const SIZE_CONFIG: Record<BrandLogoSize, { h: number; mobileH: number }> = {
+  sm: { h: 36, mobileH: 28 },
+  md: { h: 44, mobileH: 32 },
+  lg: { h: 52, mobileH: 36 },
+  xl: { h: 60, mobileH: 40 },
 };
 
 function BrandLogoContent({
   size = "md",
   iconOnly = false,
   hideWordmarkOnMobile = false,
+  variant,
 }: Omit<BrandLogoProps, "href" | "className">) {
   const config = SIZE_CONFIG[size];
 
-  if (iconOnly) {
+  if (hideWordmarkOnMobile) {
     return (
-      <img
-        src={LOGO_ICON}
-        alt="Talk to My Lawyer"
-        style={{ height: config.iconH, width: config.iconH }}
-        className="object-contain flex-shrink-0 block"
-      />
+      <>
+        <img
+          src={LOGO_MAIN}
+          alt="Talk to My Lawyer"
+          style={{ height: config.mobileH }}
+          className="object-contain flex-shrink-0 block md:hidden max-w-[120px]"
+        />
+        <img
+          src={LOGO_MAIN}
+          alt="Talk to My Lawyer"
+          style={{ height: config.h }}
+          className={cn(
+            "object-contain flex-shrink-0 hidden md:block",
+            variant === "dark" && "brightness-0 invert"
+          )}
+        />
+      </>
     );
   }
 
   return (
     <img
-      src={LOGO_COMBINED}
-      alt="talk-to-my Lawyer"
-      style={{ height: config.combinedH }}
+      src={LOGO_MAIN}
+      alt="Talk to My Lawyer"
+      style={{ height: iconOnly ? config.mobileH : config.h }}
       className={cn(
-        "object-contain flex-shrink-0 block",
-        hideWordmarkOnMobile && "hidden md:block"
+        "object-contain flex-shrink-0 block max-w-full",
+        variant === "dark" && "brightness-0 invert"
       )}
     />
   );
@@ -62,7 +73,7 @@ export default function BrandLogo({
   variant,
 }: BrandLogoProps) {
   const content = (
-    <span className={cn("inline-flex items-center overflow-hidden", className)}>
+    <span className={cn("inline-flex items-center", className)}>
       <BrandLogoContent
         size={size}
         iconOnly={iconOnly}
@@ -75,7 +86,7 @@ export default function BrandLogo({
   if (!href) return content;
 
   return (
-    <Link href={href} className="inline-flex items-center overflow-hidden">
+    <Link href={href} className="inline-flex items-center">
       {content}
     </Link>
   );

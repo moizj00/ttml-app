@@ -118,8 +118,8 @@ export default function Home() {
     <div className="min-h-screen bg-white font-['Inter'] text-slate-900 overflow-x-hidden">
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 h-[72px] flex items-center justify-between">
-          <BrandLogo href="/" size="lg" hideWordmarkOnMobile />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 h-[64px] md:h-[72px] flex items-center justify-between">
+          <BrandLogo href="/" size="md" hideWordmarkOnMobile />
 
           <div className="hidden md:flex items-center gap-7">
             <button
@@ -228,15 +228,15 @@ export default function Home() {
       </nav>
 
       {/* Split Hero */}
-      <section className="relative min-h-screen flex flex-col lg:flex-row pt-[72px]">
-        <div className="w-full lg:w-[60%] flex flex-col justify-center px-6 lg:px-20 xl:px-24 py-12 lg:py-0">
+      <section className="relative min-h-screen flex flex-col lg:flex-row pt-[64px] md:pt-[72px]">
+        <div className="w-full lg:w-[60%] flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 py-8 sm:py-12 lg:py-0">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-4 py-2 mb-8 text-sm text-blue-700 font-medium">
-              <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+            <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-6 sm:mb-8 text-xs sm:text-sm text-blue-700 font-medium">
+              <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse flex-shrink-0"></span>
               Your First Letter Is Free — Attorney Review Included
             </div>
 
-            <h1 className="text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.1] tracking-tight mb-8">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.1] tracking-tight mb-6 sm:mb-8">
               Professional{" "}
               <span className="text-blue-600 relative">
                 Legal Letters
@@ -257,13 +257,13 @@ export default function Home() {
               drafted and approved by attorneys
             </h1>
 
-            <p className="text-lg lg:text-xl text-slate-600 mb-10 max-w-xl leading-relaxed">
+            <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
               Describe your legal situation. Our attorneys research applicable
               laws, draft a professional letter, and review every word before
               delivery.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 mb-12">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12">
               <button
                 onClick={goToLogin}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
@@ -281,18 +281,18 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
               {letterTypes.map((type) => (
                 <button
                   key={type}
                   onClick={goToLogin}
-                  className="bg-white border border-slate-200 text-slate-700 text-sm font-medium px-4 py-1.5 rounded-full shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                  className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                   data-testid={`pill-${type.toLowerCase().replace(/\s+/g, "-")}`}
                 >
                   {type}
                 </button>
               ))}
-              <span className="bg-slate-50 border border-slate-200 text-slate-400 text-sm font-medium px-4 py-1.5 rounded-full cursor-default">
+              <span className="bg-slate-50 border border-slate-200 text-slate-400 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full cursor-default">
                 And more
               </span>
             </div>
@@ -345,10 +345,10 @@ export default function Home() {
       </section>
 
       {/* Horizontal Timeline "How it Works" */}
-      <section className="py-24 px-6 lg:px-12 bg-slate-50 border-y border-slate-100">
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-slate-50 border-y border-slate-100">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-20">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-20">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
               Three Steps to a Professional Legal Letter
             </h2>
             <p className="text-lg text-slate-600">
@@ -411,11 +411,11 @@ export default function Home() {
       {/* Alternating Layout Features */}
       <section
         id="features"
-        className="py-24 px-6 lg:px-12 bg-white overflow-hidden"
+        className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-white overflow-hidden"
       >
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-24">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-24">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
               Built for Real Legal Situations
             </h2>
             <p className="text-lg text-slate-600">
@@ -423,12 +423,12 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="space-y-32">
+          <div className="space-y-16 sm:space-y-24 md:space-y-32">
             {/* Feature Row 1: Jurisdiction Research */}
-            <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
+            <div className="flex flex-col lg:flex-row items-center gap-8 sm:gap-12 lg:gap-24">
               <div className="w-full lg:w-1/2">
                 <div
-                  className="aspect-square max-h-[500px] w-full bg-blue-50 rounded-3xl p-12 relative flex items-center justify-center"
+                  className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-blue-50 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center"
                 >
                   <div
                     className="absolute inset-0 bg-blue-600/5 rounded-3xl"
@@ -496,9 +496,9 @@ export default function Home() {
             </div>
 
             {/* Feature Row 2: Attorney Review Center (Reversed) */}
-            <div className="flex flex-col lg:flex-row-reverse items-center gap-16 lg:gap-24">
+            <div className="flex flex-col lg:flex-row-reverse items-center gap-8 sm:gap-12 lg:gap-24">
               <div className="w-full lg:w-1/2">
-                <div className="aspect-square max-h-[500px] w-full bg-slate-100 rounded-3xl p-12 relative flex items-center justify-center">
+                <div className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-slate-100 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center">
                   <div className="relative w-full h-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
                     <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
                       <span className="text-white font-medium text-sm">
@@ -532,7 +532,7 @@ export default function Home() {
                           <div className="p-2 bg-yellow-50 rounded border border-yellow-200 relative">
                             <div className="h-2 w-full bg-yellow-200 rounded mb-2"></div>
                             <div className="h-2 w-4/5 bg-yellow-200 rounded"></div>
-                            <div className="absolute top-1/2 -right-12 translate-x-full -translate-y-1/2 bg-white shadow-lg rounded p-2 text-[10px] text-slate-500 border border-slate-100 w-24">
+                            <div className="absolute top-1/2 -right-12 translate-x-full -translate-y-1/2 bg-white shadow-lg rounded p-2 text-[10px] text-slate-500 border border-slate-100 w-24 hidden sm:block">
                               Strengthened claim here.
                             </div>
                           </div>
@@ -617,11 +617,11 @@ export default function Home() {
       {/* Pricing - Horizontal Stacked Cards */}
       <section
         id="pricing"
-        className="py-24 px-6 lg:px-12 bg-slate-900 text-white"
+        className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-slate-900 text-white"
       >
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
+          <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
               Simple, Transparent Pricing
             </h2>
             <p className="text-lg text-slate-400">
@@ -630,9 +630,9 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+          <div className="flex flex-col gap-4 sm:gap-6 max-w-5xl mx-auto">
             <div
-              className="flex flex-col md:flex-row items-center justify-between p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
+              className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
               data-testid="pricing-pay-per-letter"
             >
               <div className="w-full md:w-1/3 mb-6 md:mb-0">
@@ -659,7 +659,7 @@ export default function Home() {
             </div>
 
             <div
-              className="flex flex-col md:flex-row items-center justify-between p-8 rounded-2xl bg-blue-600 border border-blue-500 shadow-2xl shadow-blue-900/50 relative transform md:scale-105 z-10"
+              className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-blue-600 border border-blue-500 shadow-2xl shadow-blue-900/50 relative transform md:scale-105 z-10"
               data-testid="pricing-monthly"
             >
               <div className="absolute -top-3 left-8 bg-amber-400 text-amber-950 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -692,7 +692,7 @@ export default function Home() {
             </div>
 
             <div
-              className="flex flex-col md:flex-row items-center justify-between p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
+              className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
               data-testid="pricing-monthly-pro"
             >
               <div className="w-full md:w-1/3 mb-6 md:mb-0">
@@ -725,14 +725,14 @@ export default function Home() {
       </section>
 
       {/* Two-Column FAQ */}
-      <section id="faq" className="py-24 px-6 lg:px-12 bg-white">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-16">
+      <section id="faq" className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-white">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8 sm:gap-12 lg:gap-16">
           <div className="w-full lg:w-1/3">
             <div className="sticky top-32">
               <div className="inline-flex items-center gap-2 text-blue-600 font-semibold mb-4 text-sm tracking-wide uppercase">
                 <HelpCircle className="w-4 h-4" /> FAQ
               </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6 text-slate-900">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-6 text-slate-900">
                 Common Questions
               </h2>
               <p className="text-lg text-slate-600 mb-8">
@@ -759,7 +759,7 @@ export default function Home() {
                     data-testid={`faq-toggle-${i}`}
                   >
                     <span
-                      className={`text-xl font-semibold pr-8 transition-colors ${openFaq === i ? "text-blue-600" : "text-slate-900 group-hover:text-blue-600"}`}
+                      className={`text-base sm:text-lg md:text-xl font-semibold pr-4 sm:pr-8 transition-colors ${openFaq === i ? "text-blue-600" : "text-slate-900 group-hover:text-blue-600"}`}
                     >
                       {faq.q}
                     </span>
@@ -788,12 +788,12 @@ export default function Home() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-24 px-6 lg:px-12 bg-blue-600 text-center">
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-blue-600 text-center">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-4xl font-bold text-white mb-6">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 sm:mb-6">
             Ready to send your first legal letter?
           </h2>
-          <p className="text-blue-100 text-xl mb-10 max-w-2xl mx-auto">
+          <p className="text-blue-100 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 max-w-2xl mx-auto">
             Get professional legal representation in your correspondence today.
             Your first letter is completely free.
           </p>
@@ -820,11 +820,11 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-950 text-slate-400 py-12 px-6 lg:px-12 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+      <footer className="bg-slate-950 text-slate-400 py-8 sm:py-12 px-4 sm:px-6 lg:px-12 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6">
           <BrandLogo href="/" variant="dark" size="sm" />
 
-          <div className="flex gap-6 text-sm font-medium">
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm font-medium">
             <button
               onClick={() => scrollTo("pricing")}
               className="hover:text-white transition-colors"

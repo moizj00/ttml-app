@@ -165,7 +165,7 @@ export default function FAQ() {
             <HelpCircle className="w-4 h-4" />
             Frequently Asked Questions
           </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 mb-4 leading-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 mb-4 leading-tight">
             Everything You Need to Know
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">

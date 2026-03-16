@@ -281,8 +281,8 @@ export default function Login() {
       {/* Mobile: mx-4 to prevent overflow on 320px phones; sm+: auto margins */}
       <div className="w-full max-w-md mx-4 sm:mx-auto">
         {/* Logo & Brand */}
-        <div className="text-center mb-8">
-          <BrandLogo href="/" size="xl" className="justify-center mb-4" />
+        <div className="text-center mb-6 sm:mb-8">
+          <BrandLogo href="/" size="lg" className="justify-center mb-4" />
           <p className="text-slate-500 text-sm">
             Professional legal letters drafted and reviewed by attorneys
           </p>
@@ -291,7 +291,7 @@ export default function Login() {
         {/* Login Card */}
         <Card className="border-slate-200 shadow-lg">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl font-semibold text-center">
+            <CardTitle className="text-xl sm:text-2xl font-semibold text-center">
               Sign In
             </CardTitle>
             <CardDescription className="text-center">

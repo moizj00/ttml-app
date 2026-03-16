@@ -316,11 +316,11 @@ export default function Signup() {
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <BrandLogo href="/" size="xl" className="justify-center mb-4" />
+        <div className="w-full max-w-md mx-4 sm:mx-auto">
+          <div className="text-center mb-6 sm:mb-8">
+            <BrandLogo href="/" size="lg" className="justify-center mb-4" />
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-green-600" />
             </div>
@@ -380,10 +380,10 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md mx-4 sm:mx-auto">
         {/* Logo & Brand */}
-        <div className="text-center mb-8">
-          <BrandLogo href="/" size="xl" className="justify-center mb-4" />
+        <div className="text-center mb-6 sm:mb-8">
+          <BrandLogo href="/" size="lg" className="justify-center mb-4" />
           <p className="text-slate-500 text-sm">
             Professional legal letters drafted and reviewed by attorneys
           </p>
@@ -392,7 +392,7 @@ export default function Signup() {
         {/* Signup Card */}
         <Card className="border-slate-200 shadow-lg">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-2xl font-semibold text-center">
+            <CardTitle className="text-xl sm:text-2xl font-semibold text-center">
               Create Account
             </CardTitle>
             <CardDescription className="text-center">
