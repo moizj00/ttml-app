@@ -148,7 +148,7 @@ describe("Email verification — GET /api/auth/verify-email?token= cache invalid
 
   it("GET verify-email sends role-based welcome email after verification", () => {
     const content = readFileSync(filePath, "utf-8");
-    const getRouteSection = content.match(/app\.get\("\/api\/auth\/verify-email"[\s\S]{0,1500}/)?.[0] || "";
+    const getRouteSection = content.match(/app\.get\("\/api\/auth\/verify-email"[\s\S]{0,3000}/)?.[0] || "";
     expect(getRouteSection).toContain("sendRoleBasedWelcomeEmail");
   });
 

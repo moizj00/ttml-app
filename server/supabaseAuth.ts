@@ -517,8 +517,11 @@ export function registerSupabaseAuthRoutes(app: Express) {
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const { email, password, name, role: requestedRole } = req.body;
-      // Attorney role is NOT self-assignable — it can only be granted by a super admin via the Users page
       const ALLOWED_SIGNUP_ROLES = ["subscriber", "employee"];
+      if (requestedRole && !ALLOWED_SIGNUP_ROLES.includes(requestedRole)) {
+        res.status(400).json({ error: "Invalid role. Only 'subscriber' or 'employee' roles are allowed for signup." });
+        return;
+      }
       const signupRole = ALLOWED_SIGNUP_ROLES.includes(requestedRole) ? requestedRole : "subscriber";
 
       if (!email || !password) {
@@ -949,12 +952,14 @@ export function registerSupabaseAuthRoutes(app: Express) {
         email?.split("@")[0] ||
         null;
       // Enforce whitelist: whitelisted → admin; non-whitelisted with admin → strip to subscriber
+      const VALID_ROLES = ["subscriber", "employee", "admin", "attorney"] as const;
+      type ValidRole = typeof VALID_ROLES[number];
       const roleOverride = isOwner
-        ? { role: "admin" as const }
+        ? { role: "admin" as ValidRole }
         : existingUser?.role === "admin"
-        ? { role: "subscriber" as const }
-        : existingUser?.role
-        ? { role: existingUser.role as any }
+        ? { role: "subscriber" as ValidRole }
+        : existingUser?.role && VALID_ROLES.includes(existingUser.role as ValidRole)
+        ? { role: existingUser.role as ValidRole }
         : {};
       await db.upsertUser({
         openId: supabaseUser.id,
