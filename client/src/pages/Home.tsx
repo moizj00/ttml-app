@@ -237,9 +237,9 @@ export default function Home() {
               Your First Letter Is Free — Attorney Review Included
             </div>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.1] tracking-tight mb-6 sm:mb-8">
+            <h1 className="text-3xl sm:text-4xl md:text-[2.8rem] lg:text-[3.2rem] xl:text-[3.6rem] font-extrabold leading-[1.12] tracking-tight mb-6 sm:mb-8">
               Professional{" "}
-              <span className="text-blue-600 relative">
+              <span className="text-blue-600 relative inline-block">
                 Legal Letters
                 <svg
                   className="absolute w-full h-3 -bottom-1 left-0 text-blue-200"
@@ -253,9 +253,8 @@ export default function Home() {
                     fill="transparent"
                   />
                 </svg>
-              </span>
-              <br />
-              drafted and approved by attorneys
+              </span>{" "}
+              Drafted & Approved by Attorneys
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
@@ -304,7 +303,7 @@ export default function Home() {
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 opacity-50"></div>
           <div className="absolute top-[-10%] right-[-10%] w-[120%] h-[120%] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0,transparent_100%)]"></div>
 
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col transform rotate-2 hover:rotate-0 transition-transform duration-500">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col hero-card-float">
             <div className="h-12 border-b border-slate-100 flex items-center px-4 gap-2 bg-slate-50">
               <div className="w-3 h-3 rounded-full bg-red-400"></div>
               <div className="w-3 h-3 rounded-full bg-amber-400"></div>
