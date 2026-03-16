@@ -60,9 +60,9 @@ export default function ResetPassword() {
       });
       return;
     }
-    if (password.length < 6) {
+    if (password.length < 8) {
       toast.error("Password too short", {
-        description: "Password must be at least 6 characters.",
+        description: "Password must be at least 8 characters.",
       });
       return;
     }
@@ -150,18 +150,20 @@ export default function ResetPassword() {
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
-                      minLength={6}
+                      minLength={8}
                       disabled={loading}
                       className="pr-10"
+                      data-testid="input-password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      data-testid="button-toggle-password"
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }
@@ -186,11 +188,13 @@ export default function ResetPassword() {
                       required
                       disabled={loading}
                       className="pr-10"
+                      data-testid="input-confirm-password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirm(!showConfirm)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      data-testid="button-toggle-confirm-password"
                       aria-label={
                         showConfirm
                           ? "Hide confirmation password"
@@ -221,6 +225,7 @@ export default function ResetPassword() {
                       !!confirmPassword &&
                       password !== confirmPassword)
                   }
+                  data-testid="button-reset-password"
                 >
                   {loading ? (
                     <>

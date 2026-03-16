@@ -316,6 +316,7 @@ export default function Login() {
                         <button
                           type="button"
                           disabled={resendLoading}
+                          data-testid="button-resend-verification"
                           onClick={async () => {
                             setResendLoading(true);
                             try {
@@ -360,6 +361,7 @@ export default function Login() {
                 className="w-full border-slate-300 text-slate-700 hover:bg-slate-50"
                 onClick={handleGoogleLogin}
                 disabled={googleLoading || loading}
+                data-testid="button-google-login"
               >
                 {googleLoading ? (
                   <>
@@ -394,6 +396,7 @@ export default function Login() {
                   required
                   autoComplete="email"
                   disabled={loading}
+                  data-testid="input-email"
                 />
               </div>
 
@@ -403,6 +406,7 @@ export default function Login() {
                   <Link
                     href="/forgot-password"
                     className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline"
+                    data-testid="link-forgot-password"
                   >
                     Forgot password?
                   </Link>
@@ -418,6 +422,7 @@ export default function Login() {
                     autoComplete="current-password"
                     disabled={loading}
                     className="pr-10"
+                    data-testid="input-password"
                   />
                   <button
                     type="button"
@@ -426,6 +431,7 @@ export default function Login() {
                     aria-label={
                       showPassword ? "Hide password" : "Show password"
                     }
+                    data-testid="button-toggle-password"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -440,6 +446,7 @@ export default function Login() {
                 type="submit"
                 className="w-full bg-indigo-600 hover:bg-indigo-700"
                 disabled={loading}
+                data-testid="button-login"
               >
                 {loading ? (
                   <>
@@ -457,6 +464,7 @@ export default function Login() {
               <Link
                 href="/signup"
                 className="text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                data-testid="link-signup"
               >
                 Create one
               </Link>
@@ -467,11 +475,11 @@ export default function Login() {
         {/* Footer */}
         <p className="text-center text-xs text-slate-400 mt-6">
           By signing in, you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-slate-600">
+          <Link href="/terms" className="underline hover:text-slate-600" data-testid="link-terms">
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/privacy" className="underline hover:text-slate-600">
+          <Link href="/privacy" className="underline hover:text-slate-600" data-testid="link-privacy">
             Privacy Policy
           </Link>
           .

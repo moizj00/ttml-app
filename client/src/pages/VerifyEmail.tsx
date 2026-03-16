@@ -150,6 +150,7 @@ export default function VerifyEmail() {
               <Button
                 onClick={() => setLocation("/login")}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                data-testid="button-sign-in"
               >
                 Sign In to Your Account
               </Button>
@@ -166,11 +167,12 @@ export default function VerifyEmail() {
                 variant="outline"
                 onClick={() => setState("resend")}
                 className="w-full mb-3"
+                data-testid="button-request-new-link"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Request a New Verification Link
               </Button>
-              <Link href="/login">
+              <Link href="/login" data-testid="link-back-to-login-error">
                 <Button variant="ghost" className="w-full text-indigo-600">
                   Back to Sign In
                 </Button>
@@ -188,7 +190,7 @@ export default function VerifyEmail() {
                   <p className="text-green-600 mb-6">
                     A new verification link has been sent to <strong>{resendEmail}</strong>. Please check your inbox.
                   </p>
-                  <Link href="/login">
+                  <Link href="/login" data-testid="link-back-to-login-success">
                     <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
                       Back to Sign In
                     </Button>
@@ -209,12 +211,14 @@ export default function VerifyEmail() {
                       placeholder="you@example.com"
                       required
                       className="mt-1"
+                      data-testid="input-email"
                     />
                   </div>
                   <Button
                     type="submit"
                     disabled={resendLoading}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                    data-testid="button-resend-verification"
                   >
                     {resendLoading ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
@@ -222,7 +226,7 @@ export default function VerifyEmail() {
                       "Send Verification Email"
                     )}
                   </Button>
-                  <Link href="/login">
+                  <Link href="/login" data-testid="link-back-to-login-resend">
                     <Button variant="ghost" className="w-full mt-2 text-slate-600">
                       Back to Sign In
                     </Button>
@@ -235,7 +239,7 @@ export default function VerifyEmail() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           Need help?{" "}
-          <a href="mailto:support@talk-to-my-lawyer.com" className="text-indigo-600 hover:underline">
+          <a href="mailto:support@talk-to-my-lawyer.com" className="text-indigo-600 hover:underline" data-testid="link-contact-support">
             Contact support
           </a>
         </p>

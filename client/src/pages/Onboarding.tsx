@@ -183,6 +183,7 @@ export default function Onboarding() {
                       : ""
                   }`}
                   onClick={() => handleRoleSelect(opt.role)}
+                  data-testid={`card-role-${opt.role}`}
                 >
                   <CardContent className="flex items-center gap-4 p-6">
                     <div className="shrink-0">{opt.icon}</div>
@@ -225,7 +226,7 @@ export default function Onboarding() {
                   Primary State / Jurisdiction
                 </Label>
                 <Select value={jurisdiction} onValueChange={setJurisdiction}>
-                  <SelectTrigger id="jurisdiction">
+                  <SelectTrigger id="jurisdiction" data-testid="select-jurisdiction">
                     <SelectValue placeholder="Select your state" />
                   </SelectTrigger>
                   <SelectContent>
@@ -249,6 +250,7 @@ export default function Onboarding() {
                     value={companyName}
                     onChange={e => setCompanyName(e.target.value)}
                     placeholder="e.g., Acme Legal Services"
+                    data-testid="input-company-name"
                   />
                 </div>
               )}
@@ -256,6 +258,7 @@ export default function Onboarding() {
               <div className="flex gap-3 pt-4">
                 <Button
                   variant="outline"
+                  data-testid="button-back-onboarding"
                   onClick={() => {
                     setStep("role");
                     setSelectedRole(null);
@@ -267,6 +270,7 @@ export default function Onboarding() {
                   className="flex-1"
                   onClick={handleComplete}
                   disabled={loading}
+                  data-testid="button-complete-onboarding"
                 >
                   {loading ? (
                     <>

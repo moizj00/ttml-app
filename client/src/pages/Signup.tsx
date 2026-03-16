@@ -175,7 +175,7 @@ export default function Signup() {
   }, [navigate, nextPath, requestedRoleFromSearch, role, utils]);
 
   const passwordChecks = {
-    length: password.length >= 6,
+    length: password.length >= 8,
     match: password === confirmPassword && confirmPassword.length > 0,
   };
 
@@ -188,8 +188,8 @@ export default function Signup() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -341,6 +341,7 @@ export default function Signup() {
               Didn't receive it? Check your spam folder or
             </p>
             <button
+              data-testid="button-resend-verification"
               onClick={async () => {
                 try {
                   const res = await fetch("/api/auth/resend-verification", {
@@ -365,7 +366,7 @@ export default function Signup() {
               resend the verification email
             </button>
             <div className="mt-6">
-              <Link href="/login">
+              <Link href="/login" data-testid="link-back-to-login">
                 <Button variant="outline" className="w-full">
                   Back to Sign In
                 </Button>
@@ -406,6 +407,7 @@ export default function Signup() {
               className="w-full mb-4 border-slate-300 text-slate-700 hover:bg-slate-50"
               onClick={handleGoogleSignup}
               disabled={googleLoading || loading}
+              data-testid="button-google-signup"
             >
               {googleLoading ? (
                 <>
@@ -447,6 +449,7 @@ export default function Signup() {
                       type="button"
                       onClick={() => setRole(opt.value)}
                       disabled={loading}
+                      data-testid={`button-role-${opt.value}`}
                       className={cn(
                         "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-center transition-all duration-150 cursor-pointer",
                         role === opt.value
@@ -494,6 +497,7 @@ export default function Signup() {
                   onChange={e => setName(e.target.value)}
                   autoComplete="name"
                   disabled={loading}
+                  data-testid="input-name"
                 />
               </div>
 
@@ -509,6 +513,7 @@ export default function Signup() {
                   required
                   autoComplete="email"
                   disabled={loading}
+                  data-testid="input-email"
                 />
               </div>
 
@@ -526,11 +531,13 @@ export default function Signup() {
                     autoComplete="new-password"
                     disabled={loading}
                     className="pr-10"
+                    data-testid="input-password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    data-testid="button-toggle-password"
                     aria-label={
                       showPassword ? "Hide password" : "Show password"
                     }
@@ -554,7 +561,7 @@ export default function Signup() {
                           : "text-slate-400"
                       }
                     >
-                      At least 6 characters
+                      At least 8 characters
                     </span>
                   </div>
                 )}
@@ -572,6 +579,7 @@ export default function Signup() {
                   required
                   autoComplete="new-password"
                   disabled={loading}
+                  data-testid="input-confirm-password"
                 />
                 {confirmPassword.length > 0 && (
                   <div className="flex items-center gap-2 text-xs mt-1">
@@ -595,6 +603,7 @@ export default function Signup() {
                 type="submit"
                 className="w-full bg-indigo-600 hover:bg-indigo-700"
                 disabled={loading || !passwordChecks.length}
+                data-testid="button-signup"
               >
                 {loading ? (
                   <>
@@ -612,6 +621,7 @@ export default function Signup() {
               <Link
                 href="/login"
                 className="text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                data-testid="link-login"
               >
                 Sign in
               </Link>

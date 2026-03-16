@@ -77,7 +77,7 @@ export default function ForgotPassword() {
                   If an account exists with <strong>{email}</strong>, you'll
                   receive a password reset email shortly.
                 </p>
-                <Link href="/login">
+                <Link href="/login" data-testid="link-back-to-login">
                   <Button variant="outline" className="w-full mt-4">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Sign In
@@ -97,6 +97,7 @@ export default function ForgotPassword() {
                     required
                     autoComplete="email"
                     disabled={loading}
+                    data-testid="input-email"
                   />
                 </div>
 
@@ -104,6 +105,7 @@ export default function ForgotPassword() {
                   type="submit"
                   className="w-full bg-indigo-600 hover:bg-indigo-700"
                   disabled={loading}
+                  data-testid="button-send-reset"
                 >
                   {loading ? (
                     <>
@@ -115,7 +117,7 @@ export default function ForgotPassword() {
                   )}
                 </Button>
 
-                <Link href="/login">
+                <Link href="/login" data-testid="link-back-to-login-form">
                   <Button variant="ghost" className="w-full text-slate-500">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Sign In
