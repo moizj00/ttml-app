@@ -74,6 +74,7 @@ export default function HowItWorks() {
   const svgRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
   const iconRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const progressRef = useRef<number>(0);
   const [activeSteps, setActiveSteps] = useState<boolean[]>([false, false, false]);
   const [pathD, setPathD] = useState("");
   const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
