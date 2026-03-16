@@ -1155,15 +1155,15 @@ export function registerSupabaseAuthRoutes(app: Express) {
       supabaseAuthUrl.searchParams.set("code_challenge_method", "s256");
 
       // ── Persist the verifier in an httpOnly cookie for the callback ────────
-      // CRITICAL: Use sameSite: "none" with secure: true to allow the cookie to be
-      // sent when Google redirects back to /api/auth/callback (cross-site request).
-      // Without this, the PKCE verifier is withheld by the browser, causing
-      // "PKCE verifier cookie missing" errors and OAuth failures.
+      // Use sameSite: "lax" — the Google→callback redirect is a top-level
+      // navigation, and "lax" cookies are included in top-level navigations
+      // from external sites. "none" was silently rejected by Safari ITP,
+      // Firefox private mode, and some corporate proxies.
       res.cookie("pkce_verifier", codeVerifier, {
         httpOnly: true,
         secure: true,
-        sameSite: "none",
-        maxAge: 5 * 60 * 1000, // 5 minutes — plenty for the OAuth round-trip
+        sameSite: "lax",
+        maxAge: 5 * 60 * 1000,
         path: "/",
       });
 
@@ -1274,19 +1274,16 @@ export function registerSupabaseAuthRoutes(app: Express) {
       const storedVerifier = reqCookies.get("pkce_verifier") || "";
 
       // Clear the one-time PKCE cookie immediately (before any async work).
-      // CRITICAL: clearCookie options MUST exactly match the options used when
-      // the cookie was set (sameSite: "none", secure: true). A mismatch causes
-      // the browser to treat them as different cookies, leaving the verifier
-      // cookie alive and causing PKCE failures on subsequent OAuth attempts.
+      // Options MUST exactly match the options used when the cookie was set.
       res.clearCookie("pkce_verifier", {
         httpOnly: true,
         secure: true,
-        sameSite: "none",
+        sameSite: "lax",
         path: "/",
       });
 
       if (!storedVerifier) {
-        console.error("[SupabaseAuth] PKCE verifier cookie missing");
+        console.error("[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
@@ -1323,7 +1320,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
       };
 
       if (!tokenResponse.ok || !tokenJson.access_token || !tokenJson.user) {
-        console.error("[SupabaseAuth] PKCE token exchange failed:", tokenJson.error || tokenJson.message);
+        console.error("[SupabaseAuth] PKCE token exchange failed:", {
+          status: tokenResponse.status,
+          error: tokenJson.error,
+          description: tokenJson.error_description,
+          message: tokenJson.message,
+        });
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
