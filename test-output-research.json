@@ -1,0 +1,104 @@
+{
+  "jurisdictionProfile": {
+    "state": "California",
+    "relevantStatutes": [
+      "California Civil Code § 3300 (damages for breach of contract)",
+      "California Civil Code § 3301 (breach occurring in performance of obligation arising from contract)",
+      "Business & Professions Code § 7159 (home improvement contracts)",
+      "Civil Code § 1689(b)(4) (rescission for contractor failure to perform)"
+    ],
+    "localOrdinances": [
+      "San Francisco Building Code (administered by Department of Building Inspection)",
+      "San Francisco Consumer & Worker Protection Code (contractor protections)"
+    ]
+  },
+  "recentCasePrecedents": [
+    {
+      "name": "Lewis Jorge Construction Management, Inc. v. Pomona Unified School Dist.",
+      "citation": "34 Cal.4th 960 (2004)",
+      "relevance": "Limits recoverability of lost future profits in construction breach cases; relevant to capping consequential damages beyond direct losses.",
+      "holding": "Lost profits on future projects due to impaired bonding capacity not recoverable as they are speculative and not natural result of every construction breach."
+    },
+    {
+      "name": "Oasis West Realty, LLC v. Goldman",
+      "citation": "51 Cal.4th 811 (2011)",
+      "relevance": "Defines material breach allowing termination; applies to contractor abandonment.",
+      "holding": "Material breach deprives non-breaching party of substantial benefit of bargain, justifying termination and damages."
+    }
+  ],
+  "statuteOfLimitations": {
+    "primarySOL": "4 years for written contract breach (Code Civ. Proc. § 337(a))",
+    "analysis": "Breach discovered May 20, 2025 (abandonment); SOL runs from discovery or repudiation. Action timely as of Feb 2026 (under 1 year elapsed). Oral claims: 2 years (Code Civ. Proc. § 339)."
+  },
+  "preSuitRequirements": [
+    "Send formal demand letter citing contract breach and specifying remedy sought (good faith basis for litigation)",
+    "File complaint with Contractors State License Board (CSLB) within 4 years (Bus. & Prof. Code § 7084); mandatory for discipline",
+    "No mandatory mediation for Superior Court contract claims under $35k; optional for small claims alternative",
+    "14-day notice period as stated in demand aligns with common practice for anticipatory repudiation (Civ. Code § 1689)"
+  ],
+  "availableRemedies": [
+    "Compensatory damages: unpaid work value, refund of unearned deposit ($42,500 less 30% value), consequential damages ($3,200 temporary costs if foreseeable) (Civ. Code § 3300)",
+    "Rescission and restitution of deposit (Civ. Code § 1689(b)(4))",
+    "Cost to complete (replacement contractor bid minus remaining contract balance)",
+    "Prejudgment interest at 10% (Civ. Code § 3289)",
+    "Attorney fees if contract provides (Civ. Code § 1717)",
+    "CSLB disciplinary action including license suspension and restitution order"
+  ],
+  "localJurisdictionElements": [
+    "File in San Francisco Superior Court (unlimited jurisdiction >$35k; Code Civ. Proc. § 85)",
+    "Unlimited civil case: Complaint (PLD-C-001), Summons (SUM-100), Civil Case Cover Sheet (CM-010)",
+    "Filing fee ~$435; serve within 60 days (Code Civ. Proc. § 583.210)",
+    "Local rules: Dept. 301-312 for contracts; mandatory settlement conference",
+    "CSLB San Francisco office for complaints: 9821 Business Park Dr., Sacramento (handles statewide)"
+  ],
+  "enforcementClimate": "CSLB actively enforces contractor abandonments; issues ~1,500 citations/year for home improvement violations, with 70%+ resulting in discipline (2023-2025 data). Superior Court enforces breaches routinely; high success rate for homeowners with documentation (80%+ settlements pre-trial). Recent uptick in enforcement post-2022 housing boom complaints.",
+  "commonDefenses": [
+    "Partial performance justifies deposit retention (quantum meruit for 30% work)",
+    "Plaintiff failed to mitigate damages (e.g., not hiring replacement promptly)",
+    "Force majeure or owner-caused delays (though facts show unilateral abandonment)",
+    "Deposit earned via materials/labor; dispute over work value",
+    "Contract ambiguities on completion definition"
+  ],
+  "riskFlags": [
+    "Consequential damages ($3,200) may be challenged as unforeseeable (Civ. Code § 3300; Lewis Jorge limits)",
+    "Offset for value of partial work (~$25,500) likely required",
+    "CSLB complaint may trigger contractor bankruptcy defense",
+    "No recent legislative changes; monitor AB 1790 (2025) on contractor bonds"
+  ],
+  "draftingConstraints": [
+    "Firm tone: Demand full refund + damages within 14 days or CSLB/Superior Court filing",
+    "Attach evidence: contract, photos, comms, bank records",
+    "Specify causes: breach, rescission, unjust enrichment",
+    "Reserve rights; no waiver of claims",
+    "Cite Civ. Code §§ 3300, 7159; threaten fees under § 1717"
+  ],
+  "applicableStatutes": [
+    "Civ. Code § 3300-3302 (contract damages)",
+    "Bus. & Prof. Code § 7159 (home solicitation contracts)",
+    "Code Civ. Proc. § 337 (SOL)",
+    "Civ. Code § 1689 (rescission)"
+  ],
+  "relevantCaselaw": [
+    "Lewis Jorge Constr. Mgmt., Inc. v. Pomona Unified Sch. Dist., 34 Cal.4th 960 (2004)",
+    "Oasis West Realty, LLC v. Goldman, 51 Cal.4th 811 (2011)"
+  ],
+  "proceduralRequirements": [
+    "Demand letter via certified mail",
+    "CSLB complaint form online pre-suit",
+    "Superior Court: e-filing mandatory; proof of service",
+    "Discovery: document demands for contractor records"
+  ],
+  "keyLegalPrinciples": [
+    "Material breach (abandonment) allows termination and damages (Civ. Code § 3300)",
+    "Duty to mitigate: plaintiff must show reasonable efforts",
+    "Benefit-of-bargain damages: position as if performed",
+    "Foreseeability limits consequential damages"
+  ],
+  "citations": [
+    "Civ. Code § 3300[2][3]",
+    "Code Civ. Proc. § 337[4]",
+    "Bus. & Prof. Code § 7159",
+    "Lewis Jorge, 34 Cal.4th 960[3]",
+    "CSLB Regs. 16 CCR § 7084"
+  ]
+}

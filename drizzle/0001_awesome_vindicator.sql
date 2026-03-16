@@ -1,0 +1,1 @@
+ALTER TABLE "letter_requests" ADD COLUMN "pdf_url" text;

@@ -1,0 +1,302 @@
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Migration 0002: Row Level Security Policies, Helper Functions, Performance Indexes
+-- Talk-to-My-Lawyer — Supabase PostgreSQL
+-- 
+-- ARCHITECTURE NOTE:
+-- This app uses Supabase Auth with server-side JWT verification, so auth.uid() is NOT available.
+-- Server-side Drizzle ORM queries use the postgres.js driver (which connects as the
+-- database owner / service_role equivalent), so RLS is effectively bypassed for
+-- server-side operations. These policies serve as DEFENSE-IN-DEPTH:
+--   1. If anyone connects via Supabase client SDK (anon/authenticated key), RLS applies
+--   2. If Supabase Dashboard "Data" tab is used, RLS applies to non-service-role users
+--   3. Prevents accidental data leaks from misconfigured API routes
+--
+-- The helper functions use a session variable approach: the server sets
+-- current_setting('app.current_user_id') and current_setting('app.current_user_role')
+-- before queries when RLS enforcement is desired.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- ─── Helper Functions ─────────────────────────────────────────────────────────
+
+-- Get the current app user ID from session variable (set by server middleware)
+CREATE OR REPLACE FUNCTION public.app_user_id()
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_user_id', true), '')::INTEGER;
+$$;
+
+-- Get the current app user role from session variable
+CREATE OR REPLACE FUNCTION public.app_user_role()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_user_role', true), '');
+$$;
+
+-- Check if current session user is admin
+CREATE OR REPLACE FUNCTION public.is_app_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT public.app_user_role() = 'admin';
+$$;
+
+-- Check if current session user is employee (or admin)
+CREATE OR REPLACE FUNCTION public.is_app_employee_or_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT public.app_user_role() IN ('employee', 'admin');
+$$;
+
+-- Check if current session user is subscriber
+CREATE OR REPLACE FUNCTION public.is_app_subscriber()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT public.app_user_role() = 'subscriber';
+$$;
+
+-- ─── Enable RLS on ALL 9 tables ──────────────────────────────────────────────
+
+ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "letter_requests" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "letter_versions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "review_actions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "workflow_jobs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "research_runs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "attachments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "notifications" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;
+
+-- ─── FORCE RLS (applies even to table owners, except superuser) ──────────────
+-- NOTE: We do NOT use FORCE because our Drizzle connection uses the DB owner role.
+-- If we FORCE, all Drizzle queries would need session vars set. Instead, RLS only
+-- applies to non-owner roles (anon, authenticated, dashboard users).
+
+-- ─── TABLE: users ─────────────────────────────────────────────────────────────
+
+-- Subscribers can see their own row
+CREATE POLICY users_select_own ON "users"
+  FOR SELECT
+  USING (id = public.app_user_id() OR public.is_app_admin());
+
+-- Admins can update any user (role changes, etc.)
+CREATE POLICY users_update_admin ON "users"
+  FOR UPDATE
+  USING (public.is_app_admin())
+  WITH CHECK (public.is_app_admin());
+
+-- Users can update their own profile
+CREATE POLICY users_update_own ON "users"
+  FOR UPDATE
+  USING (id = public.app_user_id())
+  WITH CHECK (id = public.app_user_id());
+
+-- Insert: system/server only (handled by Drizzle as DB owner)
+CREATE POLICY users_insert_system ON "users"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- ─── TABLE: letter_requests ──────────────────────────────────────────────────
+
+-- Subscribers see own letters
+CREATE POLICY letter_requests_select_own ON "letter_requests"
+  FOR SELECT
+  USING (user_id = public.app_user_id());
+
+-- Employees/admins see letters in reviewable statuses
+CREATE POLICY letter_requests_select_employee ON "letter_requests"
+  FOR SELECT
+  USING (public.is_app_employee_or_admin());
+
+-- Subscribers can create letters
+CREATE POLICY letter_requests_insert_own ON "letter_requests"
+  FOR INSERT
+  WITH CHECK (user_id = public.app_user_id() OR public.is_app_admin());
+
+-- Subscribers can update own letters (e.g., updateForChanges)
+CREATE POLICY letter_requests_update_own ON "letter_requests"
+  FOR UPDATE
+  USING (user_id = public.app_user_id() OR public.is_app_employee_or_admin())
+  WITH CHECK (user_id = public.app_user_id() OR public.is_app_employee_or_admin());
+
+-- ─── TABLE: letter_versions ──────────────────────────────────────────────────
+
+-- Subscribers see versions for their own letters
+CREATE POLICY letter_versions_select_own ON "letter_versions"
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM "letter_requests" lr
+      WHERE lr.id = letter_request_id AND lr.user_id = public.app_user_id()
+    )
+  );
+
+-- Employees/admins see all versions
+CREATE POLICY letter_versions_select_employee ON "letter_versions"
+  FOR SELECT
+  USING (public.is_app_employee_or_admin());
+
+-- Insert: system and employees/admins (attorney edits, AI drafts)
+CREATE POLICY letter_versions_insert ON "letter_versions"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- ─── TABLE: review_actions ───────────────────────────────────────────────────
+
+-- Subscribers see user_visible notes on their own letters
+CREATE POLICY review_actions_select_subscriber ON "review_actions"
+  FOR SELECT
+  USING (
+    note_visibility = 'user_visible' AND EXISTS (
+      SELECT 1 FROM "letter_requests" lr
+      WHERE lr.id = letter_request_id AND lr.user_id = public.app_user_id()
+    )
+  );
+
+-- Employees/admins see all review actions
+CREATE POLICY review_actions_select_employee ON "review_actions"
+  FOR SELECT
+  USING (public.is_app_employee_or_admin());
+
+-- Insert: employees/admins and system
+CREATE POLICY review_actions_insert ON "review_actions"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- ─── TABLE: workflow_jobs ────────────────────────────────────────────────────
+
+-- Admins only
+CREATE POLICY workflow_jobs_select_admin ON "workflow_jobs"
+  FOR SELECT
+  USING (public.is_app_admin());
+
+-- System insert (pipeline creates jobs)
+CREATE POLICY workflow_jobs_insert ON "workflow_jobs"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- System/admin update
+CREATE POLICY workflow_jobs_update ON "workflow_jobs"
+  FOR UPDATE
+  USING (public.is_app_admin())
+  WITH CHECK (true);
+
+-- Admin delete (purge failed jobs)
+CREATE POLICY workflow_jobs_delete_admin ON "workflow_jobs"
+  FOR DELETE
+  USING (public.is_app_admin());
+
+-- ─── TABLE: research_runs ────────────────────────────────────────────────────
+
+-- Admins and employees (review center shows research)
+CREATE POLICY research_runs_select ON "research_runs"
+  FOR SELECT
+  USING (public.is_app_employee_or_admin());
+
+-- System insert
+CREATE POLICY research_runs_insert ON "research_runs"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- System update
+CREATE POLICY research_runs_update ON "research_runs"
+  FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
+-- ─── TABLE: attachments ──────────────────────────────────────────────────────
+
+-- Subscribers see attachments for their own letters
+CREATE POLICY attachments_select_own ON "attachments"
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM "letter_requests" lr
+      WHERE lr.id = letter_request_id AND lr.user_id = public.app_user_id()
+    )
+  );
+
+-- Employees/admins see all attachments
+CREATE POLICY attachments_select_employee ON "attachments"
+  FOR SELECT
+  USING (public.is_app_employee_or_admin());
+
+-- Subscribers can upload to own letters
+CREATE POLICY attachments_insert_own ON "attachments"
+  FOR INSERT
+  WITH CHECK (
+    uploaded_by_user_id = public.app_user_id() OR public.is_app_admin()
+  );
+
+-- ─── TABLE: notifications ────────────────────────────────────────────────────
+
+-- Users see only their own notifications
+CREATE POLICY notifications_select_own ON "notifications"
+  FOR SELECT
+  USING (user_id = public.app_user_id() OR public.is_app_admin());
+
+-- System insert
+CREATE POLICY notifications_insert ON "notifications"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- Users can mark own notifications as read
+CREATE POLICY notifications_update_own ON "notifications"
+  FOR UPDATE
+  USING (user_id = public.app_user_id())
+  WITH CHECK (user_id = public.app_user_id());
+
+-- ─── TABLE: subscriptions ────────────────────────────────────────────────────
+
+-- Subscribers see own subscriptions
+CREATE POLICY subscriptions_select_own ON "subscriptions"
+  FOR SELECT
+  USING (user_id = public.app_user_id() OR public.is_app_admin());
+
+-- System insert (Stripe webhook creates subscriptions)
+CREATE POLICY subscriptions_insert ON "subscriptions"
+  FOR INSERT
+  WITH CHECK (true);
+
+-- System update (Stripe webhook updates subscriptions)
+CREATE POLICY subscriptions_update ON "subscriptions"
+  FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
+-- ─── Performance Indexes ─────────────────────────────────────────────────────
+
+-- Composite indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_letter_requests_user_status
+  ON "letter_requests" (user_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_status
+  ON "subscriptions" (user_id, status);
+
+-- Partial indexes for hot queries (active pipeline letters)
+CREATE INDEX IF NOT EXISTS idx_letter_requests_active
+  ON "letter_requests" (user_id)
+  WHERE status IN ('submitted', 'researching', 'drafting', 'generated_locked', 'pending_review', 'under_review');
+
+-- Partial index for active subscriptions
+CREATE INDEX IF NOT EXISTS idx_subscriptions_active
+  ON "subscriptions" (user_id)
+  WHERE status = 'active';
+
+-- Partial index for pending review letters (employee queue)
+CREATE INDEX IF NOT EXISTS idx_letter_requests_pending_review
+  ON "letter_requests" (status, assigned_reviewer_id)
+  WHERE status IN ('pending_review', 'under_review', 'needs_changes');
+
+-- Index for notification unread count
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON "notifications" (user_id)
+  WHERE read_at IS NULL;

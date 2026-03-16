@@ -1,0 +1,1 @@
+ALTER TYPE "public"."letter_status" ADD VALUE 'generated_unlocked' BEFORE 'pending_review';

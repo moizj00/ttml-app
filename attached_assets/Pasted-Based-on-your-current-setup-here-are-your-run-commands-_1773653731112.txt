@@ -1,0 +1,89 @@
+Based on your current setup, here are your run commands and the complete railway.toml configuration:
+
+Development Server
+pnpm run dev
+# or npm run dev
+What it does: Runs NODE_ENV=development tsx watch server/_core/index.ts — watches for file changes and hot-reloads the server. Vite dev server starts automatically for the frontend on port 5000.
+
+Production Server
+First, build the application:
+
+pnpm run build
+# or npm run build
+What it does: Compiles the frontend (Vite) + bundles the backend (esbuild), outputs to dist/ folder.
+
+Then start the production server:
+
+pnpm run start
+# or npm run start
+What it does: Runs NODE_ENV=production node --import ./dist/sentry-init.js dist/index.js — loads Sentry hooks before starting the app. The server reads PORT from environment variables (Railway injects this automatically).
+
+Complete railway.toml Configuration
+Your existing railway.toml is already well-configured. Here's what's currently set and what you should ensure is in place:
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+[deploy]
+startCommand = "pnpm run start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+[deploy.healthCheck]
+httpPath = "/api/health"
+intervalSeconds = 30
+timeoutSeconds = 10
+startPeriodSeconds = 30
+[deploy.environmentVariables]
+NODE_ENV = "production"
+PORT = "3000"
+CORS_ALLOWED_ORIGINS = "https://talk-to-my-lawyer.com,https://www.talk-to-my-lawyer.com"
+APP_BASE_URL = "https://www.talk-to-my-lawyer.com"
+Required Secrets (Set in Railway Dashboard)
+Set these in your Railway project's Variables tab (not in railway.toml):
+
+Database:
+
+DATABASE_URL — PostgreSQL connection string
+Auth:
+
+JWT_SECRET — Random 32+ char secret for session cookies
+Supabase:
+
+SUPABASE_URL
+VITE_SUPABASE_URL (same value)
+VITE_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+AI & Pipeline:
+
+ANTHROPIC_API_KEY — Claude API key
+PERPLEXITY_API_KEY — Research API key
+Email (Resend):
+
+RESEND_API_KEY
+RESEND_FROM_EMAIL (optional, defaults to noreply@talk-to-my-lawyer.com)
+Payments (Stripe):
+
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+VITE_STRIPE_PUBLISHABLE_KEY
+Rate Limiting (Upstash Redis) — optional:
+
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+Error Monitoring (Sentry) — optional:
+
+SENTRY_DSN
+VITE_SENTRY_DSN
+SENTRY_ORG
+SENTRY_PROJECT
+Key Points for Successful Deployment
+✅ Your Dockerfile handles the build and pnpm setup
+✅ Health check on /api/health validates the app is running
+✅ Restart policy (3 retries) handles temporary failures gracefully
+✅ Sentry hooks pre-loaded via --import flag
+✅ CORS origins restricted to your production domain
+✅ NODE_ENV=production tells the server to serve dist/public instead of using Vite dev server
+
+No issues—your setup is deployment-ready! 🚀
+
+Agent encountered an error while running, we are investigating the issue.
