@@ -36,7 +36,7 @@ function BrandLogoContent({
           src={LOGO_MAIN}
           alt="Talk to My Lawyer"
           style={{ height: config.mobileH }}
-          className="object-contain flex-shrink-0 block md:hidden max-w-[120px]"
+          className="object-contain flex-shrink-0 block md:hidden max-w-[120px] ml-[20px] mr-[20px]"
         />
         <img
           src={LOGO_MAIN}
