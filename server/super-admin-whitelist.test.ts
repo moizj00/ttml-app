@@ -73,8 +73,8 @@ describe("Super Admin Whitelist — Source Code Enforcement", () => {
 
   it("uses SUPER_ADMIN_EMAILS in at least 4 enforcement points", () => {
     const occurrences = (authFile.match(/SUPER_ADMIN_EMAILS/g) || []).length;
-    // 4 declarations + 4 usages = at least 8 occurrences
-    expect(occurrences).toBeGreaterThanOrEqual(8);
+    // 1 const declaration + 4 enforcement checks + 1 module-level comment = 6
+    expect(occurrences).toBeGreaterThanOrEqual(6);
   });
 
   it("strips admin role from non-whitelisted users on login (verifyToken)", () => {

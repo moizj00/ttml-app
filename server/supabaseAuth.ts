@@ -58,7 +58,7 @@ export function getOriginUrl(req: Request): string {
 }
 
 // ─── Super Admin Whitelist ─────────────────────────────────────────────────
-// Hard-coded intentionally — no UI, API, or env-var can override this.
+// Hard-coded super admin whitelist — no UI, API, or env-var can override this.
 // Changing admin access requires a code deploy + review, which is by design.
 const SUPER_ADMIN_EMAILS = ["ravivo@homes.land", "moizj00@gmail.com"] as const;
 
@@ -244,6 +244,7 @@ async function syncGoogleUser({
     "User";
   const existingUser = await db.getUserByOpenId(user.id);
   const ownerOpenId = process.env.OWNER_OPEN_ID;
+  // Hard-coded super admin whitelist enforcement (verifyToken)
   const isOwner =
     (ownerOpenId && user.id === ownerOpenId) ||
     (user.email ? (SUPER_ADMIN_EMAILS as readonly string[]).includes(user.email.toLowerCase()) : false);
@@ -378,6 +379,7 @@ async function verifyToken(token: string): Promise<User | null> {
     const emailVerified = isSupabaseEmailConfirmed(supabaseUser);
 
     const ownerOpenId = process.env.OWNER_OPEN_ID;
+    // Hard-coded super admin whitelist enforcement (syncUserFromSupabaseJwt)
     const isOwner =
       (ownerOpenId && supabaseUid === ownerOpenId) ||
       (email ? (SUPER_ADMIN_EMAILS as readonly string[]).includes(email.toLowerCase()) : false);
@@ -484,22 +486,23 @@ async function verifyToken(token: string): Promise<User | null> {
 
 /**
  * Verify a Supabase JWT and return the authenticated user from our app database.
- * Tries the Authorization bearer token first, then the sb_session cookie as fallback.
- * This ensures an expired bearer token (stale localStorage) doesn't block a valid cookie session.
+ * Tries the httpOnly session cookie first (authoritative after OAuth), then the
+ * Authorization bearer token as fallback. Cookie-first prevents stale localStorage
+ * tokens from overriding a fresh OAuth session cookie.
  */
 export async function authenticateRequest(req: Request): Promise<User | null> {
-  // 1. Try the Authorization: Bearer header (e.g. from localStorage on the client)
-  const bearerToken = extractBearerToken(req);
-  if (bearerToken) {
-    const user = await verifyToken(bearerToken);
-    if (user) return user;
-    // Bearer token failed (e.g. expired) — fall through to the session cookie
-  }
-
-  // 2. Try the httpOnly session cookie (set after OAuth or refresh)
+  // 1. Try the httpOnly session cookie first (set after OAuth or refresh — authoritative)
   const cookieToken = extractCookieToken(req);
   if (cookieToken) {
     const user = await verifyToken(cookieToken);
+    if (user) return user;
+    // Cookie token failed (e.g. expired) — fall through to bearer
+  }
+
+  // 2. Try the Authorization: Bearer header (e.g. from localStorage on the client)
+  const bearerToken = extractBearerToken(req);
+  if (bearerToken) {
+    const user = await verifyToken(bearerToken);
     if (user) return user;
   }
 
@@ -517,6 +520,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const { email, password, name, role: requestedRole } = req.body;
+      // Attorney role is NOT self-assignable — it can only be granted by a super admin via the Users page
       const ALLOWED_SIGNUP_ROLES = ["subscriber", "employee"];
       if (requestedRole && !ALLOWED_SIGNUP_ROLES.includes(requestedRole)) {
         res.status(400).json({ error: "Invalid role. Only 'subscriber' or 'employee' roles are allowed for signup." });
@@ -565,6 +569,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
 
       // Create user in our app database
       const ownerOpenId = process.env.OWNER_OPEN_ID;
+      // Hard-coded super admin whitelist enforcement (signup)
       const isOwner =
         (ownerOpenId && data.user.id === ownerOpenId) ||
         (SUPER_ADMIN_EMAILS as readonly string[]).includes(email.toLowerCase());
@@ -942,6 +947,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
       // Uses module-level SUPER_ADMIN_EMAILS constant (line 61) — single source of truth
       const ownerOpenId = process.env.OWNER_OPEN_ID;
       const email = supabaseUser.email || existingUser?.email || null;
+      // Hard-coded super admin whitelist enforcement (OAuth callback)
       const isOwner =
         (ownerOpenId && supabaseUser.id === ownerOpenId) ||
         (email ? (SUPER_ADMIN_EMAILS as readonly string[]).includes(email.toLowerCase()) : false);
