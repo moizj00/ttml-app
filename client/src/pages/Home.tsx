@@ -21,6 +21,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import HowItWorks from "@/components/HowItWorks";
 
 const letterTypes = [
   "Breach of Contract",
@@ -345,68 +346,7 @@ export default function Home() {
       </section>
 
       {/* Horizontal Timeline "How it Works" */}
-      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-slate-50 border-y border-slate-100">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-20">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-              Three Steps to a Professional Legal Letter
-            </h2>
-            <p className="text-lg text-slate-600">
-              From intake to attorney-approved PDF in as little as 24 hours
-            </p>
-          </div>
-
-          <div className="relative">
-            <div className="hidden md:block absolute top-12 left-0 w-full h-1 bg-slate-200 rounded-full">
-              <div className="h-full w-1/3 bg-blue-600 rounded-full"></div>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-12 relative z-10">
-              {[
-                {
-                  step: "01",
-                  icon: FileText,
-                  title: "Describe Your Situation",
-                  desc: "Complete a guided intake form with the facts of your case. No legal expertise required.",
-                },
-                {
-                  step: "02",
-                  icon: Search,
-                  title: "Attorneys Research & Draft",
-                  desc: "Our legal team researches applicable statutes for your jurisdiction and drafts your letter.",
-                },
-                {
-                  step: "03",
-                  icon: CheckCircle2,
-                  title: "Attorney Reviews & Approves",
-                  desc: "A licensed attorney makes final edits and signs off before delivery. Human oversight guaranteed.",
-                },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col items-center text-center"
-                  data-testid={`step-${item.step}`}
-                >
-                  <div
-                    className={`w-24 h-24 rounded-full flex items-center justify-center mb-8 shadow-xl relative bg-white border-4 ${i === 0 ? "border-blue-600" : "border-slate-100"}`}
-                  >
-                    <item.icon
-                      className={`w-10 h-10 ${i === 0 ? "text-blue-600" : "text-slate-400"}`}
-                    />
-                    <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-bold">
-                      {item.step}
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                  <p className="text-slate-600 leading-relaxed max-w-xs">
-                    {item.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <HowItWorks />
 
       {/* Alternating Layout Features */}
       <section
