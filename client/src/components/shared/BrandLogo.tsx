@@ -16,9 +16,9 @@ const LOGO_MAIN = "/logo-main.png";
 
 const SIZE_CONFIG: Record<BrandLogoSize, { h: number; mobileH: number }> = {
   sm: { h: 36, mobileH: 28 },
-  md: { h: 44, mobileH: 32 },
-  lg: { h: 52, mobileH: 36 },
-  xl: { h: 60, mobileH: 40 },
+  md: { h: 44, mobileH: 38 },
+  lg: { h: 52, mobileH: 40 },
+  xl: { h: 60, mobileH: 44 },
 };
 
 function BrandLogoContent({

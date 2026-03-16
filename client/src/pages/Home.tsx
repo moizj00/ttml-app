@@ -120,7 +120,7 @@ export default function Home() {
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 h-[64px] md:h-[72px] flex items-center justify-between">
-          <BrandLogo href="/" size="md" hideWordmarkOnMobile />
+          <BrandLogo href="/" size="lg" hideWordmarkOnMobile />
 
           <div className="hidden md:flex items-center gap-7">
             <button
@@ -267,7 +267,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12">
               <button
                 onClick={goToLogin}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
                 data-testid="hero-cta"
               >
                 <Play className="w-5 h-5 fill-current" />
@@ -275,7 +275,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => scrollTo("pricing")}
-                className="bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 px-8 py-4 rounded-xl text-base font-semibold flex items-center justify-center gap-2 transition-all"
+                className="bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 transition-all"
                 data-testid="hero-pricing"
               >
                 View Pricing <ArrowRight className="w-5 h-5" />
@@ -541,7 +541,7 @@ export default function Home() {
               {supportingFeatures.map((f, i) => (
                 <div
                   key={i}
-                  className="p-8 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors"
+                  className="p-6 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors"
                   data-testid={`feature-card-${i}`}
                 >
                   <f.icon className="w-8 h-8 text-blue-600 mb-6" />
@@ -590,7 +590,7 @@ export default function Home() {
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
                   onClick={goToLogin}
-                  className="w-full md:w-auto px-8 py-3 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-xl transition-colors text-center"
+                  className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
                   data-testid="pricing-cta-pay-per-letter"
                 >
                   Get Started
@@ -623,7 +623,7 @@ export default function Home() {
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
                   onClick={goToLogin}
-                  className="w-full md:w-auto px-8 py-3 bg-white text-blue-700 hover:bg-slate-50 font-bold rounded-xl transition-colors shadow-lg text-center"
+                  className="w-full md:w-auto px-6 py-2.5 bg-white text-blue-700 hover:bg-slate-50 font-bold rounded-lg transition-colors shadow-lg text-center"
                   data-testid="pricing-cta-monthly"
                 >
                   Subscribe Now
@@ -653,7 +653,7 @@ export default function Home() {
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
                   onClick={goToLogin}
-                  className="w-full md:w-auto px-8 py-3 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-xl transition-colors text-center"
+                  className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
                   data-testid="pricing-cta-monthly-pro"
                 >
                   Subscribe Pro
@@ -739,7 +739,7 @@ export default function Home() {
           </p>
           <button
             onClick={goToLogin}
-            className="bg-white text-blue-600 hover:bg-slate-50 px-10 py-5 rounded-xl text-lg font-bold shadow-2xl transition-transform hover:-translate-y-1 inline-block"
+            className="bg-white text-blue-600 hover:bg-slate-50 px-6 py-3 rounded-lg text-base font-bold shadow-2xl transition-transform hover:-translate-y-1 inline-block"
             data-testid="final-cta"
           >
             Start Your Free Letter Now
