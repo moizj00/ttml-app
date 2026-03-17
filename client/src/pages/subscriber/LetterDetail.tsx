@@ -130,35 +130,248 @@ export default function LetterDetail() {
     const finalVersion = data.versions.find((v) => v.versionType === "final_approved");
     if (!finalVersion) return;
 
-    const letterContent = finalVersion.content
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br>");
+    const isHtml = /<[a-z][\s\S]*>/i.test(finalVersion.content);
+    const letterBody = isHtml
+      ? finalVersion.content
+      : finalVersion.content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .split(/\n\n+/)
+          .map((para: string) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
+          .join("\n");
+
+    const letterTypeLabel = (data?.letter?.letterType ?? "").replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    const docDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
     const printHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Legal Letter #${letterId}</title>
+  <title>${data?.letter?.subject ?? "Legal Letter"} — Talk to My Lawyer</title>
   <style>
-    @page { margin: 1in; size: letter; }
-    body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.6; color: #000; background: #fff; }
-    .header { border-bottom: 2px solid #1E3A5F; padding-bottom: 12px; margin-bottom: 24px; }
-    .brand { font-family: Arial, sans-serif; font-size: 10pt; color: #1E3A5F; font-weight: bold; }
-    .meta { font-family: Arial, sans-serif; font-size: 9pt; color: #666; margin-top: 4px; }
-    .letter-body { white-space: pre-wrap; font-size: 12pt; }
-    .footer { border-top: 1px solid #ccc; margin-top: 32px; padding-top: 12px; font-family: Arial, sans-serif; font-size: 9pt; color: #888; text-align: center; }
-    @media print { body { print-color-adjust: exact; } }
+    @page {
+      size: letter;
+      margin: 0.85in 1in 1in 1in;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Georgia', 'Times New Roman', Times, serif;
+      font-size: 11.5pt;
+      line-height: 1.7;
+      color: #111;
+      background: #fff;
+    }
+
+    /* ── Letterhead ── */
+    .letterhead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 2.5px solid #1e3a5f;
+      margin-bottom: 6px;
+    }
+    .brand-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: #1e3a5f;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .brand-name {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13pt;
+      font-weight: 700;
+      color: #1e3a5f;
+      letter-spacing: -0.3px;
+    }
+    .brand-tagline {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8pt;
+      color: #6b7280;
+      letter-spacing: 0.3px;
+      margin-top: 1px;
+    }
+    .doc-meta {
+      text-align: right;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .doc-meta-label {
+      font-size: 7.5pt;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+    }
+    .doc-meta-value {
+      font-size: 9pt;
+      color: #374151;
+      margin-top: 2px;
+    }
+
+    /* ── Attorney badge ── */
+    .attorney-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 7px 12px;
+      margin: 10px 0 22px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .attorney-badge-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .attorney-badge-text {
+      font-size: 8.5pt;
+      color: #166534;
+      font-weight: 600;
+    }
+    .attorney-badge-sub {
+      font-size: 7.5pt;
+      color: #4ade80;
+      color: #16a34a;
+      font-weight: 400;
+    }
+
+    /* ── Letter body ── */
+    .letter-body {
+      font-size: 11.5pt;
+      line-height: 1.75;
+      color: #111;
+    }
+    .letter-body p {
+      margin-bottom: 14px;
+    }
+    .letter-body p:last-child {
+      margin-bottom: 0;
+    }
+    .letter-body br + br {
+      display: block;
+      content: "";
+      margin-top: 10px;
+    }
+    .letter-body strong, .letter-body b {
+      font-weight: 700;
+    }
+    .letter-body em, .letter-body i {
+      font-style: italic;
+    }
+    .letter-body u {
+      text-decoration: underline;
+    }
+    .letter-body ul, .letter-body ol {
+      margin: 8px 0 14px 22px;
+    }
+    .letter-body li {
+      margin-bottom: 4px;
+    }
+    .letter-body h1, .letter-body h2, .letter-body h3 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: 700;
+      margin: 18px 0 8px;
+      color: #111;
+    }
+    .letter-body h1 { font-size: 13pt; }
+    .letter-body h2 { font-size: 12pt; }
+    .letter-body h3 { font-size: 11.5pt; }
+
+    /* ── Footer ── */
+    .footer {
+      position: running(footer);
+    }
+    @page { @bottom-center { content: element(footer); } }
+
+    .footer-bar {
+      border-top: 1.5px solid #e5e7eb;
+      padding-top: 10px;
+      margin-top: 40px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .footer-cert {
+      font-size: 7.5pt;
+      color: #6b7280;
+      line-height: 1.4;
+    }
+    .footer-cert strong {
+      color: #374151;
+      font-weight: 600;
+    }
+    .footer-id {
+      font-size: 7.5pt;
+      color: #9ca3af;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    @media print {
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="brand">⚖️ Talk to My Lawyer — Reviewed PDF</div>
-    <div class="meta">Letter #${letterId} &bull; ${data?.letter?.letterType?.replace(/-/g, " ") ?? ""} &bull; ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</div>
+
+  <!-- Letterhead -->
+  <div class="letterhead">
+    <div class="brand-left">
+      <div class="brand-icon">&#9878;</div>
+      <div>
+        <div class="brand-name">Talk to My Lawyer</div>
+        <div class="brand-tagline">Attorney-Reviewed Legal Correspondence</div>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <div class="doc-meta-label">Document Type</div>
+      <div class="doc-meta-value">${letterTypeLabel}</div>
+    </div>
   </div>
-  <div class="letter-body">${letterContent}</div>
-  <div class="footer">Reviewed PDF — This letter was reviewed and approved by a licensed attorney via Talk to My Lawyer. Document ID: #${letterId}</div>
+
+  <!-- Attorney Approved Badge -->
+  <div class="attorney-badge">
+    <div class="attorney-badge-icon">&#10003;</div>
+    <div>
+      <span class="attorney-badge-text">Attorney Reviewed &amp; Approved</span>
+      <span class="attorney-badge-sub"> &mdash; This letter has been reviewed and approved by a licensed attorney</span>
+    </div>
+  </div>
+
+  <!-- Letter Body -->
+  <div class="letter-body">
+    ${letterBody}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer-bar">
+    <div class="footer-row">
+      <div class="footer-cert">
+        <strong>Talk to My Lawyer &mdash; Attorney-Reviewed Document</strong><br>
+        This letter was professionally drafted and approved by a licensed attorney. Generated ${docDate}.
+      </div>
+      <div class="footer-id">Document ID: #${letterId}</div>
+    </div>
+  </div>
+
 </body>
 </html>`;
 
@@ -176,7 +389,7 @@ export default function LetterDetail() {
     printWindow.document.write(printHtml);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => { printWindow.print(); }, 500);
+    setTimeout(() => { printWindow.print(); }, 600);
   };
 
   if (isLoading) {
