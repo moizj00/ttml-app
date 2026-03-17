@@ -80,7 +80,14 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
   if (user.emailVerified !== undefined) {
     values.emailVerified = user.emailVerified;
-    updateSet.emailVerified = user.emailVerified;
+    // Never downgrade emailVerified from true → false on upsert.
+    // Once verified, it stays verified regardless of what Supabase reports
+    // (e.g. custom-token verification sets our DB to true but Supabase may
+    // still show email_confirmed_at = null until the next Supabase-side flow).
+    if (user.emailVerified === true) {
+      updateSet.emailVerified = true;
+    }
+    // If incoming is false, we deliberately leave the existing value in place.
   }
   if (user.freeReviewUsedAt !== undefined) {
     values.freeReviewUsedAt = user.freeReviewUsedAt;

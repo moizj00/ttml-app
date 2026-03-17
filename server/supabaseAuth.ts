@@ -590,23 +590,24 @@ export function registerSupabaseAuthRoutes(app: Express) {
       // Get the app user record to get the integer id
       const appUser = await db.getUserByOpenId(data.user.id);
 
-      // Backup: also create a custom verification token for resend/fallback scenarios.
-      // Even though Supabase sends a confirmation email, users may need to resend
-      // the verification email via our custom token flow from the login page.
+      // Send our own verification email via Resend (reliable delivery).
+      // Supabase also sends its confirmation email as a secondary/fallback.
       if (appUser && !isOwner) {
         try {
           const customVerificationToken = crypto.randomBytes(48).toString("hex");
+          await db.deleteUserVerificationTokens(appUser.id);
           await db.createEmailVerificationToken(appUser.id, email, customVerificationToken);
-          // Note: not sending custom token email here — Supabase's is preferred.
-          // Custom tokens are only emailed when user clicks "Resend verification" from login.
+          const verifyUrl = `${origin}/verify-email?token=${customVerificationToken}`;
+          await sendVerificationEmail({
+            to: email,
+            name: userName,
+            verifyUrl,
+          });
+          console.log(`[SupabaseAuth] Verification email sent via Resend to ${email}`);
         } catch (tokenErr) {
-          console.error("[SupabaseAuth] Failed to create backup verification token:", tokenErr);
-          // This is non-blocking — Supabase email should still work.
+          console.error("[SupabaseAuth] Failed to send verification email:", tokenErr);
+          // Non-blocking — Supabase email should still be delivered as fallback.
         }
-      }
-
-      if (appUser && !isOwner) {
-        console.log(`[SupabaseAuth] Confirmation email dispatched by Supabase/Resend to ${email}`);
       }
 
       // Auto-generate discount code for employees
@@ -922,18 +923,28 @@ export function registerSupabaseAuthRoutes(app: Express) {
           }
         | null
         = null;
+      let sessionTokens: { access_token: string; refresh_token: string; expires_in: number } | null = null;
 
       if (code) {
         const { data, error } = await anonClient.auth.exchangeCodeForSession(code);
         if (error || !data.user) {
+          console.error("[SupabaseAuth] Code exchange failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
         supabaseUser = data.user;
+        if (data.session) {
+          sessionTokens = {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_in: data.session.expires_in,
+          };
+        }
       } else if (access_token) {
         const admin = getAdminClient();
         const { data, error } = await admin.auth.getUser(access_token);
         if (error || !data.user) {
+          console.error("[SupabaseAuth] Access token verification failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -944,10 +955,18 @@ export function registerSupabaseAuthRoutes(app: Express) {
           type: type as EmailOtpType,
         });
         if (error || !data.user) {
+          console.error("[SupabaseAuth] OTP verification failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
         supabaseUser = data.user;
+        if (data.session) {
+          sessionTokens = {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_in: data.session.expires_in,
+          };
+        }
       } else {
         res.status(400).json({ error: "Verification data is required" });
         return;
@@ -1003,7 +1022,32 @@ export function registerSupabaseAuthRoutes(app: Express) {
         }).catch(() => {});
       }
 
-      res.json({ success: true, message: "Email verified successfully! You can now sign in." });
+      const freshUser = await db.getUserByOpenId(supabaseUser.id);
+      const userRole = freshUser?.role || "subscriber";
+
+      if (sessionTokens) {
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(SUPABASE_SESSION_COOKIE, JSON.stringify({
+          access_token: sessionTokens.access_token,
+          refresh_token: sessionTokens.refresh_token,
+        }), {
+          ...cookieOptions,
+          maxAge: sessionTokens.expires_in * 1000,
+        });
+      }
+
+      const redirectPath = getPostAuthRedirectPath(userRole, null);
+      res.json({
+        success: true,
+        message: "Email verified successfully!",
+        sessionSet: !!sessionTokens,
+        redirectPath,
+        user: {
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+          role: userRole,
+        },
+      });
     } catch (err) {
       console.error("[SupabaseAuth] Supabase email verification error:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -1076,36 +1120,36 @@ export function registerSupabaseAuthRoutes(app: Express) {
         return;
       }
       const origin = getOriginUrl(req);
-      const admin = getAdminClient();
-      const { data: authLookup, error: authLookupError } = await admin.auth.admin.getUserById(user.openId);
-      const authUser = authLookup?.user;
 
-      if (!authLookupError && authUser && !isSupabaseEmailConfirmed(authUser)) {
-        const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { error: resendError } = await anonClient.auth.resend({
-          type: "signup",
-          email,
-          options: {
-            emailRedirectTo: `${origin}/verify-email`,
-          },
-        });
-        if (resendError) {
-          console.error("[SupabaseAuth] Failed to resend Supabase verification email:", resendError.message);
-        }
-      } else {
-        const verificationToken = crypto.randomBytes(48).toString("hex");
-        await db.deleteUserVerificationTokens(user.id);
-        await db.createEmailVerificationToken(user.id, email, verificationToken);
-        const verifyUrl = `${origin}/verify-email?token=${verificationToken}`;
-        try {
-          await sendVerificationEmail({ to: email, name: user.name || email.split("@")[0], verifyUrl });
-        } catch (emailErr) {
-          console.error("[SupabaseAuth] Failed to resend verification email:", emailErr);
-        }
+      const verificationToken = crypto.randomBytes(48).toString("hex");
+      await db.deleteUserVerificationTokens(user.id);
+      await db.createEmailVerificationToken(user.id, email, verificationToken);
+      const verifyUrl = `${origin}/verify-email?token=${verificationToken}`;
+      try {
+        await sendVerificationEmail({ to: email, name: user.name || email.split("@")[0], verifyUrl });
+        console.log(`[SupabaseAuth] Custom verification email sent to ${email}`);
+      } catch (emailErr) {
+        console.error("[SupabaseAuth] Failed to resend verification email:", emailErr);
       }
-      res.json({ success: true, message: "Verification email resent. Please check your inbox." });
+
+      try {
+        const admin = getAdminClient();
+        const { data: authLookup } = await admin.auth.admin.getUserById(user.openId);
+        if (authLookup?.user && !isSupabaseEmailConfirmed(authLookup.user)) {
+          const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          await anonClient.auth.resend({
+            type: "signup",
+            email,
+            options: { emailRedirectTo: `${origin}/verify-email` },
+          });
+        }
+      } catch (supabaseErr) {
+        console.error("[SupabaseAuth] Supabase resend (secondary) failed:", supabaseErr);
+      }
+
+      res.json({ success: true, message: "Verification email sent. Please check your inbox." });
     } catch (err) {
       console.error("[SupabaseAuth] Resend verification error:", err);
       res.status(500).json({ error: "Internal server error" });

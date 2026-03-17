@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import BrandLogo from "@/components/shared/BrandLogo";
 
-type VerifyState = "loading" | "success" | "error" | "resend";
+type VerifyState = "loading" | "success" | "success-redirect" | "error" | "resend";
 
 export default function VerifyEmail() {
   const [, setLocation] = useLocation();
@@ -16,6 +16,23 @@ export default function VerifyEmail() {
   const [resendEmail, setResendEmail] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+  const [redirectPath, setRedirectPath] = useState("/dashboard");
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
+
+  useEffect(() => {
+    if (state !== "success-redirect") return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(timer);
+          setLocation(redirectPath);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [state, redirectPath, setLocation]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -53,11 +70,15 @@ export default function VerifyEmail() {
         throw new Error(data.error || "Verification failed. The link may have expired.");
       }
       clearAuthParams();
-      setState("success");
+      if (data.sessionSet && data.redirectPath) {
+        setRedirectPath(data.redirectPath);
+        setState("success-redirect");
+      } else {
+        setState("success");
+      }
     };
 
     if (!token && !code && !tokenHash && !accessToken) {
-      // No token — show resend form
       setState("resend");
       return;
     }
@@ -139,7 +160,28 @@ export default function VerifyEmail() {
             </>
           )}
 
-          {/* Success */}
+          {/* Success with auto-redirect (session was set) */}
+          {state === "success-redirect" && (
+            <>
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">Email Verified!</h1>
+              <p className="text-slate-600 mb-4">
+                Your email address has been confirmed. Your account is now active.
+              </p>
+              <p className="text-slate-500 text-sm mb-6">
+                Redirecting to your dashboard in {redirectCountdown}...
+              </p>
+              <Button
+                onClick={() => setLocation(redirectPath)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                data-testid="button-go-to-dashboard"
+              >
+                Go to Dashboard Now
+              </Button>
+            </>
+          )}
+
+          {/* Success without session (custom token — needs login) */}
           {state === "success" && (
             <>
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
