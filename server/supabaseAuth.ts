@@ -538,23 +538,19 @@ export function registerSupabaseAuthRoutes(app: Express) {
         return;
       }
 
-      // Use anon client signUp so Supabase sends the confirmation email via our Resend SMTP relay
-      const anonSignupClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
+      // Use admin client to create user without triggering Supabase's own confirmation email.
+      // We send exactly one verification email via Resend below.
       const origin = getOriginUrl(req);
-      const { data, error } = await anonSignupClient.auth.signUp({
+      const { data, error } = await getAdminClient().auth.admin.createUser({
         email,
         password,
-        options: {
-          emailRedirectTo: `${origin}/verify-email`,
-          data: { name: name || email.split("@")[0] },
-        },
+        email_confirm: false,
+        user_metadata: { name: name || email.split("@")[0] },
       });
 
       if (error) {
         console.error("[SupabaseAuth] Signup error:", error.message);
-        if (error.message.includes("already been registered") || error.message.includes("already exists")) {
+        if (error.message.includes("already been registered") || error.message.includes("already exists") || error.message.includes("already registered")) {
           res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
           return;
         }
@@ -590,8 +586,8 @@ export function registerSupabaseAuthRoutes(app: Express) {
       // Get the app user record to get the integer id
       const appUser = await db.getUserByOpenId(data.user.id);
 
-      // Send our own verification email via Resend (reliable delivery).
-      // Supabase also sends its confirmation email as a secondary/fallback.
+      // Send the single verification email via Resend.
+      // Supabase's own confirmation email is suppressed (admin createUser with email_confirm: false).
       if (appUser && !isOwner) {
         try {
           const customVerificationToken = crypto.randomBytes(48).toString("hex");
@@ -606,7 +602,6 @@ export function registerSupabaseAuthRoutes(app: Express) {
           console.log(`[SupabaseAuth] Verification email sent via Resend to ${email}`);
         } catch (tokenErr) {
           console.error("[SupabaseAuth] Failed to send verification email:", tokenErr);
-          // Non-blocking — Supabase email should still be delivered as fallback.
         }
       }
 
@@ -1069,32 +1064,44 @@ export function registerSupabaseAuthRoutes(app: Express) {
         return;
       }
       const origin = getOriginUrl(req);
-      // Single DB read: invalidate cache + send welcome email in one pass.
       // consumeVerificationToken writes directly to the DB (not via upsertUser),
       // so we must call invalidateUserCache manually here.
-      db.getUserById(record.userId).then(async (user) => {
-        if (!user) return;
-        if (user.openId) invalidateUserCache(user.openId);
-
-        // Auto-generate discount code for employees on verification if not already done
-        if (user.role === "employee") {
-          try {
-            await db.createDiscountCodeForEmployee(user.id, user.name || "Employee");
-          } catch (codeErr) {
-            console.error("[SupabaseAuth] Failed to create discount code on verification:", codeErr);
-          }
+      const user = await db.getUserById(record.userId);
+      if (user?.openId) {
+        invalidateUserCache(user.openId);
+        // Mark email as confirmed in Supabase before responding so that
+        // signInWithPassword works immediately after the user clicks the link.
+        try {
+          await getAdminClient().auth.admin.updateUserById(user.openId, { email_confirm: true });
+        } catch (confirmErr) {
+          console.error("[SupabaseAuth] Failed to confirm email in Supabase:", confirmErr);
         }
+      }
 
-        if (user.email) {
-          try {
-            // Re-fetch user to ensure it has the discount code if it was just created
-            const freshUser = await db.getUserById(user.id);
-            await sendRoleBasedWelcomeEmail(freshUser || user, origin);
-          } catch (emailErr) {
-            console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
+      // Non-critical side-effects (discount codes, welcome email) run in the background.
+      if (user) {
+        (async () => {
+          // Auto-generate discount code for employees on verification if not already done
+          if (user.role === "employee") {
+            try {
+              await db.createDiscountCodeForEmployee(user.id, user.name || "Employee");
+            } catch (codeErr) {
+              console.error("[SupabaseAuth] Failed to create discount code on verification:", codeErr);
+            }
           }
-        }
-      }).catch(() => {});
+
+          if (user.email) {
+            try {
+              // Re-fetch user to ensure it has the discount code if it was just created
+              const freshUser = await db.getUserById(user.id);
+              await sendRoleBasedWelcomeEmail(freshUser || user, origin);
+            } catch (emailErr) {
+              console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
+            }
+          }
+        })().catch(() => {});
+      }
+
       res.json({ success: true, message: "Email verified successfully! You can now sign in." });
     } catch (err) {
       console.error("[SupabaseAuth] Email verification error:", err);
