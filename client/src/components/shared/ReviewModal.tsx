@@ -220,7 +220,7 @@ export default function ReviewModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-none w-screen h-screen sm:w-[95vw] sm:h-[95vh] sm:max-w-7xl p-0 gap-0 overflow-hidden rounded-none sm:rounded-xl flex flex-col">
+      <DialogContent showCloseButton={false} className="max-w-none w-screen h-screen sm:w-[95vw] sm:h-[95vh] sm:max-w-7xl p-0 gap-0 overflow-hidden rounded-none sm:rounded-xl flex flex-col">
 
         {/* ═══════════════════════════════════════════════════
             HEADER — sticky, never wraps, always readable
@@ -279,10 +279,19 @@ export default function ReviewModal({
                 onClick={() => claimMutation.mutate({ letterId })}
                 disabled={claimMutation.isPending}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 min-w-[138px] justify-center"
               >
-                <ClipboardList className="w-4 h-4 mr-1.5" />
-                {claimMutation.isPending ? "Claiming..." : "Claim for Review"}
+                {claimMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    Claiming…
+                  </>
+                ) : (
+                  <>
+                    <ClipboardList className="w-4 h-4 mr-1.5" />
+                    Claim for Review
+                  </>
+                )}
               </Button>
             )}
 
@@ -805,7 +814,7 @@ export default function ReviewModal({
                   approveMutation.isPending ||
                   htmlToPlainText(approveContent).length < 50
                 }
-                className="bg-green-600 hover:bg-green-700 text-white px-6 font-semibold"
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold min-w-[160px] justify-center"
               >
                 {approveMutation.isPending ? (
                   <>

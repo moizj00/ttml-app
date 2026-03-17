@@ -408,9 +408,20 @@ export default function LetterDetail() {
             </CardHeader>
             <CardContent>
               <div className="bg-white border border-green-200 rounded-lg p-5">
-                <pre className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed">
-                  {finalVersion.content}
-                </pre>
+                {/<[a-z][\s\S]*>/i.test(finalVersion.content) ? (
+                  <div
+                    className="prose prose-sm max-w-none text-foreground
+                      prose-p:my-2 prose-p:leading-relaxed
+                      prose-headings:font-semibold prose-headings:text-foreground
+                      prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5
+                      prose-strong:text-foreground"
+                    dangerouslySetInnerHTML={{ __html: finalVersion.content }}
+                  />
+                ) : (
+                  <pre className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-sans">
+                    {finalVersion.content}
+                  </pre>
+                )}
               </div>
             </CardContent>
           </Card>
