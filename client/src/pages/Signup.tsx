@@ -22,6 +22,7 @@ import {
   Check,
   User,
   Briefcase,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -81,6 +82,7 @@ export default function Signup() {
   const [role, setRole] = useState<RoleOption>(
     requestedRoleFromSearch ?? "subscriber"
   );
+  const [wantsAffiliate, setWantsAffiliate] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -208,6 +210,7 @@ export default function Signup() {
               password,
               name: name || undefined,
               role,
+              wantsAffiliate: role === "employee" ? wantsAffiliate : undefined,
             }),
             signal: controller.signal,
           });
@@ -477,10 +480,45 @@ export default function Signup() {
                   ))}
                 </div>
                 {role === "employee" && (
-                  <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    Employee accounts require admin approval before full access
-                    is granted.
-                  </p>
+                  <>
+                    <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                      Employee accounts require admin approval before full
+                      access is granted.
+                    </p>
+                    <div
+                      className={cn(
+                        "flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-all duration-150",
+                        wantsAffiliate
+                          ? "border-indigo-500 bg-indigo-50"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      )}
+                      onClick={() => setWantsAffiliate(v => !v)}
+                      data-testid="card-affiliate-opt-in"
+                    >
+                      <input
+                        type="checkbox"
+                        id="wantsAffiliate"
+                        checked={wantsAffiliate}
+                        onChange={e => setWantsAffiliate(e.target.checked)}
+                        onClick={e => e.stopPropagation()}
+                        className="mt-0.5 shrink-0 w-4 h-4 accent-indigo-600 cursor-pointer"
+                        data-testid="checkbox-affiliate"
+                      />
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                          <span className="text-xs font-semibold text-slate-800">
+                            Join the referral program
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-tight">
+                          Get a personal 20% discount code to share. Each code
+                          is single-use — it auto-rotates every time you copy
+                          it, keeping every share unique.
+                        </p>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
 

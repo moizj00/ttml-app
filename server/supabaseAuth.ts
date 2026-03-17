@@ -519,7 +519,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
   // POST /api/auth/signup — Create a new user via Supabase Auth
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
-      const { email, password, name, role: requestedRole } = req.body;
+      const { email, password, name, role: requestedRole, wantsAffiliate } = req.body;
       // Attorney role is NOT self-assignable — it can only be granted by a super admin via the Users page
       const ALLOWED_SIGNUP_ROLES = ["subscriber", "employee"];
       if (requestedRole && !ALLOWED_SIGNUP_ROLES.includes(requestedRole)) {
@@ -605,11 +605,11 @@ export function registerSupabaseAuthRoutes(app: Express) {
         }
       }
 
-      // Auto-generate discount code for employees
-      if (appUser && signupRole === "employee") {
+      // Auto-generate discount code for employees who opted into the affiliate program
+      if (appUser && signupRole === "employee" && wantsAffiliate === true) {
         try {
           await db.createDiscountCodeForEmployee(appUser.id, userName);
-          console.log(`[SupabaseAuth] Discount code auto-generated for new employee #${appUser.id}`);
+          console.log(`[SupabaseAuth] Discount code generated for new affiliate employee #${appUser.id}`);
         } catch (codeErr) {
           console.error("[SupabaseAuth] Failed to create discount code for employee:", codeErr);
           // Non-fatal — employee can still sign up

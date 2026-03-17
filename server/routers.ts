@@ -46,6 +46,7 @@ import {
   archiveLetterRequest,
   createDiscountCodeForEmployee,
   getDiscountCodeByEmployeeId,
+  rotateDiscountCode,
   getDiscountCodeByCode,
   getAllDiscountCodes,
   updateDiscountCode,
@@ -1588,6 +1589,16 @@ export const appRouter = router({
           ctx.user.name ?? "EMP"
         );
       }
+      return code;
+    }),
+
+    // Employee: rotate (regenerate) my discount code — called after copying
+    rotateCode: employeeProcedure.mutation(async ({ ctx }) => {
+      const code = await rotateDiscountCode(
+        ctx.user.id,
+        ctx.user.name ?? "EMP"
+      );
+      if (!code) throw new TRPCError({ code: "NOT_FOUND", message: "No discount code found to rotate." });
       return code;
     }),
 

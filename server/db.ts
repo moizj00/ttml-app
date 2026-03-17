@@ -1020,7 +1020,28 @@ export async function createDiscountCodeForEmployee(
       discountPercent: 20,
       isActive: true,
       usageCount: 0,
+      maxUses: 1,
     })
+    .returning();
+  return result[0];
+}
+
+export async function rotateDiscountCode(
+  employeeId: number,
+  employeeName: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const newCode = generateDiscountCode(employeeName);
+  const result = await db
+    .update(discountCodes)
+    .set({
+      code: newCode,
+      usageCount: 0,
+      maxUses: 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(discountCodes.employeeId, employeeId))
     .returning();
   return result[0];
 }

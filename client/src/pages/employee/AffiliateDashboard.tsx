@@ -90,6 +90,11 @@ export default function AffiliateDashboard() {
       toast.error("Payout request failed", { description: err.message }),
   });
 
+  const rotateCode = trpc.affiliate.rotateCode.useMutation({
+    onSuccess: () => utils.affiliate.myCode.invalidate(),
+    onError: err => console.error("[AffiliateDashboard] rotateCode error:", err.message),
+  });
+
   const availableBalanceDollars = (earnings?.pending ?? 0) / 100;
 
   const handleRequestPayout = () => {
@@ -135,11 +140,14 @@ export default function AffiliateDashboard() {
   // ─── Copy helpers ───────────────────────────────────────────
   const handleCopyCode = () => {
     if (!discountCode?.code) return;
-    navigator.clipboard.writeText(discountCode.code).then(
-      () =>
-        toast.success("Copied", {
-          description: "Discount code copied to clipboard.",
-        }),
+    const codeToCopy = discountCode.code;
+    navigator.clipboard.writeText(codeToCopy).then(
+      () => {
+        toast.success("Copied & refreshed", {
+          description: `${codeToCopy} copied. A new code is now ready for your next share.`,
+        });
+        rotateCode.mutate();
+      },
       () =>
         toast.error("Copy failed", {
           description: "Please select and copy the code manually.",
@@ -308,19 +316,37 @@ export default function AffiliateDashboard() {
                     </div>
                     
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold uppercase text-muted-foreground">Discount Code</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase text-muted-foreground">Discount Code</span>
+                        <span className="text-[10px] text-muted-foreground/70 italic">Single-use · rotates on copy</span>
+                      </div>
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1 rounded-lg bg-muted px-4 py-2 text-center font-mono text-lg font-bold tracking-wider">
-                          {discountCode.code}
+                          {rotateCode.isPending ? (
+                            <span className="text-muted-foreground text-sm font-normal flex items-center justify-center gap-1.5">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Refreshing…
+                            </span>
+                          ) : discountCode.code}
                         </div>
                         <Button
                           onClick={handleCopyCode}
                           variant="outline"
                           size="sm"
+                          disabled={rotateCode.isPending}
+                          data-testid="button-copy-discount-code"
+                          title="Copy code — a new code is generated after each copy"
                         >
-                          <Copy className="w-4 h-4" />
+                          {rotateCode.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
                         </Button>
                       </div>
+                      <p className="text-[11px] text-muted-foreground leading-tight">
+                        Each code can only be used by <strong>one account</strong>. When you copy, the code refreshes so every share is unique.
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between pt-2 border-t">
