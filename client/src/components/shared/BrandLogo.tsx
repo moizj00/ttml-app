@@ -51,19 +51,13 @@ function BrandLogoContent({
           src={LOGO_FULL}
           alt="Talk to My Lawyer"
           style={{ height: config.mobileH }}
-          className={cn(
-            "object-contain flex-shrink-0 block md:hidden",
-            variant === "dark" && "brightness-0 invert"
-          )}
+          className="object-contain flex-shrink-0 block md:hidden"
         />
         <img
           src={LOGO_FULL}
           alt="Talk to My Lawyer"
           style={{ height: config.h }}
-          className={cn(
-            "object-contain flex-shrink-0 hidden md:block",
-            variant === "dark" && "brightness-0 invert"
-          )}
+          className="object-contain flex-shrink-0 hidden md:block"
         />
       </>
     );
@@ -74,10 +68,7 @@ function BrandLogoContent({
       src={LOGO_FULL}
       alt="Talk to My Lawyer"
       style={{ height: config.h }}
-      className={cn(
-        "object-contain flex-shrink-0 block max-w-full",
-        variant === "dark" && "brightness-0 invert"
-      )}
+      className="object-contain flex-shrink-0 block max-w-full"
     />
   );
 }
