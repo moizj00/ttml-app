@@ -590,9 +590,21 @@ export function registerSupabaseAuthRoutes(app: Express) {
       // Get the app user record to get the integer id
       const appUser = await db.getUserByOpenId(data.user.id);
 
-      // Supabase now sends the confirmation email via our Resend SMTP relay (smtp.resend.com).
-      // The emailRedirectTo in signUp() above points to /verify-email on the correct domain.
-      // No need to send a separate custom verification email here.
+      // Backup: also create a custom verification token for resend/fallback scenarios.
+      // Even though Supabase sends a confirmation email, users may need to resend
+      // the verification email via our custom token flow from the login page.
+      if (appUser && !isOwner) {
+        try {
+          const customVerificationToken = crypto.randomBytes(48).toString("hex");
+          await db.createEmailVerificationToken(appUser.id, email, customVerificationToken);
+          // Note: not sending custom token email here — Supabase's is preferred.
+          // Custom tokens are only emailed when user clicks "Resend verification" from login.
+        } catch (tokenErr) {
+          console.error("[SupabaseAuth] Failed to create backup verification token:", tokenErr);
+          // This is non-blocking — Supabase email should still work.
+        }
+      }
+
       if (appUser && !isOwner) {
         console.log(`[SupabaseAuth] Confirmation email dispatched by Supabase/Resend to ${email}`);
       }
