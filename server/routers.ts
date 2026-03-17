@@ -1709,20 +1709,35 @@ export const appRouter = router({
           const commissions = await getCommissionsByEmployeeId(
             payout.employeeId
           );
+          // Sort oldest-first so we settle in chronological order
           const pendingCommissions = commissions
             .filter(c => c.status === "pending")
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-          let remaining = payout.amount;
+
+          // Mark commissions oldest-first until the cumulative total meets or
+          // exceeds the payout amount. This guarantees the full payout is always
+          // settled — even when a single commission is larger than the residual.
+          // Commissions are indivisible, so the last marked one may slightly
+          // over-cover; that small surplus stays on the employee's ledger.
+          let cumulative = 0;
           const idsToMark: number[] = [];
           for (const c of pendingCommissions) {
-            if (remaining <= 0) break;
-            if (c.commissionAmount <= remaining) {
-              idsToMark.push(c.id);
-              remaining -= c.commissionAmount;
-            }
+            if (cumulative >= payout.amount) break;
+            idsToMark.push(c.id);
+            cumulative += c.commissionAmount;
           }
+
           if (idsToMark.length > 0) {
             await markCommissionsPaid(idsToMark);
+            console.log(
+              `[adminProcessPayout] Payout #${input.payoutId}: marked ${idsToMark.length} commission(s) ` +
+              `totalling ${cumulative} cents as paid (payout amount: ${payout.amount} cents)`
+            );
+          } else {
+            console.warn(
+              `[adminProcessPayout] Payout #${input.payoutId}: no pending commissions found to settle ` +
+              `for employee #${payout.employeeId}`
+            );
           }
         }
 
