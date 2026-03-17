@@ -71,15 +71,30 @@
       "sourceType": "github",
       "computedHash": "8e50ee8d0bf35cfc74849328fdc5df9a5db8ab4c8e58a126aeb6a56bc47f314f"
     },
+    "e2e-testing-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "37ea37e42a81c926ebd81924691a15fb657df7c8a52b863c34967e5ab99cdc22"
+    },
     "enhance-prompt": {
       "source": "google-labs-code/stitch-skills",
       "sourceType": "github",
       "computedHash": "71cc23e9ec5fc6361e12453495fa8c683f6cf26f3efaf9b230b0f43e0a32cc96"
     },
+    "expo-dev-client": {
+      "source": "expo/skills",
+      "sourceType": "github",
+      "computedHash": "234e2633b7fbcef2d479f8fe8ab20d53d08ed3e4beec7c965da4aff5b43affe7"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
       "computedHash": "d31e234f0c90694a670222cdd1dafa853e051d7066beda389f1097c22dadd461"
+    },
+    "finishing-a-development-branch": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "computedHash": "9edba9a38684c060fdc38290f640e1dc0c37de286723ac9be73bacacf7cd6f3d"
     },
     "fixing-motion-performance": {
       "source": "ibelick/ui-skills",
@@ -130,6 +145,16 @@
       "source": "sickn33/antigravity-awesome-skills",
       "sourceType": "github",
       "computedHash": "915f9c5cf1387e3860a67ad74c0ac287f994c2f95fbed4c1d8eca536e4e5df81"
+    },
+    "postgresql-table-design": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "0728424e6f56972333bd60e4f45da0322ac6db273744d863aa2b94f1e95d61ec"
+    },
+    "python-testing-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "c9ac74e0ecade3d4aacc89b8eb9eec63d9125a3a02e4bac9781ae0ca371227ad"
     },
     "react-native-best-practices": {
       "source": "callstackincubator/agent-skills",
@@ -186,6 +211,11 @@
       "sourceType": "github",
       "computedHash": "7ff2f4650597e98ca4cd8f01231fb432ab4d187d6b12e641485aa871a04448cc"
     },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "computedHash": "126f1ebf6ccd414f42544f6e83d8cc5adb089e1108eaffb7c400701e37eecd9f"
+    },
     "threejs-animation": {
       "source": "cloudai-x/threejs-skills",
       "sourceType": "github",
@@ -205,6 +235,11 @@
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "computedHash": "2e9088a7333666d8c2833b8ff58bd51b955501c42b4c7244f72b4cbf22dafcc4"
+    },
+    "vitest": {
+      "source": "antfu/skills",
+      "sourceType": "github",
+      "computedHash": "669c7275f7e1379b06b2bcfa593603aead4c983b951c7e8edbc09640aa38d0a1"
     },
     "vueuse-functions": {
       "source": "antfu/skills",
