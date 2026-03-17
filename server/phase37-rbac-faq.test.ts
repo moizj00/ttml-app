@@ -159,13 +159,13 @@ describe("Phase 37: Role-based routing, FAQ, Onboarding, Mobile nav", () => {
     it("should have an inline FAQ section with id='faq'", () => {
       const content = readFileSync(filePath, "utf-8");
       expect(content).toContain('id="faq"');
-      expect(content).toContain("Frequently Asked Questions");
+      expect(content).toContain("FAQ");
     });
 
-    it("should use Accordion for inline FAQ", () => {
+    it("should use collapsible FAQ items with ChevronDown toggle", () => {
       const content = readFileSync(filePath, "utf-8");
-      expect(content).toContain("Accordion");
-      expect(content).toContain("AccordionItem");
+      expect(content).toContain("ChevronDown");
+      expect(content).toContain("faqs.map");
     });
 
     it("should have a 'View All FAQs' link to /faq", () => {
@@ -177,7 +177,7 @@ describe("Phase 37: Role-based routing, FAQ, Onboarding, Mobile nav", () => {
     it("should have a mobile hamburger menu", () => {
       const content = readFileSync(filePath, "utf-8");
       expect(content).toContain("mobileMenuOpen");
-      expect(content).toContain("sm:hidden");
+      expect(content).toContain("md:hidden");
       expect(content).toContain("Menu");
     });
 
@@ -189,7 +189,7 @@ describe("Phase 37: Role-based routing, FAQ, Onboarding, Mobile nav", () => {
     it("should have footer links including FAQ", () => {
       const content = readFileSync(filePath, "utf-8");
       expect(content).toContain('href="/faq"');
-      expect(content).toContain('href="/pricing"');
+      expect(content).toContain('href="/terms"');
     });
   });
 

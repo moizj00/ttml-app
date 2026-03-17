@@ -215,9 +215,10 @@ describe("Letter Claiming Flow — State Machine Integrity", () => {
   });
 
   it("ALLOWED_TRANSITIONS defines under_review → approved, rejected, needs_changes", () => {
-    expect(dbFile).toMatch(/under_review[\s\S]{0,100}approved/);
-    expect(dbFile).toMatch(/under_review[\s\S]{0,100}rejected/);
-    expect(dbFile).toMatch(/under_review[\s\S]{0,100}needs_changes/);
+    const typesFile = readFileSync(join(__dirname, "..", "shared", "types.ts"), "utf-8");
+    expect(typesFile).toMatch(/under_review[\s\S]{0,100}approved/);
+    expect(typesFile).toMatch(/under_review[\s\S]{0,100}rejected/);
+    expect(typesFile).toMatch(/under_review[\s\S]{0,100}needs_changes/);
   });
 
   it("claim mutation transitions from pending_review to under_review", () => {
@@ -252,7 +253,7 @@ describe("Letter Claiming Flow — Subscriber Delivery (My Letters Area)", () =>
   });
 
   it("subscriber LetterDetail shows a Download PDF button for approved letters", () => {
-    expect(subscriberDetailFile).toContain("Download PDF");
+    expect(subscriberDetailFile).toContain("Download Reviewed PDF");
     expect(subscriberDetailFile).toContain("approved");
   });
 

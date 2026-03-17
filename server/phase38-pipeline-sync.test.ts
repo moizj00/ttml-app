@@ -46,7 +46,7 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
 
     it("pdfGenerator includes attorney approval stamp in PDF", () => {
       const content = fs.readFileSync(path.join(SERVER_DIR, "pdfGenerator.ts"), "utf-8");
-      expect(content).toContain("ATTORNEY REVIEWED & APPROVED");
+      expect(content).toContain("REVIEWED PDF — ATTORNEY APPROVED");
     });
 
     it("pdfGenerator includes Talk to My Lawyer branding", () => {
@@ -176,7 +176,7 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
         content.indexOf("export async function sendLetterApprovedEmail"),
         content.indexOf("export async function sendNeedsChangesEmail")
       );
-      expect(fnSection).toContain("Download your approved letter as PDF");
+      expect(fnSection).toContain("Download your Reviewed PDF");
     });
   });
 
@@ -198,12 +198,12 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
       expect(content).toContain("data?.letter?.pdfUrl");
     });
 
-    it("LetterDetail shows 'Download PDF' label when pdfUrl exists", () => {
+    it("LetterDetail shows 'Download Reviewed PDF' label when pdfUrl exists", () => {
       const content = fs.readFileSync(
         path.join(CLIENT_DIR, "pages/subscriber/LetterDetail.tsx"),
         "utf-8"
       );
-      expect(content).toContain("Download PDF");
+      expect(content).toContain("Download Reviewed PDF");
     });
 
     it("getLetterRequestSafeForSubscriber returns pdfUrl field", () => {

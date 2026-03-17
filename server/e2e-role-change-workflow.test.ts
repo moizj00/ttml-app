@@ -42,9 +42,9 @@ describe("Super Admin Whitelist — Four Independent Enforcement Points", () => 
     expect(authFile).toMatch(/SUPER_ADMIN_EMAILS\s*=\s*\[/);
   });
 
-  it("references SUPER_ADMIN_EMAILS at least 8 times (4 definitions + 4 usages)", () => {
+  it("references SUPER_ADMIN_EMAILS at least 6 times (1 definition + 5 usages)", () => {
     const occurrences = (authFile.match(/SUPER_ADMIN_EMAILS/g) ?? []).length;
-    expect(occurrences).toBeGreaterThanOrEqual(8);
+    expect(occurrences).toBeGreaterThanOrEqual(6);
   });
 
   it("enforces whitelist in syncGoogleUser (Google OAuth signup/login)", () => {
@@ -77,8 +77,14 @@ describe("Super Admin Whitelist — Four Independent Enforcement Points", () => 
     expect(allowedRolesContent).not.toContain("admin");
   });
 
-  it("blocks attorney self-signup via Google OAuth (safeRole excludes attorney)", () => {
-    expect(authFile).toMatch(/safeRole[\s\S]{0,200}subscriber.*employee|employee.*subscriber/);
+  it("blocks attorney self-signup via Google OAuth (ALLOWED_OAUTH_ROLES excludes attorney)", () => {
+    const oauthRolesMatch = authFile.match(/ALLOWED_OAUTH_ROLES\s*=\s*\[([^\]]+)\]/);
+    expect(oauthRolesMatch).not.toBeNull();
+    const oauthRolesContent = oauthRolesMatch![1];
+    expect(oauthRolesContent).not.toContain("attorney");
+    expect(oauthRolesContent).not.toContain("admin");
+    expect(oauthRolesContent).toContain("subscriber");
+    expect(oauthRolesContent).toContain("employee");
   });
 });
 

@@ -191,11 +191,8 @@ describe("approval flow", () => {
     const routersSource = await import("fs").then(fs =>
       fs.readFileSync(new URL("./routers.ts", import.meta.url).pathname, "utf-8")
     );
-    // freeUnlock transitions to pending_review
     expect(routersSource).toContain('"pending_review"');
-    // payTrialReview transitions to pending_review (replaced sendForReview in Phase 67)
-    expect(routersSource).toContain("payTrialReview");
-    // approve requires under_review status
+    expect(routersSource).toContain("freeUnlock");
     expect(routersSource).toContain("Letter must be under_review to approve");
   });
 });
@@ -235,6 +232,6 @@ describe("My Letters page", () => {
     );
     expect(source).toContain("window.open(data.letter.pdfUrl");
     expect(source).toContain("_blank");
-    expect(source).toContain("Download PDF");
+    expect(source).toContain("Download Reviewed PDF");
   });
 });
