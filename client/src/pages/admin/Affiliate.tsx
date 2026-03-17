@@ -361,7 +361,7 @@ export default function AdminAffiliate() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Code</TableHead>
-                        <TableHead>Employee ID</TableHead>
+                        <TableHead>Employee</TableHead>
                         <TableHead className="text-center">Discount</TableHead>
                         <TableHead className="text-center">Uses</TableHead>
                         <TableHead className="text-center">Max Uses</TableHead>
@@ -375,7 +375,12 @@ export default function AdminAffiliate() {
                           <TableCell className="font-mono font-medium">
                             {code.code}
                           </TableCell>
-                          <TableCell>#{code.employeeId}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-sm">{code.employeeName ?? "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground">{code.employeeEmail ?? `#${code.employeeId}`}</p>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-center">
                             {code.discountPercent}%
                           </TableCell>
@@ -449,7 +454,12 @@ export default function AdminAffiliate() {
                             <TableCell className="text-sm">
                               {formatDate(c.createdAt)}
                             </TableCell>
-                            <TableCell>#{c.employeeId}</TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-sm">{c.employeeName ?? "Unknown"}</p>
+                                <p className="text-xs text-muted-foreground">{c.employeeEmail ?? `#${c.employeeId}`}</p>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               {formatCurrency(c.saleAmount)}
                             </TableCell>
@@ -512,7 +522,12 @@ export default function AdminAffiliate() {
                           <TableCell className="text-sm">
                             {formatDate(p.createdAt)}
                           </TableCell>
-                          <TableCell>#{p.employeeId}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-sm">{p.employeeName ?? "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground">{p.employeeEmail ?? `#${p.employeeId}`}</p>
+                            </div>
+                          </TableCell>
                           <TableCell className="font-medium">
                             {formatCurrency(p.amount)}
                           </TableCell>
@@ -594,7 +609,7 @@ export default function AdminAffiliate() {
               </DialogTitle>
               <DialogDescription>
                 {processingPayout?.action === "completed"
-                  ? "Confirm that this payout has been sent to the employee. All pending commissions will be marked as paid."
+                  ? "Confirm that this payout has been sent to the employee. Oldest pending commissions up to the payout amount will be marked as paid."
                   : "Provide a reason for rejecting this payout request."}
               </DialogDescription>
             </DialogHeader>

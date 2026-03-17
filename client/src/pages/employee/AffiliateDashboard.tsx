@@ -44,7 +44,6 @@ import {
   Clock,
   Loader2,
   Wallet,
-  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -74,6 +73,8 @@ export default function AffiliateDashboard() {
   const [payoutOpen, setPayoutOpen] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutMethod, setPayoutMethod] = useState("bank_transfer");
+  const [paypalEmail, setPaypalEmail] = useState("");
+  const [venmoHandle, setVenmoHandle] = useState("");
 
   const requestPayout = trpc.affiliate.requestPayout.useMutation({
     onSuccess: () => {
@@ -89,6 +90,8 @@ export default function AffiliateDashboard() {
       toast.error("Payout request failed", { description: err.message }),
   });
 
+  const availableBalanceDollars = (earnings?.pending ?? 0) / 100;
+
   const handleRequestPayout = () => {
     const amountCents = Math.round(parseFloat(payoutAmount) * 100);
     if (isNaN(amountCents) || amountCents < 1000) {
@@ -97,7 +100,36 @@ export default function AffiliateDashboard() {
       });
       return;
     }
-    requestPayout.mutate({ amount: amountCents, paymentMethod: payoutMethod });
+    if (amountCents > (earnings?.pending ?? 0)) {
+      toast.error("Exceeds balance", {
+        description: `You can request up to ${formatCurrency(earnings?.pending ?? 0)}.`,
+      });
+      return;
+    }
+    const paymentDetails: Record<string, string> = {};
+    if (payoutMethod === "paypal") {
+      if (!paypalEmail.trim()) {
+        toast.error("PayPal email required", {
+          description: "Please enter your PayPal email address.",
+        });
+        return;
+      }
+      paymentDetails.paypalEmail = paypalEmail.trim();
+    }
+    if (payoutMethod === "venmo") {
+      if (!venmoHandle.trim()) {
+        toast.error("Venmo handle required", {
+          description: "Please enter your Venmo handle.",
+        });
+        return;
+      }
+      paymentDetails.venmoHandle = venmoHandle.trim();
+    }
+    requestPayout.mutate({
+      amount: amountCents,
+      paymentMethod: payoutMethod,
+      paymentDetails: Object.keys(paymentDetails).length > 0 ? paymentDetails : undefined,
+    });
   };
 
   // ─── Copy helpers ───────────────────────────────────────────
@@ -308,39 +340,6 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Share2 className="w-5 h-5 text-indigo-600" />
-                Referral Link
-              </CardTitle>
-              <CardDescription>
-                Share this link directly — the discount code is pre-applied at
-                checkout.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1 rounded-lg bg-muted px-4 py-3 font-mono text-sm break-all">
-                    {referralLink}
-                  </div>
-                  <Button
-                    onClick={handleCopyLink}
-                    variant="outline"
-                    size="icon"
-                    className="self-start sm:self-auto"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  When clients visit this link and purchase a letter, your
-                  discount code is automatically applied.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Payout Request Section */}
@@ -380,21 +379,32 @@ export default function AffiliateDashboard() {
                     <Label htmlFor="amount">Amount ($)</Label>
                     <Input
                       id="amount"
+                      data-testid="input-payout-amount"
                       type="number"
                       min="10"
+                      max={availableBalanceDollars}
                       step="0.01"
                       placeholder="10.00"
                       value={payoutAmount}
                       onChange={e => setPayoutAmount(e.target.value)}
                     />
+                    {payoutAmount && parseFloat(payoutAmount) > availableBalanceDollars && (
+                      <p className="text-xs text-destructive mt-1">
+                        Amount exceeds your available balance of {formatCurrency(earnings?.pending ?? 0)}.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="method">Payment Method</Label>
                     <Select
                       value={payoutMethod}
-                      onValueChange={setPayoutMethod}
+                      onValueChange={val => {
+                        setPayoutMethod(val);
+                        setPaypalEmail("");
+                        setVenmoHandle("");
+                      }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger data-testid="select-payout-method">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -406,6 +416,32 @@ export default function AffiliateDashboard() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {payoutMethod === "paypal" && (
+                    <div>
+                      <Label htmlFor="paypal-email">PayPal Email</Label>
+                      <Input
+                        id="paypal-email"
+                        data-testid="input-paypal-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={paypalEmail}
+                        onChange={e => setPaypalEmail(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {payoutMethod === "venmo" && (
+                    <div>
+                      <Label htmlFor="venmo-handle">Venmo Handle</Label>
+                      <Input
+                        id="venmo-handle"
+                        data-testid="input-venmo-handle"
+                        type="text"
+                        placeholder="@your-venmo"
+                        value={venmoHandle}
+                        onChange={e => setVenmoHandle(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
                 <DialogFooter className="flex-col gap-2 sm:flex-row">
                   <Button

@@ -72,6 +72,8 @@ import {
   sendStatusUpdateEmail,
   sendVerificationEmail,
   sendReviewAssignedEmail,
+  sendPayoutCompletedEmail,
+  sendPayoutRejectedEmail,
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
@@ -1693,15 +1695,23 @@ export const appRouter = router({
           });
 
         if (input.action === "completed") {
-          // Mark related pending commissions as paid
           const commissions = await getCommissionsByEmployeeId(
             payout.employeeId
           );
-          const pendingIds = commissions
+          const pendingCommissions = commissions
             .filter(c => c.status === "pending")
-            .map(c => c.id);
-          if (pendingIds.length > 0) {
-            await markCommissionsPaid(pendingIds);
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+          let remaining = payout.amount;
+          const idsToMark: number[] = [];
+          for (const c of pendingCommissions) {
+            if (remaining <= 0) break;
+            if (c.commissionAmount <= remaining) {
+              idsToMark.push(c.id);
+              remaining -= c.commissionAmount;
+            }
+          }
+          if (idsToMark.length > 0) {
+            await markCommissionsPaid(idsToMark);
           }
         }
 
@@ -1711,6 +1721,30 @@ export const appRouter = router({
           input.action,
           input.rejectionReason
         );
+
+        try {
+          const employee = await getUserById(payout.employeeId);
+          if (employee?.email) {
+            if (input.action === "completed") {
+              await sendPayoutCompletedEmail({
+                to: employee.email,
+                name: employee.name ?? "Employee",
+                amount: `$${(payout.amount / 100).toFixed(2)}`,
+                paymentMethod: payout.paymentMethod,
+              });
+            } else {
+              await sendPayoutRejectedEmail({
+                to: employee.email,
+                name: employee.name ?? "Employee",
+                amount: `$${(payout.amount / 100).toFixed(2)}`,
+                reason: input.rejectionReason ?? "No reason provided",
+              });
+            }
+          }
+        } catch (emailErr) {
+          console.error("[adminProcessPayout] Notification email error:", emailErr);
+        }
+
         return { success: true };
       }),
 

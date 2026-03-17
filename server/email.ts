@@ -1100,3 +1100,74 @@ export async function sendEmployeeCommissionEmail(opts: {
     }),
   });
 }
+
+export async function sendPayoutCompletedEmail(opts: {
+  to: string;
+  name: string;
+  amount: string;
+  paymentMethod: string;
+}) {
+  const methodLabel = opts.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const body = `
+    <p>Hello ${opts.name},</p>
+    <p>Your payout request has been <strong style="color:#059669;">approved</strong> and processed.</p>
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#ECFDF5;border-radius:8px;margin:16px 0;border:1px solid #A7F3D0;">
+      <tr><td style="padding:16px;">
+        <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#047857;font-weight:700;">Payout Approved</p>
+        <p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Amount:</strong> ${opts.amount}</p>
+        <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Method:</strong> ${methodLabel}</p>
+      </td></tr>
+    </table>
+    <p>The funds will be sent to you via your selected payment method. If you have any questions, please contact your administrator.</p>
+  `;
+  const html = buildEmailHtml({
+    preheader: `Your payout of ${opts.amount} has been approved!`,
+    title: "Payout Approved",
+    body,
+    accentColor: "#059669",
+  });
+  await sendEmail({
+    to: opts.to,
+    subject: `[${APP_NAME}] Payout approved: ${opts.amount}`,
+    html,
+    text: buildPlainText({
+      title: "Payout Approved",
+      body: `Hello ${opts.name}, your payout request of ${opts.amount} via ${methodLabel} has been approved and processed.`,
+    }),
+  });
+}
+
+export async function sendPayoutRejectedEmail(opts: {
+  to: string;
+  name: string;
+  amount: string;
+  reason: string;
+}) {
+  const body = `
+    <p>Hello ${opts.name},</p>
+    <p>Unfortunately, your payout request has been <strong style="color:#DC2626;">rejected</strong>.</p>
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#FEF2F2;border-radius:8px;margin:16px 0;border:1px solid #FECACA;">
+      <tr><td style="padding:16px;">
+        <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#DC2626;font-weight:700;">Payout Rejected</p>
+        <p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Amount Requested:</strong> ${opts.amount}</p>
+        <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Reason:</strong> ${opts.reason}</p>
+      </td></tr>
+    </table>
+    <p>Your pending balance has not been affected. If you believe this was in error, please contact your administrator.</p>
+  `;
+  const html = buildEmailHtml({
+    preheader: `Your payout request of ${opts.amount} was rejected`,
+    title: "Payout Rejected",
+    body,
+    accentColor: "#DC2626",
+  });
+  await sendEmail({
+    to: opts.to,
+    subject: `[${APP_NAME}] Payout rejected: ${opts.amount}`,
+    html,
+    text: buildPlainText({
+      title: "Payout Rejected",
+      body: `Hello ${opts.name}, your payout request of ${opts.amount} was rejected. Reason: ${opts.reason}. Your pending balance has not been affected.`,
+    }),
+  });
+}

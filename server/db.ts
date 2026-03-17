@@ -1063,7 +1063,24 @@ export async function incrementDiscountCodeUsage(codeId: number) {
 export async function getAllDiscountCodes() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(discountCodes).orderBy(desc(discountCodes.createdAt));
+  return db
+    .select({
+      id: discountCodes.id,
+      employeeId: discountCodes.employeeId,
+      code: discountCodes.code,
+      discountPercent: discountCodes.discountPercent,
+      isActive: discountCodes.isActive,
+      usageCount: discountCodes.usageCount,
+      maxUses: discountCodes.maxUses,
+      expiresAt: discountCodes.expiresAt,
+      createdAt: discountCodes.createdAt,
+      updatedAt: discountCodes.updatedAt,
+      employeeName: users.name,
+      employeeEmail: users.email,
+    })
+    .from(discountCodes)
+    .leftJoin(users, eq(discountCodes.employeeId, users.id))
+    .orderBy(desc(discountCodes.createdAt));
 }
 
 export async function updateDiscountCode(
@@ -1219,10 +1236,27 @@ export async function getAllEmployeeEarnings(): Promise<
 export async function getAllCommissions() {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
+  const rows = await db
+    .select({
+      id: commissionLedger.id,
+      employeeId: commissionLedger.employeeId,
+      letterRequestId: commissionLedger.letterRequestId,
+      subscriberId: commissionLedger.subscriberId,
+      discountCodeId: commissionLedger.discountCodeId,
+      stripePaymentIntentId: commissionLedger.stripePaymentIntentId,
+      saleAmount: commissionLedger.saleAmount,
+      commissionRate: commissionLedger.commissionRate,
+      commissionAmount: commissionLedger.commissionAmount,
+      status: commissionLedger.status,
+      paidAt: commissionLedger.paidAt,
+      createdAt: commissionLedger.createdAt,
+      employeeName: users.name,
+      employeeEmail: users.email,
+    })
     .from(commissionLedger)
+    .leftJoin(users, eq(commissionLedger.employeeId, users.id))
     .orderBy(desc(commissionLedger.createdAt));
+  return rows;
 }
 
 export async function markCommissionsPaid(commissionIds: number[]) {
@@ -1275,10 +1309,26 @@ export async function getPayoutRequestsByEmployeeId(employeeId: number) {
 export async function getAllPayoutRequests() {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
+  const rows = await db
+    .select({
+      id: payoutRequests.id,
+      employeeId: payoutRequests.employeeId,
+      amount: payoutRequests.amount,
+      paymentMethod: payoutRequests.paymentMethod,
+      paymentDetails: payoutRequests.paymentDetails,
+      status: payoutRequests.status,
+      processedAt: payoutRequests.processedAt,
+      processedBy: payoutRequests.processedBy,
+      rejectionReason: payoutRequests.rejectionReason,
+      createdAt: payoutRequests.createdAt,
+      updatedAt: payoutRequests.updatedAt,
+      employeeName: users.name,
+      employeeEmail: users.email,
+    })
     .from(payoutRequests)
+    .leftJoin(users, eq(payoutRequests.employeeId, users.id))
     .orderBy(desc(payoutRequests.createdAt));
+  return rows;
 }
 
 export async function processPayoutRequest(

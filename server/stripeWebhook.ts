@@ -187,10 +187,10 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                           commissionRate,
                           commissionAmount,
                         });
-                        console.log(`[StripeWebhook] Commission created: $${(commissionAmount / 100).toFixed(2)} for employee #${metaEmployeeId ?? discountCode.employeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)})`);
-                        // ─── Notify employee of commission earned ───
+                        const resolvedEmployeeId = metaEmployeeId ?? discountCode.employeeId;
+                        console.log(`[StripeWebhook] Commission created: $${(commissionAmount / 100).toFixed(2)} for employee #${resolvedEmployeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)})`);
                         try {
-                          const employee = await getUserById(discountCode.employeeId);
+                          const employee = await getUserById(resolvedEmployeeId);
                           const subscriber = await getUserById(userId);
                           if (employee?.email) {
                             const planCfg = getPlanConfig(planId);
@@ -253,10 +253,10 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                     commissionRate,
                     commissionAmount,
                   });
-                  console.log(`[StripeWebhook] Subscription commission: $${(commissionAmount / 100).toFixed(2)} for employee #${metaEmployeeId ?? discountCode.employeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)}, plan: ${planId})`);
-                  // ─── Notify employee of commission earned ───
+                  const resolvedEmployeeId = metaEmployeeId ?? discountCode.employeeId;
+                  console.log(`[StripeWebhook] Subscription commission: $${(commissionAmount / 100).toFixed(2)} for employee #${resolvedEmployeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)}, plan: ${planId})`);
                   try {
-                    const employee = await getUserById(discountCode.employeeId);
+                    const employee = await getUserById(resolvedEmployeeId);
                     const subscriber = await getUserById(userId);
                     if (employee?.email) {
                       const planCfg = getPlanConfig(planId);
