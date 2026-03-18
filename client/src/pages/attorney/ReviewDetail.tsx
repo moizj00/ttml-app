@@ -120,6 +120,9 @@ export default function ReviewDetail() {
   // don't re-enter it on every subsequent poll refetch.
   const autoEnteredRef = useRef(false);
 
+  // ── Auto-save timer ───────────────────────────────────────────────────────
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const invalidate = () =>
     utils.review.letterDetail.invalidate({ id: letterId });
 
@@ -207,6 +210,20 @@ export default function ReviewDetail() {
       setHasUnsavedChanges(false);
     }
   }, [data]);
+
+  // ── Auto-save when editContent changes while in edit mode ─────────────────
+  // Only fires when there are actual unsaved changes to avoid spurious saves
+  // on editor initialisation.
+  useEffect(() => {
+    if (!editMode || !hasUnsavedChanges) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      saveMutation.mutate({ letterId, content: htmlToPlainText(editContent) });
+    }, 2000);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [editContent, editMode, hasUnsavedChanges]);
 
   // ── Loading / error states ────────────────────────────────────────────────
   if (isLoading) {

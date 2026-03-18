@@ -217,10 +217,10 @@ export default function SubmitLetter() {
     if (step === 2) return !!form.jurisdictionState;
     if (step === 3)
       return (
-        !!form.senderName &&
-        !!form.senderAddress &&
-        !!form.recipientName &&
-        !!form.recipientAddress
+        form.senderName.trim().length > 0 &&
+        form.senderAddress.trim().length > 0 &&
+        form.recipientName.trim().length > 0 &&
+        form.recipientAddress.trim().length > 0
       );
     if (step === 4) return form.description.length >= 20;
     if (step === 5) return form.desiredOutcome.length >= 10;

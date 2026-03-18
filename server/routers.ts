@@ -1193,6 +1193,27 @@ export const appRouter = router({
           fromStatus: letter.status,
           toStatus: input.newStatus,
         });
+        if (input.newStatus === "pending_review") {
+          try {
+            const appUrl = getAppUrl(ctx.req);
+            if (letter.assignedReviewerId) {
+              const attorney = await getUserById(letter.assignedReviewerId);
+              if (attorney?.email) {
+                await sendNewReviewNeededEmail({
+                  to: attorney.email,
+                  name: attorney.name ?? "Attorney",
+                  letterSubject: letter.subject,
+                  letterId: input.letterId,
+                  letterType: letter.letterType,
+                  jurisdiction: `${letter.jurisdictionState ?? ""}, ${letter.jurisdictionCountry ?? "US"}`,
+                  appUrl,
+                });
+              }
+            }
+          } catch (_err) {
+            // Non-fatal: email failure should not block the status transition
+          }
+        }
         return { success: true };
       }),
 
