@@ -5,7 +5,7 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import Highlight from "@tiptap/extension-highlight";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Bold,
   Italic,
@@ -237,6 +237,8 @@ export default function RichTextEditor({
   className,
   minHeight = "400px",
 }: RichTextEditorProps) {
+  const isFocusedRef = useRef(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -251,6 +253,12 @@ export default function RichTextEditor({
     ],
     content,
     editable,
+    onFocus: () => {
+      isFocusedRef.current = true;
+    },
+    onBlur: () => {
+      isFocusedRef.current = false;
+    },
     onUpdate: ({ editor: e }) => {
       onChange?.(e.getHTML());
     },
@@ -262,9 +270,9 @@ export default function RichTextEditor({
     },
   });
 
-  // Sync content from parent when it changes externally
+  // Sync content from parent when it changes externally (skip if editor has focus)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
+    if (editor && !isFocusedRef.current && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editor]);
