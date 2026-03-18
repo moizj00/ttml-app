@@ -545,24 +545,20 @@ export default function LetterDetail() {
           </CardContent>
         </Card>
 
-        {/* ── In-progress: pipeline running ── */}
+        {/* ── In-progress: intake received, waiting for draft ── */}
         {["submitted", "researching", "drafting"].includes(letter.status) && (
           <Card className="border-blue-200 bg-blue-50/30">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <div className="w-4 h-4 border-2 border-blue-400 border-t-blue-700 rounded-full animate-spin" />
+                  <Clock className="w-4 h-4 text-blue-700" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-blue-800">
-                    {letter.status === "submitted" && "Preparing your letter..."}
-                    {letter.status === "researching" && "Researching applicable laws and precedents..."}
-                    {letter.status === "drafting" && "Drafting your letter..."}
+                    Your intake has been received and is under review
                   </p>
                   <p className="text-xs text-blue-600 mt-1">
-                    {letter.status === "submitted" && "Our team is reviewing your intake and starting research."}
-                    {letter.status === "researching" && "Our legal research team is analysing statutes, case law, and local ordinances relevant to your matter."}
-                    {letter.status === "drafting" && "Our team is drafting a professional letter based on the research findings."}
+                    Our team will prepare your draft letter. You'll receive an email with a direct link when it's ready — typically within 24 hours.
                   </p>
                 </div>
               </div>

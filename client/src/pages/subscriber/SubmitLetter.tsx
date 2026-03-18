@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { LETTER_TYPE_CONFIG, US_STATES } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
-import PipelineProgressModal from "@/components/PipelineProgressModal";
 import { Link } from "wouter";
 
 const STEPS = [
@@ -143,8 +142,6 @@ export default function SubmitLetter() {
     { id: "exhibit-0", description: "", file: null },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pipelineLetterId, setPipelineLetterId] = useState<number | null>(null);
-  const [showPipeline, setShowPipeline] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [, navigate] = useLocation();
 
@@ -335,12 +332,10 @@ export default function SubmitLetter() {
       }
       // Clear saved draft on successful submission
       localStorage.removeItem(DRAFT_KEY);
-      toast.success("Letter submitted", {
-        description:
-          "Our legal team is preparing your draft. This usually takes 1\u20132 minutes.",
+      toast.success("Intake received", {
+        description: "Your letter intake has been received. You'll get an email when your draft is ready.",
       });
-      setPipelineLetterId(letterId);
-      setShowPipeline(true);
+      navigate(`/letters/${letterId}`);
     } catch (err: any) {
       toast.error("Submission failed", {
         description: err?.message ?? "Please check your inputs and try again.",
@@ -1106,14 +1101,6 @@ export default function SubmitLetter() {
           )}
         </div>
       </div>
-      <PipelineProgressModal
-        open={showPipeline}
-        onClose={() => {
-          setShowPipeline(false);
-          if (pipelineLetterId) navigate(`/letters/${pipelineLetterId}`);
-        }}
-        letterId={pipelineLetterId}
-      />
     </AppLayout>
   );
 }
