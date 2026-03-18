@@ -75,7 +75,7 @@
 
 ## Phase 9: Stripe Payment Integration
 - [ ] Add Stripe feature via webdev_add_feature
-- [ ] Subscription plans: per-letter ($299), monthly ($200/mo unlimited), annual ($2000/yr 48 letters)
+- [ ] Subscription plans: per-letter ($200), monthly ($200/mo 4 letters), annual ($2000/yr 4 letters/mo)
 - [ ] Checkout session creation with metadata
 - [ ] Webhook handler for checkout.session.completed
 - [ ] Atomic subscription activation (prevent race conditions)
