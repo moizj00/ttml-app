@@ -6,7 +6,17 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Send, Clock, Copy, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Send, Clock, Copy, Trash2, Mail } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
@@ -21,6 +31,10 @@ export default function LetterDetail() {
   const search = useSearch();
   const letterId = parseInt(params.id ?? "0");
   const [updateText, setUpdateText] = useState("");
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [sendSubjectOverride, setSendSubjectOverride] = useState("");
+  const [sendNote, setSendNote] = useState("");
 
   // Show success toast after Stripe redirect
   useEffect(() => {
@@ -107,6 +121,17 @@ export default function LetterDetail() {
       setUpdateText("");
     },
     onError: (err) => toast.error("Submission failed", { description: err.message }),
+  });
+
+  const sendToRecipientMutation = trpc.letters.sendToRecipient.useMutation({
+    onSuccess: () => {
+      toast.success("Letter sent", { description: `The approved letter has been sent to ${recipientEmail}.` });
+      setSendDialogOpen(false);
+      setRecipientEmail("");
+      setSendSubjectOverride("");
+      setSendNote("");
+    },
+    onError: (err) => toast.error("Failed to send letter", { description: err.message }),
   });
 
   const handleSubmitUpdate = () => {
@@ -600,21 +625,109 @@ export default function LetterDetail() {
 
         {/* Final Approved Letter */}
         {letter.status === "approved" && finalVersion && (
+          <>
+          <Dialog open={sendDialogOpen} onOpenChange={(open) => { setSendDialogOpen(open); if (!open) { setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); } }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send Letter via Lawyer's Email</DialogTitle>
+                <DialogDescription>
+                  Enter the recipient's email address. The approved letter will be sent from our platform's legal address, with the PDF attached (or letter content inline if no PDF is available).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="recipient-email">Recipient Email Address</Label>
+                  <Input
+                    id="recipient-email"
+                    data-testid="input-recipient-email"
+                    type="email"
+                    placeholder="recipient@example.com"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    disabled={sendToRecipientMutation.isPending}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="subject-override">Subject Line (optional)</Label>
+                  <Input
+                    id="subject-override"
+                    data-testid="input-subject-override"
+                    type="text"
+                    placeholder={letter.subject}
+                    value={sendSubjectOverride}
+                    onChange={(e) => setSendSubjectOverride(e.target.value)}
+                    disabled={sendToRecipientMutation.isPending}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the original letter subject.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="send-note">Note to Recipient (optional)</Label>
+                  <Textarea
+                    id="send-note"
+                    data-testid="input-send-note"
+                    placeholder="Add an optional note that will appear in the email to the recipient..."
+                    value={sendNote}
+                    onChange={(e) => setSendNote(e.target.value)}
+                    rows={3}
+                    disabled={sendToRecipientMutation.isPending}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The letter will be sent from our platform's lawyer email address on behalf of you.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => { setSendDialogOpen(false); setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); }}
+                  disabled={sendToRecipientMutation.isPending}
+                  data-testid="button-cancel-send"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => sendToRecipientMutation.mutate({
+                    letterId,
+                    recipientEmail: recipientEmail.trim(),
+                    subjectOverride: sendSubjectOverride.trim() || undefined,
+                    note: sendNote.trim() || undefined,
+                  })}
+                  disabled={sendToRecipientMutation.isPending || !recipientEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim())}
+                  data-testid="button-confirm-send"
+                >
+                  {sendToRecipientMutation.isPending ? (
+                    "Sending..."
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4 mr-2" />
+                      Send Letter
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Card className="border-green-200 bg-green-50/30">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-sm flex items-center gap-2 text-green-700">
                   <CheckCircle className="w-4 h-4" />
                   Final Approved Letter
                 </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-copy-letter">
                     <Copy className="w-3.5 h-3.5 mr-1.5" />
                     Copy
                   </Button>
-                  <Button onClick={handleDownloadPdf} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50">
+                  <Button onClick={handleDownloadPdf} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-download-letter">
                     <Download className="w-3.5 h-3.5 mr-1.5" />
                     {(data?.letter as any)?.pdfUrl ? "Download Reviewed PDF" : "Download"}
+                  </Button>
+                  <Button onClick={() => setSendDialogOpen(true)} size="sm" className="bg-green-700 hover:bg-green-800 text-white" data-testid="button-send-via-lawyer-email">
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    Send Via Lawyer's Email
                   </Button>
                 </div>
               </div>
@@ -638,6 +751,7 @@ export default function LetterDetail() {
               </div>
             </CardContent>
           </Card>
+          </>
         )}
 
         {/* Rejected Notice */}

@@ -75,6 +75,7 @@ import {
   sendReviewAssignedEmail,
   sendPayoutCompletedEmail,
   sendPayoutRejectedEmail,
+  sendLetterToRecipient,
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
@@ -552,6 +553,45 @@ export const appRouter = router({
             message: "Only completed letters can be archived",
           });
         await archiveLetterRequest(input.letterId, ctx.user.id);
+        return { success: true };
+      }),
+
+    sendToRecipient: subscriberProcedure
+      .input(
+        z.object({
+          letterId: z.number(),
+          recipientEmail: z.string().email(),
+          subjectOverride: z.string().max(500).optional(),
+          note: z.string().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter || letter.userId !== ctx.user.id)
+          throw new TRPCError({ code: "NOT_FOUND" });
+        if (letter.status !== "approved")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Only approved letters can be sent to recipients",
+          });
+
+        const versions = await getLetterVersionsByRequestId(input.letterId, false);
+        const finalVersion = versions.find((v) => v.versionType === "final_approved");
+        if (!finalVersion)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No approved letter version found",
+          });
+
+        await sendLetterToRecipient({
+          recipientEmail: input.recipientEmail,
+          letterSubject: letter.subject,
+          subjectOverride: input.subjectOverride?.trim() || undefined,
+          note: input.note?.trim() || undefined,
+          pdfUrl: letter.pdfUrl ?? undefined,
+          htmlContent: finalVersion.content,
+        });
+
         return { success: true };
       }),
 
