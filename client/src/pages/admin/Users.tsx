@@ -19,9 +19,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, Briefcase, User, Scale, AlertCircle, Gavel, CreditCard } from "lucide-react";
+import { Shield, Briefcase, User, Scale, AlertCircle, Gavel, CreditCard, ArrowUpDown, X } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 const ROLE_CONFIG = {
   admin: {
@@ -46,6 +46,12 @@ const ROLE_CONFIG = {
   },
 };
 
+type SortKey = "name-asc" | "name-desc" | "email-asc" | "email-desc" | "role" | "subscription";
+type RoleFilter = "all" | "admin" | "attorney" | "employee" | "subscriber";
+type SubFilter = "all" | "paid" | "free";
+
+const ROLE_ORDER: Record<string, number> = { admin: 0, attorney: 1, employee: 2, subscriber: 3 };
+
 export default function AdminUsers() {
   const {
     data: users,
@@ -62,8 +68,10 @@ export default function AdminUsers() {
     newRoleValue: string;
   } | null>(null);
 
-  // Use the base mutation without onSuccess/onError — we pass per-call callbacks
-  // in the onClick handler so we can capture the values before state is cleared.
+  const [filterRole, setFilterRole] = useState<RoleFilter>("all");
+  const [filterSub, setFilterSub] = useState<SubFilter>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("name-asc");
+
   const updateRole = trpc.admin.updateRole.useMutation();
 
   const markAsPaid = trpc.admin.markAsPaid.useMutation({
@@ -78,13 +86,8 @@ export default function AdminUsers() {
 
   const handleConfirm = () => {
     if (!pendingRoleChange) return;
-
-    // Capture all values NOW, before clearing state
     const { userId, newRoleValue, userName } = pendingRoleChange;
-
-    // Clear state immediately so the dialog closes
     setPendingRoleChange(null);
-
     updateRole.mutate(
       { userId, role: newRoleValue as any },
       {
@@ -112,16 +115,66 @@ export default function AdminUsers() {
     );
   };
 
+  const displayedUsers = useMemo(() => {
+    if (!users) return [];
+
+    let result = [...users];
+
+    if (filterRole !== "all") {
+      result = result.filter(u => u.role === filterRole);
+    }
+
+    if (filterSub === "paid") {
+      result = result.filter(u => u.subscriptionStatus === "active");
+    } else if (filterSub === "free") {
+      result = result.filter(u => u.subscriptionStatus !== "active");
+    }
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "name-asc":
+          return (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
+        case "name-desc":
+          return (b.name ?? b.email ?? "").localeCompare(a.name ?? a.email ?? "");
+        case "email-asc":
+          return (a.email ?? "").localeCompare(b.email ?? "");
+        case "email-desc":
+          return (b.email ?? "").localeCompare(a.email ?? "");
+        case "role":
+          return (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
+        case "subscription":
+          return (a.subscriptionStatus === "active" ? 0 : 1) - (b.subscriptionStatus === "active" ? 0 : 1);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [users, filterRole, filterSub, sortBy]);
+
+  const hasActiveFilters = filterRole !== "all" || filterSub !== "all";
+
+  const clearFilters = () => {
+    setFilterRole("all");
+    setFilterSub("all");
+  };
+
   return (
     <AppLayout
       breadcrumb={[{ label: "Admin", href: "/admin" }, { label: "Users" }]}
     >
       <div className="space-y-4">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">User Management</h1>
-          <p className="text-sm text-muted-foreground">
-            {users?.length ?? 0} registered users
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-foreground">User Management</h1>
+            <p className="text-sm text-muted-foreground">
+              {isLoading ? "Loading..." : (
+                hasActiveFilters
+                  ? `${displayedUsers.length} of ${users?.length ?? 0} users`
+                  : `${users?.length ?? 0} registered users`
+              )}
+            </p>
+          </div>
         </div>
 
         {/* Attorney promotion notice */}
@@ -134,6 +187,82 @@ export default function AdminUsers() {
             and claim letters.
           </p>
         </div>
+
+        {/* Filter + Sort toolbar */}
+        {!isLoading && !error && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Role filter pills */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {(["all", "admin", "attorney", "employee", "subscriber"] as RoleFilter[]).map(role => {
+                const isActive = filterRole === role;
+                const label =
+                  role === "all" ? "All Roles"
+                  : role === "employee" ? "Affiliate"
+                  : role === "admin" ? "Admin"
+                  : role === "attorney" ? "Attorney"
+                  : "Subscriber";
+                return (
+                  <button
+                    key={role}
+                    data-testid={`filter-role-${role}`}
+                    onClick={() => setFilterRole(role)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      isActive
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+            {/* Subscription filter */}
+            <Select value={filterSub} onValueChange={v => setFilterSub(v as SubFilter)}>
+              <SelectTrigger className="h-7 w-28 text-xs" data-testid="filter-subscription">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Plans</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="free">Free</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort */}
+            <div className="flex items-center gap-1 ml-auto">
+              <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <Select value={sortBy} onValueChange={v => setSortBy(v as SortKey)}>
+                <SelectTrigger className="h-7 w-36 text-xs" data-testid="sort-users">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name-asc">Name A → Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z → A</SelectItem>
+                  <SelectItem value="email-asc">Email A → Z</SelectItem>
+                  <SelectItem value="email-desc">Email Z → A</SelectItem>
+                  <SelectItem value="role">Role</SelectItem>
+                  <SelectItem value="subscription">Subscription</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear filters */}
+            {hasActiveFilters && (
+              <button
+                data-testid="button-clear-filters"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3 h-3" />
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="space-y-3">
@@ -161,14 +290,27 @@ export default function AdminUsers() {
               </Button>
             </CardContent>
           </Card>
+        ) : displayedUsers.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-10">
+              <User className="w-8 h-8 text-muted-foreground mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">No users match the current filters</p>
+              <button
+                onClick={clearFilters}
+                className="mt-3 text-xs text-primary hover:underline"
+              >
+                Clear filters
+              </button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-2">
-            {(users ?? []).map(user => {
+            {displayedUsers.map(user => {
               const roleInfo =
                 ROLE_CONFIG[user.role as keyof typeof ROLE_CONFIG] ??
                 ROLE_CONFIG.subscriber;
               return (
-                <Card key={user.id}>
+                <Card key={user.id} data-testid={`card-user-${user.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
