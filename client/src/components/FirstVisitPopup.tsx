@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { X, Gift, Clock } from "lucide-react";
 
 const FIRST_VISIT_KEY = "ttml_first_visit_popup_seen";
@@ -13,6 +14,7 @@ function formatTime(seconds: number): string {
 export default function FirstVisitPopup() {
   const [visible, setVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(COUNTDOWN_SECONDS);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     const seen = localStorage.getItem(FIRST_VISIT_KEY);
@@ -46,6 +48,12 @@ export default function FirstVisitPopup() {
     localStorage.setItem(FIRST_VISIT_KEY, "true");
     setVisible(false);
   }, []);
+
+  const handleGetStarted = useCallback(() => {
+    localStorage.setItem(FIRST_VISIT_KEY, "true");
+    setVisible(false);
+    navigate("/login");
+  }, [navigate]);
 
   if (!visible) return null;
 
@@ -99,7 +107,7 @@ export default function FirstVisitPopup() {
           </div>
 
           <button
-            onClick={dismiss}
+            onClick={handleGetStarted}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors"
             data-testid="first-visit-popup-cta"
           >

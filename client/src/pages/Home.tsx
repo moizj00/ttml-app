@@ -273,7 +273,7 @@ export default function Home() {
                 data-testid="hero-cta"
               >
                 <Play className="w-5 h-5 fill-current" />
-                Start Your Free Letter
+                Get Started
               </button>
               <button
                 onClick={() => scrollTo("pricing")}
