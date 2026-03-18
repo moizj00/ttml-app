@@ -1,0 +1,52 @@
+CHANGE 3 — Auto-save while attorney edits
+File: client/src/pages/attorney/ReviewDetail.tsx
+Problem: Attorneys must manually click Save. If they forget, unsaved edits are lost.
+Fix: Add a 2-second debounced auto-save that fires whenever editContent changes while in editMode.
+typescript// Add at the top of the component (near other refs):
+const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+// Add this useEffect (after the existing editContent state declaration):
+useEffect(() => {
+  if (!editMode || !hasUnsavedChanges) return;
+
+  if (autosaveTimerRef.current) {
+    clearTimeout(autosaveTimerRef.current);
+  }
+  autosaveTimerRef.current = setTimeout(() => {
+    saveMutation.mutate();
+  }, 2000);
+
+  return () => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+  };
+}, [editContent, hasUnsavedChanges, editMode]);
+Why: The saveMutation already exists in this component. We debounce 2 seconds after the last keystroke so we're not hitting the server on every character. Uses the existing mutation — no new API calls needed.
+
+CHANGE 4 — Required field validation on Step 3 of SubmitLetter
+File: client/src/pages/subscriber/SubmitLetter.tsx
+Problem: Users can advance past Step 3 (parties) without filling in sender name/address or recipient name/address, which breaks PDF generation.
+Fix: In the canProceed() function (Step 3 branch), add whitespace-aware checks:
+typescriptcase 3: {
+  const sName    = (formData.senderName    ?? "").trim();
+  const sAddr    = (formData.senderAddress ?? "").trim();
+  const rName    = (formData.recipientName ?? "").trim();
+  const rAddr    = (formData.recipientAddress ?? "").trim();
+  return sName.length > 0 && sAddr.length > 0 && rName.length > 0 && rAddr.length > 0;
+}
+Why: .trim() prevents spaces-only values from passing validation. The ?? "" handles undefined fields without throwing.
+
+CHANGE 5 — Notify attorneys when admin force-moves a letter to pending_review
+File: server/routers.ts
+Problem: When a super-admin force-transitions a letter to pending_review via admin.forceStatusTransition, attorneys are not emailed. They only get notified when admin.assignLetter is used.
+Find the admin.forceStatusTransition mutation. After the status update, add:
+typescriptif (input.newStatus === "pending_review") {
+  try {
+    await sendNewReviewNeededEmail({ letterId: input.letterId });
+  } catch (emailErr) {
+    console.error("[forceStatusTransition] Failed to send review email:", emailErr);
+    // Non-fatal — don't fail the transition over an email error
+  }
+}
+Why: Attorneys monitor their queue via email. Without this, letters silently enter pending_review and sit unnoticed.
