@@ -581,11 +581,7 @@ export default function SubmitLetter() {
                       <SelectValue placeholder="Select state..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {US_STATES.map(s => (
-                        <SelectItem key={s.code} value={s.code}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="CA">California</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">
