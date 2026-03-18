@@ -315,7 +315,7 @@ export const appRouter = router({
           );
 
         // Trigger AI pipeline in background (non-blocking)
-        runFullPipeline(letterId, input.intakeJson as any).catch(async err => {
+        runFullPipeline(letterId, input.intakeJson as any, undefined, ctx.user.id).catch(async err => {
           console.error("[Pipeline] Failed:", err);
           try {
             const admins = await getAllUsers("admin");
@@ -427,7 +427,7 @@ export const appRouter = router({
         const intake = input.updatedIntakeJson ?? letter.intakeJson;
         if (intake) {
           const appUrl = getAppUrl(ctx.req);
-          runFullPipeline(input.letterId, intake as any).catch(async err => {
+          runFullPipeline(input.letterId, intake as any, undefined, letter.userId).catch(async err => {
             console.error(
               "[Pipeline] Retry after subscriber update failed:",
               err
@@ -512,7 +512,7 @@ export const appRouter = router({
         await updateLetterStatus(input.letterId, "submitted");
 
         const appUrl = getAppUrl(ctx.req);
-        runFullPipeline(input.letterId, intake as any).catch(async err => {
+        runFullPipeline(input.letterId, intake as any, undefined, letter.userId).catch(async err => {
           console.error(
             "[Pipeline] Retry after rejection failed:",
             err
@@ -725,6 +725,7 @@ export const appRouter = router({
           finalContent: z.string().min(50),
           internalNote: z.string().optional(),
           userVisibleNote: z.string().optional(),
+          acknowledgedUnverifiedResearch: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -742,6 +743,11 @@ export const appRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Letter must be under_review to approve",
+          });
+        if (letter.researchUnverified && !input.acknowledgedUnverifiedResearch)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "You must acknowledge that research citations are unverified before approving this letter.",
           });
         const version = await createLetterVersion({
           letterRequestId: input.letterId,
@@ -973,7 +979,8 @@ export const appRouter = router({
           retryPipelineFromStage(
             input.letterId,
             letter.intakeJson as any,
-            "drafting"
+            "drafting",
+            letter.userId
           ).catch(console.error);
         }
         return { success: true };
@@ -1112,7 +1119,8 @@ export const appRouter = router({
         retryPipelineFromStage(
           input.letterId,
           letter.intakeJson as any,
-          input.stage
+          input.stage,
+          letter.userId
         ).catch(console.error);
         return {
           success: true,

@@ -213,6 +213,8 @@ export interface ResearchPacket {
     stateProvince: string;
     city?: string;
     authorityHierarchy: string[];
+    politicalContext?: string;
+    localCourts?: string;
   };
   issuesIdentified: string[];
   applicableRules: {
@@ -233,10 +235,99 @@ export interface ResearchPacket {
     sourceUrl: string;
     confidence: "high" | "medium" | "low";
   }[];
+  recentCasePrecedents?: {
+    caseName?: string;
+    citation?: string;
+    court?: string;
+    year?: number;
+    facts?: string;
+    holding?: string;
+    relevance?: string;
+    damages?: string;
+    sourceUrl?: string;
+    summary?: string;
+  }[];
+  statuteOfLimitations?: {
+    statute?: string;
+    period?: string;
+    clockStartsOn?: string;
+    deadlineEstimate?: string;
+    urgencyFlag?: boolean;
+    notes?: string;
+  };
+  preSuitRequirements?: {
+    demandLetterRequired?: boolean;
+    statute?: string;
+    waitingPeriodDays?: number;
+    requiredContent?: string[];
+    deliveryMethod?: string;
+    consequenceOfNonCompliance?: string;
+    description?: string;
+    notes?: string;
+  };
+  availableRemedies?: {
+    actualDamages?: string;
+    statutoryDamages?: string;
+    punitiveDamages?: string;
+    attorneyFees?: string;
+    injunctiveRelief?: string;
+    multiplier?: string;
+  };
+  commonDefenses?: {
+    defense?: string;
+    description?: string;
+    counterArgument?: string;
+    successRate?: string;
+  }[];
+  enforcementClimate?: {
+    agActivity?: string;
+    classActions?: string;
+    recentLegislation?: string;
+    politicalLeaning?: string;
+  };
   factualDataNeeded: string[];
   openQuestions: string[];
   riskFlags: string[];
   draftingConstraints: string[];
+}
+
+// ─── Citation Registry Entry ───
+export interface CitationRegistryEntry {
+  registryNumber: number;
+  citationText: string;
+  ruleTitle: string;
+  ruleType: string;
+  confidence: "high" | "medium" | "low";
+  sourceUrl: string;
+  sourceTitle: string;
+  revalidated: boolean;
+}
+
+// ─── Citation Audit Report ───
+export interface CitationAuditEntry {
+  citation: string;
+  registryNumber: number | null;
+  status: "verified" | "unverified";
+  confidence: "high" | "medium" | "low";
+  source: "research_packet" | "claude_generated";
+}
+
+export interface CitationAuditReport {
+  verifiedCitations: CitationAuditEntry[];
+  unverifiedCitations: CitationAuditEntry[];
+  totalCitations: number;
+  hallucinationRiskScore: number;
+  auditedAt: string;
+}
+
+// ─── Pipeline Context (source of truth throughout all stages) ───
+export interface PipelineContext {
+  letterId: number;
+  userId: number;
+  intake: IntakeJson;
+  researchProvider?: string;
+  citationRegistry?: CitationRegistryEntry[];
+  researchUnverified?: boolean;
 }
 
 // ─── Draft Output Shape ───

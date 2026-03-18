@@ -29,11 +29,50 @@ import {
   Save,
   ClipboardList,
   X,
+  ShieldAlert,
+  ChevronDown,
+  ChevronRight,
+  Scale,
 } from "lucide-react";
 import { useParams } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, type CitationAuditReport, type CitationAuditEntry } from "../../../../shared/types";
+
+interface AssemblyVersionMeta {
+  stage?: string;
+  researchUnverified?: boolean;
+  citationAuditReport?: CitationAuditReport;
+  [key: string]: unknown;
+}
+
+interface IntakeJson {
+  sender?: { name?: string; address?: string; email?: string; phone?: string };
+  recipient?: { name?: string; address?: string; company?: string; email?: string };
+  jurisdiction?: string | { state?: string; country?: string; city?: string };
+  matter?: { description?: string; [key: string]: unknown };
+  description?: string;
+  desiredOutcome?: string;
+  financials?: { amountOwed?: string; currency?: string };
+  timeline?: string;
+  [key: string]: unknown;
+}
+
+interface ResearchPacketSummary {
+  researchSummary?: string;
+  applicableRules?: Array<{
+    ruleTitle?: string;
+    relevanceScore?: number;
+    citationText?: string;
+    citation?: string;
+    summary?: string;
+    confidence?: string;
+  }>;
+  issuesIdentified?: string[];
+  riskFlags?: string[];
+  openQuestions?: string[];
+  [key: string]: unknown;
+}
 
 export default function ReviewDetail() {
   const params = useParams<{ id: string }>();
@@ -74,6 +113,8 @@ export default function ReviewDetail() {
   const [rejectReason, setRejectReason] = useState("");
   const [changesNote, setChangesNote] = useState("");
   const [retrigger, setRetrigger] = useState(false);
+  const [citationReportOpen, setCitationReportOpen] = useState(false);
+  const [acknowledgedUnverified, setAcknowledgedUnverified] = useState(false);
 
   // Track whether we've already auto-entered edit mode after a claim so we
   // don't re-enter it on every subsequent poll refetch.
@@ -203,12 +244,18 @@ export default function ReviewDetail() {
 
   const { letter, versions, actions, research } = data;
 
-  // Prefer the latest attorney edit; fall back to the AI draft.
   const latestDraft =
     versions?.find(v => v.versionType === "attorney_edit") ??
     versions?.find(v => v.versionType === "ai_draft");
 
   const isUnderReview = letter.status === "under_review";
+
+  const assemblyVersion = versions?.find(
+    v => v.versionType === "ai_draft" && (v.metadataJson as AssemblyVersionMeta | null)?.stage === "final_assembly"
+  );
+  const assemblyMeta = assemblyVersion?.metadataJson as AssemblyVersionMeta | null;
+  const citationAuditReport: CitationAuditReport | null = assemblyMeta?.citationAuditReport ?? null;
+  const isResearchUnverified = letter.researchUnverified === true || assemblyMeta?.researchUnverified === true;
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const enterEditMode = () => {
@@ -225,6 +272,26 @@ export default function ReviewDetail() {
     }
     setEditMode(false);
     setHasUnsavedChanges(false);
+  };
+
+  const highlightCitationsInHtml = (html: string): string => {
+    if (!citationAuditReport) return html;
+    let result = html;
+    const unverifiedCitations: string[] = (citationAuditReport.unverifiedCitations ?? []).map((e: CitationAuditEntry) => e.citation);
+    const lowConfidenceCitations: string[] = (citationAuditReport.verifiedCitations ?? [])
+      .filter((e: CitationAuditEntry) => e.confidence === "low")
+      .map((e: CitationAuditEntry) => e.citation);
+    for (const cit of unverifiedCitations) {
+      const escaped = cit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`(${escaped})`, "gi");
+      result = result.replace(re, `<mark style="background-color:#fecaca;border-radius:2px;padding:0 2px" title="Unverified citation">$1</mark>`);
+    }
+    for (const cit of lowConfidenceCitations) {
+      const escaped = cit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`(${escaped})`, "gi");
+      result = result.replace(re, `<mark style="background-color:#fef3c7;border-radius:2px;padding:0 2px" title="Low confidence citation">$1</mark>`);
+    }
+    return result;
   };
 
   const openApproveDialog = () => {
@@ -355,6 +422,25 @@ export default function ReviewDetail() {
           </div>
         </div>
 
+        {isResearchUnverified && (
+          <div
+            data-testid="banner-research-unverified"
+            className="flex items-center gap-3 px-4 py-3 mb-3 rounded-xl bg-red-50 border border-red-200"
+          >
+            <ShieldAlert className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-red-800">
+                RESEARCH UNVERIFIED
+              </p>
+              <p className="text-xs text-red-700 mt-0.5">
+                This letter's legal research was not web-verified (Perplexity was
+                unavailable). Citations require manual attorney validation before
+                approval.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Split panel ─────────────────────────────────────────────────── */}
         <div className="flex gap-4 min-h-0" style={{ height: "calc(100vh - 200px)" }}>
           {/* Left: Rich text editor */}
@@ -411,7 +497,7 @@ export default function ReviewDetail() {
                 />
               ) : (
                 <RichTextEditor
-                  content={plainTextToHtml(latestDraft?.content ?? "")}
+                  content={highlightCitationsInHtml(plainTextToHtml(latestDraft?.content ?? ""))}
                   editable={false}
                   minHeight="100%"
                   className="h-full border-0 rounded-none"
@@ -420,7 +506,7 @@ export default function ReviewDetail() {
             </div>
           </div>
 
-          {/* Right: Intake / Research / History panel */}
+          {/* Right: Intake / Research / Citations / History panel */}
           <div className="w-80 flex-shrink-0 flex flex-col min-h-0">
             <Tabs defaultValue="intake" className="flex flex-col h-full">
               <TabsList className="w-full flex-shrink-0">
@@ -431,6 +517,10 @@ export default function ReviewDetail() {
                 <TabsTrigger value="research" className="flex-1 text-xs">
                   <BookOpen className="w-3 h-3 mr-1" />
                   Research
+                </TabsTrigger>
+                <TabsTrigger value="citations" className="flex-1 text-xs" data-testid="tab-citations">
+                  <Scale className="w-3 h-3 mr-1" />
+                  Citations
                 </TabsTrigger>
                 <TabsTrigger value="history" className="flex-1 text-xs">
                   <History className="w-3 h-3 mr-1" />
@@ -447,7 +537,7 @@ export default function ReviewDetail() {
                   <CardContent className="p-3 space-y-3">
                     {letter.intakeJson ? (
                       (() => {
-                        const intake = letter.intakeJson as any;
+                        const intake = letter.intakeJson as IntakeJson;
                         return (
                           <>
                             {/* Sender */}
@@ -504,8 +594,11 @@ export default function ReviewDetail() {
                                   Jurisdiction
                                 </p>
                                 <p className="text-xs text-foreground">
-                                  {intake.jurisdiction ??
-                                    `${letter.jurisdictionState}, US`}
+                                  {typeof intake.jurisdiction === "string"
+                                    ? intake.jurisdiction
+                                    : intake.jurisdiction
+                                      ? [intake.jurisdiction.city, intake.jurisdiction.state, intake.jurisdiction.country].filter(Boolean).join(", ")
+                                      : `${letter.jurisdictionState}, US`}
                                 </p>
                               </div>
                             )}
@@ -576,7 +669,7 @@ export default function ReviewDetail() {
                     ) : (
                       research.map(run => {
                         const packet = (run.resultJson ??
-                          run.validationResultJson) as any;
+                          run.validationResultJson) as ResearchPacketSummary | null;
                         return (
                           <div key={run.id} className="space-y-2">
                             {packet?.researchSummary && (
@@ -598,7 +691,7 @@ export default function ReviewDetail() {
                                   <div className="space-y-1.5">
                                     {packet.applicableRules
                                       .slice(0, 5)
-                                      .map((rule: any, i: number) => (
+                                      .map((rule, i) => (
                                         <div
                                           key={i}
                                           className="bg-muted/50 rounded-lg p-2.5"
@@ -683,6 +776,149 @@ export default function ReviewDetail() {
                 </Card>
               </TabsContent>
 
+              {/* Citations */}
+              <TabsContent
+                value="citations"
+                className="flex-1 overflow-auto mt-2"
+              >
+                <Card className="h-full border-border">
+                  <CardContent className="p-3 space-y-3" data-testid="panel-citation-report">
+                    {!citationAuditReport ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2">
+                        <Scale className="w-7 h-7 text-muted-foreground/30" />
+                        <p className="text-xs text-muted-foreground">
+                          Citation audit not yet available.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-foreground">
+                            Citation Confidence Report
+                          </p>
+                          <span
+                            data-testid="text-hallucination-risk"
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              citationAuditReport.hallucinationRiskScore === 0
+                                ? "bg-green-100 text-green-700"
+                                : citationAuditReport.hallucinationRiskScore <= 25
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            Risk: {citationAuditReport.hallucinationRiskScore}%
+                          </span>
+                        </div>
+
+                        <div className="bg-muted/50 rounded-lg p-2.5">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Total citations</span>
+                            <span className="font-medium text-foreground">{citationAuditReport.totalCitations}</span>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                            <span>Verified</span>
+                            <span className="font-medium text-green-700">{citationAuditReport.verifiedCitations?.length ?? 0}</span>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                            <span>Unverified</span>
+                            <span className="font-medium text-red-700">{citationAuditReport.unverifiedCitations?.length ?? 0}</span>
+                          </div>
+                        </div>
+
+                        {citationAuditReport.verifiedCitations?.length > 0 && (
+                          <div>
+                            <button
+                              onClick={() => setCitationReportOpen(!citationReportOpen)}
+                              className="flex items-center gap-1 text-xs font-semibold text-foreground mb-1.5 hover:text-primary transition-colors"
+                              data-testid="button-toggle-verified"
+                            >
+                              {citationReportOpen ? (
+                                <ChevronDown className="w-3 h-3" />
+                              ) : (
+                                <ChevronRight className="w-3 h-3" />
+                              )}
+                              Verified Citations ({citationAuditReport.verifiedCitations.length})
+                            </button>
+                            {citationReportOpen && (
+                              <div className="space-y-1.5">
+                                {citationAuditReport.verifiedCitations.map(
+                                  (entry: CitationAuditEntry, i: number) => (
+                                    <div
+                                      key={i}
+                                      data-testid={`citation-verified-${i}`}
+                                      className={`rounded-lg p-2 border ${
+                                        entry.confidence === "low"
+                                          ? "bg-amber-50 border-amber-200"
+                                          : "bg-green-50 border-green-200"
+                                      }`}
+                                    >
+                                      <p className="text-xs font-mono text-foreground leading-snug">
+                                        {entry.citation}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span
+                                          className={`text-xs px-1.5 py-0.5 rounded ${
+                                            entry.confidence === "high"
+                                              ? "bg-green-100 text-green-700"
+                                              : entry.confidence === "medium"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"
+                                          }`}
+                                        >
+                                          {entry.confidence}
+                                        </span>
+                                        <span className="text-xs text-green-600">
+                                          verified
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {citationAuditReport.unverifiedCitations?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-red-700 mb-1.5">
+                              Unverified Citations ({citationAuditReport.unverifiedCitations.length})
+                            </p>
+                            <div className="space-y-1.5">
+                              {citationAuditReport.unverifiedCitations.map(
+                                (entry: CitationAuditEntry, i: number) => (
+                                  <div
+                                    key={i}
+                                    data-testid={`citation-unverified-${i}`}
+                                    className="bg-red-50 border border-red-200 rounded-lg p-2"
+                                  >
+                                    <p className="text-xs font-mono text-red-800 leading-snug">
+                                      {entry.citation}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                                        unverified
+                                      </span>
+                                      <span className="text-xs text-red-600">
+                                        added by Claude
+                                      </span>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-muted-foreground">
+                          Audited: {new Date(citationAuditReport.auditedAt).toLocaleString()}
+                        </p>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               {/* History */}
               <TabsContent
                 value="history"
@@ -732,7 +968,10 @@ export default function ReviewDetail() {
       </div>
 
       {/* ── Approve Dialog ─────────────────────────────────────────────────── */}
-      <Dialog open={approveDialog} onOpenChange={setApproveDialog}>
+      <Dialog open={approveDialog} onOpenChange={(open) => {
+        setApproveDialog(open);
+        if (!open) setAcknowledgedUnverified(false);
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-700">
@@ -751,6 +990,28 @@ export default function ReviewDetail() {
               placeholder="Final letter content..."
               minHeight="300px"
             />
+            {isResearchUnverified && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2" data-testid="unverified-research-acknowledgment">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                    Research citations in this letter were not independently verified via web search. All legal citations must be manually confirmed before approval.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgedUnverified}
+                    onChange={e => setAcknowledgedUnverified(e.target.checked)}
+                    className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    data-testid="checkbox-acknowledge-unverified"
+                  />
+                  <span className="text-sm text-amber-700 dark:text-amber-300">
+                    I have manually verified all legal citations in this letter
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex-shrink-0">
             <Button
@@ -765,11 +1026,13 @@ export default function ReviewDetail() {
                 approveMutation.mutate({
                   letterId,
                   finalContent: htmlToPlainText(approveContent),
+                  ...(isResearchUnverified ? { acknowledgedUnverifiedResearch: acknowledgedUnverified } : {}),
                 })
               }
               disabled={
                 approveMutation.isPending ||
-                htmlToPlainText(approveContent).length < 50
+                htmlToPlainText(approveContent).length < 50 ||
+                (isResearchUnverified && !acknowledgedUnverified)
               }
               className="bg-green-600 hover:bg-green-700 text-white"
             >

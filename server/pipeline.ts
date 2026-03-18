@@ -25,13 +25,13 @@ import {
   updateResearchRun,
   updateWorkflowJob,
 } from "./db";
-import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext } from "../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
 } from "./intake-normalizer";
 import { sendLetterReadyEmail, sendStatusUpdateEmail, sendNewReviewNeededEmail } from "./email";
-import { getUserById, getLetterRequestById as getLetterById, getAllUsers } from "./db";
+import { getUserById, getLetterRequestById as getLetterById, getAllUsers, setLetterResearchUnverified } from "./db";
 import { captureServerException } from "./sentry";
 
 // ═══════════════════════════════════════════════════════
@@ -257,13 +257,287 @@ export function validateFinalLetter(text: string): {
 }
 
 // ═══════════════════════════════════════════════════════
+// CITATION REGISTRY & ANTI-HALLUCINATION ENGINE
+// ═══════════════════════════════════════════════════════
+
+export function buildCitationRegistry(research: ResearchPacket): CitationRegistryEntry[] {
+  const registry: CitationRegistryEntry[] = [];
+  let idx = 1;
+
+  for (const rule of research.applicableRules ?? []) {
+    if (rule.citationText && rule.citationText.trim().length > 0) {
+      registry.push({
+        registryNumber: idx++,
+        citationText: rule.citationText.trim(),
+        ruleTitle: rule.ruleTitle,
+        ruleType: rule.ruleType,
+        confidence: rule.confidence ?? "medium",
+        sourceUrl: rule.sourceUrl ?? "",
+        sourceTitle: rule.sourceTitle ?? "",
+        revalidated: false,
+      });
+    }
+  }
+
+  if (Array.isArray(research.recentCasePrecedents)) {
+    for (const c of research.recentCasePrecedents) {
+      if (c.citation && c.citation.trim().length > 0) {
+        registry.push({
+          registryNumber: idx++,
+          citationText: c.citation.trim(),
+          ruleTitle: c.caseName ?? "",
+          ruleType: "case_law",
+          confidence: "medium",
+          sourceUrl: c.sourceUrl ?? "",
+          sourceTitle: c.court ?? "",
+          revalidated: false,
+        });
+      }
+    }
+  }
+
+  if (research.statuteOfLimitations?.statute) {
+    registry.push({
+      registryNumber: idx++,
+      citationText: research.statuteOfLimitations.statute.trim(),
+      ruleTitle: "Statute of Limitations",
+      ruleType: "statute",
+      confidence: "high",
+      sourceUrl: "",
+      sourceTitle: "",
+      revalidated: false,
+    });
+  }
+
+  if (research.preSuitRequirements?.statute) {
+    registry.push({
+      registryNumber: idx++,
+      citationText: research.preSuitRequirements.statute.trim(),
+      ruleTitle: "Pre-Suit Requirement",
+      ruleType: "statute",
+      confidence: "high",
+      sourceUrl: "",
+      sourceTitle: "",
+      revalidated: false,
+    });
+  }
+
+  for (const local of research.localJurisdictionElements ?? []) {
+    if (local.element && local.element.trim().length > 0) {
+      registry.push({
+        registryNumber: idx++,
+        citationText: local.element.trim(),
+        ruleTitle: local.element,
+        ruleType: "local_ordinance",
+        confidence: local.confidence ?? "medium",
+        sourceUrl: local.sourceUrl ?? "",
+        sourceTitle: "",
+        revalidated: false,
+      });
+    }
+  }
+
+  return registry;
+}
+
+export function buildCitationRegistryPromptBlock(registry: CitationRegistryEntry[]): string {
+  if (registry.length === 0) return "";
+  const lines = registry.map(
+    r => `  [REF-${r.registryNumber}] ${r.citationText} (${r.ruleType}, confidence: ${r.confidence})`
+  );
+  return `
+## CITATION REGISTRY — MANDATORY CONSTRAINT
+The following is the COMPLETE list of validated legal citations from the research packet.
+You may ONLY use citations from this registry, referenced by their registry number (e.g. [REF-1]).
+Adding ANY citation, statute, case name, or legal reference NOT in this list is STRICTLY FORBIDDEN.
+If you need to reference a legal concept that has no citation in this registry, write:
+"[CITATION REQUIRES ATTORNEY VERIFICATION]" instead.
+
+${lines.join("\n")}
+
+TOTAL REGISTERED CITATIONS: ${registry.length}
+RULE: Use ONLY [REF-N] identifiers from the list above. Do NOT invent or add any citation not listed.
+`;
+}
+
+export async function revalidateCitationsWithPerplexity(
+  registry: CitationRegistryEntry[],
+  jurisdiction: string,
+  letterId: number
+): Promise<CitationRegistryEntry[]> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey || apiKey.trim().length === 0) {
+    console.warn(
+      `[Pipeline] PERPLEXITY_API_KEY not set — skipping citation revalidation for letter #${letterId}`
+    );
+    return registry;
+  }
+
+  const perplexity = createOpenAI({
+    apiKey,
+    baseURL: "https://api.perplexity.ai",
+    name: "perplexity",
+  });
+
+  const citationList = registry
+    .map(r => `${r.registryNumber}. "${r.citationText}" (${r.ruleType})`)
+    .join("\n");
+
+  const prompt = `You are a legal citation verification engine. Verify whether each of the following legal citations is real and currently valid in ${jurisdiction}. For each citation, respond with the number and either "VALID" or "INVALID" and a brief reason.
+
+Citations to verify:
+${citationList}
+
+Respond in this exact format, one per line:
+1. VALID - [brief reason]
+2. INVALID - [brief reason]
+...`;
+
+  try {
+    console.log(
+      `[Pipeline] Revalidating ${registry.length} citations with Perplexity for letter #${letterId}`
+    );
+    const { text } = await generateText({
+      model: perplexity.chat("sonar-pro"),
+      prompt,
+      maxOutputTokens: 2000,
+      abortSignal: AbortSignal.timeout(60_000),
+    });
+
+    const updatedRegistry = registry.map(entry => ({ ...entry }));
+
+    const lines = text.split("\n").filter(l => l.trim().length > 0);
+    for (const line of lines) {
+      const match = line.match(/^(\d+)\.\s*(VALID|INVALID)/i);
+      if (match) {
+        const num = parseInt(match[1]);
+        const isValid = match[2].toUpperCase() === "VALID";
+        const regEntry = updatedRegistry.find(r => r.registryNumber === num);
+        if (regEntry) {
+          regEntry.revalidated = true;
+          if (!isValid) {
+            regEntry.confidence = "low";
+          }
+        }
+      }
+    }
+
+    console.log(
+      `[Pipeline] Citation revalidation complete for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+    );
+    return updatedRegistry;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[Pipeline] Citation revalidation failed for letter #${letterId}: ${msg}. Continuing with unvalidated registry.`
+    );
+    return registry;
+  }
+}
+
+const CITATION_PATTERNS = [
+  /§\s*[\d.]+(?:\([a-z]\))?/g,
+  /\b[A-Z][a-z]+\s+v\.\s+[A-Z][a-z]+[\w\s,]*\d{4}/g,
+  /\b\d+\s+[A-Z]\.\w+\.?\s*(?:\d+[a-z]*\s+)?\d+/g,
+  /\b(?:Cal\.|Tex\.|N\.Y\.|Fla\.|Ill\.|Ohio|Pa\.|Ga\.|Mass\.|Mich\.|Wash\.|Va\.)[\s\w.]*§\s*[\d.]+/g,
+  /\b\d+\s+(?:U\.S\.C\.|C\.F\.R\.|F\.\d+[a-z]*|F\.Supp\.\d*|S\.Ct\.|L\.Ed\.\d*)\s*§?\s*\d+/g,
+  /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+Code\s+§\s*[\d.]+/g,
+];
+
+export function extractCitationsFromText(text: string): string[] {
+  const found = new Set<string>();
+  for (const pattern of CITATION_PATTERNS) {
+    const matches = text.match(new RegExp(pattern.source, pattern.flags));
+    if (matches) {
+      for (const m of matches) {
+        found.add(m.trim());
+      }
+    }
+  }
+  return Array.from(found);
+}
+
+function normalizeCitation(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.,;:'"()[\]{}]/g, "")
+    .replace(/§/g, "section")
+    .trim();
+}
+
+export function runCitationAudit(
+  letterText: string,
+  registry: CitationRegistryEntry[]
+): CitationAuditReport {
+  const extractedCitations = extractCitationsFromText(letterText);
+  const verified: CitationAuditEntry[] = [];
+  const unverified: CitationAuditEntry[] = [];
+
+  const normalizedRegistry = registry.map(r => ({
+    entry: r,
+    normalized: normalizeCitation(r.citationText),
+  }));
+
+  for (const citation of extractedCitations) {
+    const citNorm = normalizeCitation(citation);
+    const matchedEntry = normalizedRegistry.find(r =>
+      r.normalized.includes(citNorm) || citNorm.includes(r.normalized)
+    )?.entry ?? null;
+
+    if (matchedEntry) {
+      verified.push({
+        citation,
+        registryNumber: matchedEntry.registryNumber,
+        status: "verified",
+        confidence: matchedEntry.confidence,
+        source: "research_packet",
+      });
+    } else {
+      unverified.push({
+        citation,
+        registryNumber: null,
+        status: "unverified",
+        confidence: "low",
+        source: "claude_generated",
+      });
+    }
+  }
+
+  const total = verified.length + unverified.length;
+  const riskScore = total > 0 ? Math.round((unverified.length / total) * 100) : 0;
+
+  return {
+    verifiedCitations: verified,
+    unverifiedCitations: unverified,
+    totalCitations: total,
+    hallucinationRiskScore: riskScore,
+    auditedAt: new Date().toISOString(),
+  };
+}
+
+export function replaceUnverifiedCitations(
+  letterText: string,
+  auditReport: CitationAuditReport
+): string {
+  let result = letterText;
+  for (const entry of auditReport.unverifiedCitations) {
+    const escaped = entry.citation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "g");
+    result = result.replace(regex, "[CITATION REQUIRES ATTORNEY VERIFICATION]");
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════
 // STAGE 1: PERPLEXITY LEGAL RESEARCH
 // ═══════════════════════════════════════════════════════
 
 export async function runResearchStage(
   letterId: number,
-  intake: IntakeJson
-): Promise<ResearchPacket> {
+  intake: IntakeJson,
+  pipelineCtx?: PipelineContext
+): Promise<{ packet: ResearchPacket; provider: string }> {
   const researchConfig = getResearchModel();
   const job = await createWorkflowJob({
     letterRequestId: letterId,
@@ -271,8 +545,11 @@ export async function runResearchStage(
     provider: researchConfig.provider,
     requestPayloadJson: {
       letterId,
+      userId: pipelineCtx?.userId,
       letterType: intake.letterType,
       jurisdiction: intake.jurisdiction,
+      sender: intake.sender,
+      recipient: intake.recipient,
     },
   });
   const jobId = (job as any)?.insertId ?? 0;
@@ -385,8 +662,8 @@ export async function runResearchStage(
       responsePayloadJson: { researchRunId: runId },
     });
 
-    console.log(`[Pipeline] Stage 1 complete for letter #${letterId}`);
-    return researchPacket;
+    console.log(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${researchConfig.provider})`);
+    return { packet: researchPacket, provider: researchConfig.provider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] Stage 1 failed for letter #${letterId}:`, msg);
@@ -411,20 +688,26 @@ export async function runResearchStage(
 export async function runDraftingStage(
   letterId: number,
   intake: IntakeJson,
-  research: ResearchPacket
+  research: ResearchPacket,
+  pipelineCtx?: PipelineContext
 ): Promise<DraftOutput> {
   const job = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "draft_generation",
     provider: "anthropic",
-    requestPayloadJson: { letterId, letterType: intake.letterType },
+    requestPayloadJson: {
+      letterId,
+      userId: pipelineCtx?.userId,
+      letterType: intake.letterType,
+      sender: intake.sender,
+      recipient: intake.recipient,
+    },
   });
   const jobId = (job as any)?.insertId ?? 0;
 
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
   await updateLetterStatus(letterId, "drafting");
 
-  // Build normalized intake for the drafting prompt
   const normalizedIntake = buildNormalizedPromptInput(
     {
       subject: intake.matter?.subject ?? "Legal Matter",
@@ -436,7 +719,10 @@ export async function runDraftingStage(
     },
     intake
   );
-  const draftSystemPrompt = buildDraftingSystemPrompt();
+  const citationRegistryBlock = pipelineCtx?.citationRegistry
+    ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
+    : "";
+  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock;
   // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
@@ -447,7 +733,7 @@ export async function runDraftingStage(
   const draftUserPrompt = buildDraftingUserPrompt(
     normalizedIntake,
     targetWordCount,
-    research as any
+    research
   );
 
   try {
@@ -476,7 +762,6 @@ export async function runDraftingStage(
 
     const draft = validation.data;
 
-    // Store AI draft as a letter version
     const version = await createLetterVersion({
       letterRequestId: letterId,
       versionType: "ai_draft",
@@ -489,6 +774,8 @@ export async function runDraftingStage(
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
         reviewNotes: draft.reviewNotes,
+        citationRegistrySize: pipelineCtx?.citationRegistry?.length ?? 0,
+        researchUnverified: pipelineCtx?.researchUnverified ?? false,
       },
     });
     const versionId = (version as any)?.insertId ?? 0;
@@ -527,26 +814,36 @@ export async function runAssemblyStage(
   letterId: number,
   intake: IntakeJson,
   research: ResearchPacket,
-  draft: DraftOutput
+  draft: DraftOutput,
+  pipelineCtx?: PipelineContext
 ): Promise<string> {
   const job = await createWorkflowJob({
     letterRequestId: letterId,
-    jobType: "draft_generation", // reuse type, differentiated by provider
+    jobType: "draft_generation",
     provider: "anthropic",
-    requestPayloadJson: { letterId, stage: "final_assembly" },
+    requestPayloadJson: {
+      letterId,
+      userId: pipelineCtx?.userId,
+      stage: "final_assembly",
+      sender: intake.sender,
+      recipient: intake.recipient,
+    },
   });
   const jobId = (job as any)?.insertId ?? 0;
 
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
-  const assemblySystem = buildAssemblySystemPrompt();
+  const citationRegistryBlock = pipelineCtx?.citationRegistry
+    ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
+    : "";
+  const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock;
   const assemblyUser = buildAssemblyUserPrompt(intake, research, draft);
 
   try {
     console.log(
       `[Pipeline] Stage 3: Claude final assembly for letter #${letterId}`
     );
-    const { text: finalLetter } = await generateText({
+    const { text: rawFinalLetter } = await generateText({
       model: getAssemblyModel(),
       system: assemblySystem,
       prompt: assemblyUser,
@@ -554,17 +851,24 @@ export async function runAssemblyStage(
       abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
     });
 
-    // Validate the final letter
-    const validation = validateFinalLetter(finalLetter);
+    const validation = validateFinalLetter(rawFinalLetter);
     if (!validation.valid) {
       console.warn(
         `[Pipeline] Stage 3 validation warnings for letter #${letterId}:`,
         validation.errors
       );
-      // Non-fatal: still store it but log the warnings
     }
 
-    // Store the assembled letter as a new AI draft version (replaces the Stage 2 draft)
+    const registry = pipelineCtx?.citationRegistry ?? [];
+    const citationAuditReport = runCitationAudit(rawFinalLetter, registry);
+    console.log(
+      `[Pipeline] Citation audit for letter #${letterId}: ${citationAuditReport.verifiedCitations.length} verified, ${citationAuditReport.unverifiedCitations.length} unverified, risk score: ${citationAuditReport.hallucinationRiskScore}%`
+    );
+
+    const finalLetter = citationAuditReport.unverifiedCitations.length > 0
+      ? replaceUnverifiedCitations(rawFinalLetter, citationAuditReport)
+      : rawFinalLetter;
+
     const version = await createLetterVersion({
       letterRequestId: letterId,
       versionType: "ai_draft",
@@ -574,11 +878,14 @@ export async function runAssemblyStage(
         provider: "anthropic",
         stage: "final_assembly",
         assembledFrom: {
-          researchProvider: "perplexity",
+          researchProvider: pipelineCtx?.researchProvider ?? "perplexity",
           draftProvider: "anthropic",
         },
         validationWarnings:
           validation.errors.length > 0 ? validation.errors : undefined,
+        citationAuditReport,
+        researchUnverified: pipelineCtx?.researchUnverified ?? false,
+        citationRegistry: registry,
       },
     });
     const versionId = (version as any)?.insertId ?? 0;
@@ -681,7 +988,8 @@ export async function runFullPipeline(
     jurisdictionState?: string | null;
     jurisdictionCity?: string | null;
     letterType: string;
-  }
+  },
+  userId?: number
 ): Promise<void> {
   // Normalize intake using canonical helper
   const normalizedInput = buildNormalizedPromptInput(
@@ -824,15 +1132,39 @@ export async function runFullPipeline(
     startedAt: new Date(),
   });
 
+  const pipelineCtx: PipelineContext = {
+    letterId,
+    userId: userId ?? 0,
+    intake,
+  };
+
   try {
     // Stage 1: Perplexity Research
-    const research = await runResearchStage(letterId, intake);
+    const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
+    pipelineCtx.researchProvider = researchProvider;
+    pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
+    await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
 
-    // Stage 2: OpenAI Draft
-    const draft = await runDraftingStage(letterId, intake, research);
+    // Build citation registry from research packet
+    let citationRegistry = buildCitationRegistry(research);
+    console.log(
+      `[Pipeline] Built citation registry for letter #${letterId}: ${citationRegistry.length} citations extracted`
+    );
 
-    // Stage 3: Claude Final Assembly
-    await runAssemblyStage(letterId, intake, research, draft);
+    // Revalidate citations with Perplexity (only if Perplexity is available)
+    if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+      const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
+      citationRegistry = await revalidateCitationsWithPerplexity(
+        citationRegistry, jurisdiction, letterId
+      );
+    }
+    pipelineCtx.citationRegistry = citationRegistry;
+
+    // Stage 2: Claude Draft (with citation registry constraint)
+    const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+
+    // Stage 3: Claude Final Assembly (with citation registry + post-assembly audit)
+    await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
 
     await updateWorkflowJob(pipelineJobId, {
       status: "completed",
@@ -953,13 +1285,14 @@ export async function autoAdvanceIfPreviouslyUnlocked(
 export async function retryPipelineFromStage(
   letterId: number,
   intake: IntakeJson,
-  stage: "research" | "drafting"
+  stage: "research" | "drafting",
+  userId?: number
 ): Promise<void> {
   const retryJob = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "retry",
     provider: "multi-provider",
-    requestPayloadJson: { letterId, stage },
+    requestPayloadJson: { letterId, stage, userId },
   });
   const retryJobId = (retryJob as any)?.insertId ?? 0;
   await updateWorkflowJob(retryJobId, {
@@ -967,20 +1300,42 @@ export async function retryPipelineFromStage(
     startedAt: new Date(),
   });
 
+  const pipelineCtx: PipelineContext = {
+    letterId,
+    userId: userId ?? 0,
+    intake,
+  };
+
   try {
     if (stage === "research") {
-      // Full re-run from research
-      const research = await runResearchStage(letterId, intake);
-      const draft = await runDraftingStage(letterId, intake, research);
-      await runAssemblyStage(letterId, intake, research, draft);
+      const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
+      pipelineCtx.researchProvider = researchProvider;
+      pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
+      await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
+      let citationRegistry = buildCitationRegistry(research);
+      if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+        const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
+        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
+      }
+      pipelineCtx.citationRegistry = citationRegistry;
+      const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+      await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
     } else {
-      // Re-run from drafting using existing research
       const latestResearch = await getLatestResearchRun(letterId);
       if (!latestResearch?.resultJson)
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;
-      const draft = await runDraftingStage(letterId, intake, research);
-      await runAssemblyStage(letterId, intake, research, draft);
+      pipelineCtx.researchProvider = latestResearch.provider ?? "perplexity";
+      pipelineCtx.researchUnverified = latestResearch.provider === "anthropic-fallback";
+      await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
+      let citationRegistry = buildCitationRegistry(research);
+      if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+        const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
+        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
+      }
+      pipelineCtx.citationRegistry = citationRegistry;
+      const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+      await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
     }
     await updateWorkflowJob(retryJobId, {
       status: "completed",
@@ -1339,62 +1694,7 @@ The draftLetter value must be plain text with \\n for line breaks �� no mark
 function buildDraftingUserPrompt(
   intake: NormalizedPromptInput,
   targetWordCount: number,
-  research: ResearchPacket & {
-    recentCasePrecedents?: {
-      caseName: string;
-      citation: string;
-      court: string;
-      year: number;
-      facts: string;
-      holding: string;
-      relevance: string;
-      damages?: string;
-    }[];
-    statuteOfLimitations?: {
-      period: string;
-      statute: string;
-      clockStartsOn: string;
-      deadlineEstimate?: string;
-      urgencyFlag?: boolean;
-      notes?: string;
-    };
-    preSuitRequirements?: {
-      demandLetterRequired: boolean;
-      statute?: string;
-      waitingPeriodDays?: number;
-      requiredContent?: string[];
-      deliveryMethod?: string;
-      consequenceOfNonCompliance?: string;
-    };
-    availableRemedies?: {
-      actualDamages?: string;
-      statutoryDamages?: string;
-      punitiveDamages?: string;
-      attorneyFees?: string;
-      injunctiveRelief?: string;
-      multiplier?: string;
-    };
-    commonDefenses?: {
-      defense: string;
-      description: string;
-      counterArgument: string;
-      successRate: string;
-    }[];
-    enforcementClimate?: {
-      agActivity?: string;
-      classActions?: string;
-      recentLegislation?: string;
-      politicalLeaning?: string;
-    };
-    jurisdictionProfile: {
-      country: string;
-      stateProvince: string;
-      city?: string;
-      authorityHierarchy: string[];
-      politicalContext?: string;
-      localCourts?: string;
-    };
-  }
+  research: ResearchPacket
 ): string {
   const today = new Date().toLocaleDateString("en-US", {
     year: "numeric",
@@ -1789,8 +2089,6 @@ function buildAssemblyUserPrompt(
     month: "long",
     day: "numeric",
   });
-  const researchAny = research as any;
-
   // Build enriched research context for the assembly stage
   const rulesBlock = research.applicableRules
     .slice(0, 6)
@@ -1798,31 +2096,31 @@ function buildAssemblyUserPrompt(
     .join("\n");
 
   const casesBlock =
-    researchAny.recentCasePrecedents
+    research.recentCasePrecedents
       ?.slice(0, 3)
-      .map((c: any) => `- ${c.caseName} (${c.citation}) — ${c.holding}`)
+      .map(c => `- ${c.caseName} (${c.citation}) — ${c.holding}`)
       .join("\n") ?? "";
 
-  const solBlock = researchAny.statuteOfLimitations
-    ? `SOL: ${researchAny.statuteOfLimitations.period} (${researchAny.statuteOfLimitations.statute})${
-        researchAny.statuteOfLimitations.urgencyFlag ? " ⚠ APPROACHING" : ""
+  const solBlock = research.statuteOfLimitations
+    ? `SOL: ${research.statuteOfLimitations.period} (${research.statuteOfLimitations.statute})${
+        research.statuteOfLimitations.urgencyFlag ? " ⚠ APPROACHING" : ""
       }`
     : "";
 
-  const remediesBlock = researchAny.availableRemedies
+  const remediesBlock = research.availableRemedies
     ? [
-        researchAny.availableRemedies.actualDamages
-          ? `Actual: ${researchAny.availableRemedies.actualDamages}`
+        research.availableRemedies.actualDamages
+          ? `Actual: ${research.availableRemedies.actualDamages}`
           : null,
-        researchAny.availableRemedies.statutoryDamages
-          ? `Statutory: ${researchAny.availableRemedies.statutoryDamages}`
+        research.availableRemedies.statutoryDamages
+          ? `Statutory: ${research.availableRemedies.statutoryDamages}`
           : null,
-        researchAny.availableRemedies.attorneyFees
-          ? `Fees: ${researchAny.availableRemedies.attorneyFees}`
+        research.availableRemedies.attorneyFees
+          ? `Fees: ${research.availableRemedies.attorneyFees}`
           : null,
-        researchAny.availableRemedies.multiplier &&
-        researchAny.availableRemedies.multiplier !== "None"
-          ? `Multiplier: ${researchAny.availableRemedies.multiplier}`
+        research.availableRemedies.multiplier &&
+        research.availableRemedies.multiplier !== "None"
+          ? `Multiplier: ${research.availableRemedies.multiplier}`
           : null,
       ]
         .filter(Boolean)
@@ -1830,16 +2128,16 @@ function buildAssemblyUserPrompt(
     : "";
 
   const defensesBlock =
-    researchAny.commonDefenses
+    research.commonDefenses
       ?.slice(0, 3)
-      .map((d: any) => `- ${d.defense}: Pre-empt with: ${d.counterArgument}`)
+      .map(d => `- ${d.defense}: Pre-empt with: ${d.counterArgument}`)
       .join("\n") ?? "";
 
-  const enforcementBlock = researchAny.enforcementClimate
+  const enforcementBlock = research.enforcementClimate
     ? [
-        researchAny.enforcementClimate.agActivity,
-        researchAny.enforcementClimate.classActions,
-        researchAny.enforcementClimate.recentLegislation,
+        research.enforcementClimate.agActivity,
+        research.enforcementClimate.classActions,
+        research.enforcementClimate.recentLegislation,
       ]
         .filter(Boolean)
         .join(" | ")
@@ -1853,8 +2151,8 @@ function buildAssemblyUserPrompt(
   const senderEmail = intake.sender.email ? "Email: " + intake.sender.email : "";
   const senderPhone = intake.sender.phone ? "Phone: " + intake.sender.phone : "";
   const tone = intake.tonePreference ?? "firm";
-  const step6 = researchAny.commonDefenses?.length > 0 ? "6. VERIFY all identified defenses are pre-empted in the letter body" : "";
-  const step7 = researchAny.statuteOfLimitations?.urgencyFlag ? "7. ENSURE SOL urgency is reflected in the letter's timeline demands" : "";
+  const step6 = (research.commonDefenses?.length ?? 0) > 0 ? "6. VERIFY all identified defenses are pre-empted in the letter body" : "";
+  const step7 = research.statuteOfLimitations?.urgencyFlag ? "7. ENSURE SOL urgency is reflected in the letter's timeline demands" : "";
 
   return "## Letter Context\n" +
     "Type: " + intake.letterType.replace(/-/g, " ").toUpperCase() + "\n" +

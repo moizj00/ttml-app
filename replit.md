@@ -11,7 +11,7 @@ A full-stack legal letter platform where users can get AI-drafted, attorney-revi
 - **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed)
 - **Payments**: Stripe
 - **Rate Limiting**: Upstash Redis
-- **AI Pipeline**: Perplexity (research) + Anthropic Claude (drafting & assembly)
+- **AI Pipeline**: Perplexity (research + citation revalidation) + Anthropic Claude (drafting & assembly) + anti-hallucination citation audit
 - **Monitoring**: Sentry (error tracking, alerting)
 - **Deployment**: Railway (`www.talk-to-my-lawyer.com` + `talk-to-my-lawyer.com`)
 

@@ -139,6 +139,7 @@ export const letterRequests = pgTable("letter_requests", {
   lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow(),
   // Tracks when the 48-hour draft-ready reminder email was sent (null = not yet sent)
   draftReminderSentAt: timestamp("draft_reminder_sent_at", { withTimezone: true }),
+  researchUnverified: boolean("research_unverified").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
