@@ -1,0 +1,52 @@
+Here are all the action points extracted from the three recordings:
+
+---
+
+## Recording 1 — mzw-bfgz-pmp (Mar 18, 03:50 GMT+5) · 43 min
+*Topic: Legal email system, letter workflow, platform bugs*
+
+1. Make the jurisdiction dropdown show only California for the relevant form flow (enforce selection and prevent other options).
+2. Add a repeatable "communication + evidence" UI: a clickable "Add" that creates new entries (date, method, description) with an upload for exhibit(s), and include those exhibits as labeled exhibits in the generated letter.
+3. Move/combine attachments and evidence earlier in the form flow (so users can upload evidence alongside communications) and remove confusion caused by current placement.
+4. Implement form revalidation and required fields so missing items (e.g., company name, gender/title) block progress and the form does not invent placeholder names.
+5. Add letterhead to drafts and approved letters, and add a large "DRAFT" watermark on the draft PDF version.
+6. Ensure the review workflow implements lawyer review then client review, and after client approval present the payment window ($200 one-time or subscription options) before sending the final letter; do not surface internal AI/workflow details to clients.
+7. Fix the review center/queue display and notifications so pending reviews are counted correctly (show "1 letter to review" when a pending review exists) and send notification emails to attorneys for items to review.
+8. Add paid vs. unpaid subscriber visual differentiation (e.g., red/green or explicit labels) and add the ability for a super admin to mark a subscriber as paid without payment.
+9. Implement an autosave (cron job or periodic save) to preserve in-progress edits and avoid requiring manual Save every time.
+10. Investigate and fix the editor bug where edits revert, the screen freezes, or scrolling is blocked when editing a draft, and ensure save state persists correctly.
+11. Provide a way for a super admin to claim or act as an attorney (an "impersonate attorney" workflow) so a super admin can claim, edit, and approve letters when needed, with appropriate security controls.
+12. Fix workflow integrity to prevent forced status transitions by super admins from corrupting the pipeline, and provide a recovery for any disrupted letters (clean up duplicate/incorrect letter states).
+
+---
+
+## Recording 2 — mzw-bfgz-pmp (Mar 18, 03:27 GMT+5) · 23 min
+*Topic: Subscription pricing, commissions, affiliate/agent system*
+
+1. Test the full user onboarding and purchase flow: sign out, create a new account with a different email, complete the onboarding form, and verify download vs. send-by-lawyer-email options and overall redirect behaviour.
+2. Update website pricing and wording: set monthly subscription to $299, yearly subscription to reflect 2 months free (pay for 10 months), ensure both plans show four letters, and remove "monthly Pro" wording.
+3. Implement agent discount codes and pricing flow: generate unique agent codes that apply $99 off monthly (resulting in $200/month) and ensure code attribution is recorded for commission tracking.
+4. Draft the commission structure document: propose a sliding-scale commission plan (5% up to 25% with thresholds at 10/15/20/25 subscribers) and include agreed one-time signup payments ($200 signup fee and upfront yearly 5% payout calculation).
+5. Build affiliate/sales-agent features in admin: auto-generate affiliate codes (e.g., TTML001, TTML002), show number and type of users per code (one-letter, monthly, yearly), and record totals required for payout calculations.
+6. Add admin UI improvements: enable sorting of users (by subscriber, attorney, affiliate), remove the word "employee" (replace with "client" or appropriate label), and ensure users changed to "attorney" are redirected to the attorney dashboard on next login.
+7. Continue with platform functionality work (back-end and flows) before finalising web page text; implement workflows first, then revisit web pages for final content adjustments.
+8. Create an additional lawyer-facing email (e.g., via GoDaddy) to support the "Send Via Lawyer's Email" option for letters.
+
+---
+
+## Recording 3 — mzw-bfgz-pmp (Mar 18, 03:13 GMT+5) · 13 min
+*Topic: Website design, pricing display, marketing/outreach strategy*
+
+1. Create a sales manual for outreach agents explaining where to find target businesses (Google, LinkedIn, Facebook pages/groups), how to collect business emails, and instructing agents to focus outreach on businesses in California.
+2. Draft a sequence of at least 12 outreach emails (introductory, follow-ups, ongoing touchpoints) for agents to copy-and-paste, including instructions for regular holiday/greeting messaging.
+3. Specify requirements for, or evaluate building/obtaining, a networking/contact-management software that stores business contacts, schedules automated holiday/greeting emails, and tracks outreach cadence.
+4. Change the site display to the longer domain format (talktomylawyer.com) and update visible domain text on the header.
+5. Update the site icon so the first letters are capitalised (T, M, L) in the top-left icon.
+6. Replace wording that implies a free complimentary letter with clearer copy: remove "attorney review included" from the first page and change phrasing to "View your first letter for free" where appropriate.
+7. Implement a first-time visitor pop-up that appears ~3 seconds after arrival with the message "Congratulations as a first time client. View your first letter for free" and a five-minute countdown that remains until cancelled.
+8. Remove the pricing promo bar claiming the first letter is complimentary; update the pricing section headline to focus on value (e.g., "Resolve your dispute faster with lawyer-drafted letters and negotiations").
+9. Update displayed pricing details to show: one-time paper letter price, 12-month subscription label for ongoing matters, $200/month subscription with "$50 per letter" as a smaller line, and later change the paper letter price to $299.
+
+---
+
+**Total: 29 action points across the three recordings.** All three sessions appear to be from the same project — a legal letter platform called "Talk to My Lawyer" — so the items span website UX, platform back-end, pricing/subscriptions, and a sales/marketing strategy. Let me know if you'd like these organised differently (e.g., by owner, priority, or theme).
