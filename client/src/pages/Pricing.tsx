@@ -26,7 +26,6 @@ const PLANS = [
     priceDisplay: PRICING.freeTrial.priceDisplay,
     priceNumeric: PRICING.freeTrial.price,
     period: PRICING.freeTrial.period,
-    reviewFee: "Attorney review included",
     description: PRICING.freeTrial.description,
     badge: null as string | null,
     features: PRICING.freeTrial.features as readonly string[],
@@ -40,7 +39,6 @@ const PLANS = [
     priceDisplay: PRICING.perLetter.priceDisplay,
     priceNumeric: PRICING.perLetter.price,
     period: PRICING.perLetter.period,
-    reviewFee: "Attorney review included",
     description: PRICING.perLetter.description,
     badge: null as string | null,
     features: PRICING.perLetter.features as readonly string[],
@@ -50,29 +48,27 @@ const PLANS = [
   },
   {
     id: PRICING.monthlyBasic.id,
-    name: PRICING.monthlyBasic.name,
+    name: "Yearly",
     priceDisplay: PRICING.monthlyBasic.priceDisplay,
     priceNumeric: PRICING.monthlyBasic.price,
     period: PRICING.monthlyBasic.period,
-    reviewFee: "Attorney review included",
     description: PRICING.monthlyBasic.description,
     badge: "Most Popular" as string | null,
     features: PRICING.monthlyBasic.features as readonly string[],
-    cta: "Subscribe — Basic",
+    cta: "Subscribe — Yearly",
     highlight: true,
     isFree: false,
   },
   {
     id: PRICING.monthlyPro.id,
-    name: PRICING.monthlyPro.name,
+    name: "Yearly Pro",
     priceDisplay: PRICING.monthlyPro.priceDisplay,
     priceNumeric: PRICING.monthlyPro.price,
     period: PRICING.monthlyPro.period,
-    reviewFee: "Attorney review included",
     description: PRICING.monthlyPro.description,
     badge: "Best Value" as string | null,
     features: PRICING.monthlyPro.features as readonly string[],
-    cta: "Subscribe — Pro",
+    cta: "Subscribe — Yearly Pro",
     highlight: false,
     isFree: false,
   },
@@ -135,7 +131,7 @@ export default function Pricing() {
             <Scale className="w-12 h-12 text-blue-500" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            Professional Legal Letters
+            Resolve your dispute faster with lawyer-drafted letters and negotiations
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
             Professionally drafted and attorney-reviewed legal letters. Start
@@ -198,13 +194,7 @@ export default function Pricing() {
                     {plan.period}
                   </span>
                 </div>
-                {plan.reviewFee && (
-                  <p
-                    className={`text-xs mt-1 font-medium ${plan.isFree ? "text-emerald-600" : "text-emerald-600"}`}
-                  >
-                    {plan.reviewFee}
-                  </p>
-                )}
+                
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <ul className="space-y-3 flex-1 mb-6">

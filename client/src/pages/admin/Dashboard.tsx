@@ -150,7 +150,7 @@ export default function AdminDashboard() {
                       bg: "bg-purple-50",
                     },
                     {
-                      role: "Employees",
+                      role: "Affiliates",
                       count: s.employees ?? 0,
                       icon: <Briefcase className="w-4 h-4" />,
                       color: "text-amber-600",

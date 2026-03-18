@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -25,7 +25,6 @@ import {
   AlignLeft,
   Target,
   Paperclip,
-  Upload,
   X,
   File as FileIcon,
 } from "lucide-react";
@@ -40,9 +39,11 @@ const STEPS = [
   { id: 3, label: "Parties", icon: <Users className="w-4 h-4" /> },
   { id: 4, label: "Details", icon: <AlignLeft className="w-4 h-4" /> },
   { id: 5, label: "Outcome", icon: <Target className="w-4 h-4" /> },
-  { id: 6, label: "Communications", icon: <Users className="w-4 h-4" /> },
-  { id: 7, label: "Evidence", icon: <Paperclip className="w-4 h-4" /> },
+  { id: 6, label: "Exhibits", icon: <Paperclip className="w-4 h-4" /> },
 ];
+
+const EXHIBIT_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+const MAX_EXHIBITS = 10;
 
 const MAX_FILE_MB = 10;
 const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
@@ -65,6 +66,12 @@ interface PendingFile {
   base64: string;
   status: "ready" | "error";
   error?: string;
+}
+
+interface ExhibitRow {
+  id: string;
+  description: string;
+  file: PendingFile | null;
 }
 
 function fmtBytes(b: number) {
@@ -121,7 +128,7 @@ const INITIAL: FormData = {
   deadlineDate: "",
   language: "english",
   priorCommunication: "",
-  deliveryMethod: "certified_mail",
+  deliveryMethod: "email",
   communicationsSummary: "",
   communicationsLastContactDate: "",
   communicationsMethod: "",
@@ -132,13 +139,13 @@ const DRAFT_KEY = "ttml_draft_letter";
 export default function SubmitLetter() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
+  const [exhibits, setExhibits] = useState<ExhibitRow[]>([
+    { id: "exhibit-0", description: "", file: null },
+  ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pipelineLetterId, setPipelineLetterId] = useState<number | null>(null);
   const [showPipeline, setShowPipeline] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [, navigate] = useLocation();
 
   // ── Resume draft: load saved draft on mount ─────────────────────────────
@@ -217,12 +224,10 @@ export default function SubmitLetter() {
       );
     if (step === 4) return form.description.length >= 20;
     if (step === 5) return form.desiredOutcome.length >= 10;
-    if (step === 6) return true; // communications are optional
-    if (step === 7) return true; // attachments are optional
+    if (step === 6) return true; // exhibits are optional
     return true;
   };
 
-  // ── File helpers ──────────────────────────────────────────────────────────
   const readBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -230,61 +235,6 @@ export default function SubmitLetter() {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-
-  const addFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const arr = Array.from(files);
-      if (pendingFiles.length + arr.length > 5) {
-        toast.error("Attachment limit reached", {
-          description: "You can upload a maximum of 5 supporting documents.",
-        });
-        return;
-      }
-      for (const file of arr) {
-        const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
-        if (file.size > MAX_FILE_BYTES) {
-          toast.error("File too large", {
-            description: `${file.name} exceeds the ${MAX_FILE_MB} MB limit. Please compress or split the file.`,
-          });
-          continue;
-        }
-        if (!ALLOWED_EXTS.includes(ext)) {
-          toast.error("Unsupported file type", {
-            description: `${file.name} is not an accepted format. Please use PDF, DOCX, JPG, or PNG.`,
-          });
-          continue;
-        }
-        try {
-          const base64 = await readBase64(file);
-          setPendingFiles(prev => [
-            ...prev,
-            {
-              id: `${file.name}-${Date.now()}`,
-              name: file.name,
-              size: file.size,
-              mimeType: file.type || "application/octet-stream",
-              base64,
-              status: "ready",
-            },
-          ]);
-        } catch {
-          toast.error("Upload failed", {
-            description: `Could not read ${file.name}. Please try again.`,
-          });
-        }
-      }
-    },
-    [pendingFiles.length]
-  );
-
-  const removeFile = (id: string) =>
-    setPendingFiles(prev => prev.filter(f => f.id !== id));
-
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    addFiles(e.dataTransfer.files);
-  };
 
   // ── Submit with attachments ───────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -325,6 +275,13 @@ export default function SubmitLetter() {
         language: form.language,
         priorCommunication: form.priorCommunication || undefined,
         deliveryMethod: form.deliveryMethod,
+        exhibits: exhibits
+          .filter(e => e.description || e.file)
+          .map((e, i) => ({
+            label: `Exhibit ${EXHIBIT_LETTERS[i]}`,
+            description: e.description || undefined,
+            hasAttachment: !!e.file,
+          })),
         communications: form.communicationsSummary
           ? {
               summary: form.communicationsSummary,
@@ -361,19 +318,19 @@ export default function SubmitLetter() {
         intakeJson,
       });
       const letterId = result.letterId;
-      // Upload attachments in parallel (non-blocking failures)
-      if (pendingFiles.length > 0) {
+      const exhibitFiles = exhibits
+        .filter(e => e.file && e.file.status === "ready")
+        .map(e => e.file!);
+      if (exhibitFiles.length > 0) {
         await Promise.allSettled(
-          pendingFiles
-            .filter(f => f.status === "ready")
-            .map(f =>
-              uploadAttachment.mutateAsync({
-                letterId,
-                fileName: f.name,
-                mimeType: f.mimeType,
-                base64Data: f.base64,
-              })
-            )
+          exhibitFiles.map(f =>
+            uploadAttachment.mutateAsync({
+              letterId,
+              fileName: f.name,
+              mimeType: f.mimeType,
+              base64Data: f.base64,
+            })
+          )
         );
       }
       // Clear saved draft on successful submission
@@ -892,16 +849,7 @@ export default function SubmitLetter() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="certified_mail">
-                          Certified Mail
-                        </SelectItem>
                         <SelectItem value="email">Email Only</SelectItem>
-                        <SelectItem value="both">
-                          Both (Mail + Email)
-                        </SelectItem>
-                        <SelectItem value="hand_delivery">
-                          Hand Delivery
-                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -948,156 +896,181 @@ export default function SubmitLetter() {
                 </div>
               </>
             )}
-            {/* ── Step 6: Prior Communications (Optional) ─────────────────── */}
+            {/* ── Step 6: Exhibits (merged Communications + Evidence) ──── */}
             {step === 6 && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Describe any emails, letters, or conversations you've already
-                  had with the other party. This helps the attorney understand
-                  the full context.{" "}
+                  Add supporting exhibits — prior communications, contracts,
+                  photos, or other documents that strengthen your case. Each
+                  exhibit can include a description and/or a file attachment.{" "}
                   <span className="font-medium">Optional.</span>
                 </p>
-                <div>
-                  <Label
-                    htmlFor="communicationsSummary"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Summary of Prior Communications
-                  </Label>
-                  <Textarea
-                    id="communicationsSummary"
-                    value={form.communicationsSummary}
-                    onChange={e =>
-                      update("communicationsSummary", e.target.value)
-                    }
-                    placeholder="e.g., I sent an email on Jan 5 requesting payment. They responded on Jan 10 saying they would pay within 30 days but never did..."
-                    rows={4}
-                    className="resize-none"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label
-                      htmlFor="communicationsLastContactDate"
-                      className="text-sm font-medium mb-1.5 block"
-                    >
-                      Date of Last Contact
-                    </Label>
-                    <Input
-                      id="communicationsLastContactDate"
-                      type="date"
-                      value={form.communicationsLastContactDate}
-                      onChange={e =>
-                        update("communicationsLastContactDate", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Communication Method
-                    </Label>
-                    <Select
-                      value={form.communicationsMethod}
-                      onValueChange={v => update("communicationsMethod", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select method..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="phone">Phone</SelectItem>
-                        <SelectItem value="letter">Letter / Mail</SelectItem>
-                        <SelectItem value="in-person">In Person</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* ── Step 7: Evidence / Attachments ───────────────────────────── */}
-            {step === 7 && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Upload supporting documents, photos, or contracts that
-                  strengthen your case. Attachments are{" "}
-                  <span className="font-medium">optional</span> — you can submit
-                  without them.
-                </p>
 
-                {/* Drag-drop zone */}
-                <div
-                  onDrop={onDrop}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                    isDragging
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50 hover:bg-muted/20"
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={ALLOWED_EXTS.join(",")}
-                    className="hidden"
-                    onChange={e => e.target.files && addFiles(e.target.files)}
-                  />
-                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm font-medium">
-                    Drop files here or click to browse
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    PDF, DOCX, JPG, PNG, TXT &nbsp;·&nbsp; Max {MAX_FILE_MB} MB
-                    per file &nbsp;·&nbsp; Up to 5 files
-                  </p>
-                </div>
-
-                {/* File list */}
-                {pendingFiles.length > 0 && (
-                  <div className="space-y-2">
-                    {pendingFiles.map(f => (
-                      <div
-                        key={f.id}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20"
-                      >
-                        <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
-                          <FileIcon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">
-                            {f.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {fmtBytes(f.size)} &nbsp;·&nbsp;{" "}
-                            <span className="text-green-600 dark:text-green-400">
-                              Ready
-                            </span>
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(f.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                          aria-label="Remove"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                <div className="space-y-3">
+                  {exhibits.map((exhibit, idx) => (
+                    <div
+                      key={exhibit.id}
+                      className="rounded-xl border border-border p-4 space-y-3"
+                      data-testid={`exhibit-row-${idx}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-foreground">
+                          Exhibit {EXHIBIT_LETTERS[idx]}
+                        </span>
+                        {exhibits.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExhibits(prev =>
+                                prev.filter(e => e.id !== exhibit.id)
+                              )
+                            }
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                            aria-label={`Remove Exhibit ${EXHIBIT_LETTERS[idx]}`}
+                            data-testid={`exhibit-remove-${idx}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <Textarea
+                        value={exhibit.description}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setExhibits(prev =>
+                            prev.map(ex =>
+                              ex.id === exhibit.id
+                                ? { ...ex, description: val }
+                                : ex
+                            )
+                          );
+                        }}
+                        placeholder="Describe this exhibit (e.g., Email sent on Jan 5 requesting payment...)"
+                        rows={2}
+                        className="resize-none"
+                        data-testid={`exhibit-description-${idx}`}
+                      />
+                      {exhibit.file ? (
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
+                          <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                            <FileIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {exhibit.file.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtBytes(exhibit.file.size)} &nbsp;·&nbsp;{" "}
+                              <span className="text-green-600 dark:text-green-400">
+                                Ready
+                              </span>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExhibits(prev =>
+                                prev.map(ex =>
+                                  ex.id === exhibit.id
+                                    ? { ...ex, file: null }
+                                    : ex
+                                )
+                              )
+                            }
+                            className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                            aria-label="Remove file"
+                            data-testid={`exhibit-file-remove-${idx}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          className="flex items-center gap-2 text-sm text-primary cursor-pointer hover:underline"
+                          data-testid={`exhibit-file-attach-${idx}`}
+                        >
+                          <Paperclip className="w-4 h-4" />
+                          Attach file
+                          <input
+                            type="file"
+                            accept={ALLOWED_EXTS.join(",")}
+                            className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const ext =
+                                "." +
+                                (file.name.split(".").pop() ?? "").toLowerCase();
+                              if (file.size > MAX_FILE_BYTES) {
+                                toast.error("File too large", {
+                                  description: `${file.name} exceeds the ${MAX_FILE_MB} MB limit.`,
+                                });
+                                return;
+                              }
+                              if (!ALLOWED_EXTS.includes(ext)) {
+                                toast.error("Unsupported file type", {
+                                  description: `${file.name} is not an accepted format.`,
+                                });
+                                return;
+                              }
+                              try {
+                                const base64 = await readBase64(file);
+                                const pf: PendingFile = {
+                                  id: `${file.name}-${Date.now()}`,
+                                  name: file.name,
+                                  size: file.size,
+                                  mimeType:
+                                    file.type || "application/octet-stream",
+                                  base64,
+                                  status: "ready",
+                                };
+                                setExhibits(prev =>
+                                  prev.map(ex =>
+                                    ex.id === exhibit.id
+                                      ? { ...ex, file: pf }
+                                      : ex
+                                  )
+                                );
+                              } catch {
+                                toast.error("Upload failed", {
+                                  description: `Could not read ${file.name}.`,
+                                });
+                              }
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {exhibits.length < MAX_EXHIBITS && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setExhibits(prev => [
+                        ...prev,
+                        {
+                          id: `exhibit-${Date.now()}`,
+                          description: "",
+                          file: null,
+                        },
+                      ])
+                    }
+                    data-testid="exhibit-add"
+                  >
+                    + Add Exhibit
+                  </Button>
                 )}
 
-                {pendingFiles.length === 0 && (
+                {exhibits.every(e => !e.description && !e.file) && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
                     <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700 dark:text-blue-300">
-                      No attachments added. You can still submit — attachments
+                      No exhibits added yet. You can still submit — exhibits
                       help the attorney build a stronger letter.
                     </p>
                   </div>
@@ -1117,7 +1090,7 @@ export default function SubmitLetter() {
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back
           </Button>
-          {step < 7 ? (
+          {step < 6 ? (
             <Button
               onClick={() => setStep(s => s + 1)}
               disabled={!canProceed()}

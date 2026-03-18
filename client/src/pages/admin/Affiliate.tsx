@@ -251,7 +251,7 @@ export default function AdminAffiliate() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-indigo-600" />
-                  Employee Performance
+                  Affiliate Performance
                 </CardTitle>
                 <CardDescription>
                   Overview of each affiliate's referral activity and earnings.
@@ -267,7 +267,7 @@ export default function AdminAffiliate() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Employee</TableHead>
+                          <TableHead>Affiliate</TableHead>
                           <TableHead>Discount Code</TableHead>
                           <TableHead className="text-center">Uses</TableHead>
                           <TableHead className="text-center">
@@ -332,7 +332,7 @@ export default function AdminAffiliate() {
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">No employees found.</p>
+                    <p className="text-sm">No affiliates found.</p>
                   </div>
                 )}
               </CardContent>
@@ -348,7 +348,7 @@ export default function AdminAffiliate() {
                   All Discount Codes
                 </CardTitle>
                 <CardDescription>
-                  Manage employee discount codes. Toggle active/inactive status.
+                  Manage affiliate discount codes. Toggle active/inactive status.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -361,7 +361,7 @@ export default function AdminAffiliate() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Code</TableHead>
-                        <TableHead>Employee</TableHead>
+                        <TableHead>Affiliate</TableHead>
                         <TableHead className="text-center">Discount</TableHead>
                         <TableHead className="text-center">Uses</TableHead>
                         <TableHead className="text-center">Max Uses</TableHead>
@@ -427,7 +427,7 @@ export default function AdminAffiliate() {
                   All Commissions
                 </CardTitle>
                 <CardDescription>
-                  Full ledger of all commissions across employees.
+                  Full ledger of all commissions across affiliates.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -441,7 +441,7 @@ export default function AdminAffiliate() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Date</TableHead>
-                          <TableHead>Employee</TableHead>
+                          <TableHead>Affiliate</TableHead>
                           <TableHead>Sale</TableHead>
                           <TableHead>Rate</TableHead>
                           <TableHead>Commission</TableHead>
@@ -496,7 +496,7 @@ export default function AdminAffiliate() {
                   Payout Requests
                 </CardTitle>
                 <CardDescription>
-                  Review and process employee payout requests.
+                  Review and process affiliate payout requests.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -509,7 +509,7 @@ export default function AdminAffiliate() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>Employee</TableHead>
+                        <TableHead>Affiliate</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Method</TableHead>
                         <TableHead>Status</TableHead>

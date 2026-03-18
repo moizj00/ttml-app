@@ -239,7 +239,7 @@ export default function Onboarding() {
                 </Select>
               </div>
 
-              {/* Employee-specific fields */}
+              {/* Affiliate-specific fields */}
               {selectedRole === "employee" && (
                 <div>
                   <Label htmlFor="companyName">

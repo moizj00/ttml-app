@@ -48,7 +48,7 @@ const ROLE_OPTIONS: {
   },
   {
     value: "employee",
-    label: "Employee",
+    label: "Affiliate",
     description: "I work on operations & support",
     icon: <Briefcase className="w-5 h-5" />,
   },
@@ -482,7 +482,7 @@ export default function Signup() {
                 {role === "employee" && (
                   <>
                     <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                      Employee accounts require admin approval before full
+                      Affiliate accounts require admin approval before full
                       access is granted.
                     </p>
                     <div
@@ -649,7 +649,7 @@ export default function Signup() {
                     Creating account...
                   </>
                 ) : (
-                  `Create ${role === "subscriber" ? "Client" : "Employee"} Account`
+                  `Create ${role === "subscriber" ? "Client" : "Affiliate"} Account`
                 )}
               </Button>
             </form>

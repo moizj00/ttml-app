@@ -290,7 +290,7 @@ export default function AdminLetterDetail() {
               <span className="text-muted-foreground">Reviewer</span>
               <span className="font-medium">
                 {l.assignedReviewerId
-                  ? `Employee #${l.assignedReviewerId}`
+                  ? `Reviewer #${l.assignedReviewerId}`
                   : "Unassigned"}
               </span>
               <span className="text-muted-foreground">Created</span>

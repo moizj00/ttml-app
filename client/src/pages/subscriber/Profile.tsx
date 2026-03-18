@@ -30,7 +30,7 @@ import {
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   subscriber: { label: "Client", color: "bg-blue-100 text-blue-800" },
-  employee: { label: "Employee", color: "bg-green-100 text-green-800" },
+  employee: { label: "Affiliate", color: "bg-green-100 text-green-800" },
   attorney: { label: "Attorney", color: "bg-purple-100 text-purple-800" },
   admin: { label: "Admin", color: "bg-red-100 text-red-800" },
 };
