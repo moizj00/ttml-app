@@ -507,7 +507,7 @@ export default function LetterDetail() {
                   <span className="text-xs text-muted-foreground">
                     Submitted {new Date(letter.createdAt).toLocaleDateString()}
                   </span>
-                  {isPolling && (
+                  {isPolling && !["submitted", "researching", "drafting"].includes(letter.status) && (
                     <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       Auto-refreshing...
