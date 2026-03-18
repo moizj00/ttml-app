@@ -1,13 +1,12 @@
 /**
  * Pricing Model Tests
  * Verifies the current pricing structure:
- *  - free_trial:    $0 (first letter completely free — research + draft + attorney review)
- *  - per_letter:    $200 one-time (pay-per-letter)
- *  - monthly_basic: $499/month (4 letters, attorney review included)
- *  - monthly_pro:   $699/month (8 letters, attorney review included)
+ *  - single_letter: $200 one-time (pay-per-letter)
+ *  - monthly:       $200/month (4 letters, attorney review included)
+ *  - yearly:        $2,000/year (4 letters/month, attorney review included)
  *
- * Legacy plan IDs (starter, professional, free_trial_review, monthly, annual)
- * are supported via LEGACY_PLAN_ALIASES for backward compatibility.
+ * Legacy plan IDs (per_letter, monthly_basic, monthly_pro, starter, professional,
+ * free_trial, free_trial_review, annual) are supported via LEGACY_PLAN_ALIASES.
  */
 
 import { describe, it, expect } from "vitest";
@@ -16,8 +15,8 @@ import {
   PLAN_LIST,
   getPlanConfig,
   LETTER_UNLOCK_PRICE_CENTS,
-  MONTHLY_BASIC_PRICE_CENTS,
-  MONTHLY_PRO_PRICE_CENTS,
+  MONTHLY_PRICE_CENTS,
+  YEARLY_PRICE_CENTS,
   LEGACY_PLAN_ALIASES,
 } from "./stripe-products";
 
@@ -26,112 +25,106 @@ describe("Pricing constants", () => {
     expect(LETTER_UNLOCK_PRICE_CENTS).toBe(20000);
   });
 
-  it("MONTHLY_BASIC_PRICE_CENTS is $499 (49900 cents)", () => {
-    expect(MONTHLY_BASIC_PRICE_CENTS).toBe(49900);
+  it("MONTHLY_PRICE_CENTS is $200 (20000 cents)", () => {
+    expect(MONTHLY_PRICE_CENTS).toBe(20000);
   });
 
-  it("MONTHLY_PRO_PRICE_CENTS is $699 (69900 cents)", () => {
-    expect(MONTHLY_PRO_PRICE_CENTS).toBe(69900);
+  it("YEARLY_PRICE_CENTS is $2,000 (200000 cents)", () => {
+    expect(YEARLY_PRICE_CENTS).toBe(200000);
   });
 });
 
 describe("PLANS configuration", () => {
-  it("has exactly 4 plans", () => {
-    expect(Object.keys(PLANS)).toHaveLength(4);
+  it("has exactly 3 plans", () => {
+    expect(Object.keys(PLANS)).toHaveLength(3);
     expect(Object.keys(PLANS)).toEqual(
-      expect.arrayContaining(["free_trial", "per_letter", "monthly_basic", "monthly_pro"])
+      expect.arrayContaining(["single_letter", "monthly", "yearly"])
     );
   });
 
-  describe("free_trial plan", () => {
-    const plan = PLANS.free_trial;
-
-    it("exists", () => expect(plan).toBeDefined());
-    it("is $0 (free)", () => expect(plan.price).toBe(0));
-    it("is one_time interval", () => expect(plan.interval).toBe("one_time"));
-    it("is marked as trial", () => expect(plan.isTrial).toBe(true));
-    it("allows 1 letter", () => expect(plan.lettersAllowed).toBe(1));
-  });
-
-  describe("per_letter plan", () => {
-    const plan = PLANS.per_letter;
+  describe("single_letter plan", () => {
+    const plan = PLANS.single_letter;
 
     it("exists", () => expect(plan).toBeDefined());
     it("is $200 (20000 cents)", () => expect(plan.price).toBe(20000));
     it("is one_time interval", () => expect(plan.interval).toBe("one_time"));
     it("allows 1 letter", () => expect(plan.lettersAllowed).toBe(1));
-    it("is not a trial", () => expect(plan.isTrial).toBeFalsy());
   });
 
-  describe("monthly_basic plan", () => {
-    const plan = PLANS.monthly_basic;
+  describe("monthly plan", () => {
+    const plan = PLANS.monthly;
 
     it("exists", () => expect(plan).toBeDefined());
-    it("is $499/month (49900 cents)", () => expect(plan.price).toBe(49900));
+    it("is $200/month (20000 cents)", () => expect(plan.price).toBe(20000));
     it("is monthly interval", () => expect(plan.interval).toBe("month"));
     it("allows 4 letters per month", () => expect(plan.lettersAllowed).toBe(4));
     it("has Most Popular badge", () => expect(plan.badge).toBe("Most Popular"));
   });
 
-  describe("monthly_pro plan", () => {
-    const plan = PLANS.monthly_pro;
+  describe("yearly plan", () => {
+    const plan = PLANS.yearly;
 
     it("exists", () => expect(plan).toBeDefined());
-    it("is $699/month (69900 cents)", () => expect(plan.price).toBe(69900));
-    it("is monthly interval", () => expect(plan.interval).toBe("month"));
-    it("allows 8 letters per month", () => expect(plan.lettersAllowed).toBe(8));
-    it("has Best Value badge", () => expect(plan.badge).toBe("Best Value"));
+    it("is $2,000/year (200000 cents)", () => expect(plan.price).toBe(200000));
+    it("is yearly interval", () => expect(plan.interval).toBe("year"));
+    it("allows 4 letters per month", () => expect(plan.lettersAllowed).toBe(4));
+    it("has 2 Months Free badge", () => expect(plan.badge).toBe("2 Months Free"));
   });
 });
 
 describe("getPlanConfig", () => {
-  it("returns correct plan for free_trial", () => {
-    const plan = getPlanConfig("free_trial");
-    expect(plan?.price).toBe(0);
-    expect(plan?.isTrial).toBe(true);
-  });
-
-  it("returns correct plan for per_letter", () => {
-    const plan = getPlanConfig("per_letter");
+  it("returns correct plan for single_letter", () => {
+    const plan = getPlanConfig("single_letter");
     expect(plan?.price).toBe(20000);
     expect(plan?.lettersAllowed).toBe(1);
   });
 
-  it("returns correct plan for monthly_basic", () => {
-    const plan = getPlanConfig("monthly_basic");
-    expect(plan?.price).toBe(49900);
+  it("returns correct plan for monthly", () => {
+    const plan = getPlanConfig("monthly");
+    expect(plan?.price).toBe(20000);
     expect(plan?.lettersAllowed).toBe(4);
   });
 
-  it("returns correct plan for monthly_pro", () => {
-    const plan = getPlanConfig("monthly_pro");
-    expect(plan?.price).toBe(69900);
-    expect(plan?.lettersAllowed).toBe(8);
+  it("returns correct plan for yearly", () => {
+    const plan = getPlanConfig("yearly");
+    expect(plan?.price).toBe(200000);
+    expect(plan?.lettersAllowed).toBe(4);
   });
 
   it("resolves legacy plan IDs via aliases", () => {
-    // Legacy starter → monthly_basic
+    // Legacy per_letter → single_letter
+    const perLetter = getPlanConfig("per_letter");
+    expect(perLetter?.id).toBe("single_letter");
+    expect(perLetter?.price).toBe(20000);
+
+    // Legacy monthly_basic → monthly
+    const monthlyBasic = getPlanConfig("monthly_basic");
+    expect(monthlyBasic?.id).toBe("monthly");
+    expect(monthlyBasic?.price).toBe(20000);
+
+    // Legacy monthly_pro → monthly
+    const monthlyPro = getPlanConfig("monthly_pro");
+    expect(monthlyPro?.id).toBe("monthly");
+
+    // Legacy starter → monthly
     const starter = getPlanConfig("starter");
-    expect(starter?.id).toBe("monthly_basic");
-    expect(starter?.price).toBe(49900);
+    expect(starter?.id).toBe("monthly");
 
-    // Legacy professional → monthly_pro
+    // Legacy professional → monthly
     const professional = getPlanConfig("professional");
-    expect(professional?.id).toBe("monthly_pro");
-    expect(professional?.price).toBe(69900);
+    expect(professional?.id).toBe("monthly");
 
-    // Legacy free_trial_review → free_trial
+    // Legacy free_trial → single_letter
+    const freeTrial = getPlanConfig("free_trial");
+    expect(freeTrial?.id).toBe("single_letter");
+
+    // Legacy free_trial_review → single_letter
     const trialReview = getPlanConfig("free_trial_review");
-    expect(trialReview?.id).toBe("free_trial");
-    expect(trialReview?.isTrial).toBe(true);
+    expect(trialReview?.id).toBe("single_letter");
 
-    // Legacy monthly → monthly_basic
-    const monthly = getPlanConfig("monthly");
-    expect(monthly?.id).toBe("monthly_basic");
-
-    // Legacy annual → monthly_pro
+    // Legacy annual → yearly
     const annual = getPlanConfig("annual");
-    expect(annual?.id).toBe("monthly_pro");
+    expect(annual?.id).toBe("yearly");
   });
 
   it("returns undefined for truly unknown plan", () => {
@@ -141,43 +134,63 @@ describe("getPlanConfig", () => {
 });
 
 describe("PLAN_LIST", () => {
-  it("has 4 plans", () => expect(PLAN_LIST).toHaveLength(4));
+  it("has 3 plans", () => expect(PLAN_LIST).toHaveLength(3));
 
-  it("plans are sorted by price ascending", () => {
-    const prices = PLAN_LIST.map((p) => p.price);
-    const sorted = [...prices].sort((a, b) => a - b);
-    expect(prices).toEqual(sorted);
+  it("includes all 3 plan IDs", () => {
+    const ids = PLAN_LIST.map((p) => p.id);
+    expect(ids).toContain("single_letter");
+    expect(ids).toContain("monthly");
+    expect(ids).toContain("yearly");
   });
 });
 
 describe("LEGACY_PLAN_ALIASES", () => {
-  it("maps starter to monthly_basic", () => {
-    expect(LEGACY_PLAN_ALIASES.starter).toBe("monthly_basic");
+  it("maps per_letter to single_letter", () => {
+    expect(LEGACY_PLAN_ALIASES.per_letter).toBe("single_letter");
   });
 
-  it("maps professional to monthly_pro", () => {
-    expect(LEGACY_PLAN_ALIASES.professional).toBe("monthly_pro");
+  it("maps monthly_basic to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.monthly_basic).toBe("monthly");
   });
 
-  it("maps free_trial_review to free_trial", () => {
-    expect(LEGACY_PLAN_ALIASES.free_trial_review).toBe("free_trial");
+  it("maps monthly_pro to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.monthly_pro).toBe("monthly");
+  });
+
+  it("maps starter to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.starter).toBe("monthly");
+  });
+
+  it("maps professional to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.professional).toBe("monthly");
+  });
+
+  it("maps free_trial to single_letter", () => {
+    expect(LEGACY_PLAN_ALIASES.free_trial).toBe("single_letter");
+  });
+
+  it("maps free_trial_review to single_letter", () => {
+    expect(LEGACY_PLAN_ALIASES.free_trial_review).toBe("single_letter");
+  });
+
+  it("maps annual to yearly", () => {
+    expect(LEGACY_PLAN_ALIASES.annual).toBe("yearly");
   });
 });
 
 describe("Subscription plan recurring check", () => {
-  it("monthly_basic and monthly_pro are recurring (monthly)", () => {
-    expect(PLANS.monthly_basic.interval).toBe("month");
-    expect(PLANS.monthly_pro.interval).toBe("month");
+  it("monthly and yearly are recurring", () => {
+    expect(PLANS.monthly.interval).toBe("month");
+    expect(PLANS.yearly.interval).toBe("year");
   });
 
-  it("free_trial and per_letter are one-time payments", () => {
-    expect(PLANS.free_trial.interval).toBe("one_time");
-    expect(PLANS.per_letter.interval).toBe("one_time");
+  it("single_letter is a one-time payment", () => {
+    expect(PLANS.single_letter.interval).toBe("one_time");
   });
 });
 
 describe("Email template pricing copy", () => {
-  it("sendLetterReadyEmail is exported from email.ts (Draft Ready — $200 CTA)", async () => {
+  it("sendLetterReadyEmail is exported from email.ts", async () => {
     const { sendLetterReadyEmail } = await import("./email");
     expect(typeof sendLetterReadyEmail).toBe("function");
   });

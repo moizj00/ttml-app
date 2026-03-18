@@ -89,7 +89,7 @@ export const jobTypeEnum = pgEnum("job_type", ["research", "draft_generation", "
 export const researchStatusEnum = pgEnum("research_status", ["queued", "running", "completed", "failed", "invalid"]);
 export const priorityEnum = pgEnum("priority_level", ["low", "normal", "high", "urgent"]);
 export const noteVisibilityEnum = pgEnum("note_visibility", ["internal", "user_visible"]);
-export const subscriptionPlanEnum = pgEnum("subscription_plan", ["per_letter", "monthly", "annual", "free_trial_review", "starter", "professional"]); // free_trial_review/starter/professional added via migration
+export const subscriptionPlanEnum = pgEnum("subscription_plan", ["per_letter", "monthly", "annual", "free_trial_review", "starter", "professional", "single_letter", "yearly"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "canceled", "past_due", "trialing", "incomplete", "none"]);
 export const commissionStatusEnum = pgEnum("commission_status", ["pending", "paid", "voided"]);
 export const payoutStatusEnum = pgEnum("payout_status", ["pending", "processing", "completed", "rejected"]);
@@ -265,7 +265,7 @@ export type InsertNotification = typeof notifications.$inferInsert;
 // ═══════════════════════════════════════════════════════
 // TABLE: subscriptions (Stripe subscription tracking)
 // ═══════════════════════════════════════════════════════
-export const SUBSCRIPTION_PLANS = ["per_letter", "monthly", "annual", "free_trial_review", "starter", "professional"] as const;
+export const SUBSCRIPTION_PLANS = ["per_letter", "monthly", "annual", "free_trial_review", "starter", "professional", "single_letter", "yearly"] as const;
 export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
 
 export const SUBSCRIPTION_STATUSES = ["active", "canceled", "past_due", "trialing", "incomplete", "none"] as const;

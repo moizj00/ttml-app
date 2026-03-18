@@ -507,7 +507,7 @@ export default function LetterDetail() {
           </Card>
         )}
 
-        {/* ── PAYWALL: generated_locked — blurred draft + $200 CTA ── */}
+        {/* ── PAYWALL: generated_locked — blurred draft + $299 CTA ── */}
         {isGeneratedLocked && (
           <LetterPaywall
             letterId={letterId}

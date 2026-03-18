@@ -251,22 +251,20 @@ describe("Checkout session discount parameter logic", () => {
 
 // ─── 6. Pricing page PLANS data integrity ────────────────────────────────────
 describe("Pricing page PLANS data integrity", () => {
-  it("PRICING has all four plans", () => {
-    expect(PRICING.freeTrial).toBeDefined();
-    expect(PRICING.perLetter).toBeDefined();
-    expect(PRICING.monthlyBasic).toBeDefined();
-    expect(PRICING.monthlyPro).toBeDefined();
+  it("PRICING has all three plans", () => {
+    expect(PRICING.singleLetter).toBeDefined();
+    expect(PRICING.monthly).toBeDefined();
+    expect(PRICING.yearly).toBeDefined();
   });
 
-  it("ALL_PLANS has 4 entries in order", () => {
-    expect(ALL_PLANS).toHaveLength(4);
-    expect(ALL_PLANS[0].id).toBe("free_trial");
-    expect(ALL_PLANS[1].id).toBe("per_letter");
-    expect(ALL_PLANS[2].id).toBe("monthly_basic");
-    expect(ALL_PLANS[3].id).toBe("monthly_pro");
+  it("ALL_PLANS has 3 entries in order", () => {
+    expect(ALL_PLANS).toHaveLength(3);
+    expect(ALL_PLANS[0].id).toBe("single_letter");
+    expect(ALL_PLANS[1].id).toBe("monthly");
+    expect(ALL_PLANS[2].id).toBe("yearly");
   });
 
-  it("PAID_PLANS excludes free trial", () => {
+  it("PAID_PLANS has 3 entries, all paid", () => {
     expect(PAID_PLANS).toHaveLength(3);
     expect(PAID_PLANS.every((p) => p.price > 0)).toBe(true);
   });
@@ -275,24 +273,19 @@ describe("Pricing page PLANS data integrity", () => {
     expect(AFFILIATE_DISCOUNT_PERCENT).toBe(20);
   });
 
-  it("free trial price is 0", () => {
-    expect(PRICING.freeTrial.price).toBe(0);
-    expect(PRICING.freeTrial.priceDisplay).toBe("Free");
+  it("single letter price is $200", () => {
+    expect(PRICING.singleLetter.price).toBe(200);
+    expect(PRICING.singleLetter.priceDisplay).toBe("$200");
   });
 
-  it("per letter price is $200", () => {
-    expect(PRICING.perLetter.price).toBe(200);
-    expect(PRICING.perLetter.priceDisplay).toBe("$200");
+  it("monthly price is $200", () => {
+    expect(PRICING.monthly.price).toBe(200);
+    expect(PRICING.monthly.priceDisplay).toBe("$200");
   });
 
-  it("monthly basic price is $499", () => {
-    expect(PRICING.monthlyBasic.price).toBe(499);
-    expect(PRICING.monthlyBasic.priceDisplay).toBe("$499");
-  });
-
-  it("monthly pro price is $699", () => {
-    expect(PRICING.monthlyPro.price).toBe(699);
-    expect(PRICING.monthlyPro.priceDisplay).toBe("$699");
+  it("yearly price is $2,000", () => {
+    expect(PRICING.yearly.price).toBe(2000);
+    expect(PRICING.yearly.priceDisplay).toBe("$2,000");
   });
 
   it("all plans have features array", () => {
@@ -385,56 +378,53 @@ describe("LetterPaywall — UI state determination", () => {
 
 // ─── 9. Stripe products config integrity ─────────────────────────────────────
 describe("Stripe products config (stripe-products.ts)", () => {
-  it("has all 4 plans", () => {
-    expect(PLANS.free_trial).toBeDefined();
-    expect(PLANS.per_letter).toBeDefined();
-    expect(PLANS.monthly_basic).toBeDefined();
-    expect(PLANS.monthly_pro).toBeDefined();
+  it("has all 3 plans", () => {
+    expect(PLANS.single_letter).toBeDefined();
+    expect(PLANS.monthly).toBeDefined();
+    expect(PLANS.yearly).toBeDefined();
   });
 
-  it("free_trial is $0 and isTrial", () => {
-    expect(PLANS.free_trial.price).toBe(0);
-    expect(PLANS.free_trial.isTrial).toBe(true);
+  it("single_letter is $200 (20000 cents)", () => {
+    expect(PLANS.single_letter.price).toBe(20000);
+    expect(PLANS.single_letter.interval).toBe("one_time");
+    expect(PLANS.single_letter.lettersAllowed).toBe(1);
   });
 
-  it("per_letter is $200 (20000 cents)", () => {
-    expect(PLANS.per_letter.price).toBe(20000);
-    expect(PLANS.per_letter.interval).toBe("one_time");
+  it("monthly is $200/month (20000 cents)", () => {
+    expect(PLANS.monthly.price).toBe(20000);
+    expect(PLANS.monthly.interval).toBe("month");
+    expect(PLANS.monthly.lettersAllowed).toBe(4);
   });
 
-  it("monthly_basic is $499/month (49900 cents)", () => {
-    expect(PLANS.monthly_basic.price).toBe(49900);
-    expect(PLANS.monthly_basic.interval).toBe("month");
-    expect(PLANS.monthly_basic.lettersAllowed).toBe(4);
-  });
-
-  it("monthly_pro is $699/month (69900 cents)", () => {
-    expect(PLANS.monthly_pro.price).toBe(69900);
-    expect(PLANS.monthly_pro.interval).toBe("month");
-    expect(PLANS.monthly_pro.lettersAllowed).toBe(8);
+  it("yearly is $2,000/year (200000 cents)", () => {
+    expect(PLANS.yearly.price).toBe(200000);
+    expect(PLANS.yearly.interval).toBe("year");
+    expect(PLANS.yearly.lettersAllowed).toBe(4);
   });
 
   it("getPlanConfig resolves valid plan IDs", () => {
-    expect(getPlanConfig("free_trial")?.isTrial).toBe(true);
-    expect(getPlanConfig("per_letter")?.price).toBe(20000);
-    expect(getPlanConfig("monthly_basic")?.lettersAllowed).toBe(4);
-    expect(getPlanConfig("monthly_pro")?.lettersAllowed).toBe(8);
+    expect(getPlanConfig("single_letter")?.price).toBe(20000);
+    expect(getPlanConfig("monthly")?.lettersAllowed).toBe(4);
+    expect(getPlanConfig("yearly")?.lettersAllowed).toBe(4);
   });
 
   it("getPlanConfig resolves legacy aliases", () => {
-    expect(getPlanConfig("starter")?.id).toBe("monthly_basic");
-    expect(getPlanConfig("professional")?.id).toBe("monthly_pro");
+    expect(getPlanConfig("starter")?.id).toBe("monthly");
+    expect(getPlanConfig("professional")?.id).toBe("monthly");
+    expect(getPlanConfig("per_letter")?.id).toBe("single_letter");
+    expect(getPlanConfig("annual")?.id).toBe("yearly");
   });
 
   it("getPlanConfig returns undefined for unknown plan", () => {
     expect(getPlanConfig("nonexistent")).toBeUndefined();
   });
 
-  it("PLAN_LIST has 4 plans sorted by price", () => {
-    expect(PLAN_LIST).toHaveLength(4);
-    const prices = PLAN_LIST.map((p) => p.price);
-    const sorted = [...prices].sort((a, b) => a - b);
-    expect(prices).toEqual(sorted);
+  it("PLAN_LIST has 3 plans", () => {
+    expect(PLAN_LIST).toHaveLength(3);
+    const ids = PLAN_LIST.map((p) => p.id);
+    expect(ids).toContain("single_letter");
+    expect(ids).toContain("monthly");
+    expect(ids).toContain("yearly");
   });
 });
 

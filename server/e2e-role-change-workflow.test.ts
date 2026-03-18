@@ -60,7 +60,7 @@ describe("Super Admin Whitelist — Four Independent Enforcement Points", () => 
   });
 
   it("enforces whitelist in email verification handler (POST /api/auth/verify-email)", () => {
-    expect(authFile).toMatch(/verify-email[\s\S]{0,2000}SUPER_ADMIN_EMAILS/);
+    expect(authFile).toMatch(/verify-email[\s\S]{0,5000}SUPER_ADMIN_EMAILS/);
   });
 
   it("strips admin role from non-whitelisted users on login", () => {

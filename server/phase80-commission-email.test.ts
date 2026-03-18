@@ -83,7 +83,7 @@ function makePerLetterSession(metaOverrides: Record<string, any> = {}): any {
     success_url: "https://www.talk-to-my-lawyer.com/letters/99?success=true",
     metadata: {
       user_id: "5",
-      plan_id: "per_letter",
+      plan_id: "single_letter",
       letter_id: "99",
       unlock_type: "letter_unlock",
       discount_code: "ALICE20",
@@ -96,14 +96,14 @@ function makeSubscriptionSession(metaOverrides: Record<string, any> = {}): any {
   return {
     id: "cs_test_456",
     mode: "subscription",
-    amount_total: 49900, // $499
+    amount_total: 20000, // $200
     payment_intent: null,
     customer: "cus_test_xyz",
     client_reference_id: "5",
     success_url: "https://www.talk-to-my-lawyer.com/billing?success=true",
     metadata: {
       user_id: "5",
-      plan_id: "monthly_basic",
+      plan_id: "monthly",
       discount_code: "ALICE20",
       ...metaOverrides,
     },
@@ -189,7 +189,7 @@ describe("stripeWebhook — employee commission email", () => {
         to: "alice@lawfirm.com",
         name: "Alice Johnson",
         subscriberName: "John Doe",
-        planName: "Pay Per Letter",
+        planName: "Single Letter",
         commissionAmount: "$10.00", // 5% of $200
         discountCode: "ALICE20",
       })
@@ -210,8 +210,8 @@ describe("stripeWebhook — employee commission email", () => {
         to: "alice@lawfirm.com",
         name: "Alice Johnson",
         subscriberName: "John Doe",
-        planName: "Monthly Basic",
-        commissionAmount: "$24.95", // 5% of $499
+        planName: "Monthly",
+        commissionAmount: "$10.00", // 5% of $200
         discountCode: "ALICE20",
       })
     );

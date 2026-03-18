@@ -5,38 +5,19 @@
  * Import from here — never hardcode prices in components or procedures.
  *
  * Pricing model:
- *  - Free Trial: first letter is free (research + draft + attorney review)
- *  - Pay-per-letter: $200 one-time per letter
- *  - Monthly Basic: $499/month for 4 letters
- *  - Monthly Pro:   $699/month for 8 letters
+ *  - Single Letter: $200 one-time (1 letter)
+ *  - Monthly:       $200/month (4 letters/month)
+ *  - Yearly:        $2,000/year (4 letters/month, 2 months free)
  */
 
 export const PRICING = {
-  /** Free trial — first letter is completely free */
-  freeTrial: {
-    id: "free_trial",
-    name: "Free Trial",
-    price: 0,
-    priceDisplay: "Free",
-    period: "first letter",
-    lettersIncluded: 1,
-    description: "Your first letter — research, drafting, and attorney review included at no cost.",
-    features: [
-      "Professional legal research",
-      "Attorney-drafted letter",
-      "Licensed attorney review & approval",
-      "PDF download of approved letter",
-      "Jurisdiction-specific language",
-    ],
-  },
-
-  /** Pay-per-letter — $200 one-time */
-  perLetter: {
-    id: "per_letter",
-    name: "Pay Per Letter",
+  /** Single Letter — $200 one-time */
+  singleLetter: {
+    id: "single_letter",
+    name: "Single Letter",
     price: 200,
     priceDisplay: "$200",
-    period: "per letter",
+    period: "one-time",
     lettersIncluded: 1,
     description: "One professionally drafted and attorney-reviewed letter. No subscription required.",
     features: [
@@ -48,12 +29,12 @@ export const PRICING = {
     ],
   },
 
-  /** Monthly Basic — $499/month for 4 letters */
-  monthlyBasic: {
-    id: "monthly_basic",
-    name: "Monthly Basic",
-    price: 499,
-    priceDisplay: "$499",
+  /** Monthly — $200/month for 4 letters */
+  monthly: {
+    id: "monthly",
+    name: "Monthly",
+    price: 200,
+    priceDisplay: "$200",
     period: "per month",
     lettersIncluded: 4,
     description: "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
@@ -65,54 +46,55 @@ export const PRICING = {
       "PDF downloads of approved letters",
       "Jurisdiction-specific language",
       "Priority support",
+      "Cancel anytime",
     ],
   },
 
-  /** Monthly Pro — $699/month for 8 letters */
-  monthlyPro: {
-    id: "monthly_pro",
-    name: "Monthly Pro",
-    price: 699,
-    priceDisplay: "$699",
-    period: "per month",
-    lettersIncluded: 8,
-    description: "8 attorney-reviewed letters per month. Best for businesses and high-volume users.",
+  /** Yearly — $2,000/year for 4 letters/month */
+  yearly: {
+    id: "yearly",
+    name: "Yearly",
+    price: 2000,
+    priceDisplay: "$2,000",
+    period: "per year",
+    lettersIncluded: 4,
+    description: "4 attorney-reviewed letters per month, billed annually. 2 months free vs monthly.",
     features: [
-      "8 letters per month",
+      "4 letters per month",
       "Professional legal research",
       "Attorney-drafted letters",
       "Licensed attorney review & approval",
       "PDF downloads of approved letters",
       "Jurisdiction-specific language",
       "Priority support",
-      "Dedicated account support",
+      "2 months free vs monthly",
+      "Cancel anytime",
     ],
   },
 } as const;
 
 /** All plans in display order */
 export const ALL_PLANS = [
-  PRICING.freeTrial,
-  PRICING.perLetter,
-  PRICING.monthlyBasic,
-  PRICING.monthlyPro,
+  PRICING.singleLetter,
+  PRICING.monthly,
+  PRICING.yearly,
 ] as const;
 
-/** Plans shown on the public Pricing page (excludes free trial — shown separately) */
+/** Plans shown on the public Pricing page */
 export const PAID_PLANS = [
-  PRICING.perLetter,
-  PRICING.monthlyBasic,
-  PRICING.monthlyPro,
+  PRICING.singleLetter,
+  PRICING.monthly,
+  PRICING.yearly,
 ] as const;
 
 /** Affiliate discount percentage */
 export const AFFILIATE_DISCOUNT_PERCENT = 20;
 
-/** Per-letter price in cents (for Stripe) */
-export const PER_LETTER_PRICE_CENTS = PRICING.perLetter.price * 100;
+/** Single letter price in cents (for Stripe) */
+export const SINGLE_LETTER_PRICE_CENTS = PRICING.singleLetter.price * 100;
 
-/** Monthly Basic price in cents (for Stripe) */
-export const MONTHLY_BASIC_PRICE_CENTS = PRICING.monthlyBasic.price * 100;
+/** Monthly price in cents (for Stripe) */
+export const MONTHLY_PRICE_CENTS = PRICING.monthly.price * 100;
 
-/** Monthly Pro price in cents (for Stripe) */
-export const MONTHLY_PRO_PRICE_CENTS = PRICING.monthlyPro.price * 100;
+/** Yearly price in cents (for Stripe) */
+export const YEARLY_PRICE_CENTS = PRICING.yearly.price * 100;

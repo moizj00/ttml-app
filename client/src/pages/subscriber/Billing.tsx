@@ -25,43 +25,51 @@ import { Link } from "wouter";
 import { useEffect } from "react";
 
 const PLAN_DISPLAY: Record<string, { name: string; color: string }> = {
+  single_letter: {
+    name: "Single Letter ($200)",
+    color: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+  },
+  monthly: {
+    name: "Monthly ($200/mo)",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  },
+  yearly: {
+    name: "Yearly ($2,000/yr)",
+    color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  },
+  // Legacy plan names (kept for backward compatibility with existing subscriptions)
   free_trial: {
-    name: "Free Trial",
+    name: "Free Trial (Legacy)",
     color:
       "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   },
   per_letter: {
-    name: "Pay Per Letter ($200)",
+    name: "Pay Per Letter ($200) (Legacy)",
     color: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
   },
   monthly_basic: {
-    name: "Monthly Basic ($499/mo)",
+    name: "Monthly Basic ($499/mo) (Legacy)",
     color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   },
   monthly_pro: {
-    name: "Monthly Pro ($699/mo)",
+    name: "Monthly Pro ($699/mo) (Legacy)",
     color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   },
-  // Legacy plan names (kept for backward compatibility with existing subscriptions)
   starter: {
-    name: "Starter ($499/mo)",
+    name: "Starter (Legacy)",
     color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   },
   professional: {
-    name: "Professional ($799/mo)",
+    name: "Professional (Legacy)",
     color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   },
   free_trial_review: {
-    name: "Free Trial",
+    name: "Free Trial (Legacy)",
     color:
       "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   },
-  monthly: {
-    name: "Monthly Plan",
-    color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  },
   annual: {
-    name: "Annual Plan",
+    name: "Annual (Legacy)",
     color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
   },
 };

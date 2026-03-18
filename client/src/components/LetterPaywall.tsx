@@ -3,9 +3,8 @@
  *
  * Simplified flow (Phase 69 + Phase 82):
  *   - Every letter ends at generated_locked after the drafting pipeline.
- *   - Subscriber sees the first ~35% of the draft clearly; the rest is blurred.
- *   - If eligible for free first letter → "Submit for Free Review" CTA
- *   - Otherwise → $200 CTA with optional promo code discount
+ *   - Subscriber sees the first ~20% of the draft clearly; the rest is blurred.
+ *   - Non-subscribers → $200 CTA with optional promo code discount
  *   - Stripe webhook transitions generated_locked → pending_review on payment.
  */
 import { useState } from "react";

@@ -178,8 +178,8 @@ describe("Stripe products — per-letter unlock price", () => {
     expect(LETTER_UNLOCK_PRICE_CENTS).toBe(20000);
   });
 
-  it("per_letter plan price is $200", async () => {
+  it("single_letter plan price is $200", async () => {
     const { PLANS } = await import("./stripe-products");
-    expect(PLANS.per_letter.price).toBe(20000);
+    expect(PLANS.single_letter.price).toBe(20000);
   });
 });

@@ -12,8 +12,8 @@ import {
   PLANS,
   getPlanConfig,
   LETTER_UNLOCK_PRICE_CENTS,
-  MONTHLY_BASIC_PRICE_CENTS,
-  MONTHLY_PRO_PRICE_CENTS,
+  MONTHLY_PRICE_CENTS,
+  YEARLY_PRICE_CENTS,
 } from "./stripe-products";
 
 /**
@@ -389,13 +389,16 @@ export async function hasActiveRecurringSubscription(
   const sub = await getUserSubscription(userId);
   if (!sub) return false;
   if (sub.status !== "active") return false;
-  // per_letter and free_trial are one-time, not recurring subscriptions
+  // single_letter is one-time, not a recurring subscription
   // Support both new plan IDs and legacy aliases
   return [
-    "monthly_basic",
-    "monthly_pro",
-    "starter", // legacy alias for monthly_basic
-    "professional", // legacy alias for monthly_pro
+    "monthly",
+    "yearly",
+    "monthly_basic", // legacy
+    "monthly_pro",   // legacy
+    "starter",       // legacy
+    "professional",  // legacy
+    "annual",        // legacy
   ].includes(sub.plan);
 }
 
@@ -456,7 +459,7 @@ export async function createLetterUnlockCheckout(params: {
       : { allow_promotion_codes: true }),
     metadata: {
       user_id: userId.toString(),
-      plan_id: "per_letter",
+      plan_id: "single_letter",
       letter_id: letterId.toString(),
       unlock_type: "letter_unlock",
       customer_email: email,
@@ -479,7 +482,7 @@ export async function createLetterUnlockCheckout(params: {
             name: "Legal Letter — Attorney Review",
             description:
               "Unlock your AI-drafted letter and send it for licensed attorney review and approval.",
-            metadata: { plan_id: "per_letter", letter_id: letterId.toString() },
+            metadata: { plan_id: "single_letter", letter_id: letterId.toString() },
           },
           unit_amount: LETTER_UNLOCK_PRICE_CENTS, // $200
         },
@@ -489,7 +492,7 @@ export async function createLetterUnlockCheckout(params: {
     payment_intent_data: {
       metadata: {
         user_id: userId.toString(),
-        plan_id: "per_letter",
+        plan_id: "single_letter",
         letter_id: letterId.toString(),
         unlock_type: "letter_unlock",
       },

@@ -36,15 +36,15 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "How much does a letter cost?",
-        a: "Your first letter is completely free — including professional research, drafting, and licensed attorney review. After your free letter, a single attorney-reviewed letter costs $200 (pay-per-letter), or you can subscribe for $499/month (4 letters) or $699/month (8 letters) with attorney review included.",
+        a: "A single attorney-reviewed letter costs $200 (one-time), or you can subscribe for $200/month (4 letters) or $2,000/year (4 letters/month, 2 months free) with attorney review included.",
       },
       {
-        q: "What is included with the free first letter?",
-        a: "Your first letter includes everything: professional legal research, attorney-drafted letter, licensed attorney review and approval, and a downloadable PDF of the final approved letter. No credit card required. After your free letter, the $200 pay-per-letter fee covers the same complete service.",
+        q: "What is included with each letter?",
+        a: "Every letter includes professional legal research, an attorney-drafted letter, licensed attorney review and approval, and a downloadable PDF of the final approved letter. The $200 single-letter fee covers the complete service.",
       },
       {
         q: "Do you offer subscription plans?",
-        a: "Yes. We offer two subscription plans: Monthly Basic at $499/month (4 letters with attorney review included) and Monthly Pro at $699/month (8 letters with attorney review included). Subscribers bypass the per-letter paywall entirely. Visit our Pricing page for full details.",
+        a: "Yes. We offer two subscription plans: Monthly at $200/month (4 letters with attorney review included) and Yearly at $2,000/year (4 letters/month, equivalent to 2 months free). Subscribers bypass the per-letter paywall entirely. Visit our Pricing page for full details.",
       },
       {
         q: "What payment methods do you accept?",
@@ -69,7 +69,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Can I see the draft before paying?",
-        a: "Yes — and for your first letter, you can read the full draft and attorney review is included at no cost. For subsequent letters without a subscription, the draft is partially blurred until you pay the $200 per-letter fee or subscribe to a monthly plan.",
+        a: "Yes. For letters without a subscription, the draft is partially blurred until you pay the $200 per-letter fee or subscribe to a monthly or yearly plan.",
       },
       {
         q: "What if the attorney requests changes?",

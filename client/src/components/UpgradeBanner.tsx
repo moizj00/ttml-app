@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import { X, Zap, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
-const PRO_BENEFITS = [
-  "8 letters/month (vs 4 on Basic)",
+const YEARLY_BENEFITS = [
+  "2 months free vs monthly billing",
+  "4 letters/month included",
   "Priority attorney review queue",
-  "Same-day turnaround guarantee",
 ];
 
-const BASIC_PLAN_IDS = ["monthly_basic", "starter", "monthly"];
+const MONTHLY_PLAN_IDS = ["monthly", "monthly_basic", "starter"];
 const SESSION_KEY = "upgrade_banner_dismissed";
 
 interface Props {
@@ -38,10 +38,10 @@ export default function UpgradeBanner({ plan }: Props) {
   };
 
   const handleUpgrade = () => {
-    checkoutMutation.mutate({ planId: "monthly_pro" });
+    checkoutMutation.mutate({ planId: "yearly" });
   };
 
-  if (dismissed || !plan || !BASIC_PLAN_IDS.includes(plan)) return null;
+  if (dismissed || !plan || !MONTHLY_PLAN_IDS.includes(plan)) return null;
 
   return (
     <div className="relative bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 sm:p-5 text-white overflow-hidden">
@@ -63,13 +63,13 @@ export default function UpgradeBanner({ plan }: Props) {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <Zap className="w-4 h-4 text-yellow-300" fill="currentColor" />
-            <span className="text-sm font-bold tracking-wide uppercase text-blue-100">Upgrade to Monthly Pro</span>
+            <span className="text-sm font-bold tracking-wide uppercase text-blue-100">Switch to Yearly & Save</span>
           </div>
           <p className="text-white/90 text-sm font-medium mb-2">
-            You're on Monthly Basic — unlock more with Pro for only $699/mo.
+            You're on Monthly — switch to Yearly for $2,000/yr and get 2 months free.
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {PRO_BENEFITS.map((b) => (
+            {YEARLY_BENEFITS.map((b) => (
               <span key={b} className="flex items-center gap-1 text-xs text-blue-100">
                 <CheckCircle className="w-3 h-3 text-green-300 flex-shrink-0" />
                 {b}
@@ -85,7 +85,7 @@ export default function UpgradeBanner({ plan }: Props) {
           onClick={handleUpgrade}
           disabled={checkoutMutation.isPending}
         >
-          {checkoutMutation.isPending ? "Loading..." : "Upgrade to Pro →"}
+          {checkoutMutation.isPending ? "Loading..." : "Switch to Yearly →"}
         </Button>
       </div>
     </div>

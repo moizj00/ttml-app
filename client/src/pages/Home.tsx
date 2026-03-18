@@ -567,18 +567,17 @@ export default function Home() {
               Resolve your dispute faster with lawyer-drafted letters and negotiations
             </h2>
             <p className="text-lg text-slate-400">
-              Your first letter is completely free. After that, choose the plan
-              that fits.
+              Choose the plan that fits your needs. All plans include attorney review and PDF delivery.
             </p>
           </div>
 
           <div className="flex flex-col gap-4 sm:gap-6 max-w-5xl mx-auto">
             <div
               className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
-              data-testid="pricing-pay-per-letter"
+              data-testid="pricing-single-letter"
             >
               <div className="w-full md:w-1/3 mb-6 md:mb-0">
-                <h3 className="text-2xl font-bold mb-1">Pay Per Letter</h3>
+                <h3 className="text-2xl font-bold mb-1">Single Letter</h3>
                 <p className="text-slate-400 text-sm">
                   Best for a one-time legal need
                 </p>
@@ -586,14 +585,14 @@ export default function Home() {
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-bold">$200</span>
-                  <span className="text-slate-400">/letter</span>
+                  <span className="text-slate-400"> one-time</span>
                 </div>
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
                   onClick={goToLogin}
                   className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
-                  data-testid="pricing-cta-pay-per-letter"
+                  data-testid="pricing-cta-single-letter"
                 >
                   Get Started
                 </button>
@@ -618,9 +617,10 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$499</span>
+                  <span className="text-4xl font-bold">$200</span>
                   <span className="text-blue-200">/mo</span>
                 </div>
+                <p className="text-blue-200 text-xs mt-1">$50 per letter</p>
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
@@ -634,31 +634,34 @@ export default function Home() {
             </div>
 
             <div
-              className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors"
-              data-testid="pricing-monthly-pro"
+              className="flex flex-col md:flex-row items-center justify-between p-5 sm:p-8 rounded-2xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors relative"
+              data-testid="pricing-yearly"
             >
+              <div className="absolute -top-3 left-8 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                2 Months Free
+              </div>
               <div className="w-full md:w-1/3 mb-6 md:mb-0">
-                <h3 className="text-2xl font-bold mb-1">Yearly Pro</h3>
+                <h3 className="text-2xl font-bold mb-1">Yearly</h3>
                 <p className="text-slate-400 text-sm">
-                  Best value for high-volume users
+                  Best value — save 2 months
                 </p>
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-slate-700/50 px-3 py-1 rounded-md text-xs font-medium text-slate-300">
-                  <FileText className="w-3 h-3" /> 8 letters per month included
+                  <FileText className="w-3 h-3" /> 4 letters per month included
                 </div>
               </div>
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$699</span>
-                  <span className="text-slate-400">/mo</span>
+                  <span className="text-4xl font-bold">$2,000</span>
+                  <span className="text-slate-400">/yr</span>
                 </div>
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
                   onClick={goToLogin}
                   className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
-                  data-testid="pricing-cta-monthly-pro"
+                  data-testid="pricing-cta-yearly"
                 >
-                  Subscribe Pro
+                  Subscribe Yearly
                 </button>
               </div>
             </div>

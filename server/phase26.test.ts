@@ -10,27 +10,27 @@ describe("Letter unlock pricing", () => {
     expect(LETTER_UNLOCK_PRICE_CENTS).toBe(20000);
   });
 
-  it("per_letter plan price matches LETTER_UNLOCK_PRICE_CENTS", () => {
-    expect(PLANS.per_letter.price).toBe(LETTER_UNLOCK_PRICE_CENTS);
+  it("single_letter plan price matches LETTER_UNLOCK_PRICE_CENTS", () => {
+    expect(PLANS.single_letter.price).toBe(LETTER_UNLOCK_PRICE_CENTS);
   });
 
-  it("per_letter plan allows exactly 1 letter", () => {
-    expect(PLANS.per_letter.lettersAllowed).toBe(1);
+  it("single_letter plan allows exactly 1 letter", () => {
+    expect(PLANS.single_letter.lettersAllowed).toBe(1);
   });
 
-  it("per_letter plan is one_time interval", () => {
-    expect(PLANS.per_letter.interval).toBe("one_time");
+  it("single_letter plan is one_time interval", () => {
+    expect(PLANS.single_letter.interval).toBe("one_time");
   });
 
-  it("monthly_basic plan is $499/month with 4 letters", () => {
-    expect(PLANS.monthly_basic.price).toBe(49900);
-    expect(PLANS.monthly_basic.lettersAllowed).toBe(4);
-    expect(PLANS.monthly_basic.interval).toBe("month");
+  it("monthly plan is $200/month with 4 letters", () => {
+    expect(PLANS.monthly.price).toBe(20000);
+    expect(PLANS.monthly.lettersAllowed).toBe(4);
+    expect(PLANS.monthly.interval).toBe("month");
   });
-  it("monthly_pro plan is $699/month with 8 letters", () => {
-    expect(PLANS.monthly_pro.price).toBe(69900);
-    expect(PLANS.monthly_pro.lettersAllowed).toBe(8);
-    expect(PLANS.monthly_pro.interval).toBe("month");
+  it("yearly plan is $2,000/year with 4 letters", () => {
+    expect(PLANS.yearly.price).toBe(200000);
+    expect(PLANS.yearly.lettersAllowed).toBe(4);
+    expect(PLANS.yearly.interval).toBe("year");
   });
 });
 

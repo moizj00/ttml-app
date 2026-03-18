@@ -72,7 +72,7 @@ function getStatusCTA(status: string, letterId: number) {
       };
     case "generated_locked":
       return {
-        label: "Pay to Unlock \u2014 $200",
+        label: "Pay to Unlock \u2014 $299",
         icon: CreditCard,
         variant: "default" as const,
         href: `/letters/${letterId}`,
@@ -397,8 +397,8 @@ export default function SubscriberDashboard() {
                   </span>
                   <p className="text-xs text-blue-600 mt-0.5">
                     {stats.total === 0
-                      ? "No credit card required — attorney review included with your first letter."
-                      : "Get 4 letters/month for $499 or 8 letters/month for $699. Skip the $200 per-letter fee."}
+                      ? "Subscribe monthly or yearly for the best value."
+                      : "Get 4 letters/month for $200/mo or $2,000/yr. Skip the $299 per-letter fee."}
                   </p>
                 </div>
               </div>

@@ -14,63 +14,50 @@ import {
   type DiscountCodeResult,
 } from "@/components/DiscountCodeInput";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, Scale, Shield, Zap, Gift } from "lucide-react";
+import { CheckCircle2, Loader2, Scale, Shield, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
 import { PRICING } from "../../../shared/pricing";
 
 const PLANS = [
   {
-    id: PRICING.freeTrial.id,
-    name: PRICING.freeTrial.name,
-    priceDisplay: PRICING.freeTrial.priceDisplay,
-    priceNumeric: PRICING.freeTrial.price,
-    period: PRICING.freeTrial.period,
-    description: PRICING.freeTrial.description,
+    id: PRICING.singleLetter.id,
+    name: PRICING.singleLetter.name,
+    priceDisplay: PRICING.singleLetter.priceDisplay,
+    priceNumeric: PRICING.singleLetter.price,
+    period: PRICING.singleLetter.period,
+    priceSub: null as string | null,
+    description: PRICING.singleLetter.description,
     badge: null as string | null,
-    features: PRICING.freeTrial.features as readonly string[],
-    cta: "Start Free",
-    highlight: false,
-    isFree: true,
-  },
-  {
-    id: PRICING.perLetter.id,
-    name: PRICING.perLetter.name,
-    priceDisplay: PRICING.perLetter.priceDisplay,
-    priceNumeric: PRICING.perLetter.price,
-    period: PRICING.perLetter.period,
-    description: PRICING.perLetter.description,
-    badge: null as string | null,
-    features: PRICING.perLetter.features as readonly string[],
+    features: PRICING.singleLetter.features as readonly string[],
     cta: "Get This Letter",
     highlight: false,
-    isFree: false,
   },
   {
-    id: PRICING.monthlyBasic.id,
-    name: "Yearly",
-    priceDisplay: PRICING.monthlyBasic.priceDisplay,
-    priceNumeric: PRICING.monthlyBasic.price,
-    period: PRICING.monthlyBasic.period,
-    description: PRICING.monthlyBasic.description,
+    id: PRICING.monthly.id,
+    name: PRICING.monthly.name,
+    priceDisplay: PRICING.monthly.priceDisplay,
+    priceNumeric: PRICING.monthly.price,
+    period: PRICING.monthly.period,
+    priceSub: "$50 per letter" as string | null,
+    description: PRICING.monthly.description,
     badge: "Most Popular" as string | null,
-    features: PRICING.monthlyBasic.features as readonly string[],
-    cta: "Subscribe — Yearly",
+    features: PRICING.monthly.features as readonly string[],
+    cta: "Subscribe Monthly",
     highlight: true,
-    isFree: false,
   },
   {
-    id: PRICING.monthlyPro.id,
-    name: "Yearly Pro",
-    priceDisplay: PRICING.monthlyPro.priceDisplay,
-    priceNumeric: PRICING.monthlyPro.price,
-    period: PRICING.monthlyPro.period,
-    description: PRICING.monthlyPro.description,
-    badge: "Best Value" as string | null,
-    features: PRICING.monthlyPro.features as readonly string[],
-    cta: "Subscribe — Yearly Pro",
+    id: PRICING.yearly.id,
+    name: PRICING.yearly.name,
+    priceDisplay: PRICING.yearly.priceDisplay,
+    priceNumeric: PRICING.yearly.price,
+    period: PRICING.yearly.period,
+    priceSub: null as string | null,
+    description: PRICING.yearly.description,
+    badge: "2 Months Free" as string | null,
+    features: PRICING.yearly.features as readonly string[],
+    cta: "Subscribe Yearly",
     highlight: false,
-    isFree: false,
   },
 ];
 
@@ -99,13 +86,9 @@ export default function Pricing() {
     },
   });
 
-  const handleSelectPlan = (planId: string, isFree: boolean) => {
+  const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
       navigate("/login");
-      return;
-    }
-    if (isFree) {
-      navigate("/submit-letter");
       return;
     }
     checkoutMutation.mutate({
@@ -116,7 +99,7 @@ export default function Pricing() {
 
   // Calculate discounted prices for display
   const getDiscountedPrice = (priceNumeric: number) => {
-    if (!appliedDiscount || priceNumeric === 0) return null;
+    if (!appliedDiscount) return null;
     return Math.round(
       priceNumeric * (1 - appliedDiscount.discountPercent / 100)
     );
@@ -134,19 +117,18 @@ export default function Pricing() {
             Resolve your dispute faster with lawyer-drafted letters and negotiations
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            Professionally drafted and attorney-reviewed legal letters. Start
-            with your first letter free, then choose the plan that fits your
-            needs.
+            Professionally drafted and attorney-reviewed legal letters. Choose the plan that fits your needs.
           </p>
         </div>
       </div>
 
       {/* Plans */}
-      <div className="max-w-7xl mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="max-w-6xl mx-auto px-4 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map(plan => (
             <Card
               key={plan.id}
+              data-testid={`card-plan-${plan.id}`}
               className={`relative flex flex-col ${
                 plan.highlight
                   ? "border-blue-500 shadow-lg shadow-blue-500/20 scale-105"
@@ -167,13 +149,10 @@ export default function Pricing() {
                 </div>
               )}
               <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                  {plan.isFree && <Gift className="w-4 h-4 text-emerald-500" />}
-                  <CardTitle className="text-xl">{plan.name}</CardTitle>
-                </div>
+                <CardTitle className="text-xl">{plan.name}</CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
                 <div className="mt-4">
-                  {!plan.isFree && appliedDiscount ? (
+                  {appliedDiscount ? (
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className="text-4xl font-bold text-foreground">
                         ${getDiscountedPrice(plan.priceNumeric)}
@@ -193,8 +172,15 @@ export default function Pricing() {
                   <span className="text-muted-foreground ml-1">
                     {plan.period}
                   </span>
+                  {plan.priceSub && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {plan.priceSub}
+                    </p>
+                  )}
                 </div>
-                
+                <p className="text-xs mt-1 font-medium text-emerald-600">
+                  Attorney review included
+                </p>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <ul className="space-y-3 flex-1 mb-6">
@@ -208,12 +194,11 @@ export default function Pricing() {
                   ))}
                 </ul>
                 <Button
-                  className={`w-full ${plan.highlight ? "bg-[#3b82f6] hover:bg-[#2563eb] text-white" : ""} ${plan.isFree ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
-                  variant={
-                    plan.highlight || plan.isFree ? "default" : "outline"
-                  }
-                  onClick={() => handleSelectPlan(plan.id, plan.isFree)}
-                  disabled={checkoutMutation.isPending && !plan.isFree}
+                  data-testid={`button-select-plan-${plan.id}`}
+                  className={`w-full ${plan.highlight ? "bg-[#3b82f6] hover:bg-[#2563eb] text-white" : ""}`}
+                  variant={plan.highlight ? "default" : "outline"}
+                  onClick={() => handleSelectPlan(plan.id)}
+                  disabled={checkoutMutation.isPending}
                 >
                   {checkoutMutation.isPending &&
                   checkoutMutation.variables?.planId === plan.id ? (
@@ -240,8 +225,7 @@ export default function Pricing() {
           />
           {appliedDiscount && (
             <p className="text-center text-sm text-emerald-600 font-medium mt-2">
-              {appliedDiscount.discountPercent}% discount will be applied to all
-              paid plans below.
+              {appliedDiscount.discountPercent}% discount will be applied to all plans.
             </p>
           )}
         </div>
@@ -250,12 +234,11 @@ export default function Pricing() {
         <div className="mt-10 p-5 bg-muted/30 border border-border rounded-xl max-w-2xl mx-auto text-center">
           <h3 className="font-semibold text-foreground mb-2">How It Works</h3>
           <p className="text-sm text-muted-foreground">
-            Your first letter — including professional research, drafting, and
-            licensed attorney review — is completely free. After your free
-            letter, choose to pay <strong>${PRICING.perLetter.price}</strong>{" "}
-            per letter or subscribe for{" "}
-            <strong>${PRICING.monthlyBasic.price}/month</strong> (4 letters) or{" "}
-            <strong>${PRICING.monthlyPro.price}/month</strong> (8 letters). All
+            Choose a plan and complete checkout to get started. Pay{" "}
+            <strong>${PRICING.singleLetter.price}</strong> for a single letter,
+            or subscribe for{" "}
+            <strong>${PRICING.monthly.price}/month</strong> (4 letters, $50 per letter) or{" "}
+            <strong>${PRICING.yearly.price}/year</strong> (4 letters/month, 2 months free). All
             plans include attorney review and PDF delivery.
           </p>
         </div>
@@ -287,8 +270,6 @@ export default function Pricing() {
             </p>
           </div>
         </div>
-
-
       </div>
     </div>
   );
