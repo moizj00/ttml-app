@@ -99,7 +99,7 @@ function buildEmailHtml(opts: {
                     </p>
                     <p style="margin:4px 0 0;font-family:Inter,Arial,sans-serif;font-size:12px;
                                color:rgba(255,255,255,0.65);letter-spacing:0.5px;text-transform:uppercase;">
-                      AI-Powered Legal Letters
+                      Attorney-Reviewed Legal Letters
                     </p>
                   </td>
                 </tr>
