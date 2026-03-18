@@ -226,7 +226,7 @@ export default function AdminUsers() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Plans</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="free">Free</SelectItem>
               </SelectContent>
