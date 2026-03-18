@@ -301,7 +301,7 @@ export default function AdminDashboard() {
         ) : null}
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
               label: "Manage Users",
@@ -316,6 +316,13 @@ export default function AdminDashboard() {
               href: "/admin/letters",
               icon: <FileText className="w-5 h-5 text-blue-600" />,
               bg: "bg-blue-50",
+            },
+            {
+              label: "Act as Attorney",
+              desc: "Access the attorney review queue",
+              href: "/attorney/queue",
+              icon: <Scale className="w-5 h-5 text-purple-600" />,
+              bg: "bg-purple-50",
             },
             {
               label: "Failed Jobs",

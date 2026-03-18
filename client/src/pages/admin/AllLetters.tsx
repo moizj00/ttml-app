@@ -10,8 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileText, Search, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { FileText, Search, ArrowRight, ClipboardList, Eye } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
 
 const REVIEWABLE_STATUSES = [
   "pending_review",
@@ -21,11 +29,21 @@ const REVIEWABLE_STATUSES = [
   "rejected",
 ];
 
+const CLAIMABLE_STATUSES = ["pending_review", "under_review"];
+
 export default function AdminAllLetters() {
   const { data: letters, isLoading } = trpc.admin.allLetters.useQuery({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedLetterId, setSelectedLetterId] = useState<number | null>(null);
+  const [, navigate] = useLocation();
+
+  const claimMutation = trpc.review.claim.useMutation({
+    onSuccess: (_data, variables) => {
+      navigate(`/attorney/review/${variables.letterId}`);
+    },
+    onError: e => toast.error("Could not claim letter", { description: e.message }),
+  });
 
   const filtered = (letters ?? []).filter(l => {
     const matchSearch = l.subject.toLowerCase().includes(search.toLowerCase());
@@ -34,7 +52,6 @@ export default function AdminAllLetters() {
   });
 
   const handleLetterClick = (letter: { id: number; status: string }) => {
-    // Open ReviewModal for reviewable statuses, navigate to admin detail for others
     if (REVIEWABLE_STATUSES.includes(letter.status)) {
       setSelectedLetterId(letter.id);
     } else {
@@ -98,39 +115,88 @@ export default function AdminAllLetters() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map(letter => (
-              <div
-                key={letter.id}
-                onClick={() => handleLetterClick(letter)}
-                className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <FileText className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-foreground leading-tight">
-                        {letter.subject}
-                      </p>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+            {filtered.map(letter => {
+              const isClaimable = CLAIMABLE_STATUSES.includes(letter.status);
+              const isUnderReview = letter.status === "under_review";
+              const isClaiming =
+                claimMutation.isPending &&
+                claimMutation.variables?.letterId === letter.id;
+
+              return (
+                <div
+                  key={letter.id}
+                  onClick={() => handleLetterClick(letter)}
+                  className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <FileText className="w-5 h-5 text-primary" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {letter.letterType} · {letter.jurisdictionState ?? "N/A"}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <StatusBadge status={letter.status} size="sm" />
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(letter.createdAt).toLocaleDateString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        User #{letter.userId}
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground leading-tight">
+                          {letter.subject}
+                        </p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isClaimable && (
+                            isUnderReview ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    data-testid={`button-view-review-${letter.id}`}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs bg-background border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      navigate(`/attorney/review/${letter.id}`);
+                                    }}
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" />
+                                    View Review
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  This letter is currently under review
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Button
+                                data-testid={`button-claim-review-${letter.id}`}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs bg-background border-purple-300 text-purple-700 hover:bg-purple-50"
+                                disabled={isClaiming}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  claimMutation.mutate({ letterId: letter.id });
+                                }}
+                              >
+                                <ClipboardList className="w-3 h-3 mr-1" />
+                                {isClaiming ? "Claiming..." : "Claim & Review"}
+                              </Button>
+                            )
+                          )}
+                          <ArrowRight className="w-4 h-4 text-muted-foreground mt-0.5" />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {letter.letterType} · {letter.jurisdictionState ?? "N/A"}
+                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <StatusBadge status={letter.status} size="sm" />
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(letter.createdAt).toLocaleDateString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          User #{letter.userId}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

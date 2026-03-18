@@ -132,8 +132,8 @@ function getNavItems(role: string): NavItem[] {
         icon: <Users className="w-4 h-4" />,
       },
       {
-        label: "Review Center",
-        href: "/review",
+        label: "Attorney Queue",
+        href: "/attorney/queue",
         icon: <ClipboardList className="w-4 h-4" />,
       },
       {

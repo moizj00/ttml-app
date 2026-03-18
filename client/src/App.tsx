@@ -195,6 +195,14 @@ function Router() {
           </Suspense>
         </ProtectedRoute>
       </Route>
+      {/* /attorney/review/:id — admin "Claim & Review" redirect target (must be before /attorney/:id) */}
+      <Route path="/attorney/review/:id">
+        <ProtectedRoute allowedRoles={["attorney", "admin"]}>
+          <Suspense fallback={<ReviewDetailSkeleton />}>
+            <ReviewDetail />
+          </Suspense>
+        </ProtectedRoute>
+      </Route>
       <Route path="/attorney/:id">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
           <Suspense fallback={<ReviewDetailSkeleton />}>
