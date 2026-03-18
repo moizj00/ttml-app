@@ -1,1 +1,1 @@
-ALTER TABLE "letter_requests" ADD COLUMN "research_unverified" boolean DEFAULT false NOT NULL;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "research_unverified" boolean DEFAULT false NOT NULL;

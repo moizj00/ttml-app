@@ -320,6 +320,36 @@ export interface CitationAuditReport {
   auditedAt: string;
 }
 
+// ─── Validation Result (used across all pipeline stages) ───
+export interface ValidationResult {
+  stage: string;
+  check: string;
+  passed: boolean;
+  errors: string[];
+  warnings: string[];
+  timestamp: string;
+}
+
+// ─── Grounding Report (citation grounding check) ───
+export interface GroundingReport {
+  totalCitationsInDraft: number;
+  groundedCitations: string[];
+  ungroundedCitations: string[];
+  passed: boolean;
+}
+
+// ─── Content Consistency Report ───
+export interface ContentConsistencyReport {
+  senderNameFound: boolean;
+  recipientNameFound: boolean;
+  jurisdictionFound: boolean;
+  jurisdictionMismatch: boolean;
+  expectedJurisdiction: string;
+  foundJurisdiction: string | null;
+  passed: boolean;
+  warnings: string[];
+}
+
 // ─── Pipeline Context (source of truth throughout all stages) ───
 export interface PipelineContext {
   letterId: number;
@@ -328,6 +358,10 @@ export interface PipelineContext {
   researchProvider?: string;
   citationRegistry?: CitationRegistryEntry[];
   researchUnverified?: boolean;
+  webGrounded?: boolean;
+  validationResults?: ValidationResult[];
+  groundingReport?: GroundingReport;
+  consistencyReport?: ContentConsistencyReport;
 }
 
 // ─── Draft Output Shape ───
@@ -337,4 +371,5 @@ export interface DraftOutput {
   openQuestions: string[];
   riskFlags: string[];
   reviewNotes?: string;
+  groundingWarnings?: string[];
 }

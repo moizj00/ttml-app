@@ -25,7 +25,7 @@ import {
   updateResearchRun,
   updateWorkflowJob,
 } from "./db";
-import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext } from "../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext, ValidationResult, GroundingReport, ContentConsistencyReport } from "../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
@@ -257,6 +257,256 @@ export function validateFinalLetter(text: string): {
 }
 
 // ═══════════════════════════════════════════════════════
+// INTAKE PRE-FLIGHT VALIDATOR
+// ═══════════════════════════════════════════════════════
+
+const PLACEHOLDER_NAMES = [
+  "unknown sender", "unknown recipient", "address not provided",
+  "no description provided", "n/a", "tbd", "test", "placeholder",
+];
+
+export function validateIntakeCompleteness(intake: IntakeJson): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+
+  if (
+    !intake.sender?.name ||
+    intake.sender.name.trim().length === 0 ||
+    PLACEHOLDER_NAMES.includes(intake.sender.name.trim().toLowerCase())
+  ) {
+    errors.push("Sender name is missing or is a placeholder value. Please provide a real sender name.");
+  }
+
+  if (
+    !intake.recipient?.name ||
+    intake.recipient.name.trim().length === 0 ||
+    PLACEHOLDER_NAMES.includes(intake.recipient.name.trim().toLowerCase())
+  ) {
+    errors.push("Recipient name is missing or is a placeholder value. Please provide a real recipient name.");
+  }
+
+  if (
+    !intake.jurisdiction?.state ||
+    intake.jurisdiction.state.trim().length === 0 ||
+    intake.jurisdiction.state.trim().toLowerCase() === "unknown"
+  ) {
+    errors.push("Jurisdiction state is missing or set to 'Unknown'. Please specify a valid state.");
+  }
+
+  const description = intake.matter?.description ?? "";
+  if (description.trim().length < 50) {
+    errors.push(
+      `Matter description is too short (${description.trim().length} chars, minimum 50). Please provide a more detailed description of the legal matter.`
+    );
+  }
+
+  if (!intake.letterType || intake.letterType.trim().length === 0) {
+    errors.push("Letter type is required. Please select a letter type.");
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ═══════════════════════════════════════════════════════
+// RETRY WITH VALIDATION ERROR FEEDBACK
+// ═══════════════════════════════════════════════════════
+
+const RETRY_BACKOFF_MS = 2000;
+
+export async function retryOnValidationFailure<T>(
+  fn: (errorFeedback?: string) => Promise<T>,
+  validationErrors: string[],
+  stageName: string
+): Promise<T> {
+  const errorFeedback = `\n\n## VALIDATION ERRORS FROM PREVIOUS ATTEMPT — FIX THESE:\n${validationErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}\n\nYou must fix ALL of the above issues in this attempt. Do not repeat the same mistakes.`;
+  console.log(
+    `[Pipeline] Retrying ${stageName} with ${validationErrors.length} validation error(s) fed back into prompt (backoff ${RETRY_BACKOFF_MS}ms)`
+  );
+  await new Promise(resolve => setTimeout(resolve, RETRY_BACKOFF_MS));
+  return fn(errorFeedback);
+}
+
+// ═══════════════════════════════════════════════════════
+// CROSS-STAGE CITATION GROUNDING VALIDATOR
+// ═══════════════════════════════════════════════════════
+
+export function validateDraftGrounding(
+  draftText: string,
+  research: ResearchPacket
+): GroundingReport {
+  const draftCitations = extractCitationsFromText(draftText);
+
+  const researchCitationTexts: string[] = [];
+  for (const rule of research.applicableRules ?? []) {
+    if (rule.citationText) researchCitationTexts.push(rule.citationText.trim());
+    if (rule.ruleTitle) researchCitationTexts.push(rule.ruleTitle.trim());
+  }
+  for (const c of research.recentCasePrecedents ?? []) {
+    if (c.citation) researchCitationTexts.push(c.citation.trim());
+    if (c.caseName) researchCitationTexts.push(c.caseName.trim());
+  }
+  if (research.statuteOfLimitations?.statute) {
+    researchCitationTexts.push(research.statuteOfLimitations.statute.trim());
+  }
+  if (research.preSuitRequirements?.statute) {
+    researchCitationTexts.push(research.preSuitRequirements.statute.trim());
+  }
+  for (const local of research.localJurisdictionElements ?? []) {
+    if (local.element) researchCitationTexts.push(local.element.trim());
+  }
+
+  const normalizedResearch = researchCitationTexts.map(t => normalizeCitation(t));
+
+  const grounded: string[] = [];
+  const ungrounded: string[] = [];
+
+  const tokenize = (s: string): string[] => s.split(/\s+/).filter(t => t.length > 0);
+
+  for (const citation of draftCitations) {
+    const citNorm = normalizeCitation(citation);
+    const citTokens = tokenize(citNorm);
+    const isGrounded = normalizedResearch.some(r => {
+      if (r === citNorm || citNorm === r) return true;
+      const rTokens = tokenize(r);
+      if (citTokens.length === 0) return false;
+      const matchCount = citTokens.filter(ct => rTokens.includes(ct)).length;
+      const matchRatio = matchCount / citTokens.length;
+      return matchRatio >= 0.7;
+    });
+    if (isGrounded) {
+      grounded.push(citation);
+    } else {
+      ungrounded.push(citation);
+    }
+  }
+
+  return {
+    totalCitationsInDraft: draftCitations.length,
+    groundedCitations: grounded,
+    ungroundedCitations: ungrounded,
+    passed: ungrounded.length <= 2,
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// PARTY & JURISDICTION CONSISTENCY CHECKER
+// ═══════════════════════════════════════════════════════
+
+const US_STATE_NAMES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+  "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+  "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+  "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+  "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+  "New Hampshire", "New Jersey", "New Mexico", "New York",
+  "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+  "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+  "West Virginia", "Wisconsin", "Wyoming",
+];
+
+export function validateContentConsistency(
+  text: string,
+  intake: NormalizedPromptInput
+): ContentConsistencyReport {
+  const warnings: string[] = [];
+  const textLower = text.toLowerCase();
+
+  const senderLastName = intake.sender.name.split(/\s+/).pop() ?? "";
+  const senderNameFound =
+    senderLastName.length > 1 && textLower.includes(senderLastName.toLowerCase());
+  if (!senderNameFound && senderLastName.length > 1) {
+    warnings.push(`Sender's last name "${senderLastName}" not found in output text`);
+  }
+
+  const recipientName = intake.recipient.name;
+  const recipientLastName = recipientName.split(/\s+/).pop() ?? "";
+  const recipientNameFound =
+    recipientLastName.length > 1 && textLower.includes(recipientLastName.toLowerCase());
+  if (!recipientNameFound && recipientLastName.length > 1) {
+    warnings.push(`Recipient's last name "${recipientLastName}" not found in output text`);
+  }
+
+  if (
+    senderLastName.length > 1 &&
+    recipientLastName.length > 1 &&
+    senderLastName.toLowerCase() !== recipientLastName.toLowerCase()
+  ) {
+    const senderAsRecipientPattern = new RegExp(
+      `(?:dear|to|attention|addressed\\s+to)\\s+.*?\\b${senderLastName}\\b`,
+      "i"
+    );
+    const recipientAsSenderPattern = new RegExp(
+      `(?:sincerely|regards|respectfully|from)\\s*,?\\s*.*?\\b${recipientLastName}\\b`,
+      "i"
+    );
+    if (senderAsRecipientPattern.test(text)) {
+      warnings.push(`Possible swapped parties: sender "${senderLastName}" appears as letter recipient`);
+    }
+    if (recipientAsSenderPattern.test(text)) {
+      warnings.push(`Possible swapped parties: recipient "${recipientLastName}" appears as letter signatory`);
+    }
+  }
+
+  const expectedState = intake.jurisdiction.state;
+  const jurisdictionFound = textLower.includes(expectedState.toLowerCase());
+  if (!jurisdictionFound) {
+    warnings.push(`Expected jurisdiction "${expectedState}" not found in output text`);
+  }
+
+  let jurisdictionMismatch = false;
+  let foundJurisdiction: string | null = null;
+  for (const state of US_STATE_NAMES) {
+    if (state.toLowerCase() === expectedState.toLowerCase()) continue;
+    const stateRegex = new RegExp(`\\b${state}\\b`, "i");
+    const codePattern = new RegExp(
+      `\\b${state.substring(0, 3)}\\.\\s*(?:Civ\\.|Bus\\.|Penal|Rev\\.|Gen\\.|Lab\\.|Gov|Prop)`,
+      "i"
+    );
+    if (stateRegex.test(text) || codePattern.test(text)) {
+      const contextCheck = text.match(new RegExp(`.{0,50}\\b${state}\\b.{0,50}`, "i"));
+      const contextStr = contextCheck?.[0]?.toLowerCase() ?? "";
+      const isLikelyStatutoryRef =
+        contextStr.includes("code") ||
+        contextStr.includes("§") ||
+        contextStr.includes("statute") ||
+        contextStr.includes("law") ||
+        contextStr.includes("court");
+      if (isLikelyStatutoryRef) {
+        jurisdictionMismatch = true;
+        foundJurisdiction = state;
+        warnings.push(
+          `JURISDICTION MISMATCH: Letter references "${state}" legal authority but intake specifies "${expectedState}"`
+        );
+        break;
+      }
+    }
+  }
+
+  return {
+    senderNameFound,
+    recipientNameFound,
+    jurisdictionFound,
+    jurisdictionMismatch,
+    expectedJurisdiction: expectedState,
+    foundJurisdiction,
+    passed: !jurisdictionMismatch,
+    warnings,
+  };
+}
+
+function addValidationResult(
+  pipelineCtx: PipelineContext | undefined,
+  result: ValidationResult
+): void {
+  if (!pipelineCtx) return;
+  if (!pipelineCtx.validationResults) pipelineCtx.validationResults = [];
+  pipelineCtx.validationResults.push(result);
+}
+
+// ═══════════════════════════════════════════════════════
 // CITATION REGISTRY & ANTI-HALLUCINATION ENGINE
 // ═══════════════════════════════════════════════════════
 
@@ -437,7 +687,7 @@ Respond in this exact format, one per line:
 
 const CITATION_PATTERNS = [
   /§\s*[\d.]+(?:\([a-z]\))?/g,
-  /\b[A-Z][a-z]+\s+v\.\s+[A-Z][a-z]+[\w\s,]*\d{4}/g,
+  /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+v\.\s+[A-Z][a-z]+(?:[\w\s,]*\d{4})?/g,
   /\b\d+\s+[A-Z]\.\w+\.?\s*(?:\d+[a-z]*\s+)?\d+/g,
   /\b(?:Cal\.|Tex\.|N\.Y\.|Fla\.|Ill\.|Ohio|Pa\.|Ga\.|Mass\.|Mich\.|Wash\.|Va\.)[\s\w.]*§\s*[\d.]+/g,
   /\b\d+\s+(?:U\.S\.C\.|C\.F\.R\.|F\.\d+[a-z]*|F\.Supp\.\d*|S\.Ct\.|L\.Ed\.\d*)\s*§?\s*\d+/g,
@@ -591,76 +841,168 @@ export async function runResearchStage(
       abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
     });
 
-    // Parse research packet from response
-    let researchPacket: ResearchPacket;
-    try {
+    const parseResearchJson = (raw: string): ResearchPacket => {
       const jsonMatch =
-        text.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-        text.match(/(\{[\s\S]*\})/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : text;
-      researchPacket = JSON.parse(jsonStr);
+        raw.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+        raw.match(/(\{[\s\S]*\})/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : raw;
+      return JSON.parse(jsonStr);
+    };
+
+    const generateResearch = async (errorFeedback?: string): Promise<string> => {
+      const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
+      const { text: t } = await generateText({
+        model: researchConfig.model,
+        system: systemPrompt,
+        prompt: promptWithFeedback,
+        maxOutputTokens: 6000,
+        abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+      });
+      return t;
+    };
+
+    let researchPacket: ResearchPacket;
+    let stage1RetryUsed = false;
+
+    try {
+      researchPacket = parseResearchJson(text);
     } catch {
-      // Build a structured packet from the text response
-      researchPacket = {
-        researchSummary: text.substring(0, 2000),
-        jurisdictionProfile: {
-          country: intake.jurisdiction.country,
-          stateProvince: intake.jurisdiction.state,
-          city: intake.jurisdiction.city,
-          authorityHierarchy: ["Federal", "State", "Local"],
-        },
-        issuesIdentified: [intake.matter.description.substring(0, 200)],
-        applicableRules: [
-          {
-            ruleTitle: "General Legal Framework",
-            ruleType: "statute",
-            jurisdiction: intake.jurisdiction.state,
-            citationText: "See research summary",
-            sectionOrRule: "N/A",
-            summary: text.substring(0, 300),
-            sourceUrl: "",
-            sourceTitle: "Perplexity Research",
-            relevance: "Primary research findings",
-            confidence: "medium" as const,
-          },
-        ],
-        localJurisdictionElements: [],
-        factualDataNeeded: [],
-        openQuestions: [],
-        riskFlags: [],
-        draftingConstraints: [],
-      };
+      stage1RetryUsed = true;
+      console.warn(
+        `[Pipeline] Stage 1: First JSON parse failed for letter #${letterId}. Retrying (1 of 1) with stricter prompt.`
+      );
+      try {
+        const retryText = await retryOnValidationFailure(
+          generateResearch,
+          ["Response was not valid JSON. Return ONLY a JSON object starting with { and ending with }. No markdown, no explanation."],
+          "Stage 1 (JSON parse)"
+        );
+        researchPacket = parseResearchJson(retryText);
+      } catch {
+        const failedResult: ValidationResult = {
+          stage: "research",
+          check: "json_parse",
+          passed: false,
+          errors: ["Research response could not be parsed as valid JSON after 2 attempts"],
+          warnings: [],
+          timestamp: new Date().toISOString(),
+        };
+        addValidationResult(pipelineCtx, failedResult);
+        await updateResearchRun(runId, {
+          status: "failed",
+          errorMessage: "Research response could not be parsed as valid JSON after 2 attempts",
+          validationResultJson: failedResult,
+        });
+        await updateWorkflowJob(jobId, {
+          status: "failed",
+          errorMessage: "Research response could not be parsed as valid JSON after 2 attempts",
+          completedAt: new Date(),
+          responsePayloadJson: { validationResult: failedResult },
+        });
+        throw new Error(
+          "Research stage failed: AI response was not valid JSON after 2 attempts. Please try again."
+        );
+      }
     }
 
-    // Deterministic validation
-    const validation = validateResearchPacket(researchPacket);
+    let validation = validateResearchPacket(researchPacket);
+
+    if (!validation.valid && !stage1RetryUsed) {
+      stage1RetryUsed = true;
+      try {
+        const retryText = await retryOnValidationFailure(
+          generateResearch,
+          validation.errors,
+          "Stage 1 (research validation)"
+        );
+        researchPacket = parseResearchJson(retryText);
+      } catch {
+        const failedResult: ValidationResult = {
+          stage: "research",
+          check: "research_packet_validation_retry",
+          passed: false,
+          errors: ["Research retry response could not be parsed as JSON"],
+          warnings: [],
+          timestamp: new Date().toISOString(),
+        };
+        addValidationResult(pipelineCtx, failedResult);
+        await updateResearchRun(runId, {
+          status: "failed",
+          resultJson: null,
+          validationResultJson: failedResult,
+          errorMessage: "Research retry response could not be parsed as JSON",
+        });
+        await updateWorkflowJob(jobId, {
+          status: "failed",
+          errorMessage: "Research retry response could not be parsed as JSON",
+          completedAt: new Date(),
+          responsePayloadJson: { validationResult: failedResult },
+        });
+        throw new Error("Research retry response could not be parsed as JSON");
+      }
+      validation = validateResearchPacket(researchPacket);
+    }
+
     if (!validation.valid) {
+      const failedResult: ValidationResult = {
+        stage: "research",
+        check: "research_packet_validation",
+        passed: false,
+        errors: validation.errors,
+        warnings: validation.warnings,
+        timestamp: new Date().toISOString(),
+      };
+      addValidationResult(pipelineCtx, failedResult);
       await updateResearchRun(runId, {
         status: "invalid",
         resultJson: researchPacket,
-        validationResultJson: { errors: validation.errors },
-        errorMessage: `Validation failed: ${validation.errors.join("; ")}`,
+        validationResultJson: failedResult,
+        errorMessage: `Validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`,
       });
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Research validation failed: ${validation.errors.join("; ")}`,
+        errorMessage: `Research validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`,
         completedAt: new Date(),
+        responsePayloadJson: { validationResult: failedResult },
       });
       throw new Error(
-        `Research packet validation failed: ${validation.errors.join("; ")}`
+        `Research packet validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`
       );
     }
+
+    const isClaudeFallback = researchConfig.provider === "anthropic-fallback";
+    const successResult: ValidationResult = {
+      stage: "research",
+      check: "research_packet_validation",
+      passed: true,
+      errors: [],
+      warnings: [
+        ...validation.warnings,
+        ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used)"] : []),
+      ],
+      timestamp: new Date().toISOString(),
+    };
 
     await updateResearchRun(runId, {
       status: "completed",
       resultJson: researchPacket,
-      validationResultJson: { valid: true, errors: [] },
+      validationResultJson: { ...successResult, webGrounded: !isClaudeFallback },
     });
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
-      responsePayloadJson: { researchRunId: runId },
+      responsePayloadJson: {
+        researchRunId: runId,
+        webGrounded: !isClaudeFallback,
+        validationResult: successResult,
+      },
     });
+
+    if (isClaudeFallback) {
+      console.warn(
+        `[Pipeline] Stage 1: Claude fallback used for letter #${letterId} — research is NOT web-grounded. Citations may not be verified.`
+      );
+    }
 
     console.log(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${researchConfig.provider})`);
     return { packet: researchPacket, provider: researchConfig.provider };
@@ -671,11 +1013,24 @@ export async function runResearchStage(
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },
     });
-    await updateResearchRun(runId, { status: "failed", errorMessage: msg });
+    const failedResult: ValidationResult = {
+      stage: "research",
+      check: "stage_completion",
+      passed: false,
+      errors: [msg],
+      warnings: [],
+      timestamp: new Date().toISOString(),
+    };
+    await updateResearchRun(runId, {
+      status: "failed",
+      errorMessage: msg,
+      validationResultJson: failedResult,
+    });
     await updateWorkflowJob(jobId, {
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      responsePayloadJson: { validationResult: failedResult },
     });
     throw err;
   }
@@ -736,31 +1091,164 @@ export async function runDraftingStage(
     research
   );
 
+  const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
+    const promptWithFeedback = errorFeedback
+      ? draftUserPrompt + errorFeedback
+      : draftUserPrompt;
+    return generateText({
+      model: getDraftModel(),
+      system: draftSystemPrompt,
+      prompt: promptWithFeedback,
+      maxOutputTokens: 8000,
+      abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
+    });
+  };
+
+  const runAllDraftValidations = (draft: DraftOutput) => {
+    const allErrors: string[] = [];
+    const allWarnings: string[] = [];
+
+    const grounding = validateDraftGrounding(draft.draftLetter, research);
+    if (!grounding.passed) {
+      allErrors.push(`${grounding.ungroundedCitations.length} ungrounded citations: ${grounding.ungroundedCitations.join("; ")}. Use ONLY citations from the research packet.`);
+    } else if (grounding.ungroundedCitations.length > 0) {
+      allWarnings.push(`${grounding.ungroundedCitations.length} ungrounded citation(s): ${grounding.ungroundedCitations.join("; ")}`);
+    }
+
+    const consistency = validateContentConsistency(draft.draftLetter, normalizedIntake);
+    if (consistency.jurisdictionMismatch) {
+      allErrors.push(`JURISDICTION MISMATCH: Letter references "${consistency.foundJurisdiction}" law but intake specifies "${consistency.expectedJurisdiction}". ALL legal citations MUST be for ${consistency.expectedJurisdiction}.`);
+    }
+    allWarnings.push(...consistency.warnings);
+
+    return { allErrors, allWarnings, grounding, consistency };
+  };
+
   try {
     console.log(
       `[Pipeline] Stage 2: Claude structured drafting for letter #${letterId}`
     );
-    const { text } = await generateText({
-      model: getDraftModel(),
-      system: draftSystemPrompt,
-      prompt: draftUserPrompt,
-      maxOutputTokens: 8000,
-      abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
-    });
+    let { text } = await generateDraft();
+    let validation = parseAndValidateDraftLlmOutput(text);
 
-    const validation = parseAndValidateDraftLlmOutput(text);
+    let needsRetry = false;
+    let retryErrors: string[] = [];
+
     if (!validation.valid || !validation.data) {
+      needsRetry = true;
+      retryErrors = validation.errors;
+    } else {
+      const checks = runAllDraftValidations(validation.data);
+      if (checks.allErrors.length > 0) {
+        needsRetry = true;
+        retryErrors = checks.allErrors;
+      }
+    }
+
+    if (needsRetry) {
+      addValidationResult(pipelineCtx, {
+        stage: "draft_generation",
+        check: "first_attempt_validation",
+        passed: false,
+        errors: retryErrors,
+        warnings: [],
+        timestamp: new Date().toISOString(),
+      });
+      console.warn(
+        `[Pipeline] Stage 2: First attempt failed validation for letter #${letterId}: ${retryErrors.join("; ")}. Retrying (1 of 1)...`
+      );
+      const retryResult = await retryOnValidationFailure(
+        async (feedback) => {
+          const r = await generateDraft(feedback);
+          return parseAndValidateDraftLlmOutput(r.text);
+        },
+        retryErrors,
+        "Stage 2 (consolidated retry)"
+      );
+      validation = retryResult;
+    }
+
+    if (!validation.valid || !validation.data) {
+      addValidationResult(pipelineCtx, {
+        stage: "draft_generation",
+        check: "parse_and_validate",
+        passed: false,
+        errors: validation.errors,
+        warnings: [],
+        timestamp: new Date().toISOString(),
+      });
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Draft validation failed: ${validation.errors.join("; ")}`,
+        errorMessage: `Draft validation failed${needsRetry ? " after retry" : ""}: ${validation.errors.join("; ")}`,
         completedAt: new Date(),
+        responsePayloadJson: { validationErrors: validation.errors, retried: needsRetry },
       });
       throw new Error(
-        `Draft output validation failed: ${validation.errors.join("; ")}`
+        `Draft output validation failed${needsRetry ? " after retry" : ""}: ${validation.errors.join("; ")}`
       );
     }
 
-    const draft = validation.data;
+    addValidationResult(pipelineCtx, {
+      stage: "draft_generation",
+      check: "parse_and_validate",
+      passed: true,
+      errors: [],
+      warnings: [],
+      timestamp: new Date().toISOString(),
+    });
+
+    let draft = validation.data;
+
+    const { allErrors: finalErrors, allWarnings: finalWarnings, grounding: finalGrounding, consistency: finalConsistency } = runAllDraftValidations(draft);
+
+    addValidationResult(pipelineCtx, {
+      stage: "draft_generation",
+      check: "citation_grounding",
+      passed: finalGrounding.passed,
+      errors: finalGrounding.passed ? [] : [`${finalGrounding.ungroundedCitations.length} ungrounded citations: ${finalGrounding.ungroundedCitations.join("; ")}`],
+      warnings: finalGrounding.ungroundedCitations.length > 0 && finalGrounding.ungroundedCitations.length <= 2
+        ? [`${finalGrounding.ungroundedCitations.length} ungrounded citation(s): ${finalGrounding.ungroundedCitations.join("; ")}`]
+        : [],
+      timestamp: new Date().toISOString(),
+    });
+
+    addValidationResult(pipelineCtx, {
+      stage: "draft_generation",
+      check: "content_consistency",
+      passed: finalConsistency.passed,
+      errors: finalConsistency.jurisdictionMismatch
+        ? [`Jurisdiction mismatch: expected "${finalConsistency.expectedJurisdiction}" but found "${finalConsistency.foundJurisdiction}"`]
+        : [],
+      warnings: finalConsistency.warnings,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (finalConsistency.jurisdictionMismatch) {
+      await updateWorkflowJob(jobId, {
+        status: "failed",
+        errorMessage: `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}: letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`,
+        completedAt: new Date(),
+        responsePayloadJson: {
+          validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
+          consistencyReport: finalConsistency,
+        },
+      });
+      throw new Error(
+        `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}: letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
+      );
+    }
+
+    if (!finalGrounding.passed) {
+      draft.groundingWarnings = finalGrounding.ungroundedCitations;
+      console.warn(
+        `[Pipeline] Stage 2: ${finalGrounding.ungroundedCitations.length} ungrounded citations for letter #${letterId}${needsRetry ? " after retry" : ""}. Storing with groundingWarnings.`
+      );
+    }
+
+    if (pipelineCtx) {
+      pipelineCtx.groundingReport = finalGrounding;
+      pipelineCtx.consistencyReport = finalConsistency;
+    }
 
     const version = await createLetterVersion({
       letterRequestId: letterId,
@@ -776,6 +1264,11 @@ export async function runDraftingStage(
         reviewNotes: draft.reviewNotes,
         citationRegistrySize: pipelineCtx?.citationRegistry?.length ?? 0,
         researchUnverified: pipelineCtx?.researchUnverified ?? false,
+        webGrounded: pipelineCtx?.webGrounded ?? true,
+        groundingWarnings: draft.groundingWarnings,
+        groundingReport: pipelineCtx?.groundingReport,
+        consistencyReport: pipelineCtx?.consistencyReport,
+        validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
       },
     });
     const versionId = (version as any)?.insertId ?? 0;
@@ -786,7 +1279,12 @@ export async function runDraftingStage(
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
-      responsePayloadJson: { versionId },
+      responsePayloadJson: {
+        versionId,
+        groundingReport: pipelineCtx?.groundingReport,
+        consistencyReport: pipelineCtx?.consistencyReport,
+        validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
+      },
     });
 
     console.log(`[Pipeline] Stage 2 complete for letter #${letterId}`);
@@ -798,10 +1296,21 @@ export async function runDraftingStage(
       tags: { pipeline_stage: "drafting", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
     });
+    addValidationResult(pipelineCtx, {
+      stage: "draft_generation",
+      check: "stage_completion",
+      passed: false,
+      errors: [msg],
+      warnings: [],
+      timestamp: new Date().toISOString(),
+    });
     await updateWorkflowJob(jobId, {
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      responsePayloadJson: {
+        validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
+      },
     });
     throw err;
   }
@@ -839,23 +1348,139 @@ export async function runAssemblyStage(
   const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock;
   const assemblyUser = buildAssemblyUserPrompt(intake, research, draft);
 
+  const { LETTER_TYPE_CONFIG } = await import("../shared/types");
+  const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
+  const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
+
+  const generateAssembly = async (errorFeedback?: string): Promise<string> => {
+    const promptWithFeedback = errorFeedback
+      ? assemblyUser + errorFeedback
+      : assemblyUser;
+    const { text } = await generateText({
+      model: getAssemblyModel(),
+      system: assemblySystem,
+      prompt: promptWithFeedback,
+      maxOutputTokens: 10000,
+      abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
+    });
+    return text;
+  };
+
+  const normalizedIntake = buildNormalizedPromptInput(
+    {
+      subject: intake.matter?.subject ?? "Legal Matter",
+      issueSummary: intake.matter?.description,
+      jurisdictionCountry: intake.jurisdiction?.country,
+      jurisdictionState: intake.jurisdiction?.state,
+      jurisdictionCity: intake.jurisdiction?.city,
+      letterType: intake.letterType,
+    },
+    intake
+  );
+
+  const runAllAssemblyValidations = (letter: string) => {
+    const allErrors: string[] = [];
+
+    const structureValidation = validateFinalLetter(letter);
+    allErrors.push(...structureValidation.errors);
+
+    const wc = letter.split(/\s+/).filter(w => w.length > 0).length;
+    if (wc < minWords) {
+      allErrors.push(`Letter is too short: ${wc} words (minimum ${minWords} words, target ${targetWordCount})`);
+    }
+    if (wc > maxWords) {
+      allErrors.push(`Letter is too long: ${wc} words (maximum ${maxWords} words, target ${targetWordCount})`);
+    }
+
+    const consistency = validateContentConsistency(letter, normalizedIntake);
+    if (consistency.jurisdictionMismatch) {
+      allErrors.push(`JURISDICTION MISMATCH: Final letter references "${consistency.foundJurisdiction}" but must reference "${consistency.expectedJurisdiction}" jurisdiction only.`);
+    }
+
+    return { allErrors, structureValidation, wordCount: wc, consistency };
+  };
+
+  const minWords = Math.floor(targetWordCount * 0.6);
+  const maxWords = Math.floor(targetWordCount * 2.0);
+
   try {
     console.log(
       `[Pipeline] Stage 3: Claude final assembly for letter #${letterId}`
     );
-    const { text: rawFinalLetter } = await generateText({
-      model: getAssemblyModel(),
-      system: assemblySystem,
-      prompt: assemblyUser,
-      maxOutputTokens: 10000,
-      abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
+    let rawFinalLetter = await generateAssembly();
+
+    let checks = runAllAssemblyValidations(rawFinalLetter);
+    let didRetry = false;
+
+    if (checks.allErrors.length > 0) {
+      didRetry = true;
+      addValidationResult(pipelineCtx, {
+        stage: "final_assembly",
+        check: "first_attempt_validation",
+        passed: false,
+        errors: checks.allErrors,
+        warnings: [],
+        timestamp: new Date().toISOString(),
+      });
+      console.warn(
+        `[Pipeline] Stage 3: First attempt failed validation for letter #${letterId}: ${checks.allErrors.join("; ")}. Retrying (1 of 1)...`
+      );
+      const retryLetter = await retryOnValidationFailure(
+        generateAssembly,
+        checks.allErrors,
+        "Stage 3 (consolidated retry)"
+      );
+      rawFinalLetter = retryLetter;
+      checks = runAllAssemblyValidations(rawFinalLetter);
+    }
+
+    addValidationResult(pipelineCtx, {
+      stage: "final_assembly",
+      check: "letter_validation",
+      passed: checks.structureValidation.valid,
+      errors: checks.structureValidation.errors,
+      warnings: [],
+      timestamp: new Date().toISOString(),
     });
 
-    const validation = validateFinalLetter(rawFinalLetter);
-    if (!validation.valid) {
-      console.warn(
-        `[Pipeline] Stage 3 validation warnings for letter #${letterId}:`,
-        validation.errors
+    addValidationResult(pipelineCtx, {
+      stage: "final_assembly",
+      check: "word_count",
+      passed: checks.wordCount >= minWords && checks.wordCount <= maxWords,
+      errors: checks.wordCount < minWords
+        ? [`Letter is too short: ${checks.wordCount} words (minimum ${minWords})`]
+        : checks.wordCount > maxWords
+          ? [`Letter is too long: ${checks.wordCount} words (maximum ${maxWords})`]
+          : [],
+      warnings: [`Word count: ${checks.wordCount} (target: ${targetWordCount})`],
+      timestamp: new Date().toISOString(),
+    });
+
+    addValidationResult(pipelineCtx, {
+      stage: "final_assembly",
+      check: "content_consistency",
+      passed: checks.consistency.passed,
+      errors: checks.consistency.jurisdictionMismatch
+        ? [`Jurisdiction mismatch: expected "${checks.consistency.expectedJurisdiction}" but found "${checks.consistency.foundJurisdiction}"`]
+        : [],
+      warnings: checks.consistency.warnings,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (checks.allErrors.length > 0) {
+      await updateWorkflowJob(jobId, {
+        status: "failed",
+        errorMessage: `Final letter validation failed${didRetry ? " after retry" : ""}: ${checks.allErrors.join("; ")}`,
+        completedAt: new Date(),
+        responsePayloadJson: {
+          validationErrors: checks.allErrors,
+          retried: didRetry,
+          validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
+          consistencyReport: checks.consistency,
+        },
+      });
+      throw new Error(
+        `Final letter validation failed${didRetry ? " after retry" : ""}: ${checks.allErrors.join("; ")}`
       );
     }
 
@@ -881,23 +1506,30 @@ export async function runAssemblyStage(
           researchProvider: pipelineCtx?.researchProvider ?? "perplexity",
           draftProvider: "anthropic",
         },
-        validationWarnings:
-          validation.errors.length > 0 ? validation.errors : undefined,
         citationAuditReport,
         researchUnverified: pipelineCtx?.researchUnverified ?? false,
+        webGrounded: pipelineCtx?.webGrounded ?? true,
         citationRegistry: registry,
+        consistencyReport: checks.consistency,
+        validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
+        wordCount: finalLetter.split(/\s+/).filter(w => w.length > 0).length,
+        targetWordCount,
       },
     });
     const versionId = (version as any)?.insertId ?? 0;
 
-    // Update the AI draft pointer to the final assembled version
     await updateLetterVersionPointers(letterId, {
       currentAiDraftVersionId: versionId,
     });
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
-      responsePayloadJson: { versionId },
+      responsePayloadJson: {
+        versionId,
+        citationAuditReport,
+        consistencyReport: checks.consistency,
+        validationResults: pipelineCtx?.validationResults,
+      },
     });
 
     // All letters always go to generated_locked.
@@ -966,10 +1598,21 @@ export async function runAssemblyStage(
       tags: { pipeline_stage: "assembly", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
     });
+    addValidationResult(pipelineCtx, {
+      stage: "final_assembly",
+      check: "stage_completion",
+      passed: false,
+      errors: [msg],
+      warnings: [],
+      timestamp: new Date().toISOString(),
+    });
     await updateWorkflowJob(jobId, {
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      responsePayloadJson: {
+        validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
+      },
     });
     throw err;
   }
@@ -991,7 +1634,16 @@ export async function runFullPipeline(
   },
   userId?: number
 ): Promise<void> {
-  // Normalize intake using canonical helper
+  const intakeCheck = validateIntakeCompleteness(intake);
+  if (!intakeCheck.valid) {
+    console.error(
+      `[Pipeline] Intake pre-flight failed for letter #${letterId}: ${intakeCheck.errors.join("; ")}`
+    );
+    throw new Error(
+      `Intake validation failed: ${intakeCheck.errors.join("; ")}`
+    );
+  }
+
   const normalizedInput = buildNormalizedPromptInput(
     dbFields ?? {
       subject: intake.matter?.subject ?? "Legal Matter",
@@ -1140,18 +1792,28 @@ export async function runFullPipeline(
 
   try {
     // Stage 1: Perplexity Research
+    pipelineCtx.validationResults = [];
+
     const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
     pipelineCtx.researchProvider = researchProvider;
     pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
+    pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
     await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
 
-    // Build citation registry from research packet
+    addValidationResult(pipelineCtx, {
+      stage: "intake",
+      check: "intake_completeness",
+      passed: true,
+      errors: [],
+      warnings: [],
+      timestamp: new Date().toISOString(),
+    });
+
     let citationRegistry = buildCitationRegistry(research);
     console.log(
       `[Pipeline] Built citation registry for letter #${letterId}: ${citationRegistry.length} citations extracted`
     );
 
-    // Revalidate citations with Perplexity (only if Perplexity is available)
     if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
       const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
       citationRegistry = await revalidateCitationsWithPerplexity(
@@ -1160,15 +1822,19 @@ export async function runFullPipeline(
     }
     pipelineCtx.citationRegistry = citationRegistry;
 
-    // Stage 2: Claude Draft (with citation registry constraint)
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
 
-    // Stage 3: Claude Final Assembly (with citation registry + post-assembly audit)
     await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
 
     await updateWorkflowJob(pipelineJobId, {
       status: "completed",
       completedAt: new Date(),
+      responsePayloadJson: {
+        validationResults: pipelineCtx.validationResults,
+        webGrounded: pipelineCtx.webGrounded,
+        groundingReport: pipelineCtx.groundingReport,
+        consistencyReport: pipelineCtx.consistencyReport,
+      },
     });
     console.log(
       `[Pipeline] Full 3-stage in-app pipeline completed for letter #${letterId}`
@@ -1288,6 +1954,13 @@ export async function retryPipelineFromStage(
   stage: "research" | "drafting",
   userId?: number
 ): Promise<void> {
+  const intakeCheck = validateIntakeCompleteness(intake);
+  if (!intakeCheck.valid) {
+    throw new Error(
+      `Intake validation failed: ${intakeCheck.errors.join("; ")}`
+    );
+  }
+
   const retryJob = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "retry",
@@ -1304,6 +1977,7 @@ export async function retryPipelineFromStage(
     letterId,
     userId: userId ?? 0,
     intake,
+    validationResults: [],
   };
 
   try {
@@ -1311,6 +1985,7 @@ export async function retryPipelineFromStage(
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
       pipelineCtx.researchProvider = researchProvider;
       pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
+      pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
@@ -1327,6 +2002,7 @@ export async function retryPipelineFromStage(
       const research = latestResearch.resultJson as ResearchPacket;
       pipelineCtx.researchProvider = latestResearch.provider ?? "perplexity";
       pipelineCtx.researchUnverified = latestResearch.provider === "anthropic-fallback";
+      pipelineCtx.webGrounded = !pipelineCtx.researchUnverified;
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
@@ -1340,6 +2016,12 @@ export async function retryPipelineFromStage(
     await updateWorkflowJob(retryJobId, {
       status: "completed",
       completedAt: new Date(),
+      responsePayloadJson: {
+        validationResults: pipelineCtx.validationResults,
+        webGrounded: pipelineCtx.webGrounded,
+        groundingReport: pipelineCtx.groundingReport,
+        consistencyReport: pipelineCtx.consistencyReport,
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
