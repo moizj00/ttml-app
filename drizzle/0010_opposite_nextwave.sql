@@ -1,0 +1,1 @@
+ALTER TABLE "letter_requests" ADD COLUMN "research_unverified" boolean DEFAULT false NOT NULL;

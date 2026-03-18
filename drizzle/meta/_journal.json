@@ -71,6 +71,13 @@
       "when": 1773615029673,
       "tag": "0009_massive_wolfpack",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773800962956,
+      "tag": "0010_opposite_nextwave",
+      "breakpoints": true
     }
   ]
 }
