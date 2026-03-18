@@ -190,6 +190,16 @@ export default function ReviewDetail() {
     onError: e => toast.error("Request failed", { description: e.message }),
   });
 
+  const requestClientApprovalMutation = trpc.letters.requestClientApproval.useMutation({
+    onSuccess: () => {
+      toast.success("Client approval requested", {
+        description: "The subscriber has been notified to review and approve the letter.",
+      });
+      invalidate();
+    },
+    onError: e => toast.error("Failed to request client approval", { description: e.message }),
+  });
+
   // ── Auto-enter edit mode when letter becomes under_review ─────────────────
   // This fires after claim succeeds and the refetch returns the updated letter.
   useEffect(() => {
@@ -435,6 +445,20 @@ export default function ReviewDetail() {
                   Approve
                 </Button>
               </>
+            )}
+
+            {letter.status === "approved" && (
+              <Button
+                data-testid="button-request-client-approval"
+                variant="outline"
+                size="sm"
+                onClick={() => requestClientApprovalMutation.mutate({ letterId })}
+                disabled={requestClientApprovalMutation.isPending}
+                className="bg-background border-teal-300 text-teal-700 hover:bg-teal-50"
+              >
+                <Scale className="w-4 h-4 mr-1.5" />
+                {requestClientApprovalMutation.isPending ? "Sending..." : "Send to Client for Approval"}
+              </Button>
             )}
           </div>
         </div>

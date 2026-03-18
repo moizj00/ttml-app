@@ -1,0 +1,27 @@
+
+Critical findings:
+- **Broken acVERDICT: REJECTED
+cess control in `letters.requestClientApproval` (blocking):** the new mutation only chThe diff implements most of the requested surface area, but it introduces a blocking authorization flaw and leaves the new client-approval workflow functionally incomplete in key downstream paths.
+ecks role via `attorneyProcedure` and letter status (`approve
+d`), but does **not** verify that the attorney is assigCritical findings:
+ned reviewer (or admin override) like existing review mutations (`approve/reject/requestChanges`) do. Any attorney can transition any approved letter to `client_approval_pending`.
+- **Client-approved state is not integrated with existing “final delivery” actions (blocking functional gap):** after `clientApprove` moves status to `client_approved`, subscriber UI actions still key off `letter.status === "approved"` (download/send/archive controls), and backend `sendToRecipient` also only allows `approved`. This means a user can approve and then lose expected post-approval actions, contradicting “Approve & Proceed” semantics.
+- **Task conformance drift in repair semantics:** `repairLetterState` uses a broader heuristic (`submitted/researching/drafting` + failed or orphaned jobs) rather than the specified pattern (`processing` + failed workflow job + no content). This may be acceptable adaptation if `processing` is not a real status, but it should be explicitly justified/validated against expected ops behavior.
+
+Security:
+- **Serious issue observed:** missing object-level authorization check in `requestClientApproval` (IDOR-style state transition risk across letters).
+
+Next actions:
+1. Add assignment authorization to `requestClientApproval` (`ctx.user.role === "admin" || letter.assignedReviewerId === ctx.user.id`) before status transition.
+2. Align post-client-approval behavior with product intent: either (a) allow final delivery actions for `client_approved` (UI + `sendToRecipient`), or (b) transition to `approved`/delivery-complete state after client approval.
+3. Confirm/adjust `repairLetterState` criteria to match the intended operational definition, and ensure admin-facing messaging reflects the exact detection logic.- **Broken access control in `letters.requestClientApproval` (blocking):** the new mutation only checks role via `attorneyProcedure` and letter status (`approved`), but does **not** verify that the attorney is assigned reviewer (or admin override) like existing review mutations (`approve/reject/requestChanges`) do. Any attorney can transition any approved letter to `client_approval_pending`.
+- **Client-approved state is not integrated with existing “final delivery” actions (blocking functional gap):** after `clientApprove` moves status to `client_approved`, subscriber UI actions still key off `letter.status === "approved"` (download/send/archive controls), and backend `sendToRecipient` also only allows `approved`. This means a user can approve and then lose expected post-approval actions, contradicting “Approve & Proceed” semantics.
+- **Task conformance drift in repair semantics:** `repairLetterState` uses a broader heuristic (`submitted/researching/drafting` + failed or orphaned jobs) rather than the specified pattern (`processing` + failed workflow job + no content). This may be acceptable adaptation if `processing` is not a real status, but it should be explicitly justified/validated against expected ops behavior.
+
+Security:
+- **Serious issue observed:** missing object-level authorization check in `requestClientApproval` (IDOR-style state transition risk across letters).
+
+Next actions:
+1. Add assignment authorization to `requestClientApproval` (`ctx.user.role === "admin" || letter.assignedReviewerId === ctx.user.id`) before status transition.
+2. Align post-client-approval behavior with product intent: either (a) allow final delivery actions for `client_approved` (UI + `sendToRecipient`), or (b) transition to `approved`/delivery-complete state after client approval.
+3. Confirm/adjust `repairLetterState` criteria to match the intended operational definition, and ensure admin-facing messaging reflects the exact detection logic.

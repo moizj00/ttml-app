@@ -17,6 +17,8 @@ import {
   createNotification,
   getAllLetterRequests,
   getAllUsers,
+  getAllUsersWithSubscription,
+  markAsPaidDb,
   getAttachmentsByLetterId,
   getEmployees,
   getFailedJobs,
@@ -547,7 +549,7 @@ export const appRouter = router({
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
-        if (!["approved", "rejected"].includes(letter.status))
+        if (!["approved", "client_approved", "rejected"].includes(letter.status))
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Only completed letters can be archived",
@@ -569,7 +571,7 @@ export const appRouter = router({
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
-        if (letter.status !== "approved")
+        if (letter.status !== "approved" && letter.status !== "client_approved")
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Only approved letters can be sent to recipients",
@@ -627,6 +629,88 @@ export const appRouter = router({
           sizeBytes: buffer.length,
         });
         return { url, key };
+      }),
+
+    requestClientApproval: attorneyProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        if (ctx.user.role !== "admin" && letter.assignedReviewerId !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the assigned reviewer or an admin can request client approval",
+          });
+        }
+        if (letter.status !== "approved") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter must be in approved status to request client approval",
+          });
+        }
+        await updateLetterStatus(input.letterId, "client_approval_pending");
+        const actorType = ctx.user.role === "admin" ? "admin" as const : "attorney" as const;
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType,
+          action: "requested_client_approval",
+          noteText: "Attorney requested client approval before final delivery",
+          noteVisibility: "user_visible",
+          fromStatus: "approved",
+          toStatus: "client_approval_pending",
+        });
+        try {
+          const subscriber = await getUserById(letter.userId);
+          const appUrl = getAppUrl(ctx.req);
+          if (subscriber?.email) {
+            await sendStatusUpdateEmail({
+              to: subscriber.email,
+              name: subscriber.name ?? "Subscriber",
+              subject: letter.subject,
+              letterId: input.letterId,
+              newStatus: "client_approval_pending",
+              appUrl,
+            });
+          }
+          await createNotification({
+            userId: letter.userId,
+            type: "client_approval_pending",
+            title: "Your letter is ready for final approval",
+            body: "Please review your attorney-approved letter and click Approve & Proceed to confirm delivery.",
+            link: `/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[requestClientApproval] Notification error:", err);
+        }
+        return { success: true };
+      }),
+
+    clientApprove: subscriberProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter || letter.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        if (letter.status !== "client_approval_pending") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not awaiting client approval",
+          });
+        }
+        await updateLetterStatus(input.letterId, "client_approved");
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "client_approved",
+          noteText: "Subscriber approved the letter for final delivery",
+          noteVisibility: "user_visible",
+          fromStatus: "client_approval_pending",
+          toStatus: "client_approved",
+        });
+        return { success: true };
       }),
   }),
 
@@ -1079,7 +1163,24 @@ export const appRouter = router({
           })
           .optional()
       )
-      .query(async ({ input }) => getAllUsers(input?.role)),
+      .query(async ({ input }) => getAllUsersWithSubscription(input?.role)),
+
+    markAsPaid: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await getUserById(input.userId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        await markAsPaidDb(input.userId);
+        await logReviewAction({
+          letterRequestId: 0,
+          reviewerId: ctx.user.id,
+          actorType: "admin",
+          action: "admin_mark_as_paid",
+          noteText: `Admin manually activated subscription for user #${input.userId} (${user.email ?? user.name})`,
+          noteVisibility: "internal",
+        });
+        return { success: true };
+      }),
 
     updateRole: adminProcedure
       .input(
@@ -1212,6 +1313,8 @@ export const appRouter = router({
             "under_review",
             "needs_changes",
             "approved",
+            "client_approval_pending",
+            "client_approved",
             "rejected",
           ]),
           reason: z.string().min(5),
@@ -1220,6 +1323,18 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const letter = await getLetterRequestById(input.letterId);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // Guard: prevent forcing to review states without a content version
+        if (input.newStatus === "pending_review" || input.newStatus === "approved") {
+          const versions = await getLetterVersionsByRequestId(input.letterId, true);
+          if (versions.length === 0) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: `Cannot force to "${input.newStatus}": this letter has no content version. Generate a draft first.`,
+            });
+          }
+        }
+
         await updateLetterStatus(input.letterId, input.newStatus, {
           force: true,
         });
@@ -1291,6 +1406,87 @@ export const appRouter = router({
           console.error("[Notify] Failed:", err);
         }
         return { success: true };
+      }),
+
+    claimLetterAsAttorney: adminProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        if (letter.status !== "pending_review") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter must be in pending_review status to claim",
+          });
+        }
+        if (letter.assignedReviewerId !== null && letter.assignedReviewerId !== undefined) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter already has an assigned reviewer",
+          });
+        }
+        await claimLetterForReview(input.letterId, ctx.user.id);
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "admin",
+          action: "admin_claimed_as_attorney",
+          noteText: `Admin claimed letter for review as attorney`,
+          noteVisibility: "internal",
+          fromStatus: "pending_review",
+          toStatus: "under_review",
+        });
+        return { success: true };
+      }),
+
+    repairLetterState: adminProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const findings: string[] = [];
+
+        // Check for broken-processing pattern:
+        // status = "processing" or stuck in a pipeline state, with a failed workflowJob,
+        // and no content version (no ai_draft or final_approved)
+        const [versions, jobs] = await Promise.all([
+          getLetterVersionsByRequestId(input.letterId, true),
+          getWorkflowJobsByLetterId(input.letterId),
+        ]);
+
+        const hasContentVersion = versions.some(
+          v => v.versionType === "ai_draft" || v.versionType === "final_approved"
+        );
+        const hasFailed = jobs.some(j => j.status === "failed");
+        const isStuckInPipeline =
+          ["submitted", "researching", "drafting"].includes(letter.status) &&
+          hasFailed &&
+          !hasContentVersion;
+
+        if (isStuckInPipeline) {
+          findings.push(
+            `Detected stuck-processing: status="${letter.status}", has failed job(s), no content version`
+          );
+          await updateLetterStatus(input.letterId, "submitted", { force: true });
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: "admin",
+            action: "admin_repair_letter_state",
+            noteText: `Repaired stuck letter: reset from "${letter.status}" to "submitted". Has failed job(s), no content version.`,
+            noteVisibility: "internal",
+            fromStatus: letter.status,
+            toStatus: "submitted",
+          });
+          findings.push(`Reset status from "${letter.status}" to "submitted"`);
+        } else {
+          findings.push(
+            `No broken-processing pattern detected (status="${letter.status}", hasContentVersion=${hasContentVersion}, hasFailed=${hasFailed}). No changes made.`
+          );
+        }
+
+        return { success: true, findings };
       }),
   }),
 

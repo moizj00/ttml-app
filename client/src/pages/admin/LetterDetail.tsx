@@ -25,11 +25,13 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  ClipboardList,
   RefreshCw,
   Shield,
+  Wrench,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import StatusBadge from "@/components/shared/StatusBadge";
 import StatusTimeline from "@/components/shared/StatusTimeline";
@@ -49,6 +51,7 @@ const ALL_STATUSES = [
 export default function AdminLetterDetail() {
   const { id } = useParams<{ id: string }>();
   const letterId = parseInt(id ?? "0");
+  const [, navigate] = useLocation();
   useAuth();
   const [forceStatus, setForceStatus] = useState<string>("");
   const [forceNote, setForceNote] = useState("");
@@ -88,6 +91,26 @@ export default function AdminLetterDetail() {
       refetch();
     },
     onError: err => toast.error("Retry failed", { description: err.message }),
+  });
+
+  const claimAsAttorneyMutation = trpc.admin.claimLetterAsAttorney.useMutation({
+    onSuccess: () => {
+      toast.success("Letter claimed", {
+        description: "Redirecting to the attorney review view...",
+      });
+      navigate(`/attorney/review/${letterId}`);
+    },
+    onError: err => toast.error("Could not claim letter", { description: err.message }),
+  });
+
+  const repairMutation = trpc.admin.repairLetterState.useMutation({
+    onSuccess: (data) => {
+      toast.success("Repair complete", {
+        description: data.findings.join(" · "),
+      });
+      refetch();
+    },
+    onError: err => toast.error("Repair failed", { description: err.message }),
   });
 
   if (!letter) {
@@ -219,6 +242,30 @@ export default function AdminLetterDetail() {
                 Retry Pipeline
               </Button>
             )}
+            {l.status === "pending_review" && !l.assignedReviewerId && (
+              <Button
+                data-testid="button-claim-as-attorney"
+                variant="outline"
+                size="sm"
+                className="border-green-400 text-green-700"
+                onClick={() => claimAsAttorneyMutation.mutate({ letterId })}
+                disabled={claimAsAttorneyMutation.isPending}
+              >
+                <ClipboardList className="h-4 w-4 mr-2" />
+                {claimAsAttorneyMutation.isPending ? "Claiming..." : "Claim and Review This Letter"}
+              </Button>
+            )}
+            <Button
+              data-testid="button-repair-letter"
+              variant="outline"
+              size="sm"
+              className="border-gray-400 text-gray-700"
+              onClick={() => repairMutation.mutate({ letterId })}
+              disabled={repairMutation.isPending}
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              {repairMutation.isPending ? "Repairing..." : "Repair Letter State"}
+            </Button>
           </div>
 
           {showForceForm && (

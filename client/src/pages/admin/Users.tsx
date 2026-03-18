@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, Briefcase, User, Scale, AlertCircle, Gavel } from "lucide-react";
+import { Shield, Briefcase, User, Scale, AlertCircle, Gavel, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -65,6 +65,16 @@ export default function AdminUsers() {
   // Use the base mutation without onSuccess/onError — we pass per-call callbacks
   // in the onClick handler so we can capture the values before state is cleared.
   const updateRole = trpc.admin.updateRole.useMutation();
+
+  const markAsPaid = trpc.admin.markAsPaid.useMutation({
+    onSuccess: () => {
+      toast.success("Subscription activated", {
+        description: "The user's subscription has been marked as paid.",
+      });
+      refetch();
+    },
+    onError: e => toast.error("Failed to activate subscription", { description: e.message }),
+  });
 
   const handleConfirm = () => {
     if (!pendingRoleChange) return;
@@ -174,7 +184,30 @@ export default function AdminUsers() {
                           {user.email ?? "No email"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Subscription badge */}
+                        {user.subscriptionStatus === "active" ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-green-700 bg-green-100">
+                            <CreditCard className="w-3 h-3" />
+                            Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-gray-500 bg-gray-100">
+                            <CreditCard className="w-3 h-3" />
+                            Free
+                          </span>
+                        )}
+                        {/* Mark as Paid button for free users */}
+                        {user.subscriptionStatus !== "active" && (
+                          <button
+                            data-testid={`button-mark-paid-${user.id}`}
+                            className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
+                            onClick={() => markAsPaid.mutate({ userId: user.id })}
+                            disabled={markAsPaid.isPending}
+                          >
+                            Mark as Paid
+                          </button>
+                        )}
                         <span
                           className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${roleInfo.color}`}
                         >

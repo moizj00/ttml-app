@@ -24,7 +24,45 @@ import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 
 // Statuses that require active polling (pipeline in progress or awaiting action)
-const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review"];
+const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending"];
+
+function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onApprove: () => void }) {
+  const clientApprove = trpc.letters.clientApprove.useMutation({
+    onSuccess: () => {
+      toast.success("Letter approved!", { description: "Your approval has been recorded. The letter will proceed to final delivery." });
+      onApprove();
+    },
+    onError: (err) => toast.error("Approval failed", { description: err.message }),
+  });
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/40">
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-800">Your Letter is Ready — Final Approval Required</p>
+            <p className="text-sm text-blue-700 mt-1">
+              Your attorney has reviewed and approved your letter. Please review it below, then click <strong>Approve &amp; Proceed</strong> to confirm delivery.
+            </p>
+            <Button
+              data-testid="button-client-approve"
+              className="mt-3 bg-blue-600 hover:bg-blue-700 text-white"
+              size="sm"
+              onClick={() => clientApprove.mutate({ letterId })}
+              disabled={clientApprove.isPending}
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {clientApprove.isPending ? "Processing..." : "Approve & Proceed"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function LetterDetail() {
   const params = useParams<{ id: string }>();
@@ -479,7 +517,7 @@ export default function LetterDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-              {letter.status === "approved" && finalVersion && (
+              {(letter.status === "approved" || letter.status === "client_approved") && finalVersion && (
                 <>
                   <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background flex-1 sm:flex-initial">
                     <Copy className="w-4 h-4 mr-1" />
@@ -491,7 +529,7 @@ export default function LetterDetail() {
                   </Button>
                 </>
               )}
-              {["approved", "rejected"].includes(letter.status) && (
+              {["approved", "client_approved", "rejected"].includes(letter.status) && (
                 <Button onClick={handleArchive} size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={archiveMutation.isPending}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -540,6 +578,28 @@ export default function LetterDetail() {
             subject={letter.subject}
             draftContent={aiDraftVersion?.content ?? undefined}
           />
+        )}
+
+        {/* ── Client Approval Pending ── */}
+        {letter.status === "client_approval_pending" && (
+          <ClientApprovalBlock letterId={letterId} onApprove={() => utils.letters.detail.invalidate({ id: letterId })} />
+        )}
+
+        {/* ── Client Approved ── */}
+        {letter.status === "client_approved" && (
+          <Card className="border-emerald-200 bg-emerald-50/30">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-emerald-800">You have approved this letter</p>
+                  <p className="text-sm text-emerald-700 mt-1">
+                    Your approval has been recorded. The letter will proceed to final delivery.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* ── Pending / Under Review ── */}
@@ -624,7 +684,7 @@ export default function LetterDetail() {
         )}
 
         {/* Final Approved Letter */}
-        {letter.status === "approved" && finalVersion && (
+        {(letter.status === "approved" || letter.status === "client_approved") && finalVersion && (
           <>
           <Dialog open={sendDialogOpen} onOpenChange={(open) => { setSendDialogOpen(open); if (!open) { setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); } }}>
             <DialogContent>

@@ -143,6 +143,60 @@ export async function getAllUsers(
   return db.select().from(users).orderBy(desc(users.createdAt));
 }
 
+export async function getAllUsersWithSubscription(
+  role?: "subscriber" | "employee" | "admin" | "attorney"
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const query = db
+    .select({
+      id: users.id,
+      openId: users.openId,
+      name: users.name,
+      email: users.email,
+      loginMethod: users.loginMethod,
+      role: users.role,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      lastSignedIn: users.lastSignedIn,
+      emailVerified: users.emailVerified,
+      freeReviewUsedAt: users.freeReviewUsedAt,
+      subscriptionStatus: subscriptions.status,
+      subscriptionPlan: subscriptions.plan,
+    })
+    .from(users)
+    .leftJoin(subscriptions, eq(subscriptions.userId, users.id))
+    .orderBy(desc(users.createdAt));
+  if (role) return query.where(eq(users.role, role));
+  return query;
+}
+
+export async function markAsPaidDb(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await db
+    .select({ id: subscriptions.id })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  if (existing.length > 0) {
+    await db
+      .update(subscriptions)
+      .set({ plan: "monthly_basic", status: "active", updatedAt: new Date() })
+      .where(eq(subscriptions.userId, userId));
+  } else {
+    await db.insert(subscriptions).values({
+      userId,
+      plan: "monthly_basic",
+      status: "active",
+      lettersAllowed: 999,
+      lettersUsed: 0,
+      cancelAtPeriodEnd: false,
+    });
+  }
+}
+
 export async function updateUserRole(
   userId: number,
   role: "subscriber" | "employee" | "admin" | "attorney"

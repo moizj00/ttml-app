@@ -31,6 +31,8 @@ export const LETTER_STATUSES = [
   "under_review",
   "needs_changes",
   "approved",
+  "client_approval_pending",
+  "client_approved",
   "rejected",
 ] as const;
 export type LetterStatus = (typeof LETTER_STATUSES)[number];
@@ -76,7 +78,9 @@ export const userRoleEnum = pgEnum("user_role", ["subscriber", "employee", "admi
 export const letterStatusEnum = pgEnum("letter_status", [
   "submitted", "researching", "drafting", "generated_locked", "generated_unlocked",
   "upsell_dismissed",
-  "pending_review", "under_review", "needs_changes", "approved", "rejected",
+  "pending_review", "under_review", "needs_changes", "approved",
+  "client_approval_pending", "client_approved",
+  "rejected",
 ]);
 export const letterTypeEnum = pgEnum("letter_type", [
   "demand-letter", "cease-and-desist", "contract-breach", "eviction-notice",
@@ -89,7 +93,7 @@ export const jobTypeEnum = pgEnum("job_type", ["research", "draft_generation", "
 export const researchStatusEnum = pgEnum("research_status", ["queued", "running", "completed", "failed", "invalid"]);
 export const priorityEnum = pgEnum("priority_level", ["low", "normal", "high", "urgent"]);
 export const noteVisibilityEnum = pgEnum("note_visibility", ["internal", "user_visible"]);
-export const subscriptionPlanEnum = pgEnum("subscription_plan", ["per_letter", "monthly", "annual", "free_trial_review", "starter", "professional", "single_letter", "yearly"]);
+export const subscriptionPlanEnum = pgEnum("subscription_plan", ["per_letter", "monthly", "monthly_basic", "annual", "free_trial_review", "starter", "professional", "single_letter", "yearly"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "canceled", "past_due", "trialing", "incomplete", "none"]);
 export const commissionStatusEnum = pgEnum("commission_status", ["pending", "paid", "voided"]);
 export const payoutStatusEnum = pgEnum("payout_status", ["pending", "processing", "completed", "rejected"]);

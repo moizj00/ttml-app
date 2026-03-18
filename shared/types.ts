@@ -16,7 +16,9 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   pending_review: ["under_review"],
   under_review: ["approved", "rejected", "needs_changes"],
   needs_changes: ["submitted", "researching", "drafting"], // "submitted" = subscriber resubmit after changes
-  approved: [],                                  // terminal
+  approved: ["client_approval_pending"],         // attorney can request client approval
+  client_approval_pending: ["client_approved"],  // subscriber confirms
+  client_approved: [],                           // terminal
   rejected: ["submitted"],                       // subscriber can retry from scratch
 };
 
@@ -68,6 +70,16 @@ export const STATUS_CONFIG: Record<
     label: "Approved",
     color: "text-green-600",
     bgColor: "bg-green-100",
+  },
+  client_approval_pending: {
+    label: "Awaiting Client Approval",
+    color: "text-teal-600",
+    bgColor: "bg-teal-100",
+  },
+  client_approved: {
+    label: "Client Approved",
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-100",
   },
   rejected: { label: "Rejected", color: "text-red-700", bgColor: "bg-red-200" },
 };
