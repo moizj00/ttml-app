@@ -1,0 +1,236 @@
+CHANGE 6 — Paid/Free badge on Users page + admin "Mark as Paid" action
+6a — client/src/pages/admin/Users.tsx
+In the users table, add a badge column next to each user showing their plan status:
+tsx{/* In the table row */}
+<td>
+  {user.subscriptionStatus === "active" ? (
+    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+      Paid
+    </span>
+  ) : (
+    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+      Free
+    </span>
+  )}
+</td>
+
+{/* For free users, add a "Mark as Paid" button */}
+{user.subscriptionStatus !== "active" && (
+  <button
+    onClick={() => markAsPaidMutation.mutate({ userId: user.id })}
+    className="text-xs text-blue-600 hover:underline"
+  >
+    Mark as Paid
+  </button>
+)}
+Wire the mutation:
+typescriptconst markAsPaidMutation = trpc.admin.markAsPaid.useMutation({
+  onSuccess: () => utils.admin.getUsers.invalidate(),
+});
+6b — server/routers.ts
+Add a new admin.markAsPaid procedure using adminProcedure:
+typescriptmarkAsPaid: adminProcedure
+  .input(z.object({ userId: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    await db
+      .update(users)
+      .set({
+        subscriptionStatus: "active",
+        subscriptionPlan: "monthly_basic",
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, input.userId));
+
+    await logAdminAction({
+      adminId: ctx.user.id,
+      action: "mark_as_paid",
+      targetUserId: input.userId,
+    });
+
+    return { success: true };
+  }),
+
+CHANGE 7 — Client approval step before letter is sent
+This adds a client_approval_pending → client_approved workflow after attorney approval.
+7a — drizzle/schema.ts
+Add two new values to letterStatusEnum:
+typescriptexport const letterStatusEnum = pgEnum("letter_status", [
+  // ... existing values ...,
+  "client_approval_pending",
+  "client_approved",
+]);
+Create and apply the migration:
+sqlALTER TYPE letter_status ADD VALUE 'client_approval_pending';
+ALTER TYPE letter_status ADD VALUE 'client_approved';
+7b — server/routers.ts
+Add two new procedures in the letters router:
+typescript// Attorney/admin requests client approval
+requestClientApproval: attorneyOrAdminProcedure
+  .input(z.object({ letterId: z.number() }))
+  .mutation(async ({ input, ctx }) => {
+    // Must be in "approved" status
+    await db.update(letters)
+      .set({ status: "client_approval_pending", updatedAt: new Date() })
+      .where(and(eq(letters.id, input.letterId), eq(letters.status, "approved")));
+
+    await sendClientApprovalRequestEmail({ letterId: input.letterId });
+    return { success: true };
+  }),
+
+// Subscriber approves their letter
+clientApprove: subscriberProcedure
+  .input(z.object({ letterId: z.number() }))
+  .mutation(async ({ input, ctx }) => {
+    // Verify letter belongs to this user
+    const [letter] = await db.select().from(letters)
+      .where(and(eq(letters.id, input.letterId), eq(letters.userId, ctx.user.id)));
+    if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+    if (letter.status !== "client_approval_pending") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Letter is not pending client approval" });
+    }
+
+    await db.update(letters)
+      .set({ status: "client_approved", updatedAt: new Date() })
+      .where(eq(letters.id, input.letterId));
+
+    return { success: true };
+  }),
+7c — client/src/pages/subscriber/LetterDetail.tsx
+When letter.status === "client_approval_pending", show a prominent CTA:
+tsx{letter.status === "client_approval_pending" && (
+  <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+    <h3 className="font-semibold text-blue-900 mb-2">Your letter is ready for review</h3>
+    <p className="text-sm text-blue-700 mb-3">
+      A licensed attorney has reviewed and approved your letter.
+      Please review it below and confirm you're happy before we proceed.
+    </p>
+    <button
+      onClick={() => clientApproveMutation.mutate({ letterId: letter.id })}
+      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+    >
+      Approve & Proceed
+    </button>
+  </div>
+)}
+
+CHANGE 8 — Super admin can claim and review a letter as attorney
+8a — server/routers.ts
+Add new procedure in the admin router:
+typescriptclaimLetterAsAttorney: adminProcedure
+  .input(z.object({ letterId: z.number() }))
+  .mutation(async ({ input, ctx }) => {
+    // Re-use existing claim logic
+    await claimLetterForReview(input.letterId, ctx.user.id);
+
+    await logAdminAction({
+      adminId: ctx.user.id,
+      action: "admin_claim_as_attorney",
+      targetLetterId: input.letterId,
+    });
+
+    return { success: true };
+  }),
+8b — client/src/pages/admin/LetterDetail.tsx
+When letter.status === "pending_review" and letter.assignedAttorneyId is null, show a claim button:
+tsx{letter.status === "pending_review" && !letter.assignedAttorneyId && (
+  <button
+    onClick={async () => {
+      await claimMutation.mutateAsync({ letterId: letter.id });
+      router.push(`/attorney/review/${letter.id}`);
+    }}
+    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+  >
+    Claim and Review This Letter
+  </button>
+)}
+Wire the mutation:
+typescriptconst claimMutation = trpc.admin.claimLetterAsAttorney.useMutation();
+
+CHANGE 9 — Guard forceStatusTransition + add repairLetterState tool
+9a — Guard in admin.forceStatusTransition (server/routers.ts)
+Before updating status, add a pre-flight check:
+typescript// Guard: transitioning to reviewed states requires content to exist
+if (["pending_review", "approved"].includes(input.newStatus)) {
+  const [version] = await db.select().from(letterVersions)
+    .where(eq(letterVersions.letterId, input.letterId))
+    .limit(1);
+
+  if (!version) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Cannot move to "${input.newStatus}": letter has no content version. Use repairLetterState first.`,
+    });
+  }
+}
+9b — New admin.repairLetterState mutation (server/routers.ts)
+typescriptrepairLetterState: adminProcedure
+  .input(z.object({ letterId: z.number() }))
+  .mutation(async ({ input, ctx }) => {
+    const [letter] = await db.select().from(letters)
+      .where(eq(letters.id, input.letterId));
+    if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+
+    const [version] = await db.select().from(letterVersions)
+      .where(eq(letterVersions.letterId, input.letterId))
+      .limit(1);
+
+    const [failedJob] = await db.select().from(pipelineJobs)
+      .where(and(
+        eq(pipelineJobs.letterId, input.letterId),
+        eq(pipelineJobs.status, "failed")
+      ))
+      .limit(1);
+
+    const findings: string[] = [];
+
+    // Detect broken state: stuck in processing with a failed job and no content
+    const isStuck =
+      letter.status === "processing" && failedJob && !version;
+
+    if (isStuck) {
+      await db.update(letters)
+        .set({ status: "submitted", updatedAt: new Date() })
+        .where(eq(letters.id, input.letterId));
+
+      findings.push(`Detected stuck-processing state. Reset to "submitted".`);
+      findings.push(`Failed job ID: ${failedJob.id} (${failedJob.stage}).`);
+      findings.push(`No content version found — letter can now be re-queued.`);
+    } else {
+      findings.push(`Letter #${input.letterId} is in "${letter.status}" — no repair needed.`);
+      if (version)  findings.push(`Content version exists (v${version.version}).`);
+      if (failedJob) findings.push(`Warning: failed job found (${failedJob.stage}) but letter has content.`);
+    }
+
+    await logAdminAction({
+      adminId: ctx.user.id,
+      action: "repair_letter_state",
+      targetLetterId: input.letterId,
+      metadata: { findings, wasStuck: isStuck },
+    });
+
+    return { repaired: isStuck, findings };
+  }),
+
+VERIFICATION CHECKLIST
+After implementing all changes, confirm:
+
+ pnpm tsc --noEmit → zero errors
+ pdfGenerator.ts: both generateAndUploadApprovedPdf and generateDraftPdfBuffer are exported
+ pdfGenerator.ts: LOGO_PNG_BASE64 is present and non-empty
+ Draft PDF download works from subscriber LetterDetail (watermark visible)
+ Approved PDF download works after attorney approves (no watermark, stamp visible)
+ Auto-save fires ~2 s after attorney stops typing in edit mode
+ Step 3 of SubmitLetter blocks Next when any party field is blank
+ Admin Users page shows Paid/Free badge per user
+ admin.markAsPaid, admin.claimLetterAsAttorney, admin.repairLetterState procedures exist in router
+ letters.requestClientApproval and letters.clientApprove procedures exist in router
+ Drizzle migration for client_approval_pending / client_approved enum values is created
+
+
+FILES CHANGED SUMMARY
+FileChangeserver/pdfGenerator.tsFull replacement — new branded letterhead, 2 distinct templatesclient/src/components/shared/RichTextEditor.tsxFocus guard on content syncclient/src/pages/attorney/ReviewDetail.tsxDebounced auto-saveclient/src/pages/subscriber/SubmitLetter.tsxStep 3 required-field validationserver/routers.ts5 new mutations + 2 guards + notify emailclient/src/pages/admin/Users.tsxPaid/Free badge + Mark as Paid buttonclient/src/pages/admin/LetterDetail.tsxClaim & Review button for super-adminclient/src/pages/subscriber/LetterDetail.tsxClient approval CTAdrizzle/schema.ts2 new enum values(migration file)ALTER TYPE letter_status ADD VALUE ...ShareArtifactsDownload allLetterhead previewCode · HTML ReviewdetailCode · TSX RichtexteditorCode · TSX Replit final promptDocument · MD Template 1 approved letterCode · HTML Template 2 draft letterCode · HTML Template 2 draft letterCode · HTML Template 1 approved letterCode · HTML PdfgeneratorTS Project contenttalk-to-productionCreated by youTemplate-2-Draft-Letter.html156 lineshtmlContentttml-app-main.zipzipttml-app-main (1).zipzipmzw-bfgz-pmp (2026-03-18 03_50 GMT+5)
+Transcript
+
+https://otter.ai/u/K7bXcKnqSZk0uk03N7fPG6x-LEQ?view=summary
+
+The meeting focused on creating and managing a legal email system. Speaker 1 suggested using "lawsuit" as the email name to intimidate recipients. They discussed the workflow, includinpastedexcerpt_from_previous_claude_message.txt1 linetxt(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.nonce='mkvTULR88xeP9dtx1q3g8w==';d.innerHTML="window.__CF$cv$params={r:'9de7083acd6321f2',t:'MTc3Mzg2NjIxMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='mkvTULR88xeP9dtx1q3g8w==';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();
