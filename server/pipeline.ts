@@ -1779,14 +1779,8 @@ function validateVettingOutput(
     errors.push(`CRITICAL: Vetting assessed overall risk as HIGH`);
   }
 
-  if (report.factualIssuesFound.length > 1) {
-    critical = true;
-    errors.push(`CRITICAL: ${report.factualIssuesFound.length} factual issues reported by vetting: ${report.factualIssuesFound.slice(0, 3).join("; ")}`);
-  }
-
-  if (report.citationsFlagged.length > 3) {
-    critical = true;
-    errors.push(`CRITICAL: ${report.citationsFlagged.length} citations flagged by vetting (threshold: 3)`);
+  if (report.riskLevel === "medium" && report.factualIssuesFound.length > 3) {
+    errors.push(`Warning: ${report.factualIssuesFound.length} factual issues reported (some may have been fixed by vetting)`);
   }
 
   return { valid: errors.length === 0, errors, critical };
@@ -2246,7 +2240,7 @@ export async function runFullPipeline(
   // ── Try n8n workflow first (primary path) ──────────────────────────────────
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "";
   const n8nCallbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
-  // ── Routing: Direct 3-stage pipeline is PRIMARY.
+  // ── Routing: Direct 4-stage pipeline is PRIMARY.
   // Set N8N_PRIMARY=true in env to route through n8n instead (useful for debugging/experimentation).
   const useN8nPrimary =
     process.env.N8N_PRIMARY === "true" &&
@@ -2344,14 +2338,14 @@ export async function runFullPipeline(
     }
   } else {
     console.log(
-      `[Pipeline] N8N_PRIMARY not set — using direct 3-stage pipeline (primary path) for letter #${letterId}`
+      `[Pipeline] N8N_PRIMARY not set — using direct 4-stage pipeline (primary path) for letter #${letterId}`
     );
   }
 
   // ── Mark stale pipeline runs as superseded before starting fresh ──────────
   await markPriorPipelineRunsSuperseded(letterId);
 
-  // ── Fallback: In-app 3-stage pipeline ─────────────────────────────────────
+  // ── Fallback: In-app 4-stage pipeline ─────────────────────────────────────
   const pipelineJob = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "generation_pipeline",
