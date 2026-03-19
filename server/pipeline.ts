@@ -409,6 +409,20 @@ const US_STATE_NAMES = [
   "West Virginia", "Wisconsin", "Wyoming",
 ];
 
+const STATE_ABBREV_TO_NAME: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
+  NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
+  ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
+  TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+  WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+};
+
 export function validateContentConsistency(
   text: string,
   intake: NormalizedPromptInput
@@ -453,15 +467,20 @@ export function validateContentConsistency(
   }
 
   const expectedState = intake.jurisdiction.state;
-  const jurisdictionFound = textLower.includes(expectedState.toLowerCase());
+  const expectedStateFullName = STATE_ABBREV_TO_NAME[expectedState.toUpperCase()] ?? null;
+  const expectedStateNormalized = expectedStateFullName ?? expectedState;
+  const jurisdictionFound =
+    textLower.includes(expectedState.toLowerCase()) ||
+    (expectedStateFullName && textLower.includes(expectedStateFullName.toLowerCase()));
   if (!jurisdictionFound) {
-    warnings.push(`Expected jurisdiction "${expectedState}" not found in output text`);
+    warnings.push(`Expected jurisdiction "${expectedStateNormalized}" not found in output text`);
   }
 
   let jurisdictionMismatch = false;
   let foundJurisdiction: string | null = null;
   for (const state of US_STATE_NAMES) {
     if (state.toLowerCase() === expectedState.toLowerCase()) continue;
+    if (expectedStateFullName && state.toLowerCase() === expectedStateFullName.toLowerCase()) continue;
     const stateRegex = new RegExp(`\\b${state}\\b`, "i");
     const codePattern = new RegExp(
       `\\b${state.substring(0, 3)}\\.\\s*(?:Civ\\.|Bus\\.|Penal|Rev\\.|Gen\\.|Lab\\.|Gov|Prop)`,
@@ -2599,6 +2618,34 @@ export async function retryPipelineFromStage(
     validationResults: [],
   };
 
+  const runVettingAndFinalize = async (
+    research: ResearchPacket,
+    draft: DraftOutput,
+    initialAssembled: string
+  ) => {
+    const MAX_ASSEMBLY_VETTING_RETRIES = 2;
+    let assembled = initialAssembled;
+    let vettingResult = await runVettingStage(letterId, assembled, intake, research, pipelineCtx);
+    let assemblyRetries = 0;
+    while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
+      assemblyRetries++;
+      const lastValidation = pipelineCtx.validationResults
+        ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
+        .pop();
+      const allCriticalErrors = lastValidation?.errors ?? vettingResult.vettingReport.jurisdictionIssues
+        .concat(vettingResult.vettingReport.citationsFlagged)
+        .concat(vettingResult.vettingReport.factualIssuesFound);
+      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT:\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
+      assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      vettingResult = await runVettingStage(letterId, assembled, intake, research, pipelineCtx);
+    }
+    if (vettingResult.critical) {
+      throw new Error(`Retry pipeline failed: vetting critical issues after ${assemblyRetries} assembly retries`);
+    }
+    await finalizeLetterAfterVetting(letterId, vettingResult.vettedLetter, vettingResult.vettingReport, pipelineCtx);
+    return vettingResult;
+  };
+
   try {
     if (stage === "research") {
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
@@ -2613,7 +2660,8 @@ export async function retryPipelineFromStage(
       }
       pipelineCtx.citationRegistry = citationRegistry;
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
-      await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      const assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      await runVettingAndFinalize(research, draft, assembled);
     } else {
       const latestResearch = await getLatestResearchRun(letterId);
       if (!latestResearch?.resultJson)
@@ -2629,8 +2677,10 @@ export async function retryPipelineFromStage(
         citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
       }
       pipelineCtx.citationRegistry = citationRegistry;
+      await updateLetterStatus(letterId, "researching", { force: true });
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
-      await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      const assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      await runVettingAndFinalize(research, draft, assembled);
     }
     await updateWorkflowJob(retryJobId, {
       status: "completed",
