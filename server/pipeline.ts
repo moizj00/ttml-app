@@ -1778,6 +1778,16 @@ function validateVettingOutput(
     errors.push(`CRITICAL: Vetting assessed overall risk as HIGH`);
   }
 
+  if (report.factualIssuesFound.length > 1) {
+    critical = true;
+    errors.push(`CRITICAL: ${report.factualIssuesFound.length} factual issues reported by vetting: ${report.factualIssuesFound.slice(0, 3).join("; ")}`);
+  }
+
+  if (report.citationsFlagged.length > 3) {
+    critical = true;
+    errors.push(`CRITICAL: ${report.citationsFlagged.length} citations flagged by vetting (threshold: 3)`);
+  }
+
   return { valid: errors.length === 0, errors, critical };
 }
 
@@ -2067,15 +2077,22 @@ export async function runVettingStage(
 
     if (checks.validation.critical) {
       console.error(
-        `[Pipeline] Stage 4: CRITICAL issues found for letter #${letterId}: ${checks.validation.errors.join("; ")}`
+        `[Pipeline] Stage 4: CRITICAL issues for letter #${letterId} (needs assembly retry): ${checks.validation.errors.join("; ")}`
       );
-    } else {
-      console.log(
-        `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${currentReport.riskLevel}, changes=${currentReport.changesApplied.length}, bloat_removed=${currentReport.bloatPhrasesRemoved.length}`
-      );
+      return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: true };
     }
 
-    return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: checks.validation.critical };
+    if (!checks.validation.valid) {
+      const failMsg = `Stage 4 vetting validation failed for letter #${letterId} (non-critical structural issues after retry): ${checks.validation.errors.join("; ")}`;
+      console.error(`[Pipeline] ${failMsg}`);
+      throw new Error(failMsg);
+    }
+
+    console.log(
+      `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${currentReport.riskLevel}, changes=${currentReport.changesApplied.length}, bloat_removed=${currentReport.bloatPhrasesRemoved.length}`
+    );
+
+    return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
