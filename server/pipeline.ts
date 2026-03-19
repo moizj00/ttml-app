@@ -1728,10 +1728,18 @@ ${registryBlock}${enforcementBlock}${solBlock}${preSuitBlock}
 Vet this letter thoroughly. Apply all corrections and return the complete vetted letter in JSON format.`;
 }
 
+interface PostVetDeterministicContext {
+  postVetUnverifiedCitations: number;
+  postVetJurisdictionMismatch: boolean;
+  postVetFoundJurisdiction?: string | null;
+  postVetExpectedJurisdiction?: string;
+}
+
 function validateVettingOutput(
   report: VettingReport,
   originalLetter: string,
   vettedLetter: string,
+  postVetCtx?: PostVetDeterministicContext,
 ): { valid: boolean; errors: string[]; critical: boolean } {
   const errors: string[] = [];
   let critical = false;
@@ -1753,24 +1761,21 @@ function validateVettingOutput(
   if (!hasClosing) errors.push("Vetted letter is missing a closing (Sincerely/Regards)");
   if (!hasSalutation) errors.push("Vetted letter is missing a salutation (Dear/RE:)");
 
-  if (report.jurisdictionIssues.length > 0) {
-    critical = true;
-    errors.push(`CRITICAL: ${report.jurisdictionIssues.length} jurisdiction issue(s) found: ${report.jurisdictionIssues.join("; ")}`);
-  }
+  if (postVetCtx) {
+    if (postVetCtx.postVetJurisdictionMismatch) {
+      critical = true;
+      errors.push(`CRITICAL: Post-vet jurisdiction mismatch persists — letter references "${postVetCtx.postVetFoundJurisdiction}" but should reference "${postVetCtx.postVetExpectedJurisdiction}"`);
+    }
 
-  if (report.citationsFlagged.length > 2) {
-    critical = true;
-    errors.push(`CRITICAL: ${report.citationsFlagged.length} citations flagged as potentially hallucinated: ${report.citationsFlagged.slice(0, 3).join("; ")}`);
+    if (postVetCtx.postVetUnverifiedCitations > 0) {
+      critical = true;
+      errors.push(`CRITICAL: ${postVetCtx.postVetUnverifiedCitations} unverified citation(s) remain after vetting`);
+    }
   }
 
   if (report.riskLevel === "high") {
     critical = true;
     errors.push(`CRITICAL: Vetting assessed overall risk as HIGH`);
-  }
-
-  if (report.factualIssuesFound.length > 1) {
-    critical = true;
-    errors.push(`CRITICAL: ${report.factualIssuesFound.length} factual issues found: ${report.factualIssuesFound.join("; ")}`);
   }
 
   return { valid: errors.length === 0, errors, critical };
@@ -1937,70 +1942,113 @@ export async function runVettingStage(
       }
     }
 
-    const { vettedLetter, vettingReport } = parsed;
+    const runPostVetChecks = (letter: string, report: VettingReport) => {
+      const postVetCitationAudit = runCitationAudit(letter, citationRegistry);
+      if (postVetCitationAudit.unverifiedCitations.length > 0) {
+        report.citationsFlagged.push(
+          ...postVetCitationAudit.unverifiedCitations.map(c => c.citation)
+        );
+        report.citationsRemoved += postVetCitationAudit.unverifiedCitations.length;
+      }
 
-    const postVetCitationAudit = runCitationAudit(vettedLetter, citationRegistry);
-    if (postVetCitationAudit.unverifiedCitations.length > 0) {
-      vettingReport.citationsFlagged.push(
-        ...postVetCitationAudit.unverifiedCitations.map(c => c.citation)
-      );
-      vettingReport.citationsRemoved += postVetCitationAudit.unverifiedCitations.length;
-    }
+      const postVetConsistency = validateContentConsistency(letter, normalizedIntake);
+      if (postVetConsistency.jurisdictionMismatch) {
+        report.jurisdictionIssues.push(
+          `Post-vet jurisdiction mismatch: "${postVetConsistency.foundJurisdiction}" cited instead of "${postVetConsistency.expectedJurisdiction}"`
+        );
+      }
+
+      const finalLetter = postVetCitationAudit.unverifiedCitations.length > 0
+        ? replaceUnverifiedCitations(letter, postVetCitationAudit)
+        : letter;
+
+      const postVetCtx: PostVetDeterministicContext = {
+        postVetUnverifiedCitations: postVetCitationAudit.unverifiedCitations.length,
+        postVetJurisdictionMismatch: postVetConsistency.jurisdictionMismatch,
+        postVetFoundJurisdiction: postVetConsistency.foundJurisdiction,
+        postVetExpectedJurisdiction: postVetConsistency.expectedJurisdiction,
+      };
+
+      const validation = validateVettingOutput(report, assembledLetter, finalLetter, postVetCtx);
+      return { finalLetter, postVetCitationAudit, postVetConsistency, validation };
+    };
+
+    let currentLetter = parsed.vettedLetter;
+    let currentReport = parsed.vettingReport;
+    let checks = runPostVetChecks(currentLetter, { ...currentReport });
 
     addValidationResult(pipelineCtx, {
       stage: "vetting",
       check: "post_vet_citation_audit",
-      passed: postVetCitationAudit.unverifiedCitations.length === 0,
-      errors: postVetCitationAudit.unverifiedCitations.map(c => `Still unverified after vetting: "${c.citation}"`),
-      warnings: [`Post-vet hallucination risk: ${postVetCitationAudit.hallucinationRiskScore}%`],
+      passed: checks.postVetCitationAudit.unverifiedCitations.length === 0,
+      errors: checks.postVetCitationAudit.unverifiedCitations.map(c => `Still unverified after vetting: "${c.citation}"`),
+      warnings: [`Post-vet hallucination risk: ${checks.postVetCitationAudit.hallucinationRiskScore}%`],
       timestamp: new Date().toISOString(),
     });
-
-    const postVetConsistency = validateContentConsistency(vettedLetter, normalizedIntake);
-    if (postVetConsistency.jurisdictionMismatch) {
-      vettingReport.jurisdictionIssues.push(
-        `Post-vet jurisdiction mismatch: "${postVetConsistency.foundJurisdiction}" cited instead of "${postVetConsistency.expectedJurisdiction}"`
-      );
-    }
 
     addValidationResult(pipelineCtx, {
       stage: "vetting",
       check: "post_vet_content_consistency",
-      passed: postVetConsistency.passed,
-      errors: postVetConsistency.jurisdictionMismatch
-        ? [`Post-vet jurisdiction mismatch persists: "${postVetConsistency.foundJurisdiction}"`]
+      passed: checks.postVetConsistency.passed,
+      errors: checks.postVetConsistency.jurisdictionMismatch
+        ? [`Post-vet jurisdiction mismatch persists: "${checks.postVetConsistency.foundJurisdiction}"`]
         : [],
-      warnings: postVetConsistency.warnings,
+      warnings: checks.postVetConsistency.warnings,
       timestamp: new Date().toISOString(),
     });
 
-    const finalLetterAfterAudit = postVetCitationAudit.unverifiedCitations.length > 0
-      ? replaceUnverifiedCitations(vettedLetter, postVetCitationAudit)
-      : vettedLetter;
+    if (!checks.validation.valid) {
+      console.warn(
+        `[Pipeline] Stage 4: Vetting validation failed for letter #${letterId}: ${checks.validation.errors.join("; ")}. Retrying vetting...`
+      );
+      const retryResponse = await retryOnValidationFailure(
+        generateVetting,
+        checks.validation.errors,
+        "Stage 4 (vetting validation retry)"
+      );
+      const retryParsed = parseVettingResponse(retryResponse);
+      if (retryParsed) {
+        const retryChecks = runPostVetChecks(retryParsed.vettedLetter, { ...retryParsed.vettingReport });
 
-    const validation = validateVettingOutput(vettingReport, assembledLetter, finalLetterAfterAudit);
+        addValidationResult(pipelineCtx, {
+          stage: "vetting",
+          check: "vetting_retry_validation",
+          passed: retryChecks.validation.valid,
+          errors: retryChecks.validation.errors,
+          warnings: [],
+          timestamp: new Date().toISOString(),
+        });
+
+        if (retryChecks.validation.valid || !retryChecks.validation.critical) {
+          currentLetter = retryParsed.vettedLetter;
+          currentReport = retryParsed.vettingReport;
+          checks = retryChecks;
+          console.log(`[Pipeline] Stage 4: Retry improved results for letter #${letterId}`);
+        }
+      }
+    }
 
     addValidationResult(pipelineCtx, {
       stage: "vetting",
       check: "vetting_output_validation",
-      passed: validation.valid,
-      errors: validation.errors,
+      passed: checks.validation.valid,
+      errors: checks.validation.errors,
       warnings: [
-        `Risk: ${vettingReport.riskLevel}`,
-        `Changes: ${vettingReport.changesApplied.length}`,
-        `Citations flagged: ${vettingReport.citationsFlagged.length}`,
-        `Bloat removed: ${vettingReport.bloatPhrasesRemoved.length}`,
-        `Post-vet hallucination risk: ${postVetCitationAudit.hallucinationRiskScore}%`,
+        `Risk: ${currentReport.riskLevel}`,
+        `Changes: ${currentReport.changesApplied.length}`,
+        `Citations flagged: ${currentReport.citationsFlagged.length}`,
+        `Bloat removed: ${currentReport.bloatPhrasesRemoved.length}`,
+        `Post-vet hallucination risk: ${checks.postVetCitationAudit.hallucinationRiskScore}%`,
       ],
       timestamp: new Date().toISOString(),
     });
 
     await updateWorkflowJob(jobId, {
-      status: validation.valid ? "completed" : "failed",
+      status: checks.validation.valid ? "completed" : "failed",
       completedAt: new Date(),
-      errorMessage: validation.valid ? undefined : `Vetting validation failed: ${validation.errors.join("; ")}`,
+      errorMessage: checks.validation.valid ? undefined : `Vetting validation failed: ${checks.validation.errors.join("; ")}`,
       responsePayloadJson: {
-        vettingReport,
+        vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
         preVetCitationAudit: {
           verified: preVetCitationAudit.verifiedCitations.length,
@@ -2008,26 +2056,26 @@ export async function runVettingStage(
           riskScore: preVetCitationAudit.hallucinationRiskScore,
         },
         postVetCitationAudit: {
-          verified: postVetCitationAudit.verifiedCitations.length,
-          unverified: postVetCitationAudit.unverifiedCitations.length,
-          riskScore: postVetCitationAudit.hallucinationRiskScore,
+          verified: checks.postVetCitationAudit.verifiedCitations.length,
+          unverified: checks.postVetCitationAudit.unverifiedCitations.length,
+          riskScore: checks.postVetCitationAudit.hallucinationRiskScore,
         },
-        postVetConsistency,
-        critical: validation.critical,
+        postVetConsistency: checks.postVetConsistency,
+        critical: checks.validation.critical,
       },
     });
 
-    if (validation.critical) {
+    if (checks.validation.critical) {
       console.error(
-        `[Pipeline] Stage 4: CRITICAL issues found for letter #${letterId}: ${validation.errors.join("; ")}`
+        `[Pipeline] Stage 4: CRITICAL issues found for letter #${letterId}: ${checks.validation.errors.join("; ")}`
       );
     } else {
       console.log(
-        `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${vettingReport.riskLevel}, changes=${vettingReport.changesApplied.length}, bloat_removed=${vettingReport.bloatPhrasesRemoved.length}`
+        `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${currentReport.riskLevel}, changes=${currentReport.changesApplied.length}, bloat_removed=${currentReport.bloatPhrasesRemoved.length}`
       );
     }
 
-    return { vettedLetter: finalLetterAfterAudit, vettingReport, critical: validation.critical };
+    return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: checks.validation.critical };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
