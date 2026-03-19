@@ -11,7 +11,7 @@ A full-stack legal letter platform where users can get AI-drafted, attorney-revi
 - **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed)
 - **Payments**: Stripe (3 subscription plans: Single Letter $200, Monthly $200/month, Yearly $2000/year)
 - **Rate Limiting**: Upstash Redis
-- **AI Pipeline**: Perplexity (research + citation revalidation) + Anthropic Claude (drafting & assembly) + anti-hallucination pipeline with intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, and enriched audit trail
+- **AI Pipeline**: 4-stage pipeline — Perplexity (research + citation revalidation) → Claude Opus (drafting) → Claude Opus (assembly) → Claude Sonnet (vetting: jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness). Includes intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, deterministic bloat phrase detection, and enriched audit trail
 - **Monitoring**: Sentry (error tracking, alerting)
 - **Deployment**: Railway (`www.talk-to-my-lawyer.com` + `talk-to-my-lawyer.com`)
 
