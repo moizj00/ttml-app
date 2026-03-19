@@ -1385,6 +1385,7 @@ export async function runAssemblyStage(
 
   const runAllAssemblyValidations = (letter: string) => {
     const allErrors: string[] = [];
+    const allWarnings: string[] = [];
 
     const structureValidation = validateFinalLetter(letter);
     allErrors.push(...structureValidation.errors);
@@ -1399,10 +1400,10 @@ export async function runAssemblyStage(
 
     const consistency = validateContentConsistency(letter, normalizedIntake);
     if (consistency.jurisdictionMismatch) {
-      allErrors.push(`JURISDICTION MISMATCH: Final letter references "${consistency.foundJurisdiction}" but must reference "${consistency.expectedJurisdiction}" jurisdiction only.`);
+      allWarnings.push(`JURISDICTION WARNING: Final letter references "${consistency.foundJurisdiction}" but intake specifies "${consistency.expectedJurisdiction}". Stage 4 vetting will enforce this as a hard gate.`);
     }
 
-    return { allErrors, structureValidation, wordCount: wc, consistency };
+    return { allErrors, allWarnings, structureValidation, wordCount: wc, consistency };
   };
 
   const minWords = Math.floor(targetWordCount * 0.6);
@@ -2414,24 +2415,27 @@ export async function runFullPipeline(
 
     while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
       assemblyRetries++;
-      const criticalErrors = vettingResult.vettingReport.jurisdictionIssues
+      const lastValidation = pipelineCtx.validationResults
+        ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
+        .pop();
+      const allCriticalErrors = lastValidation?.errors ?? vettingResult.vettingReport.jurisdictionIssues
         .concat(vettingResult.vettingReport.citationsFlagged)
         .concat(vettingResult.vettingReport.factualIssuesFound);
 
       console.warn(
-        `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${criticalErrors.join("; ")}`
+        `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${allCriticalErrors.join("; ")}`
       );
 
       addValidationResult(pipelineCtx, {
         stage: "assembly_vetting_retry",
         check: `retry_${assemblyRetries}`,
         passed: false,
-        errors: criticalErrors,
+        errors: allCriticalErrors,
         warnings: [`Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`],
         timestamp: new Date().toISOString(),
       });
 
-      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${criticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
+      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
 
       assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
       vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
