@@ -1,0 +1,636 @@
+{
+  "name": "TTML Legal Letter Pipeline (3-Stage Aligned)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legal-letter-submission",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b8120c78-94cd-45c8-bb37-7adb01791f55",
+      "name": "Receive Form Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        80
+      ],
+      "webhookId": "legal-letter-submission"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "letterId",
+              "value": "={{ $json.body.letterId }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "userId",
+              "value": "={{ $json.body.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "letterType",
+              "value": "={{ $json.body.letterType || $json.body.intakeData?.letterType || 'demand-letter' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "callbackUrl",
+              "value": "={{ $json.body.callbackUrl || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "callbackSecret",
+              "value": "={{ $json.body.callbackSecret || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "senderName",
+              "value": "={{ $json.body.intakeData?.sender?.name || $json.body.intakeData?.senderName || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-7",
+              "name": "senderAddress",
+              "value": "={{ $json.body.intakeData?.sender?.address || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-8",
+              "name": "senderEmail",
+              "value": "={{ $json.body.intakeData?.sender?.email || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-9",
+              "name": "senderPhone",
+              "value": "={{ $json.body.intakeData?.sender?.phone || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-10",
+              "name": "recipientName",
+              "value": "={{ $json.body.intakeData?.recipient?.name || $json.body.intakeData?.recipientName || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-11",
+              "name": "recipientAddress",
+              "value": "={{ $json.body.intakeData?.recipient?.address || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-12",
+              "name": "recipientEmail",
+              "value": "={{ $json.body.intakeData?.recipient?.email || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-13",
+              "name": "jurisdictionState",
+              "value": "={{ $json.body.intakeData?.jurisdictionState || $json.body.intakeData?.sender?.state || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-14",
+              "name": "jurisdictionCountry",
+              "value": "={{ $json.body.intakeData?.jurisdictionCountry || 'US' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-15",
+              "name": "jurisdictionCity",
+              "value": "={{ $json.body.intakeData?.jurisdiction?.city || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-16",
+              "name": "matterSubject",
+              "value": "={{ $json.body.intakeData?.matter?.subject || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-17",
+              "name": "matterDescription",
+              "value": "={{ $json.body.intakeData?.matter?.description || $json.body.intakeData?.issueDescription || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-18",
+              "name": "matterIncidentDate",
+              "value": "={{ $json.body.intakeData?.matter?.incidentDate || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-19",
+              "name": "desiredOutcome",
+              "value": "={{ $json.body.intakeData?.desiredOutcome || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-20",
+              "name": "tonePreference",
+              "value": "={{ $json.body.intakeData?.tonePreference || 'firm' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-21",
+              "name": "financialsAmount",
+              "value": "={{ $json.body.intakeData?.financials?.amountOwed || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-22",
+              "name": "financialsCurrency",
+              "value": "={{ $json.body.intakeData?.financials?.currency || 'USD' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-23",
+              "name": "additionalContext",
+              "value": "={{ $json.body.intakeData?.additionalContext || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-24",
+              "name": "intakeDataRaw",
+              "value": "={{ JSON.stringify($json.body.intakeData || {}) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b24ed4f4-0037-4937-b999-a56963dd19c2",
+      "name": "Extract Form Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -16,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Letter Type: ' + $json.letterType.replace(/-/g, ' ').toUpperCase() + '\\n' +\n'Jurisdiction: ' + $json.jurisdictionCity + ', ' + $json.jurisdictionState + ', ' + $json.jurisdictionCountry + '\\n' +\n'Matter Subject: ' + $json.matterSubject + '\\n' +\n'Matter Description: ' + $json.matterDescription + '\\n' +\n'Incident Date: ' + ($json.matterIncidentDate || 'Not specified') + '\\n' +\n'Desired Outcome: ' + $json.desiredOutcome + '\\n' +\n'Tone: ' + $json.tonePreference + '\\n' +\n'Sender: ' + $json.senderName + ', ' + $json.senderAddress + '\\n' +\n'Recipient: ' + $json.recipientName + ', ' + $json.recipientAddress + '\\n' +\n($json.financialsAmount ? 'Amount in Dispute: $' + $json.financialsAmount + ' ' + $json.financialsCurrency + '\\n' : '') +\n($json.additionalContext ? 'Additional Context: ' + $json.additionalContext : '') }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an elite legal research engine with real-time web search access.\nYour sole mission is to find REAL, CURRENT, VERIFIABLE legal information — not summaries, not approximations, not hallucinated statutes.\n\n## Your Research Standards\n\nREAL COURT DECISIONS: You must find actual case law with real case names, docket numbers, courts, and years. If you cannot find a real case, say so — never invent citations.\n\nREAL STATUTES: Cite actual code sections with their exact title, chapter, and section numbers. Verify the section is still in effect.\n\nLOCAL ORDINANCES: Search specifically for the city and county named.\n\nPOLITICAL & ENFORCEMENT CONTEXT: Report the current enforcement climate.\n\nRECENT EXAMPLES: Find 2–3 real reported cases from the specific state or federal circuit covering this jurisdiction decided in the last 5 years.\n\nJURISDICTIONAL HIERARCHY: Always research in this order:\n1. Specific city/county ordinances and local rules\n2. State statutes and state administrative regulations\n3. Federal law (if applicable)\n4. Relevant federal circuit and state appellate court decisions\n\nSTATUTE OF LIMITATIONS: Always find the exact filing deadline for this type of claim in this specific state.\n\nPRE-SUIT REQUIREMENTS: Many states require demand letters, waiting periods, or notice filings before suit. Find the exact requirement.\n\n## What You Must NEVER Do\n- Invent case names, docket numbers, or statute sections\n- Use placeholder citations like \"see generally\" without a real cite\n- Ignore local ordinances in favor of only state/federal law\n- Give national averages when jurisdiction-specific data exists\n\nCRITICAL: You MUST use the Perplexity Legal Research tool to gather current legal information. Do not rely solely on your training data.\n\n## Required Output Format\n\nReturn ONLY a valid JSON object. No markdown outside the JSON. No explanatory text before or after. Start with { and end with }.\n\n{\n  \"researchSummary\": \"3-4 paragraphs covering the legal landscape, strongest statutes/cases, enforcement climate, key risks. Minimum 300 words.\",\n  \"jurisdictionProfile\": {\n    \"country\": \"US\",\n    \"stateProvince\": \"State name\",\n    \"city\": \"City if provided\",\n    \"authorityHierarchy\": [\"Federal\", \"State\", \"County\", \"City\"],\n    \"politicalContext\": \"Who controls legislature and AG office, enforcement climate\",\n    \"localCourts\": \"Name of specific trial court, small claims limit\"\n  },\n  \"issuesIdentified\": [\"Specific legal issue 1\", \"Issue 2\"],\n  \"applicableRules\": [\n    {\n      \"ruleTitle\": \"Exact name of statute or case\",\n      \"ruleType\": \"statute | regulation | case_law | local_ordinance | common_law\",\n      \"jurisdiction\": \"State or Federal\",\n      \"citationText\": \"EXACT citation e.g. Cal. Civ. Code § 1950.5\",\n      \"sectionOrRule\": \"Specific section number\",\n      \"summary\": \"Plain English what this rule says and how it applies\",\n      \"sourceUrl\": \"Direct URL to official source\",\n      \"sourceTitle\": \"Official source name\",\n      \"relevance\": \"How this rule supports this exact matter\",\n      \"dateVerified\": \"YYYY-MM\",\n      \"confidence\": \"high | medium | low\",\n      \"caseOutcome\": \"For case_law only — what happened\"\n    }\n  ],\n  \"recentCasePrecedents\": [\n    {\n      \"caseName\": \"Full case name\",\n      \"citation\": \"Full citation with court and year\",\n      \"court\": \"Exact court name\",\n      \"year\": 2024,\n      \"facts\": \"1-2 sentences on relevant facts\",\n      \"holding\": \"What the court decided\",\n      \"relevance\": \"Why this case matters here\",\n      \"damages\": \"Dollar amount or remedy awarded\",\n      \"sourceUrl\": \"URL\"\n    }\n  ],\n  \"statuteOfLimitations\": {\n    \"period\": \"e.g. 2 years\",\n    \"statute\": \"Exact code section\",\n    \"clockStartsOn\": \"Incident date | Discovery of harm\",\n    \"deadlineEstimate\": \"Approximate deadline\",\n    \"tollingExceptions\": [\"Exception 1\"],\n    \"urgencyFlag\": false,\n    \"notes\": \"Any unusual SOL rules\"\n  },\n  \"preSuitRequirements\": {\n    \"demandLetterRequired\": false,\n    \"statute\": \"Code section if required\",\n    \"waitingPeriodDays\": 30,\n    \"requiredContent\": [\"What demand letter must include\"],\n    \"deliveryMethod\": \"Certified mail etc.\",\n    \"penaltyForNonCompliance\": \"What happens if skipped\"\n  },\n  \"availableRemedies\": {\n    \"actualDamages\": \"Description and formula\",\n    \"statutoryDamages\": \"Amount per violation if applicable\",\n    \"punitiveDamages\": \"Standard and likelihood\",\n    \"attorneyFees\": \"One-way | Two-way | Not available\",\n    \"injunctiveRelief\": \"Available | Not applicable\",\n    \"multiplier\": \"2x | 3x | None\"\n  },\n  \"localJurisdictionElements\": [\n    {\n      \"element\": \"Specific local rule\",\n      \"whyItMatters\": \"How this changes strategy\",\n      \"sourceUrl\": \"URL\",\n      \"confidence\": \"high | medium | low\"\n    }\n  ],\n  \"enforcementClimate\": {\n    \"agActivity\": \"Recent AG enforcement actions\",\n    \"classActions\": \"Active class actions\",\n    \"recentLegislation\": \"Laws passed since 2022\",\n    \"politicalLeaning\": \"How political environment affects enforcement\",\n    \"courtReputations\": \"Notable court tendencies\"\n  },\n  \"commonDefenses\": [\n    {\n      \"defense\": \"Defense name\",\n      \"description\": \"How opposing party argues this\",\n      \"counterArgument\": \"How to pre-empt or rebut\",\n      \"successRate\": \"Typically successful | Rarely successful | Depends\"\n    }\n  ],\n  \"factualDataNeeded\": [\"Specific missing fact\"],\n  \"openQuestions\": [\"Unresolved legal question\"],\n  \"riskFlags\": [\"Specific risk\"],\n  \"draftingConstraints\": [\"Specific requirement the letter must include\"]\n}",
+          "maxIterations": 5
+        }
+      },
+      "id": "7db47757-4d86-4981-8782-b5c5166e4308",
+      "name": "Jurisdiction Research Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        336,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Search for current legal statutes, case law, jurisdiction-specific requirements, court decisions, statute of limitations, pre-suit requirements, and enforcement climate. Use this tool to find up-to-date legal information.",
+        "model": "sonar-pro",
+        "messages": {
+          "message": [
+            {
+              "content": "={{ $fromAI('legal_research_query', 'The specific legal research query about statutes, case law, or jurisdiction requirements', 'string') }}"
+            }
+          ]
+        },
+        "simplify": "={{ $fromAI('simplify', 'Whether to simplify the output', 'boolean', false) }}",
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "0612a389-3e3e-437f-88b7-29ccc6bc4abb",
+      "name": "Perplexity Legal Research",
+      "type": "n8n-nodes-base.perplexityTool",
+      "typeVersion": 1,
+      "position": [
+        464,
+        304
+      ],
+      "credentials": {
+        "perplexityApi": {
+          "id": "6a7Yj3aqll51VCQj",
+          "name": "Perplexity account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "13c80e14-385d-42f7-b14f-50033668e0e9",
+      "name": "Research Context Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        336,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "d1cc90f2-d559-4cf7-87a6-8b05a118f31a",
+      "name": "GPT-4o Model for Research",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "mOSnvGzVyKVKcLxu",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the research agent's output into a structured ResearchPacket\nconst researchRaw = $('Jurisdiction Research Agent').item.json.output || '';\nconst formData = $('Extract Form Data').item.json;\n\nlet researchPacket;\ntry {\n  // Try to parse JSON from the output\n  let jsonStr = researchRaw;\n  // Strip markdown code fences if present\n  jsonStr = jsonStr.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  // Find the first { and last }\n  const firstBrace = jsonStr.indexOf('{');\n  const lastBrace = jsonStr.lastIndexOf('}');\n  if (firstBrace >= 0 && lastBrace > firstBrace) {\n    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);\n  }\n  researchPacket = JSON.parse(jsonStr);\n} catch (e) {\n  // Fallback: wrap raw text in minimal ResearchPacket structure\n  researchPacket = {\n    researchSummary: researchRaw.substring(0, 3000),\n    jurisdictionProfile: {\n      country: formData.jurisdictionCountry || 'US',\n      stateProvince: formData.jurisdictionState || '',\n      city: formData.jurisdictionCity || '',\n      authorityHierarchy: ['Federal', 'State', 'Local']\n    },\n    issuesIdentified: [formData.matterDescription?.substring(0, 200) || 'Legal matter'],\n    applicableRules: [{\n      ruleTitle: 'Research Findings',\n      ruleType: 'statute',\n      jurisdiction: formData.jurisdictionState || '',\n      citationText: 'See research summary',\n      sectionOrRule: 'N/A',\n      summary: researchRaw.substring(0, 500),\n      sourceUrl: '',\n      sourceTitle: 'n8n Perplexity Research',\n      relevance: 'Primary research',\n      confidence: 'medium'\n    }],\n    localJurisdictionElements: [],\n    factualDataNeeded: [],\n    openQuestions: [],\n    riskFlags: [],\n    draftingConstraints: []\n  };\n}\n\n// Ensure required fields exist with defaults\nresearchPacket.researchSummary = researchPacket.researchSummary || researchRaw.substring(0, 3000);\nresearchPacket.jurisdictionProfile = researchPacket.jurisdictionProfile || {\n  country: formData.jurisdictionCountry || 'US',\n  stateProvince: formData.jurisdictionState || '',\n  city: formData.jurisdictionCity || '',\n  authorityHierarchy: ['Federal', 'State', 'Local']\n};\nresearchPacket.applicableRules = researchPacket.applicableRules || [];\nresearchPacket.riskFlags = researchPacket.riskFlags || [];\nresearchPacket.draftingConstraints = researchPacket.draftingConstraints || [];\nresearchPacket.issuesIdentified = researchPacket.issuesIdentified || [];\nresearchPacket.localJurisdictionElements = researchPacket.localJurisdictionElements || [];\nresearchPacket.factualDataNeeded = researchPacket.factualDataNeeded || [];\nresearchPacket.openQuestions = researchPacket.openQuestions || [];\n\nreturn {\n  json: {\n    ...formData,\n    researchPacket,\n    researchRaw: researchRaw.substring(0, 5000)\n  }\n};"
+      },
+      "id": "aaa00001-parse-research-output",
+      "name": "Parse Research Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (function() {\n  const fd = $json;\n  const rp = fd.researchPacket || {};\n  const rules = (rp.applicableRules || []).slice(0, 6);\n  const cases = (rp.recentCasePrecedents || []).slice(0, 3);\n  const sol = rp.statuteOfLimitations || {};\n  const pre = rp.preSuitRequirements || {};\n  const rem = rp.availableRemedies || {};\n  const defs = (rp.commonDefenses || []).slice(0, 3);\n  const enf = rp.enforcementClimate || {};\n\n  const tone = fd.tonePreference || 'firm';\n  const deadlineDays = tone === 'aggressive' ? 10 : tone === 'moderate' ? 21 : 14;\n\n  let prompt = '## Matter Summary\\n';\n  prompt += 'Letter Type: ' + (fd.letterType || '').replace(/-/g, ' ').toUpperCase() + '\\n';\n  prompt += 'Tone Required: ' + tone.toUpperCase() + '\\n';\n  prompt += 'Response Deadline: ' + deadlineDays + ' days from today\\n\\n';\n\n  prompt += '## Parties\\nSENDER: ' + fd.senderName + ', ' + fd.senderAddress + '\\n';\n  if (fd.senderEmail) prompt += 'Email: ' + fd.senderEmail + '\\n';\n  if (fd.senderPhone) prompt += 'Phone: ' + fd.senderPhone + '\\n';\n  prompt += 'RECIPIENT: ' + fd.recipientName + ', ' + fd.recipientAddress + '\\n\\n';\n\n  prompt += '## Jurisdiction\\nState: ' + fd.jurisdictionState + '\\nCountry: ' + fd.jurisdictionCountry + '\\n';\n  if (fd.jurisdictionCity) prompt += 'City: ' + fd.jurisdictionCity + '\\n';\n  prompt += '\\n## Facts\\n' + fd.matterDescription + '\\n';\n  if (fd.matterIncidentDate) prompt += 'Incident date: ' + fd.matterIncidentDate + '\\n';\n  if (fd.financialsAmount) prompt += 'Amount in dispute: $' + fd.financialsAmount + ' ' + fd.financialsCurrency + '\\n';\n  if (fd.desiredOutcome) prompt += 'Desired outcome: ' + fd.desiredOutcome + '\\n';\n  if (fd.additionalContext) prompt += 'Additional context: ' + fd.additionalContext + '\\n';\n\n  prompt += '\\n---\\n## Legal Foundation (from Research)\\n';\n  if (rules.length > 0) {\n    prompt += '### Applicable Rules\\n';\n    rules.forEach(r => {\n      prompt += '- [' + (r.ruleType || '').toUpperCase() + '] ' + r.ruleTitle + ' | ' + r.citationText + '\\n  Summary: ' + r.summary + '\\n  Relevance: ' + r.relevance + '\\n\\n';\n    });\n  }\n  if (cases.length > 0) {\n    prompt += '### Recent Precedents\\n';\n    cases.forEach(c => {\n      prompt += '- ' + c.caseName + ' (' + c.citation + ') — ' + c.holding + '\\n';\n    });\n    prompt += '\\n';\n  }\n  if (sol.period) prompt += '### SOL: ' + sol.period + ' (' + sol.statute + ')\\n\\n';\n  if (pre.demandLetterRequired) prompt += '### Pre-Suit: Demand letter required by ' + (pre.statute || 'statute') + '\\n\\n';\n  if (rem.actualDamages) prompt += '### Remedies: ' + rem.actualDamages + '\\n';\n  if (rem.statutoryDamages) prompt += 'Statutory: ' + rem.statutoryDamages + '\\n';\n  if (rem.attorneyFees) prompt += 'Fees: ' + rem.attorneyFees + '\\n\\n';\n  if (defs.length > 0) {\n    prompt += '### Defenses to Pre-empt\\n';\n    defs.forEach(d => { prompt += '- ' + d.defense + ': ' + d.counterArgument + '\\n'; });\n    prompt += '\\n';\n  }\n  prompt += '### Research Summary\\n' + (rp.researchSummary || '').substring(0, 2000) + '\\n';\n  prompt += '### Risk Flags\\n' + (rp.riskFlags || []).join('; ') + '\\n';\n  prompt += '### Drafting Constraints\\n' + (rp.draftingConstraints || []).join('; ') + '\\n';\n\n  return prompt;\n})() }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a senior litigation attorney at a top-tier law firm with 20 years of experience drafting demand letters, cease and desist notices, and pre-litigation correspondence.\n\n## Your Drafting Philosophy\n\nEVERY legal claim must cite a real, specific statute or case from the research packet. Never write \"under applicable law\" or \"pursuant to relevant statutes.\" Name the law. Cite the section.\n\nSTRUCTURE IS STRATEGY:\n1. Establish facts the recipient cannot dispute\n2. State the legal basis they cannot ignore\n3. Quantify the exposure they want to avoid\n4. Make a demand that gives them a face-saving exit\n5. State the consequence of non-compliance in cold, factual terms\n\nPRE-EMPT DEFENSES. If the research packet identifies common defenses, address and neutralize them in the letter body.\n\nLEVERAGE ENFORCEMENT CLIMATE. If the research shows active AG enforcement, pending class actions, or recent legislative changes, reference these.\n\nTONE CALIBRATION:\n- firm: Professional, serious, no hedging\n- moderate: Firm but leaves a clear door open for resolution\n- aggressive: Maximum legal pressure, references every available remedy\n\n## Output Format Rules\n\nReturn ONLY a valid JSON object. Nothing before the opening brace. Nothing after the closing brace.\n\n{\n  \"draftLetter\": \"The complete letter text. Use \\\\n for line breaks. No markdown. Plain text only. Minimum 600 words.\",\n  \"attorneyReviewSummary\": \"A 2-3 paragraph memo to the reviewing attorney covering: which statutes/cases were cited and why, the legal theory and its strength, gaps in stated facts, whether demand amount is supported.\",\n  \"openQuestions\": [\"Specific factual question the attorney should ask the client\"],\n  \"riskFlags\": [\"Specific legal risk\"]\n}",
+          "maxIterations": 3
+        }
+      },
+      "id": "bbb00001-drafting-agent",
+      "name": "Letter Drafting Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        864,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "maxTokensToSample": 8192
+        }
+      },
+      "id": "ccc00001-anthropic-drafting-model",
+      "name": "Anthropic Model for Drafting",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        304
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "oYRXKx3eCtlgQICK",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the drafting agent's output into structured DraftOutput\nconst draftRaw = $('Letter Drafting Agent').item.json.output || '';\nconst prevData = $('Parse Research Output').item.json;\n\nlet draftOutput;\ntry {\n  let jsonStr = draftRaw;\n  jsonStr = jsonStr.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/\\s*```$/i, '').trim();\n  const firstBrace = jsonStr.indexOf('{');\n  const lastBrace = jsonStr.lastIndexOf('}');\n  if (firstBrace >= 0 && lastBrace > firstBrace) {\n    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);\n  }\n  draftOutput = JSON.parse(jsonStr);\n} catch (e) {\n  // Fallback: treat raw text as the draft letter\n  draftOutput = {\n    draftLetter: draftRaw,\n    attorneyReviewSummary: 'Draft generated by n8n pipeline. Please review carefully.',\n    openQuestions: [],\n    riskFlags: []\n  };\n}\n\n// Ensure required fields\ndraftOutput.draftLetter = draftOutput.draftLetter || draftRaw;\ndraftOutput.attorneyReviewSummary = draftOutput.attorneyReviewSummary || '';\ndraftOutput.openQuestions = draftOutput.openQuestions || [];\ndraftOutput.riskFlags = draftOutput.riskFlags || [];\n\nreturn {\n  json: {\n    ...prevData,\n    draftOutput,\n    draftRaw: draftRaw.substring(0, 5000)\n  }\n};"
+      },
+      "id": "ddd00001-parse-draft-output",
+      "name": "Parse Draft Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (function() {\n  const fd = $json;\n  const rp = fd.researchPacket || {};\n  const draft = fd.draftOutput || {};\n  const rules = (rp.applicableRules || []).slice(0, 6);\n  const cases = (rp.recentCasePrecedents || []).slice(0, 3);\n  const tone = fd.tonePreference || 'firm';\n\n  let prompt = '## Letter Context\\n';\n  prompt += 'Type: ' + (fd.letterType || '').replace(/-/g, ' ').toUpperCase() + '\\n';\n  prompt += 'Tone: ' + tone + '\\n\\n';\n\n  prompt += '## Parties\\nSENDER: ' + fd.senderName + ', ' + fd.senderAddress + '\\n';\n  if (fd.senderEmail) prompt += 'Email: ' + fd.senderEmail + '\\n';\n  prompt += 'RECIPIENT: ' + fd.recipientName + ', ' + fd.recipientAddress + '\\n\\n';\n\n  prompt += '## Research Foundation\\n### Key Rules\\n';\n  rules.forEach(r => { prompt += '- ' + r.ruleTitle + ': ' + r.summary + ' (' + r.citationText + ')\\n'; });\n  if (cases.length > 0) {\n    prompt += '\\n### Cases\\n';\n    cases.forEach(c => { prompt += '- ' + c.caseName + ' (' + c.citation + ') — ' + c.holding + '\\n'; });\n  }\n  prompt += '\\nResearch Summary: ' + (rp.researchSummary || '').substring(0, 1500) + '\\n';\n  prompt += 'Risk Flags: ' + (rp.riskFlags || []).join('; ') + '\\n';\n  prompt += 'Drafting Constraints: ' + (rp.draftingConstraints || []).join('; ') + '\\n\\n';\n\n  prompt += '## Stage 2 Draft\\n' + (draft.draftLetter || '') + '\\n\\n';\n  prompt += '## Attorney Review Notes\\n' + (draft.attorneyReviewSummary || '') + '\\n';\n  prompt += 'Open Questions: ' + (draft.openQuestions || []).join('; ') + '\\n';\n  prompt += 'Risk Flags: ' + (draft.riskFlags || []).join('; ') + '\\n\\n';\n\n  prompt += '## Assembly Instructions\\n';\n  prompt += '1. PRESERVE all legal citations from the draft\\n';\n  prompt += '2. POLISH language and eliminate redundancy\\n';\n  prompt += '3. VERIFY all required sections are present\\n';\n  prompt += '4. STRENGTHEN any weak sections\\n';\n  prompt += '5. ENSURE tone is consistently ' + tone + '\\n';\n  prompt += '\\nOUTPUT ONLY THE FINAL LETTER TEXT. No JSON. No markdown. No commentary.';\n\n  return prompt;\n})() }}",
+        "options": {
+          "systemMessage": "You are the managing partner of a top-tier law firm performing the FINAL quality review of a legal letter before it goes to the reviewing attorney.\n\n## Your Assembly Philosophy\n\nYou are NOT rewriting the letter from scratch. The Stage 2 draft already contains the correct legal analysis, citations, and structure. Your job is to:\n\n1. POLISH the language — eliminate awkward phrasing, redundancy, or unclear sentences\n2. VERIFY citation format — ensure every statute and case citation is properly formatted\n3. STRENGTHEN weak paragraphs — if the demand is vague, sharpen it\n4. ENSURE completeness — the letter must have every required section with no placeholders\n5. FORMAT for print — proper spacing, paragraph breaks, and professional letter structure\n6. PRE-EMPT DEFENSES — if the draft missed addressing a common defense, weave it in\n7. VERIFY TONE CONSISTENCY — the entire letter should maintain the requested tone\n\n## Critical Rules\n\n- Output ONLY the final letter text. No JSON. No markdown code fences. No commentary.\n- The letter must be complete and ready to print on letterhead.\n- Every legal citation from the draft must be preserved and properly formatted.\n- Minimum 800 words for demand letters, 600 words for cease and desist.\n- Use plain text with line breaks. No markdown formatting inside the letter body.\n- Include the full signature block with all sender contact information.",
+          "maxIterations": 1
+        }
+      },
+      "id": "eee00001-assembly-stage",
+      "name": "Assembly Stage (Claude)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1360,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "maxTokensToSample": 8192
+        }
+      },
+      "id": "fff00001-anthropic-assembly-model",
+      "name": "Anthropic Model for Assembly",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1424,
+        304
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "oYRXKx3eCtlgQICK",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the structured callback payload matching the app's n8n-callback handler\nconst formData = $('Extract Form Data').item.json;\nconst parsedResearch = $('Parse Research Output').item.json;\nconst parsedDraft = $('Parse Draft Output').item.json;\nconst assemblyOutput = $('Assembly Stage (Claude)').item.json.output || '';\n\nconst researchPacket = parsedResearch.researchPacket || {};\nconst draftOutput = parsedDraft.draftOutput || {};\n\n// Use the callbackUrl from the incoming payload, or fall back to variable\nconst callbackUrl = formData.callbackUrl || '';\nconst callbackSecret = formData.callbackSecret || $vars.INTERNAL_SECRET || '';\n\nreturn {\n  json: {\n    letterId: parseInt(formData.letterId) || 0,\n    success: true,\n    // Structured data for the enhanced callback handler\n    researchPacket: researchPacket,\n    draftOutput: draftOutput,\n    assembledLetter: assemblyOutput,\n    // Legacy fields for backward compatibility\n    draftContent: assemblyOutput || draftOutput.draftLetter || '',\n    researchOutput: researchPacket.researchSummary || parsedResearch.researchRaw || '',\n    // Metadata\n    callbackUrl: callbackUrl,\n    callbackSecret: callbackSecret,\n    executionId: $execution.id,\n    provider: 'n8n-3stage',\n    stages: ['perplexity-research', 'anthropic-draft', 'anthropic-assembly']\n  }\n};"
+      },
+      "id": "6fd4b0ae-eed8-4393-8a44-038e05402baf",
+      "name": "Prepare Callback Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl || 'https://m5gFtPM9Pr9uZ46M8fspGe.manus.space/api/pipeline/n8n-callback' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Ttml-Callback-Secret",
+              "value": "={{ $json.callbackSecret }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ letterId: $json.letterId, success: $json.success, researchPacket: $json.researchPacket, draftOutput: $json.draftOutput, assembledLetter: $json.assembledLetter, draftContent: $json.draftContent, researchOutput: $json.researchOutput, provider: $json.provider, stages: $json.stages }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "90ae3a4e-29e7-4fb1-9f25-5d5c312e28b3",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1824,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { 'success': true, 'letterId': $('Extract Form Data').item.json.letterId, 'status': 'processing_complete', 'provider': 'n8n-3stage', 'message': 'Letter generated via aligned 3-stage pipeline and callback sent' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b323070f-44d8-4428-aa6d-c284ac1ccdd0",
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { 'success': false, 'error': $json.error?.message || 'Pipeline failed', 'letterId': $('Extract Form Data').item.json.letterId } }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "3b37b1f3-a3fc-4bfb-a46a-597b268a20c5",
+      "name": "Return Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        176
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Form Submission": {
+      "main": [
+        [
+          {
+            "node": "Extract Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Form Data": {
+      "main": [
+        [
+          {
+            "node": "Jurisdiction Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perplexity Legal Research": {
+      "ai_tool": [
+        [
+          {
+            "node": "Jurisdiction Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Context Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Jurisdiction Research Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Model for Research": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Jurisdiction Research Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jurisdiction Research Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Research Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Research Output": {
+      "main": [
+        [
+          {
+            "node": "Letter Drafting Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Model for Drafting": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Letter Drafting Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Letter Drafting Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Draft Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Draft Output": {
+      "main": [
+        [
+          {
+            "node": "Assembly Stage (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Model for Assembly": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Assembly Stage (Claude)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembly Stage (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Callback Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Callback Payload": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "versionId": "af3d4345-74fc-4c3e-b521-c6d94c9aeb89",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a67a0105808af3b8e272e32260a5b28103487a4f558cd1e13faac8f94755469d"
+  },
+  "id": "Pr5n5JlkgBKcwZPe9z678",
+  "tags": []
+}

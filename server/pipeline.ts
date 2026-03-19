@@ -1348,7 +1348,10 @@ export async function runAssemblyStage(
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
   const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock;
-  const assemblyUser = buildAssemblyUserPrompt(intake, research, draft);
+  const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
+    ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
+    : "";
+  const assemblyUser = buildAssemblyUserPrompt(intake, research, draft) + vettingFeedbackBlock;
 
   const { LETTER_TYPE_CONFIG } = await import("../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
@@ -1729,30 +1732,48 @@ function validateVettingOutput(
   report: VettingReport,
   originalLetter: string,
   vettedLetter: string,
-): { valid: boolean; errors: string[] } {
+): { valid: boolean; errors: string[]; critical: boolean } {
   const errors: string[] = [];
+  let critical = false;
 
   if (!vettedLetter || vettedLetter.trim().length < 200) {
     errors.push("Vetted letter is too short or empty — vetting may have truncated the content");
+    critical = true;
   }
 
   const originalWc = originalLetter.split(/\s+/).filter(w => w.length > 0).length;
   const vettedWc = vettedLetter.split(/\s+/).filter(w => w.length > 0).length;
   if (vettedWc < originalWc * 0.5) {
     errors.push(`Vetted letter lost too much content: ${vettedWc} words vs ${originalWc} original (>50% reduction)`);
+    critical = true;
   }
 
-  if (report.riskLevel === "high" && report.jurisdictionIssues.length > 2) {
-    errors.push(`High-risk letter with ${report.jurisdictionIssues.length} jurisdiction issues — needs assembly retry`);
-  }
-
-  const vettedLower = vettedLetter.toLowerCase();
   const hasClosing = /(?:sincerely|regards|respectfully|very truly yours)/i.test(vettedLetter);
   const hasSalutation = /(?:dear|re:|attention)/i.test(vettedLetter);
   if (!hasClosing) errors.push("Vetted letter is missing a closing (Sincerely/Regards)");
   if (!hasSalutation) errors.push("Vetted letter is missing a salutation (Dear/RE:)");
 
-  return { valid: errors.length === 0, errors };
+  if (report.jurisdictionIssues.length > 0) {
+    critical = true;
+    errors.push(`CRITICAL: ${report.jurisdictionIssues.length} jurisdiction issue(s) found: ${report.jurisdictionIssues.join("; ")}`);
+  }
+
+  if (report.citationsFlagged.length > 2) {
+    critical = true;
+    errors.push(`CRITICAL: ${report.citationsFlagged.length} citations flagged as potentially hallucinated: ${report.citationsFlagged.slice(0, 3).join("; ")}`);
+  }
+
+  if (report.riskLevel === "high") {
+    critical = true;
+    errors.push(`CRITICAL: Vetting assessed overall risk as HIGH`);
+  }
+
+  if (report.factualIssuesFound.length > 1) {
+    critical = true;
+    errors.push(`CRITICAL: ${report.factualIssuesFound.length} factual issues found: ${report.factualIssuesFound.join("; ")}`);
+  }
+
+  return { valid: errors.length === 0, errors, critical };
 }
 
 export async function runVettingStage(
@@ -1761,7 +1782,7 @@ export async function runVettingStage(
   intake: IntakeJson,
   research: ResearchPacket,
   pipelineCtx?: PipelineContext,
-): Promise<{ vettedLetter: string; vettingReport: VettingReport }> {
+): Promise<{ vettedLetter: string; vettingReport: VettingReport; critical: boolean }> {
   const job = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "draft_generation",
@@ -1777,17 +1798,67 @@ export async function runVettingStage(
 
   const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
   const letterType = intake.letterType ?? "general-legal";
-  const detectedBloat = detectBloatPhrases(assembledLetter);
   const citationRegistry = pipelineCtx?.citationRegistry ?? [];
 
+  const normalizedIntake = buildNormalizedPromptInput(
+    {
+      subject: intake.matter?.subject ?? "Legal Matter",
+      issueSummary: intake.matter?.description,
+      jurisdictionCountry: intake.jurisdiction?.country,
+      jurisdictionState: intake.jurisdiction?.state,
+      jurisdictionCity: intake.jurisdiction?.city,
+      letterType: intake.letterType,
+    },
+    intake
+  );
+
+  const preVetCitationAudit = runCitationAudit(assembledLetter, citationRegistry);
+  console.log(
+    `[Pipeline] Stage 4: Pre-vet citation audit for letter #${letterId}: ${preVetCitationAudit.verifiedCitations.length} verified, ${preVetCitationAudit.unverifiedCitations.length} unverified, risk score: ${preVetCitationAudit.hallucinationRiskScore}%`
+  );
+
+  addValidationResult(pipelineCtx, {
+    stage: "vetting",
+    check: "pre_vet_citation_audit",
+    passed: preVetCitationAudit.unverifiedCitations.length === 0,
+    errors: preVetCitationAudit.unverifiedCitations.map(c => `Unverified citation: "${c.citation}"`),
+    warnings: [`Total citations: ${preVetCitationAudit.totalCitations}, hallucination risk: ${preVetCitationAudit.hallucinationRiskScore}%`],
+    timestamp: new Date().toISOString(),
+  });
+
+  const preVetConsistency = validateContentConsistency(assembledLetter, normalizedIntake);
+  addValidationResult(pipelineCtx, {
+    stage: "vetting",
+    check: "pre_vet_content_consistency",
+    passed: preVetConsistency.passed,
+    errors: preVetConsistency.jurisdictionMismatch
+      ? [`Jurisdiction mismatch: expected "${preVetConsistency.expectedJurisdiction}" but found "${preVetConsistency.foundJurisdiction}"`]
+      : [],
+    warnings: preVetConsistency.warnings,
+    timestamp: new Date().toISOString(),
+  });
+
+  const detectedBloat = detectBloatPhrases(assembledLetter);
   if (detectedBloat.length > 0) {
     console.log(
       `[Pipeline] Stage 4: Detected ${detectedBloat.length} bloat phrases in letter #${letterId}: ${detectedBloat.slice(0, 5).join(", ")}${detectedBloat.length > 5 ? "..." : ""}`
     );
   }
 
+  const preVetIssues: string[] = [];
+  if (preVetCitationAudit.unverifiedCitations.length > 0) {
+    preVetIssues.push(`UNVERIFIED CITATIONS FOUND: ${preVetCitationAudit.unverifiedCitations.map(c => `"${c.citation}"`).join(", ")}. These must be removed or replaced with [CITATION REQUIRES ATTORNEY VERIFICATION].`);
+  }
+  if (preVetConsistency.jurisdictionMismatch) {
+    preVetIssues.push(`JURISDICTION MISMATCH: Letter references "${preVetConsistency.foundJurisdiction}" law but should only reference "${preVetConsistency.expectedJurisdiction}". Remove all cross-jurisdiction citations.`);
+  }
+
   const systemPrompt = buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat);
-  const userPrompt = buildVettingUserPrompt(assembledLetter, intake, research, citationRegistry);
+  const baseUserPrompt = buildVettingUserPrompt(assembledLetter, intake, research, citationRegistry);
+  const preVetBlock = preVetIssues.length > 0
+    ? `\n\n## PRE-VET ISSUES DETECTED (MUST FIX)\n${preVetIssues.map((issue, i) => `${i + 1}. ${issue}`).join("\n")}\n`
+    : "";
+  const userPrompt = baseUserPrompt + preVetBlock;
 
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
@@ -1804,19 +1875,39 @@ export async function runVettingStage(
     return text;
   };
 
+  const parseVettingResponse = (raw: string): { vettedLetter: string; vettingReport: VettingReport } | null => {
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return null;
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        vettedLetter: parsed.vettedLetter ?? "",
+        vettingReport: {
+          citationsVerified: parsed.vettingReport?.citationsVerified ?? 0,
+          citationsRemoved: parsed.vettingReport?.citationsRemoved ?? 0,
+          citationsFlagged: parsed.vettingReport?.citationsFlagged ?? [],
+          bloatPhrasesRemoved: parsed.vettingReport?.bloatPhrasesRemoved ?? [],
+          jurisdictionIssues: parsed.vettingReport?.jurisdictionIssues ?? [],
+          factualIssuesFound: parsed.vettingReport?.factualIssuesFound ?? [],
+          changesApplied: parsed.vettingReport?.changesApplied ?? [],
+          overallAssessment: parsed.vettingReport?.overallAssessment ?? "No assessment provided",
+          riskLevel: parsed.vettingReport?.riskLevel ?? "medium",
+        },
+      };
+    } catch {
+      return null;
+    }
+  };
+
   try {
     console.log(
       `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
     );
 
     let rawResponse = await generateVetting();
+    let parsed = parseVettingResponse(rawResponse);
 
-    let parsed: { vettedLetter: string; vettingReport: VettingReport };
-    try {
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No JSON object found in vetting response");
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch (parseErr) {
+    if (!parsed) {
       console.warn(
         `[Pipeline] Stage 4: Failed to parse vetting JSON for letter #${letterId}, retrying...`
       );
@@ -1825,160 +1916,118 @@ export async function runVettingStage(
         ["Your previous response was not valid JSON. Return ONLY a JSON object with vettedLetter and vettingReport fields."],
         "Stage 4 (JSON parse retry)"
       );
-      const retryMatch = rawResponse.match(/\{[\s\S]*\}/);
-      if (!retryMatch) {
-        console.error(`[Pipeline] Stage 4: JSON parse failed after retry for letter #${letterId}`);
-        await updateWorkflowJob(jobId, {
-          status: "completed",
-          completedAt: new Date(),
-          responsePayloadJson: {
-            fallback: true,
-            reason: "JSON parse failure — returning assembled letter unchanged",
-          },
-        });
+      parsed = parseVettingResponse(rawResponse);
+      if (!parsed) {
+        const failMsg = `Stage 4 vetting failed: could not parse valid JSON after retry for letter #${letterId}`;
+        console.error(`[Pipeline] ${failMsg}`);
         addValidationResult(pipelineCtx, {
           stage: "vetting",
           check: "json_parse",
           passed: false,
-          errors: ["Vetting response was not valid JSON after retry — letter returned unchanged"],
+          errors: [failMsg],
           warnings: [],
           timestamp: new Date().toISOString(),
         });
-        return {
-          vettedLetter: assembledLetter,
-          vettingReport: {
-            citationsVerified: 0,
-            citationsRemoved: 0,
-            citationsFlagged: [],
-            bloatPhrasesRemoved: [],
-            jurisdictionIssues: [],
-            factualIssuesFound: [],
-            changesApplied: [],
-            overallAssessment: "Vetting stage failed to produce valid JSON — original letter returned unchanged",
-            riskLevel: "medium",
-          },
-        };
+        await updateWorkflowJob(jobId, {
+          status: "failed",
+          errorMessage: failMsg,
+          completedAt: new Date(),
+        });
+        throw new Error(failMsg);
       }
-      parsed = JSON.parse(retryMatch[0]);
     }
 
-    const vettedLetter = parsed.vettedLetter ?? assembledLetter;
-    const vettingReport: VettingReport = {
-      citationsVerified: parsed.vettingReport?.citationsVerified ?? 0,
-      citationsRemoved: parsed.vettingReport?.citationsRemoved ?? 0,
-      citationsFlagged: parsed.vettingReport?.citationsFlagged ?? [],
-      bloatPhrasesRemoved: parsed.vettingReport?.bloatPhrasesRemoved ?? [],
-      jurisdictionIssues: parsed.vettingReport?.jurisdictionIssues ?? [],
-      factualIssuesFound: parsed.vettingReport?.factualIssuesFound ?? [],
-      changesApplied: parsed.vettingReport?.changesApplied ?? [],
-      overallAssessment: parsed.vettingReport?.overallAssessment ?? "No assessment provided",
-      riskLevel: parsed.vettingReport?.riskLevel ?? "medium",
-    };
+    const { vettedLetter, vettingReport } = parsed;
 
-    const validation = validateVettingOutput(vettingReport, assembledLetter, vettedLetter);
+    const postVetCitationAudit = runCitationAudit(vettedLetter, citationRegistry);
+    if (postVetCitationAudit.unverifiedCitations.length > 0) {
+      vettingReport.citationsFlagged.push(
+        ...postVetCitationAudit.unverifiedCitations.map(c => c.citation)
+      );
+      vettingReport.citationsRemoved += postVetCitationAudit.unverifiedCitations.length;
+    }
+
+    addValidationResult(pipelineCtx, {
+      stage: "vetting",
+      check: "post_vet_citation_audit",
+      passed: postVetCitationAudit.unverifiedCitations.length === 0,
+      errors: postVetCitationAudit.unverifiedCitations.map(c => `Still unverified after vetting: "${c.citation}"`),
+      warnings: [`Post-vet hallucination risk: ${postVetCitationAudit.hallucinationRiskScore}%`],
+      timestamp: new Date().toISOString(),
+    });
+
+    const postVetConsistency = validateContentConsistency(vettedLetter, normalizedIntake);
+    if (postVetConsistency.jurisdictionMismatch) {
+      vettingReport.jurisdictionIssues.push(
+        `Post-vet jurisdiction mismatch: "${postVetConsistency.foundJurisdiction}" cited instead of "${postVetConsistency.expectedJurisdiction}"`
+      );
+    }
+
+    addValidationResult(pipelineCtx, {
+      stage: "vetting",
+      check: "post_vet_content_consistency",
+      passed: postVetConsistency.passed,
+      errors: postVetConsistency.jurisdictionMismatch
+        ? [`Post-vet jurisdiction mismatch persists: "${postVetConsistency.foundJurisdiction}"`]
+        : [],
+      warnings: postVetConsistency.warnings,
+      timestamp: new Date().toISOString(),
+    });
+
+    const finalLetterAfterAudit = postVetCitationAudit.unverifiedCitations.length > 0
+      ? replaceUnverifiedCitations(vettedLetter, postVetCitationAudit)
+      : vettedLetter;
+
+    const validation = validateVettingOutput(vettingReport, assembledLetter, finalLetterAfterAudit);
 
     addValidationResult(pipelineCtx, {
       stage: "vetting",
       check: "vetting_output_validation",
       passed: validation.valid,
       errors: validation.errors,
-      warnings: [],
-      timestamp: new Date().toISOString(),
-    });
-
-    if (!validation.valid) {
-      console.warn(
-        `[Pipeline] Stage 4: Vetting validation failed for letter #${letterId}: ${validation.errors.join("; ")}. Retrying...`
-      );
-      const retryResponse = await retryOnValidationFailure(
-        generateVetting,
-        validation.errors,
-        "Stage 4 (vetting validation retry)"
-      );
-      try {
-        const retryMatch = retryResponse.match(/\{[\s\S]*\}/);
-        if (retryMatch) {
-          const retryParsed = JSON.parse(retryMatch[0]);
-          const retryLetter = retryParsed.vettedLetter ?? assembledLetter;
-          const retryValidation = validateVettingOutput(
-            retryParsed.vettingReport ?? vettingReport,
-            assembledLetter,
-            retryLetter,
-          );
-          if (retryValidation.valid) {
-            const retryReport: VettingReport = {
-              citationsVerified: retryParsed.vettingReport?.citationsVerified ?? 0,
-              citationsRemoved: retryParsed.vettingReport?.citationsRemoved ?? 0,
-              citationsFlagged: retryParsed.vettingReport?.citationsFlagged ?? [],
-              bloatPhrasesRemoved: retryParsed.vettingReport?.bloatPhrasesRemoved ?? [],
-              jurisdictionIssues: retryParsed.vettingReport?.jurisdictionIssues ?? [],
-              factualIssuesFound: retryParsed.vettingReport?.factualIssuesFound ?? [],
-              changesApplied: retryParsed.vettingReport?.changesApplied ?? [],
-              overallAssessment: retryParsed.vettingReport?.overallAssessment ?? "No assessment provided",
-              riskLevel: retryParsed.vettingReport?.riskLevel ?? "medium",
-            };
-
-            addValidationResult(pipelineCtx, {
-              stage: "vetting",
-              check: "vetting_retry_validation",
-              passed: true,
-              errors: [],
-              warnings: [],
-              timestamp: new Date().toISOString(),
-            });
-
-            await updateWorkflowJob(jobId, {
-              status: "completed",
-              completedAt: new Date(),
-              responsePayloadJson: {
-                vettingReport: retryReport,
-                retried: true,
-                bloatDetected: detectedBloat.length,
-              },
-            });
-
-            console.log(
-              `[Pipeline] Stage 4 complete (after retry) for letter #${letterId}: risk=${retryReport.riskLevel}, changes=${retryReport.changesApplied.length}`
-            );
-            return { vettedLetter: retryLetter, vettingReport: retryReport };
-          }
-        }
-      } catch {
-        // retry parse also failed — fall through to use first attempt
-      }
-      console.warn(
-        `[Pipeline] Stage 4: Retry also failed validation for letter #${letterId} — using first attempt result`
-      );
-    }
-
-    addValidationResult(pipelineCtx, {
-      stage: "vetting",
-      check: "vetting_complete",
-      passed: true,
-      errors: [],
       warnings: [
         `Risk: ${vettingReport.riskLevel}`,
         `Changes: ${vettingReport.changesApplied.length}`,
         `Citations flagged: ${vettingReport.citationsFlagged.length}`,
         `Bloat removed: ${vettingReport.bloatPhrasesRemoved.length}`,
+        `Post-vet hallucination risk: ${postVetCitationAudit.hallucinationRiskScore}%`,
       ],
       timestamp: new Date().toISOString(),
     });
 
     await updateWorkflowJob(jobId, {
-      status: "completed",
+      status: validation.valid ? "completed" : "failed",
       completedAt: new Date(),
+      errorMessage: validation.valid ? undefined : `Vetting validation failed: ${validation.errors.join("; ")}`,
       responsePayloadJson: {
         vettingReport,
         bloatDetected: detectedBloat.length,
+        preVetCitationAudit: {
+          verified: preVetCitationAudit.verifiedCitations.length,
+          unverified: preVetCitationAudit.unverifiedCitations.length,
+          riskScore: preVetCitationAudit.hallucinationRiskScore,
+        },
+        postVetCitationAudit: {
+          verified: postVetCitationAudit.verifiedCitations.length,
+          unverified: postVetCitationAudit.unverifiedCitations.length,
+          riskScore: postVetCitationAudit.hallucinationRiskScore,
+        },
+        postVetConsistency,
+        critical: validation.critical,
       },
     });
 
-    console.log(
-      `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${vettingReport.riskLevel}, changes=${vettingReport.changesApplied.length}, bloat_removed=${vettingReport.bloatPhrasesRemoved.length}`
-    );
+    if (validation.critical) {
+      console.error(
+        `[Pipeline] Stage 4: CRITICAL issues found for letter #${letterId}: ${validation.errors.join("; ")}`
+      );
+    } else {
+      console.log(
+        `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${vettingReport.riskLevel}, changes=${vettingReport.changesApplied.length}, bloat_removed=${vettingReport.bloatPhrasesRemoved.length}`
+      );
+    }
 
-    return { vettedLetter, vettingReport };
+    return { vettedLetter: finalLetterAfterAudit, vettingReport, critical: validation.critical };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
@@ -1999,23 +2048,7 @@ export async function runVettingStage(
       errorMessage: msg,
       completedAt: new Date(),
     });
-    console.warn(
-      `[Pipeline] Stage 4 failed for letter #${letterId} — returning assembled letter unchanged`
-    );
-    return {
-      vettedLetter: assembledLetter,
-      vettingReport: {
-        citationsVerified: 0,
-        citationsRemoved: 0,
-        citationsFlagged: [],
-        bloatPhrasesRemoved: [],
-        jurisdictionIssues: [],
-        factualIssuesFound: [],
-        changesApplied: [],
-        overallAssessment: `Vetting stage failed: ${msg}. Original letter returned unchanged.`,
-        riskLevel: "high",
-      },
-    };
+    throw new Error(`Stage 4 vetting failed for letter #${letterId}: ${msg}`);
   }
 }
 
@@ -2029,28 +2062,20 @@ async function finalizeLetterAfterVetting(
   vettingReport: VettingReport,
   pipelineCtx?: PipelineContext,
 ): Promise<void> {
-  const registry = pipelineCtx?.citationRegistry ?? [];
-  const citationAuditReport = runCitationAudit(vettedLetter, registry);
-
-  const finalLetter = citationAuditReport.unverifiedCitations.length > 0
-    ? replaceUnverifiedCitations(vettedLetter, citationAuditReport)
-    : vettedLetter;
-
   const version = await createLetterVersion({
     letterRequestId: letterId,
     versionType: "ai_draft",
-    content: finalLetter,
+    content: vettedLetter,
     createdByType: "system",
     metadataJson: {
       provider: "anthropic",
       stage: "vetted_final",
       vettingReport,
-      citationAuditReport,
       researchUnverified: pipelineCtx?.researchUnverified ?? false,
       webGrounded: pipelineCtx?.webGrounded ?? true,
-      citationRegistry: registry,
+      citationRegistry: pipelineCtx?.citationRegistry ?? [],
       validationResults: pipelineCtx?.validationResults,
-      wordCount: finalLetter.split(/\s+/).filter(w => w.length > 0).length,
+      wordCount: vettedLetter.split(/\s+/).filter(w => w.length > 0).length,
     },
   });
   const versionId = (version as any)?.insertId ?? 0;
@@ -2317,13 +2342,43 @@ export async function runFullPipeline(
 
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
 
-    const assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+    const MAX_ASSEMBLY_VETTING_RETRIES = 2;
+    let assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+    let vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+    let assemblyRetries = 0;
 
-    const { vettedLetter, vettingReport } = await runVettingStage(
-      letterId, assembledLetter, intake, research, pipelineCtx
-    );
+    while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
+      assemblyRetries++;
+      const criticalErrors = vettingResult.vettingReport.jurisdictionIssues
+        .concat(vettingResult.vettingReport.citationsFlagged)
+        .concat(vettingResult.vettingReport.factualIssuesFound);
 
-    await finalizeLetterAfterVetting(letterId, vettedLetter, vettingReport, pipelineCtx);
+      console.warn(
+        `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${criticalErrors.join("; ")}`
+      );
+
+      addValidationResult(pipelineCtx, {
+        stage: "assembly_vetting_retry",
+        check: `retry_${assemblyRetries}`,
+        passed: false,
+        errors: criticalErrors,
+        warnings: [`Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`],
+        timestamp: new Date().toISOString(),
+      });
+
+      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${criticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
+
+      assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+      vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+    }
+
+    if (vettingResult.critical) {
+      const failMsg = `Pipeline failed: vetting found critical issues after ${assemblyRetries} assembly retries for letter #${letterId}. Issues: ${vettingResult.vettingReport.jurisdictionIssues.concat(vettingResult.vettingReport.citationsFlagged).join("; ")}`;
+      console.error(`[Pipeline] ${failMsg}`);
+      throw new Error(failMsg);
+    }
+
+    await finalizeLetterAfterVetting(letterId, vettingResult.vettedLetter, vettingResult.vettingReport, pipelineCtx);
 
     await updateWorkflowJob(pipelineJobId, {
       status: "completed",
@@ -2333,11 +2388,12 @@ export async function runFullPipeline(
         webGrounded: pipelineCtx.webGrounded,
         groundingReport: pipelineCtx.groundingReport,
         consistencyReport: pipelineCtx.consistencyReport,
-        vettingReport,
+        vettingReport: vettingResult.vettingReport,
+        assemblyRetries,
       },
     });
     console.log(
-      `[Pipeline] Full 4-stage in-app pipeline completed for letter #${letterId} (vetting risk: ${vettingReport.riskLevel})`
+      `[Pipeline] Full 4-stage in-app pipeline completed for letter #${letterId} (vetting risk: ${vettingResult.vettingReport.riskLevel}, assembly retries: ${assemblyRetries})`
     );
 
     // ── Auto-unlock: if the letter was previously unlocked (paid/free),

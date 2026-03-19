@@ -374,6 +374,7 @@ export interface PipelineContext {
   validationResults?: ValidationResult[];
   groundingReport?: GroundingReport;
   consistencyReport?: ContentConsistencyReport;
+  assemblyVettingFeedback?: string;
 }
 
 // ─── Draft Output Shape ───
