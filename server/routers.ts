@@ -1626,6 +1626,8 @@ export const appRouter = router({
     lessonsFiltered: adminProcedure
       .input(z.object({
         letterType: z.string().optional(),
+        jurisdiction: z.string().optional(),
+        pipelineStage: z.string().optional(),
         isActive: z.boolean().optional(),
       }).optional())
       .query(async ({ input }) => getAllLessons(input ?? undefined)),

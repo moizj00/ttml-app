@@ -29,6 +29,10 @@ import {
   Target,
   BarChart3,
   Loader2,
+  Pencil,
+  X,
+  Check,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -47,14 +51,6 @@ const CATEGORIES = [
 ] as const;
 
 const STAGES = ["research", "drafting", "assembly", "vetting"] as const;
-
-const SOURCES = [
-  "attorney_approval",
-  "attorney_rejection",
-  "attorney_changes",
-  "attorney_edit",
-  "manual",
-] as const;
 
 function categoryColor(cat: string): string {
   const map: Record<string, string> = {
@@ -146,7 +142,27 @@ function LessonsTab({
   showCreateDialog: boolean;
   setShowCreateDialog: (v: boolean) => void;
 }) {
-  const { data: lessons, isLoading, refetch } = trpc.admin.lessons.useQuery();
+  const [filterStage, setFilterStage] = useState("__all__");
+  const [filterActive, setFilterActive] = useState("__all__");
+  const [filterCategory, setFilterCategory] = useState("__all__");
+  const [filterJurisdiction, setFilterJurisdiction] = useState("");
+
+  const filters: Record<string, any> = {};
+  if (filterStage && filterStage !== "__all__") filters.pipelineStage = filterStage;
+  if (filterActive === "active") filters.isActive = true;
+  if (filterActive === "inactive") filters.isActive = false;
+  if (filterJurisdiction) filters.jurisdiction = filterJurisdiction;
+
+  const hasFilters = Object.keys(filters).length > 0;
+
+  const { data: lessons, isLoading, refetch } = trpc.admin.lessonsFiltered.useQuery(
+    hasFilters ? filters : undefined
+  );
+
+  const filteredLessons = filterCategory && filterCategory !== "__all__"
+    ? lessons?.filter((l: any) => l.category === filterCategory)
+    : lessons;
+
   const updateLesson = trpc.admin.updateLesson.useMutation({
     onSuccess: () => {
       toast.success("Lesson updated");
@@ -166,6 +182,9 @@ function LessonsTab({
   const activeCount = lessons?.filter((l: any) => l.isActive).length ?? 0;
   const totalCount = lessons?.length ?? 0;
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ lessonText: "", category: "", weight: 50 });
+
   const [newLesson, setNewLesson] = useState({
     lessonText: "",
     category: "general" as (typeof CATEGORIES)[number],
@@ -174,6 +193,40 @@ function LessonsTab({
     jurisdiction: "",
     weight: 50,
   });
+
+  function startEdit(lesson: any) {
+    setEditingId(lesson.id);
+    setEditForm({
+      lessonText: lesson.lessonText,
+      category: lesson.category ?? "general",
+      weight: lesson.weight ?? 50,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  function saveEdit() {
+    if (!editingId) return;
+    updateLesson.mutate({
+      id: editingId,
+      lessonText: editForm.lessonText,
+      category: editForm.category as any,
+      weight: editForm.weight,
+    }, {
+      onSuccess: () => {
+        setEditingId(null);
+      },
+    });
+  }
+
+  function clearFilters() {
+    setFilterStage("__all__");
+    setFilterActive("__all__");
+    setFilterCategory("__all__");
+    setFilterJurisdiction("");
+  }
 
   return (
     <div className="space-y-4">
@@ -330,81 +383,220 @@ function LessonsTab({
         </Card>
       </div>
 
+      <Card>
+        <CardContent className="py-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+            <Select value={filterStage} onValueChange={setFilterStage}>
+              <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="filter-stage">
+                <SelectValue placeholder="All stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All stages</SelectItem>
+                {STAGES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="filter-category">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All categories</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterActive} onValueChange={setFilterActive}>
+              <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="filter-active">
+                <SelectValue placeholder="All status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={filterJurisdiction}
+              onChange={(e) => setFilterJurisdiction(e.target.value)}
+              placeholder="Jurisdiction..."
+              className="w-[140px] h-8 text-xs"
+              data-testid="filter-jurisdiction"
+            />
+            {(filterStage !== "__all__" || filterCategory !== "__all__" || filterActive !== "__all__" || filterJurisdiction) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-8 px-2 text-xs"
+                data-testid="button-clear-filters"
+              >
+                <X className="w-3 h-3 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
-      ) : !lessons || lessons.length === 0 ? (
+      ) : !filteredLessons || filteredLessons.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <BookOpen className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
             <p className="text-muted-foreground">
-              No lessons yet. Lessons are automatically created when attorneys
-              approve, reject, or request changes on letters.
+              {hasFilters || (filterCategory && filterCategory !== "__all__")
+                ? "No lessons match the current filters."
+                : "No lessons yet. Lessons are automatically created when attorneys approve, reject, or request changes on letters."}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {lessons.map((lesson: any) => (
+          {filteredLessons.map((lesson: any) => (
             <Card
               key={lesson.id}
               className={`transition-opacity ${!lesson.isActive ? "opacity-50" : ""}`}
               data-testid={`card-lesson-${lesson.id}`}
             >
               <CardContent className="py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <Badge className={categoryColor(lesson.category)} variant="secondary">
-                        {lesson.category?.replace(/_/g, " ")}
-                      </Badge>
-                      {lesson.pipelineStage && (
-                        <Badge variant="outline">
-                          Stage: {lesson.pipelineStage}
-                        </Badge>
-                      )}
-                      {lesson.letterType && (
-                        <Badge variant="outline">{lesson.letterType}</Badge>
-                      )}
-                      {lesson.jurisdiction && (
-                        <Badge variant="outline">{lesson.jurisdiction}</Badge>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {sourceLabel(lesson.sourceAction)}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        Weight: {lesson.weight}
-                      </span>
+                {editingId === lesson.id ? (
+                  <div className="space-y-3" data-testid={`edit-form-${lesson.id}`}>
+                    <Textarea
+                      value={editForm.lessonText}
+                      onChange={(e) => setEditForm({ ...editForm, lessonText: e.target.value })}
+                      rows={3}
+                      className="text-sm"
+                      data-testid={`edit-text-${lesson.id}`}
+                    />
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Select
+                        value={editForm.category}
+                        onValueChange={(v) => setEditForm({ ...editForm, category: v })}
+                      >
+                        <SelectTrigger className="w-[160px] h-8 text-xs" data-testid={`edit-category-${lesson.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c.replace(/_/g, " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-muted-foreground">Weight:</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editForm.weight}
+                          onChange={(e) => setEditForm({ ...editForm, weight: parseInt(e.target.value) || 0 })}
+                          className="w-[70px] h-8 text-xs"
+                          data-testid={`edit-weight-${lesson.id}`}
+                        />
+                      </div>
+                      <div className="flex gap-1.5 ml-auto">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={cancelEdit}
+                          className="h-8 px-2"
+                          data-testid={`button-cancel-edit-${lesson.id}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={saveEdit}
+                          disabled={editForm.lessonText.length < 10 || updateLesson.isPending}
+                          className="h-8 px-3 gap-1"
+                          data-testid={`button-save-edit-${lesson.id}`}
+                        >
+                          {updateLesson.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Check className="w-3 h-3" />
+                          )}
+                          Save
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-sm leading-relaxed">{lesson.lessonText}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {lesson.sourceLetterRequestId
-                        ? `From letter #${lesson.sourceLetterRequestId} · `
-                        : ""}
-                      {new Date(lesson.createdAt).toLocaleDateString()}
-                    </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      updateLesson.mutate({
-                        id: lesson.id,
-                        isActive: !lesson.isActive,
-                      })
-                    }
-                    disabled={updateLesson.isPending}
-                    className="shrink-0"
-                    data-testid={`button-toggle-lesson-${lesson.id}`}
-                  >
-                    {lesson.isActive ? (
-                      <ToggleRight className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <ToggleLeft className="w-5 h-5 text-gray-400" />
-                    )}
-                  </Button>
-                </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <Badge className={categoryColor(lesson.category)} variant="secondary">
+                          {lesson.category?.replace(/_/g, " ")}
+                        </Badge>
+                        {lesson.pipelineStage && (
+                          <Badge variant="outline">
+                            Stage: {lesson.pipelineStage}
+                          </Badge>
+                        )}
+                        {lesson.letterType && (
+                          <Badge variant="outline">{lesson.letterType}</Badge>
+                        )}
+                        {lesson.jurisdiction && (
+                          <Badge variant="outline">{lesson.jurisdiction}</Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {sourceLabel(lesson.sourceAction)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          Weight: {lesson.weight}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-relaxed">{lesson.lessonText}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {lesson.sourceLetterRequestId
+                          ? `From letter #${lesson.sourceLetterRequestId} · `
+                          : ""}
+                        {new Date(lesson.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => startEdit(lesson)}
+                        data-testid={`button-edit-lesson-${lesson.id}`}
+                      >
+                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          updateLesson.mutate({
+                            id: lesson.id,
+                            isActive: !lesson.isActive,
+                          })
+                        }
+                        disabled={updateLesson.isPending}
+                        data-testid={`button-toggle-lesson-${lesson.id}`}
+                      >
+                        {lesson.isActive ? (
+                          <ToggleRight className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <ToggleLeft className="w-5 h-5 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -419,8 +611,10 @@ function QualityTab() {
     trpc.admin.qualityStats.useQuery();
   const { data: trend, isLoading: trendLoading } =
     trpc.admin.qualityTrend.useQuery({ days: 30 });
+  const { data: byLetterType, isLoading: byTypeLoading } =
+    trpc.admin.qualityByLetterType.useQuery();
 
-  const isLoading = statsLoading || trendLoading;
+  const isLoading = statsLoading || trendLoading || byTypeLoading;
 
   return (
     <div className="space-y-6">
@@ -498,6 +692,62 @@ function QualityTab() {
               </CardContent>
             </Card>
           </div>
+
+          {byLetterType && byLetterType.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Quality by Letter Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="table-quality-by-type">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium text-muted-foreground">Letter Type</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Avg Score</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">First-Pass %</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Avg Revisions</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byLetterType.map((row: any, i: number) => (
+                        <tr key={i} className="border-b last:border-0" data-testid={`row-quality-type-${i}`}>
+                          <td className="py-2.5 font-medium capitalize">
+                            {(row.letterType ?? "Unknown").replace(/_/g, " ")}
+                          </td>
+                          <td className="py-2.5 text-right">
+                            <span className={`font-semibold ${
+                              Number(row.avgScore) >= 70
+                                ? "text-green-600"
+                                : Number(row.avgScore) >= 40
+                                  ? "text-amber-600"
+                                  : "text-red-600"
+                            }`}>
+                              {Math.round(Number(row.avgScore))}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right">
+                            {row.firstPassRate != null
+                              ? `${Math.round(Number(row.firstPassRate))}%`
+                              : "—"}
+                          </td>
+                          <td className="py-2.5 text-right">
+                            {row.avgRevisions != null
+                              ? Number(row.avgRevisions).toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="py-2.5 text-right text-muted-foreground">
+                            {row.total ?? 0}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {trend && trend.length > 0 ? (
             <Card>
