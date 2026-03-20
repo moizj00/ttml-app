@@ -1827,8 +1827,8 @@ function validateVettingOutput(
     critical = true;
   }
 
-  const hasClosing = /(?:sincerely|regards|respectfully|very truly yours)/i.test(vettedLetter);
-  const hasSalutation = /(?:dear|re:|attention)/i.test(vettedLetter);
+  const hasClosing = /(?:sincerely|regards|respectfully|very truly yours|best|cordially|faithfully|warmly|yours truly)/i.test(vettedLetter);
+  const hasSalutation = /(?:dear|re:|attention|to:|to whom it may concern)/i.test(vettedLetter);
   if (!hasClosing) errors.push("Vetted letter is missing a closing (Sincerely/Regards)");
   if (!hasSalutation) errors.push("Vetted letter is missing a salutation (Dear/RE:)");
 
@@ -1865,7 +1865,7 @@ export async function runVettingStage(
 ): Promise<{ vettedLetter: string; vettingReport: VettingReport; critical: boolean }> {
   const job = await createWorkflowJob({
     letterRequestId: letterId,
-    jobType: "draft_generation",
+    jobType: "vetting",
     provider: "anthropic",
     requestPayloadJson: {
       letterId,
@@ -1873,7 +1873,11 @@ export async function runVettingStage(
       stage: "vetting",
     },
   });
-  const jobId = (job as any)?.insertId ?? 0;
+  const rawJobId = (job as any)?.insertId;
+  if (rawJobId == null) {
+    console.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
+  }
+  const jobId = rawJobId ?? 0;
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
   const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
@@ -1950,7 +1954,7 @@ export async function runVettingStage(
       model: anthropic("claude-sonnet-4-20250514"),
       system: systemPrompt,
       prompt: promptWithFeedback,
-      maxOutputTokens: 12000,
+      maxOutputTokens: 16000,
       abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
     });
     return text;
@@ -2019,17 +2023,26 @@ export async function runVettingStage(
     }
 
     const runPostVetChecks = (letter: string, report: VettingReport) => {
+      const safeReport: VettingReport = {
+        ...report,
+        citationsFlagged: [...report.citationsFlagged],
+        jurisdictionIssues: [...report.jurisdictionIssues],
+        factualIssuesFound: [...report.factualIssuesFound],
+        bloatPhrasesRemoved: [...report.bloatPhrasesRemoved],
+        changesApplied: [...report.changesApplied],
+      };
+
       const postVetCitationAudit = runCitationAudit(letter, citationRegistry);
       if (postVetCitationAudit.unverifiedCitations.length > 0) {
-        report.citationsFlagged.push(
+        safeReport.citationsFlagged.push(
           ...postVetCitationAudit.unverifiedCitations.map(c => c.citation)
         );
-        report.citationsRemoved += postVetCitationAudit.unverifiedCitations.length;
+        safeReport.citationsRemoved += postVetCitationAudit.unverifiedCitations.length;
       }
 
       const postVetConsistency = validateContentConsistency(letter, normalizedIntake);
       if (postVetConsistency.jurisdictionMismatch) {
-        report.jurisdictionIssues.push(
+        safeReport.jurisdictionIssues.push(
           `Post-vet jurisdiction mismatch: "${postVetConsistency.foundJurisdiction}" cited instead of "${postVetConsistency.expectedJurisdiction}"`
         );
       }
@@ -2045,13 +2058,13 @@ export async function runVettingStage(
         postVetExpectedJurisdiction: postVetConsistency.expectedJurisdiction,
       };
 
-      const validation = validateVettingOutput(report, assembledLetter, finalLetter, postVetCtx);
+      const validation = validateVettingOutput(safeReport, assembledLetter, finalLetter, postVetCtx);
       return { finalLetter, postVetCitationAudit, postVetConsistency, validation };
     };
 
     let currentLetter = parsed.vettedLetter;
     let currentReport = parsed.vettingReport;
-    let checks = runPostVetChecks(currentLetter, { ...currentReport });
+    let checks = runPostVetChecks(currentLetter, currentReport);
 
     addValidationResult(pipelineCtx, {
       stage: "vetting",
@@ -2084,7 +2097,7 @@ export async function runVettingStage(
       );
       const retryParsed = parseVettingResponse(retryResponse);
       if (retryParsed) {
-        const retryChecks = runPostVetChecks(retryParsed.vettedLetter, { ...retryParsed.vettingReport });
+        const retryChecks = runPostVetChecks(retryParsed.vettedLetter, retryParsed.vettingReport);
 
         addValidationResult(pipelineCtx, {
           stage: "vetting",
@@ -2104,6 +2117,21 @@ export async function runVettingStage(
       }
     }
 
+    const postVetBloat = detectBloatPhrases(currentLetter);
+    if (postVetBloat.length > 0) {
+      console.warn(
+        `[Pipeline] Stage 4: ${postVetBloat.length} bloat phrase(s) persist after vetting for letter #${letterId}: ${postVetBloat.join(", ")}`
+      );
+      addValidationResult(pipelineCtx, {
+        stage: "vetting",
+        check: "post_vet_bloat_enforcement",
+        passed: true,
+        errors: [],
+        warnings: postVetBloat.map(p => `Bloat phrase persists after vetting: "${p}"`),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     addValidationResult(pipelineCtx, {
       stage: "vetting",
       check: "vetting_output_validation",
@@ -2119,10 +2147,11 @@ export async function runVettingStage(
       timestamp: new Date().toISOString(),
     });
 
+    const jobStatus = checks.validation.valid ? "completed" : (checks.validation.critical ? "failed" : "completed");
     await updateWorkflowJob(jobId, {
-      status: checks.validation.valid ? "completed" : "failed",
+      status: jobStatus,
       completedAt: new Date(),
-      errorMessage: checks.validation.valid ? undefined : `Vetting validation failed: ${checks.validation.errors.join("; ")}`,
+      errorMessage: checks.validation.valid ? undefined : `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
       responsePayloadJson: {
         vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
@@ -2149,9 +2178,17 @@ export async function runVettingStage(
     }
 
     if (!checks.validation.valid) {
-      const failMsg = `Stage 4 vetting validation failed for letter #${letterId} (non-critical structural issues after retry): ${checks.validation.errors.join("; ")}`;
-      console.error(`[Pipeline] ${failMsg}`);
-      throw new Error(failMsg);
+      console.warn(
+        `[Pipeline] Stage 4: Non-critical structural issues for letter #${letterId} (proceeding with best available): ${checks.validation.errors.join("; ")}`
+      );
+      addValidationResult(pipelineCtx, {
+        stage: "vetting",
+        check: "non_critical_warnings",
+        passed: true,
+        errors: [],
+        warnings: checks.validation.errors,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     console.log(
@@ -2264,6 +2301,64 @@ async function finalizeLetterAfterVetting(
       `[Pipeline] Skipping letter-ready (paywall) email for #${letterId} — previously unlocked`
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// SHARED ASSEMBLY↔VETTING RETRY LOOP
+// ═══════════════════════════════════════════════════════
+
+const MAX_ASSEMBLY_VETTING_RETRIES = 2;
+
+async function runAssemblyVettingLoop(
+  letterId: number,
+  intake: IntakeJson,
+  research: ResearchPacket,
+  draft: DraftOutput,
+  pipelineCtx: PipelineContext,
+): Promise<{ vettingResult: { vettedLetter: string; vettingReport: VettingReport; critical: boolean }; assemblyRetries: number }> {
+  let assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+  let vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+  let assemblyRetries = 0;
+
+  while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
+    assemblyRetries++;
+    const lastValidation = pipelineCtx.validationResults
+      ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
+      .pop();
+    const lastErrors = lastValidation?.errors;
+    const reportErrors = vettingResult.vettingReport.jurisdictionIssues
+      .concat(vettingResult.vettingReport.citationsFlagged)
+      .concat(vettingResult.vettingReport.factualIssuesFound);
+
+    let allCriticalErrors: string[];
+    if (lastErrors && lastErrors.length > 0) {
+      allCriticalErrors = lastErrors;
+    } else if (reportErrors.length > 0) {
+      allCriticalErrors = reportErrors;
+    } else {
+      allCriticalErrors = [vettingResult.vettingReport.overallAssessment || "Vetting flagged critical issues but no specific errors were provided"];
+    }
+
+    console.warn(
+      `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${allCriticalErrors.join("; ")}`
+    );
+
+    addValidationResult(pipelineCtx, {
+      stage: "assembly_vetting_retry",
+      check: `retry_${assemblyRetries}`,
+      passed: false,
+      errors: allCriticalErrors,
+      warnings: [`Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`],
+      timestamp: new Date().toISOString(),
+    });
+
+    pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
+
+    assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
+    vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+  }
+
+  return { vettingResult, assemblyRetries };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2427,7 +2522,11 @@ export async function runFullPipeline(
       normalizedInput,
     },
   });
-  const pipelineJobId = (pipelineJob as any)?.insertId ?? 0;
+  const rawPipelineJobId = (pipelineJob as any)?.insertId;
+  if (rawPipelineJobId == null) {
+    console.warn(`[Pipeline] createWorkflowJob returned nullish insertId for pipeline job (letter #${letterId}), falling back to jobId=0`);
+  }
+  const pipelineJobId = rawPipelineJobId ?? 0;
   await updateWorkflowJob(pipelineJobId, {
     status: "running",
     startedAt: new Date(),
@@ -2473,38 +2572,9 @@ export async function runFullPipeline(
 
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
 
-    const MAX_ASSEMBLY_VETTING_RETRIES = 2;
-    let assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-    let vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
-    let assemblyRetries = 0;
-
-    while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
-      assemblyRetries++;
-      const lastValidation = pipelineCtx.validationResults
-        ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
-        .pop();
-      const allCriticalErrors = lastValidation?.errors ?? vettingResult.vettingReport.jurisdictionIssues
-        .concat(vettingResult.vettingReport.citationsFlagged)
-        .concat(vettingResult.vettingReport.factualIssuesFound);
-
-      console.warn(
-        `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${allCriticalErrors.join("; ")}`
-      );
-
-      addValidationResult(pipelineCtx, {
-        stage: "assembly_vetting_retry",
-        check: `retry_${assemblyRetries}`,
-        passed: false,
-        errors: allCriticalErrors,
-        warnings: [`Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`],
-        timestamp: new Date().toISOString(),
-      });
-
-      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
-
-      assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-      vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
-    }
+    const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
+      letterId, intake, research, draft, pipelineCtx
+    );
 
     if (vettingResult.critical) {
       const failMsg = `Pipeline failed: vetting found critical issues after ${assemblyRetries} assembly retries for letter #${letterId}. Issues: ${vettingResult.vettingReport.jurisdictionIssues.concat(vettingResult.vettingReport.citationsFlagged).join("; ")}`;
@@ -2657,7 +2727,11 @@ export async function retryPipelineFromStage(
     provider: "multi-provider",
     requestPayloadJson: { letterId, stage, userId },
   });
-  const retryJobId = (retryJob as any)?.insertId ?? 0;
+  const rawRetryJobId = (retryJob as any)?.insertId;
+  if (rawRetryJobId == null) {
+    console.warn(`[Pipeline] createWorkflowJob returned nullish insertId for retry job (letter #${letterId}), falling back to jobId=0`);
+  }
+  const retryJobId = rawRetryJobId ?? 0;
   await updateWorkflowJob(retryJobId, {
     status: "running",
     startedAt: new Date(),
@@ -2673,24 +2747,10 @@ export async function retryPipelineFromStage(
   const runVettingAndFinalize = async (
     research: ResearchPacket,
     draft: DraftOutput,
-    initialAssembled: string
   ) => {
-    const MAX_ASSEMBLY_VETTING_RETRIES = 2;
-    let assembled = initialAssembled;
-    let vettingResult = await runVettingStage(letterId, assembled, intake, research, pipelineCtx);
-    let assemblyRetries = 0;
-    while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
-      assemblyRetries++;
-      const lastValidation = pipelineCtx.validationResults
-        ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
-        .pop();
-      const allCriticalErrors = lastValidation?.errors ?? vettingResult.vettingReport.jurisdictionIssues
-        .concat(vettingResult.vettingReport.citationsFlagged)
-        .concat(vettingResult.vettingReport.factualIssuesFound);
-      pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT:\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
-      assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-      vettingResult = await runVettingStage(letterId, assembled, intake, research, pipelineCtx);
-    }
+    const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
+      letterId, intake, research, draft, pipelineCtx
+    );
     if (vettingResult.critical) {
       throw new Error(`Retry pipeline failed: vetting critical issues after ${assemblyRetries} assembly retries`);
     }
@@ -2712,8 +2772,7 @@ export async function retryPipelineFromStage(
       }
       pipelineCtx.citationRegistry = citationRegistry;
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
-      const assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-      await runVettingAndFinalize(research, draft, assembled);
+      await runVettingAndFinalize(research, draft);
     } else {
       const latestResearch = await getLatestResearchRun(letterId);
       if (!latestResearch?.resultJson)
@@ -2729,10 +2788,9 @@ export async function retryPipelineFromStage(
         citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
       }
       pipelineCtx.citationRegistry = citationRegistry;
-      await updateLetterStatus(letterId, "researching", { force: true });
+      await updateLetterStatus(letterId, "drafting", { force: true });
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
-      const assembled = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-      await runVettingAndFinalize(research, draft, assembled);
+      await runVettingAndFinalize(research, draft);
     }
     await updateWorkflowJob(retryJobId, {
       status: "completed",

@@ -62,7 +62,7 @@ export const JOB_STATUSES = ["queued", "running", "completed", "failed"] as cons
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 // ─── Job Types ───
-export const JOB_TYPES = ["research", "draft_generation", "generation_pipeline", "retry"] as const;
+export const JOB_TYPES = ["research", "draft_generation", "generation_pipeline", "retry", "vetting"] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 // ─── Research Statuses ───
@@ -89,7 +89,7 @@ export const letterTypeEnum = pgEnum("letter_type", [
 export const versionTypeEnum = pgEnum("version_type", ["ai_draft", "attorney_edit", "final_approved"]);
 export const actorTypeEnum = pgEnum("actor_type", ["system", "subscriber", "employee", "admin", "attorney"]);
 export const jobStatusEnum = pgEnum("job_status", ["queued", "running", "completed", "failed"]);
-export const jobTypeEnum = pgEnum("job_type", ["research", "draft_generation", "generation_pipeline", "retry"]);
+export const jobTypeEnum = pgEnum("job_type", ["research", "draft_generation", "generation_pipeline", "retry", "vetting"]);
 export const researchStatusEnum = pgEnum("research_status", ["queued", "running", "completed", "failed", "invalid"]);
 export const priorityEnum = pgEnum("priority_level", ["low", "normal", "high", "urgent"]);
 export const noteVisibilityEnum = pgEnum("note_visibility", ["internal", "user_visible"]);

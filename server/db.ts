@@ -698,7 +698,7 @@ export async function getReviewActions(
 
 export async function createWorkflowJob(data: {
   letterRequestId: number;
-  jobType: "research" | "draft_generation" | "generation_pipeline" | "retry";
+  jobType: "research" | "draft_generation" | "generation_pipeline" | "retry" | "vetting";
   provider?: string;
   requestPayloadJson?: unknown;
 }) {
