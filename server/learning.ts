@@ -153,6 +153,44 @@ export async function extractLessonFromChangesRequest(
   }
 }
 
+export async function extractLessonFromEdit(
+  letterId: number,
+  editContent: string,
+  note: string | undefined,
+  reviewerId: number,
+): Promise<void> {
+  try {
+    const letter = await getLetterRequestById(letterId);
+    if (!letter) return;
+
+    const versions = await getLetterVersionsByRequestId(letterId, true);
+    const aiDraft = versions?.find((v: any) => v.versionType === "ai_draft");
+
+    if (aiDraft?.content) {
+      const editDistance = computeWordLevelEditDistance(aiDraft.content, editContent);
+      if (editDistance > 10) {
+        const lessonText = note
+          ? `Attorney edit (${editDistance}% change): ${note}`
+          : `Attorney made ${editDistance}% word-level edits to ${letter.letterType} letter in ${letter.jurisdictionState ?? "unknown"} jurisdiction.`;
+
+        await createPipelineLesson({
+          letterType: letter.letterType as any,
+          jurisdiction: letter.jurisdictionState,
+          pipelineStage: "assembly",
+          category: categorizeFromNote(note ?? lessonText),
+          lessonText,
+          sourceLetterRequestId: letterId,
+          sourceAction: "attorney_edit",
+          createdByUserId: reviewerId,
+          weight: Math.min(editDistance, 80),
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`[Learning] Failed to extract lesson from edit for letter #${letterId}:`, err);
+  }
+}
+
 export async function computeAndStoreQualityScore(
   letterId: number,
   outcome: "approved" | "rejected",
@@ -166,13 +204,14 @@ export async function computeAndStoreQualityScore(
     const reviewActionsList = await getReviewActions(letterId, true);
     const workflowJobsList = await getWorkflowJobsByLetterId(letterId);
 
-    const revisionCount = versions?.filter((v: any) =>
-      v.versionType === "attorney_edit" || v.versionType === "final_approved"
-    ).length ?? 0;
+    const revisionCount = versions?.length ?? 0;
 
-    const vettingJobs = workflowJobsList?.filter((j: any) =>
-      j.jobType === "generation_pipeline" || j.jobType === "retry"
-    ) ?? [];
+    const vettingJobs = workflowJobsList?.filter((j: any) => {
+      const meta = j.requestPayloadJson as any;
+      return j.jobType === "generation_pipeline" ||
+        j.jobType === "retry" ||
+        (meta?.stage === "vetting");
+    }) ?? [];
     const vettingPassCount = vettingJobs.filter((j: any) => j.status === "completed").length;
     const vettingFailCount = vettingJobs.filter((j: any) => j.status === "failed").length;
 
@@ -192,17 +231,27 @@ export async function computeAndStoreQualityScore(
     let timeToFirstReviewMs: number | undefined;
     let timeToApprovalMs: number | undefined;
 
-    const submitted = reviewActionsList?.find((a: any) => a.toStatus === "submitted" || a.fromStatus === null);
-    const firstClaim = reviewActionsList?.find((a: any) => a.action === "claimed_for_review");
-    const finalAction = reviewActionsList?.find((a: any) =>
+    const sortedActions = [...(reviewActionsList ?? [])].sort(
+      (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    const submittedAction = sortedActions.find((a: any) =>
+      a.toStatus === "submitted" || a.toStatus === "under_review"
+    );
+    const firstClaim = sortedActions.find((a: any) => a.action === "claimed_for_review");
+    const finalAction = sortedActions.find((a: any) =>
       a.action === "approved" || a.action === "rejected"
     );
 
-    if (firstClaim && letter.createdAt) {
-      timeToFirstReviewMs = new Date(firstClaim.createdAt).getTime() - new Date(letter.createdAt).getTime();
+    const baseTime = submittedAction
+      ? new Date(submittedAction.createdAt).getTime()
+      : (letter.createdAt ? new Date(letter.createdAt).getTime() : undefined);
+
+    if (firstClaim && baseTime) {
+      timeToFirstReviewMs = new Date(firstClaim.createdAt).getTime() - baseTime;
     }
-    if (finalAction && letter.createdAt) {
-      timeToApprovalMs = new Date(finalAction.createdAt).getTime() - new Date(letter.createdAt).getTime();
+    if (finalAction && baseTime) {
+      timeToApprovalMs = new Date(finalAction.createdAt).getTime() - baseTime;
     }
 
     let computedScore = 100;

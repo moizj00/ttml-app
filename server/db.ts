@@ -1711,15 +1711,15 @@ export async function getQualityScoresByLetterType() {
   if (!db) return [];
   return db.execute(sql`
     SELECT
-      lr.letter_type,
-      COUNT(*) as total,
-      ROUND(AVG(CASE WHEN lqs.first_pass_approved THEN 100 ELSE 0 END), 1) as approval_rate,
-      ROUND(AVG(lqs.revision_count), 1) as avg_revisions,
-      ROUND(AVG(lqs.computed_score), 1) as avg_score
+      lr.letter_type as "letterType",
+      COUNT(*)::int as "total",
+      ROUND(AVG(CASE WHEN lqs.first_pass_approved THEN 100 ELSE 0 END), 1) as "firstPassRate",
+      ROUND(AVG(lqs.revision_count), 1) as "avgRevisions",
+      ROUND(AVG(lqs.computed_score), 1) as "avgScore"
     FROM letter_quality_scores lqs
     JOIN letter_requests lr ON lqs.letter_request_id = lr.id
     GROUP BY lr.letter_type
-    ORDER BY total DESC
+    ORDER BY "total" DESC
   `);
 }
 

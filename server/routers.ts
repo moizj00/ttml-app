@@ -68,6 +68,7 @@ import {
   updatePipelineLesson,
   getQualityScoreStats,
   getQualityScoreTrend,
+  getQualityScoresByLetterType,
 } from "./db";
 import {
   sendJobFailedAlertEmail,
@@ -85,7 +86,7 @@ import {
   sendLetterToRecipient,
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
-import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, computeAndStoreQualityScore } from "./learning";
+import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, computeAndStoreQualityScore } from "./learning";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
 import { invalidateUserCache } from "./supabaseAuth";
@@ -1156,6 +1157,7 @@ export const appRouter = router({
           noteText: input.note,
           noteVisibility: "internal",
         });
+        extractLessonFromEdit(input.letterId, input.content, input.note, ctx.user.id).catch(console.error);
         return { versionId: (version as any)?.insertId };
       }),
   }),
@@ -1556,6 +1558,8 @@ export const appRouter = router({
     qualityTrend: adminProcedure
       .input(z.object({ days: z.number().default(30) }).optional())
       .query(async ({ input }) => getQualityScoreTrend(input?.days ?? 30)),
+
+    qualityByLetterType: adminProcedure.query(async () => getQualityScoresByLetterType()),
   }),
 
   // ─── Notifications ─────────────────────────────────────────────────────────

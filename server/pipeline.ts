@@ -47,7 +47,7 @@ async function buildLessonsPromptBlock(
       letterType,
       jurisdiction: jurisdiction ?? undefined,
       pipelineStage: stage,
-      limit: 15,
+      limit: 10,
     });
     if (!lessons || lessons.length === 0) return "";
     const lines = lessons.map(
