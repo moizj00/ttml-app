@@ -859,6 +859,18 @@ export async function runResearchStage(
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
   await updateResearchRun(runId, { status: "running" });
   await updateLetterStatus(letterId, "researching");
+  try {
+    const { notifyAdmins } = await import("./db");
+    await notifyAdmins({
+      category: "letters",
+      type: "pipeline_researching",
+      title: `Letter #${letterId} entering research stage`,
+      body: `AI pipeline has started researching for letter #${letterId}.`,
+      link: `/admin/letters/${letterId}`,
+    });
+  } catch (err) {
+    console.error("[notifyAdmins] pipeline_researching:", err);
+  }
 
   // Build normalized intake for the research prompt
   const normalizedIntake = buildNormalizedPromptInput(
@@ -1108,6 +1120,18 @@ export async function runDraftingStage(
 
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
   await updateLetterStatus(letterId, "drafting");
+  try {
+    const { notifyAdmins } = await import("./db");
+    await notifyAdmins({
+      category: "letters",
+      type: "pipeline_drafting",
+      title: `Letter #${letterId} entering drafting stage`,
+      body: `AI pipeline is now drafting letter #${letterId}.`,
+      link: `/admin/letters/${letterId}`,
+    });
+  } catch (err) {
+    console.error("[notifyAdmins] pipeline_drafting:", err);
+  }
 
   const normalizedIntake = buildNormalizedPromptInput(
     {

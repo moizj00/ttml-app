@@ -99,6 +99,13 @@
       "when": 1774003243354,
       "tag": "0013_pink_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1774004248556,
+      "tag": "0014_amazing_inhumans",
+      "breakpoints": true
     }
   ]
 }

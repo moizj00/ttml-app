@@ -423,6 +423,36 @@ export async function sendJobFailedAlertEmail(opts: {
   });
 }
 
+export async function sendAdminAlertEmail(opts: {
+  to: string;
+  name: string;
+  subject: string;
+  preheader: string;
+  bodyHtml: string;
+  ctaText?: string;
+  ctaUrl?: string;
+}) {
+  const html = buildEmailHtml({
+    preheader: opts.preheader,
+    title: opts.subject,
+    body: opts.bodyHtml,
+    ctaText: opts.ctaText,
+    ctaUrl: opts.ctaUrl,
+    accentColor: BRAND_COLOR,
+  });
+  await sendEmail({
+    to: opts.to,
+    subject: `[${APP_NAME}] ${opts.subject}`,
+    html,
+    text: buildPlainText({
+      title: opts.subject,
+      body: opts.preheader,
+      ctaText: opts.ctaText,
+      ctaUrl: opts.ctaUrl,
+    }),
+  });
+}
+
 /** Notify subscriber when their letter enters a new processing stage */
 export async function sendStatusUpdateEmail(opts: {
   to: string;

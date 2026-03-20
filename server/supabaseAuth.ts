@@ -282,6 +282,25 @@ async function syncGoogleUser({
   if (dbUser && !existingUser) {
     try {
       const origin = getOriginUrl(req);
+      await db.notifyAdmins({
+        category: "users",
+        type: "new_signup",
+        title: `New user signup: ${name}`,
+        body: `${user.email ?? "unknown"} signed up as ${resolvedRole} via Google OAuth.`,
+        link: `/admin/users`,
+        emailOpts: {
+          subject: `New User Signup: ${name}`,
+          preheader: `${user.email ?? "unknown"} just signed up via Google`,
+          bodyHtml: `<p>Hello,</p><p>A new user has signed up:</p><ul><li><strong>Name:</strong> ${name}</li><li><strong>Email:</strong> ${user.email ?? "unknown"}</li><li><strong>Role:</strong> ${resolvedRole}</li><li><strong>Method:</strong> Google OAuth</li></ul>`,
+          ctaText: "View Users",
+          ctaUrl: `${origin}/admin/users`,
+        },
+      });
+    } catch (err) {
+      console.error("[notifyAdmins] new_signup_google:", err);
+    }
+    try {
+      const origin = getOriginUrl(req);
       // Re-fetch dbUser to ensure it has the discount code if it was just created
       const freshUser = await db.getUserById(dbUser.id);
       await sendRoleBasedWelcomeEmail(freshUser || dbUser, origin);
@@ -614,6 +633,25 @@ export function registerSupabaseAuthRoutes(app: Express) {
           console.error("[SupabaseAuth] Failed to create discount code for employee:", codeErr);
           // Non-fatal — employee can still sign up
         }
+      }
+
+      try {
+        await db.notifyAdmins({
+          category: "users",
+          type: "new_signup",
+          title: `New user signup: ${userName}`,
+          body: `${email} signed up as ${signupRole} via email.`,
+          link: `/admin/users`,
+          emailOpts: {
+            subject: `New User Signup: ${userName}`,
+            preheader: `${email} just signed up as ${signupRole}`,
+            bodyHtml: `<p>Hello,</p><p>A new user has signed up:</p><ul><li><strong>Name:</strong> ${userName}</li><li><strong>Email:</strong> ${email}</li><li><strong>Role:</strong> ${signupRole}</li><li><strong>Method:</strong> Email/Password</li></ul>`,
+            ctaText: "View Users",
+            ctaUrl: `${origin}/admin/users`,
+          },
+        });
+      } catch (err) {
+        console.error("[notifyAdmins] new_signup:", err);
       }
 
       // Return success — user must verify email before accessing the app
@@ -1076,6 +1114,25 @@ export function registerSupabaseAuthRoutes(app: Express) {
         } catch (confirmErr) {
           console.error("[SupabaseAuth] Failed to confirm email in Supabase:", confirmErr);
         }
+      }
+
+      try {
+        await db.notifyAdmins({
+          category: "users",
+          type: "email_verified",
+          title: `Email verified: ${user?.email ?? "unknown"}`,
+          body: `${user?.name ?? "A user"} (${user?.email ?? "unknown"}) verified their email address.`,
+          link: `/admin/users`,
+          emailOpts: {
+            subject: `Email Verified: ${user?.name ?? user?.email ?? "A user"}`,
+            preheader: `${user?.email ?? "A user"} just verified their email`,
+            bodyHtml: `<p>Hello,</p><p><strong>${user?.name ?? "A user"}</strong> (${user?.email ?? "unknown"}) has verified their email address and can now sign in.</p>`,
+            ctaText: "View Users",
+            ctaUrl: `${origin}/admin/users`,
+          },
+        });
+      } catch (err) {
+        console.error("[notifyAdmins] email_verified:", err);
       }
 
       // Non-critical side-effects (discount codes, welcome email) run in the background.

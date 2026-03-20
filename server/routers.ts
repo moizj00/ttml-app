@@ -15,6 +15,7 @@ import {
   createLetterRequest,
   createLetterVersion,
   createNotification,
+  notifyAdmins,
   getAllLetterRequests,
   getAllUsers,
   getAllUsersWithSubscription,
@@ -345,6 +346,7 @@ export const appRouter = router({
               await createNotification({
                 userId: admin.id,
                 type: "job_failed",
+                category: "letters",
                 title: `Pipeline failed for letter #${letterId}`,
                 body: err instanceof Error ? err.message : String(err),
                 link: `/admin/jobs`,
@@ -354,6 +356,18 @@ export const appRouter = router({
             console.error("[Pipeline] Failed to notify admins:", notifyErr);
           }
         });
+
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_submitted",
+            title: `New letter submitted (#${letterId})`,
+            body: `${ctx.user.name ?? ctx.user.email ?? "A subscriber"} submitted a ${input.letterType} letter: "${input.subject}"`,
+            link: `/admin/letters/${letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_submitted:", err);
+        }
 
         return { letterId, status: "submitted" };
       }),
@@ -601,6 +615,18 @@ export const appRouter = router({
           htmlContent: finalVersion.content,
         });
 
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_sent_to_recipient",
+            title: `Letter #${input.letterId} sent to recipient`,
+            body: `Letter "${letter.subject}" was sent to ${input.recipientEmail}.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_sent_to_recipient:", err);
+        }
+
         return { success: true };
       }),
 
@@ -690,6 +716,17 @@ export const appRouter = router({
         } catch (err) {
           console.error("[requestClientApproval] Notification error:", err);
         }
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_pending_client_approval",
+            title: `Letter #${input.letterId} sent for client approval`,
+            body: `Letter "${letter.subject}" is now pending client approval.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_pending_client_approval:", err);
+        }
         return { success: true };
       }),
 
@@ -717,6 +754,24 @@ export const appRouter = router({
           fromStatus: "client_approval_pending",
           toStatus: "client_approved",
         });
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "client_approved",
+            title: `Client approved letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "A subscriber"} approved "${letter.subject}" for final delivery.`,
+            link: `/admin/letters/${input.letterId}`,
+            emailOpts: {
+              subject: `Client Approved Letter #${input.letterId}`,
+              preheader: `Client approved letter "${letter.subject}" for delivery`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}" for final delivery.</p>`,
+              ctaText: "View Letter",
+              ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
+            },
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] client_approved:", err);
+        }
         return { success: true };
       }),
   }),
@@ -846,6 +901,17 @@ export const appRouter = router({
         } catch (err) {
           console.error("[Notify] Claim attorney notification failed:", err);
         }
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_claimed",
+            title: `Attorney claimed letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "An attorney"} claimed "${letter.subject}" for review.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_claimed:", err);
+        }
         return { success: true };
       }),
 
@@ -968,6 +1034,25 @@ export const appRouter = router({
         }
         extractLessonFromApproval(input.letterId, input.finalContent, ctx.user.id, input.internalNote).catch(console.error);
         computeAndStoreQualityScore(input.letterId, "approved", input.finalContent).catch(console.error);
+        try {
+          const appUrl2 = getAppUrl(ctx.req);
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_approved_by_attorney",
+            title: `Letter #${input.letterId} approved by attorney`,
+            body: `${ctx.user.name ?? "An attorney"} approved "${letter.subject}".${pdfUrl ? " PDF generated." : ""}`,
+            link: `/admin/letters/${input.letterId}`,
+            emailOpts: {
+              subject: `Letter #${input.letterId} Approved`,
+              preheader: `Attorney approved letter "${letter.subject}"`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An attorney"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}".</p>`,
+              ctaText: "View Letter",
+              ctaUrl: `${appUrl2}/admin/letters/${input.letterId}`,
+            },
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_approved_by_attorney:", err);
+        }
         return { success: true, versionId, pdfUrl };
       }),
 
@@ -1040,6 +1125,17 @@ export const appRouter = router({
         }
         extractLessonFromRejection(input.letterId, input.reason, ctx.user.id).catch(console.error);
         computeAndStoreQualityScore(input.letterId, "rejected").catch(console.error);
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_rejected",
+            title: `Letter #${input.letterId} rejected`,
+            body: `${ctx.user.name ?? "An attorney"} rejected "${letter.subject}". Reason: ${input.reason.slice(0, 200)}`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_rejected:", err);
+        }
         return { success: true };
       }),
 
@@ -1111,6 +1207,17 @@ export const appRouter = router({
           console.error("[Notify] Failed:", err);
         }
         extractLessonFromChangesRequest(input.letterId, input.internalNote, input.userVisibleNote, ctx.user.id).catch(console.error);
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_changes_requested",
+            title: `Changes requested for letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "An attorney"} requested changes on "${letter.subject}".`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_changes_requested:", err);
+        }
         if (input.retriggerPipeline && letter.intakeJson) {
           retryPipelineFromStage(
             input.letterId,
@@ -1243,6 +1350,18 @@ export const appRouter = router({
             // Non-blocking — role update still succeeds even if notification fails
             console.error("[updateRole] Failed to send attorney promotion notification:", err);
           }
+        }
+        try {
+          const targetUser = await getUserById(input.userId);
+          await notifyAdmins({
+            category: "users",
+            type: "user_role_changed",
+            title: `User role changed to ${input.role}`,
+            body: `${targetUser?.name ?? targetUser?.email ?? `User #${input.userId}`} was changed to ${input.role}.`,
+            link: `/admin/users`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] user_role_changed:", err);
         }
         return { success: true };
       }),
@@ -1811,6 +1930,18 @@ export const appRouter = router({
           console.error("[freeUnlock] Email error:", e);
         }
 
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "free_unlock",
+            title: `Free unlock — letter #${input.letterId} enters review queue`,
+            body: `${ctx.user.name ?? "A subscriber"} used free first letter for "${letter.subject}". Now pending review.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] free_unlock:", err);
+        }
+
         return { ok: true as const, free: true };
       }),
 
@@ -1925,6 +2056,17 @@ export const appRouter = router({
           ctx.user.id,
           ctx.user.name ?? "EMP"
         );
+        try {
+          await notifyAdmins({
+            category: "employee",
+            type: "discount_code_created",
+            title: `Discount code created`,
+            body: `${ctx.user.name ?? "An employee"} created a new discount code: ${code?.code ?? "unknown"}.`,
+            link: `/admin/affiliate`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] discount_code_created:", err);
+        }
       }
       return code;
     }),
@@ -1981,6 +2123,25 @@ export const appRouter = router({
           paymentMethod: input.paymentMethod,
           paymentDetails: input.paymentDetails,
         });
+        try {
+          const payoutAppUrl = getAppUrl(ctx.req);
+          await notifyAdmins({
+            category: "employee",
+            type: "payout_request",
+            title: `New payout request: $${(input.amount / 100).toFixed(2)}`,
+            body: `${ctx.user.name ?? "An employee"} requested a $${(input.amount / 100).toFixed(2)} payout via ${input.paymentMethod}.`,
+            link: `/admin/affiliate`,
+            emailOpts: {
+              subject: `New Payout Request: $${(input.amount / 100).toFixed(2)}`,
+              preheader: `${ctx.user.name ?? "An employee"} requested a payout`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An employee"}</strong> has requested a payout of <strong>$${(input.amount / 100).toFixed(2)}</strong> via ${input.paymentMethod}.</p><p>Please review and process this request.</p>`,
+              ctaText: "Review Payouts",
+              ctaUrl: `${payoutAppUrl}/admin/affiliate`,
+            },
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] payout_request:", err);
+        }
         return { success: true, payoutRequestId: result.insertId };
       }),
 

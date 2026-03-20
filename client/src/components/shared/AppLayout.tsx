@@ -191,9 +191,10 @@ export default function AppLayout({
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isAdmin = user?.role === "admin";
   const { data: notifications } = trpc.notifications.list.useQuery(
-    { unreadOnly: true },
-    { enabled: isAuthenticated, refetchInterval: 15000 }
+    { unreadOnly: isAdmin ? false : true },
+    { enabled: isAuthenticated, refetchInterval: isAdmin ? 10000 : 15000 }
   );
   const markRead = trpc.notifications.markRead.useMutation({
     onSuccess: () => utils.notifications.list.invalidate(),
@@ -210,7 +211,7 @@ export default function AppLayout({
         description: "Please try again in a moment.",
       }),
   });
-  const unreadCount = notifications?.length ?? 0;
+  const unreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
 
   // ─── Role-change detector ────────────────────────────────────────────────
   // When the server promotes this user (e.g. subscriber → attorney), a
@@ -436,20 +437,36 @@ export default function AppLayout({
                   )}
                 </div>
                 {notifications && notifications.length > 0 ? (
-                  notifications.slice(0, 5).map(n => (
+                  notifications.slice(0, isAdmin ? 15 : 5).map(n => (
                     <DropdownMenuItem
                       key={n.id}
-                      className="flex flex-col items-start gap-0.5 py-3 cursor-pointer"
+                      className={`flex flex-col items-start gap-0.5 py-3 cursor-pointer ${n.readAt ? "opacity-60" : ""}`}
                       onClick={() => {
-                        // Mark this notification as read
-                        markRead.mutate({ id: n.id });
-                        // Navigate to the linked page if one is set
+                        if (!n.readAt) markRead.mutate({ id: n.id });
                         if (n.link) {
                           navigate(n.link);
                         }
                       }}
                     >
-                      <span className="font-medium text-sm">{n.title}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{n.title}</span>
+                        {n.category && n.category !== "general" && (
+                          <span
+                            data-testid={`badge-category-${n.category}`}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                              n.category === "users"
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                : n.category === "letters"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                : n.category === "employee"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                            }`}
+                          >
+                            {n.category === "users" ? "Users" : n.category === "letters" ? "Letters" : n.category === "employee" ? "Employee" : n.category}
+                          </span>
+                        )}
+                      </div>
                       {n.body && (
                         <span className="text-xs text-muted-foreground line-clamp-2">
                           {n.body}

@@ -10,7 +10,7 @@ import { getStripe, activateSubscription } from "./stripe";
 import { getPlanConfig } from "./stripe-products";
 import {
   getDb, updateLetterStatus, logReviewAction, getLetterRequestById,
-  getUserById, createNotification, getDiscountCodeByCode,
+  getUserById, createNotification, notifyAdmins, getDiscountCodeByCode,
   incrementDiscountCodeUsage, createCommission,
 } from "./db";
 import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendNewReviewNeededEmail } from "./email";
@@ -140,6 +140,26 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                   }
                   console.log(`[StripeWebhook] Letter #${letterId} unlocked → pending_review`);
 
+                  try {
+                    const adminAppUrl = session.success_url?.split('/letters')[0] ?? "https://www.talk-to-my-lawyer.com";
+                    await notifyAdmins({
+                      category: "letters",
+                      type: "payment_received",
+                      title: `Payment received — letter #${letterId} unlocked`,
+                      body: `Letter "${letter.subject}" has been unlocked and queued for attorney review.`,
+                      link: `/admin/letters/${letterId}`,
+                      emailOpts: {
+                        subject: `Payment Received — Letter #${letterId} Unlocked`,
+                        preheader: `Letter "${letter.subject}" unlocked after payment`,
+                        bodyHtml: `<p>Hello,</p><p>Payment has been received for letter <strong>#${letterId}</strong> — "${letter.subject}". The letter is now in the attorney review queue.</p>`,
+                        ctaText: "View Letter",
+                        ctaUrl: `${adminAppUrl}/admin/letters/${letterId}`,
+                      },
+                    });
+                  } catch (err) {
+                    console.error("[notifyAdmins] payment_received:", err);
+                  }
+
                   // ─── Notify attorneys that a new letter is ready for review ───
                   try {
                     const { getAllUsers } = await import("./db");
@@ -206,6 +226,20 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                               dashboardUrl: `${appUrl}/employee/dashboard`,
                             });
                           }
+                          await notifyAdmins({
+                            category: "employee",
+                            type: "discount_code_used",
+                            title: `Discount code "${discountCodeStr}" used`,
+                            body: `Referral conversion: $${(commissionAmount / 100).toFixed(2)} commission earned by ${employee?.name ?? `employee #${resolvedEmployeeId}`}.`,
+                            link: `/admin/affiliate`,
+                          });
+                          await notifyAdmins({
+                            category: "employee",
+                            type: "commission_earned",
+                            title: `Commission earned: $${(commissionAmount / 100).toFixed(2)}`,
+                            body: `${employee?.name ?? `Employee #${resolvedEmployeeId}`} earned a commission from code "${discountCodeStr}".`,
+                            link: `/admin/affiliate`,
+                          });
                         } catch (emailErr) {
                           console.error(`[StripeWebhook] Commission email error (per-letter):`, emailErr);
                         }
@@ -272,6 +306,20 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         dashboardUrl: `${appUrl}/employee/dashboard`,
                       });
                     }
+                    await notifyAdmins({
+                      category: "employee",
+                      type: "discount_code_used",
+                      title: `Discount code "${discountCodeStr}" used (subscription)`,
+                      body: `Referral conversion: $${(commissionAmount / 100).toFixed(2)} commission earned by ${(await getUserById(resolvedEmployeeId))?.name ?? `employee #${resolvedEmployeeId}`}.`,
+                      link: `/admin/affiliate`,
+                    });
+                    await notifyAdmins({
+                      category: "employee",
+                      type: "commission_earned",
+                      title: `Commission earned: $${(commissionAmount / 100).toFixed(2)}`,
+                      body: `Subscription referral commission via code "${discountCodeStr}".`,
+                      link: `/admin/affiliate`,
+                    });
                   } catch (emailErr) {
                     console.error(`[StripeWebhook] Commission email error (subscription):`, emailErr);
                   }

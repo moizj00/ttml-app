@@ -281,6 +281,7 @@ export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   type: varchar("type", { length: 100 }).notNull(),
+  category: varchar("category", { length: 50 }).default("general").notNull(),
   title: varchar("title", { length: 500 }).notNull(),
   body: text("body"),
   link: varchar("link", { length: 1000 }),
