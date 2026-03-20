@@ -98,6 +98,32 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "
 export const commissionStatusEnum = pgEnum("commission_status", ["pending", "paid", "voided"]);
 export const payoutStatusEnum = pgEnum("payout_status", ["pending", "processing", "completed", "rejected"]);
 
+// ─── Pipeline Learning Enums ───
+export const PIPELINE_STAGES = ["research", "drafting", "assembly", "vetting"] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+export const LESSON_CATEGORIES = [
+  "citation_error", "jurisdiction_error", "tone_issue", "structure_issue",
+  "factual_error", "bloat_detected", "missing_section", "style_preference",
+  "legal_accuracy", "general",
+] as const;
+export type LessonCategory = (typeof LESSON_CATEGORIES)[number];
+
+export const LESSON_SOURCES = [
+  "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
+] as const;
+export type LessonSource = (typeof LESSON_SOURCES)[number];
+
+export const pipelineStageEnum = pgEnum("pipeline_stage", ["research", "drafting", "assembly", "vetting"]);
+export const lessonCategoryEnum = pgEnum("lesson_category", [
+  "citation_error", "jurisdiction_error", "tone_issue", "structure_issue",
+  "factual_error", "bloat_detected", "missing_section", "style_preference",
+  "legal_accuracy", "general",
+]);
+export const lessonSourceEnum = pgEnum("lesson_source", [
+  "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
+]);
+
 // ═══════════════════════════════════════════════════════
 // TABLE: users
 // ═══════════════════════════════════════════════════════
@@ -384,3 +410,52 @@ export const emailVerificationTokens = pgTable("email_verification_tokens", {
 }));
 export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
 export type InsertEmailVerificationToken = typeof emailVerificationTokens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: pipeline_lessons (recursive learning)
+// ═══════════════════════════════════════════════════════
+export const pipelineLessons = pgTable("pipeline_lessons", {
+  id: serial("id").primaryKey(),
+  letterType: letterTypeEnum("letter_type"),
+  jurisdiction: varchar("jurisdiction", { length: 100 }),
+  pipelineStage: pipelineStageEnum("pipeline_stage"),
+  category: lessonCategoryEnum("category").default("general").notNull(),
+  lessonText: text("lesson_text").notNull(),
+  sourceLetterRequestId: integer("source_letter_request_id"),
+  sourceAction: lessonSourceEnum("source_action").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  weight: integer("weight").default(50).notNull(),
+  createdByUserId: integer("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  activeIdx: index("idx_pipeline_lessons_active").on(t.isActive),
+  letterTypeIdx: index("idx_pipeline_lessons_letter_type").on(t.letterType),
+  jurisdictionIdx: index("idx_pipeline_lessons_jurisdiction").on(t.jurisdiction),
+  stageIdx: index("idx_pipeline_lessons_stage").on(t.pipelineStage),
+}));
+
+export type PipelineLesson = typeof pipelineLessons.$inferSelect;
+export type InsertPipelineLesson = typeof pipelineLessons.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: letter_quality_scores (per-letter metrics)
+// ═══════════════════════════════════════════════════════
+export const letterQualityScores = pgTable("letter_quality_scores", {
+  id: serial("id").primaryKey(),
+  letterRequestId: integer("letter_request_id").notNull(),
+  firstPassApproved: boolean("first_pass_approved").notNull(),
+  revisionCount: integer("revision_count").default(0).notNull(),
+  vettingPassCount: integer("vetting_pass_count").default(0).notNull(),
+  vettingFailCount: integer("vetting_fail_count").default(0).notNull(),
+  attorneyEditDistance: integer("attorney_edit_distance"),
+  timeToFirstReviewMs: bigint("time_to_first_review_ms", { mode: "number" }),
+  timeToApprovalMs: bigint("time_to_approval_ms", { mode: "number" }),
+  computedScore: integer("computed_score"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  letterIdx: uniqueIndex("uq_quality_scores_letter_request").on(t.letterRequestId),
+}));
+
+export type LetterQualityScore = typeof letterQualityScores.$inferSelect;
+export type InsertLetterQualityScore = typeof letterQualityScores.$inferInsert;

@@ -736,6 +736,30 @@ export function AdminAffiliateSkeleton() {
   );
 }
 
+export function AdminLearningSkeleton() {
+  return (
+    <AppLayoutSkeleton>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72 mt-2" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))}
+        </div>
+        <div className="flex gap-2 border-b pb-2">
+          {["Lessons", "Quality Scores"].map((tab) => (
+            <Skeleton key={tab} className="h-9 w-28 rounded-lg" />
+          ))}
+        </div>
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    </AppLayoutSkeleton>
+  );
+}
+
 /** Onboarding — centered card with steps */
 export function OnboardingSkeleton() {
   return (

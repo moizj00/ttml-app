@@ -92,6 +92,13 @@
       "when": 1773869617377,
       "tag": "0012_panoramic_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774003243354,
+      "tag": "0013_pink_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,8 @@ A full-stack legal letter platform where users can get AI-drafted, attorney-revi
 - **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed)
 - **Payments**: Stripe (3 subscription plans: Single Letter $200, Monthly $200/month, Yearly $2000/year)
 - **Rate Limiting**: Upstash Redis
-- **AI Pipeline**: 4-stage pipeline — Perplexity (research + citation revalidation) → Claude Opus (drafting) → Claude Opus (assembly) → Claude Sonnet (vetting: jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness). Includes intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, deterministic bloat phrase detection, and enriched audit trail
+- **AI Pipeline**: 4-stage pipeline — Perplexity (research + citation revalidation) → Claude Opus (drafting) → Claude Opus (assembly) → Claude Sonnet (vetting: jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness). Includes intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, deterministic bloat phrase detection, enriched audit trail, and **recursive learning system** (prompt memory + quality scoring)
+- **Recursive Learning**: `pipeline_lessons` table captures structured lessons from attorney approve/reject/changes actions; `letter_quality_scores` tracks per-letter quality metrics (first-pass rate, edit distance, revision count, computed score). Lessons are injected into drafting/assembly/vetting prompts via `buildLessonsPromptBlock()`. Admin Learning page at `/admin/learning` for manual lesson CRUD and quality trend visualization
 - **Monitoring**: Sentry (error tracking, alerting)
 - **Deployment**: Railway (`www.talk-to-my-lawyer.com` + `talk-to-my-lawyer.com`)
 
@@ -29,8 +30,9 @@ server/          # Express backend
   _core/         # Server setup (index.ts, env.ts, vite.ts, trpc.ts, cookies.ts)
   db.ts          # Drizzle DB connection + all DB helper functions
   supabaseAuth.ts # All auth endpoints (signup, login, verify-email, Google OAuth, session)
-  routers.ts     # All 42 tRPC procedures
+  routers.ts     # All tRPC procedures
   pipeline.ts    # AI letter generation pipeline
+  learning.ts    # Recursive learning: lesson extraction + quality scoring
   email.ts       # Email sending (Resend)
   stripe.ts      # Stripe integration
   stripeWebhook.ts # Stripe webhook handler

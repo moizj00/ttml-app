@@ -63,6 +63,11 @@ import {
   getPayoutRequestById,
   getAllEmployeeEarnings,
   markPriorPipelineRunsSuperseded,
+  getAllLessons,
+  createPipelineLesson,
+  updatePipelineLesson,
+  getQualityScoreStats,
+  getQualityScoreTrend,
 } from "./db";
 import {
   sendJobFailedAlertEmail,
@@ -80,6 +85,7 @@ import {
   sendLetterToRecipient,
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
+import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, computeAndStoreQualityScore } from "./learning";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
 import { invalidateUserCache } from "./supabaseAuth";
@@ -959,6 +965,8 @@ export const appRouter = router({
         } catch (err) {
           console.error("[Notify] Failed:", err);
         }
+        extractLessonFromApproval(input.letterId, input.finalContent, ctx.user.id, input.internalNote).catch(console.error);
+        computeAndStoreQualityScore(input.letterId, "approved", input.finalContent).catch(console.error);
         return { success: true, versionId, pdfUrl };
       }),
 
@@ -1029,6 +1037,8 @@ export const appRouter = router({
         } catch (err) {
           console.error("[Notify] Failed:", err);
         }
+        extractLessonFromRejection(input.letterId, input.reason, ctx.user.id).catch(console.error);
+        computeAndStoreQualityScore(input.letterId, "rejected").catch(console.error);
         return { success: true };
       }),
 
@@ -1099,6 +1109,7 @@ export const appRouter = router({
         } catch (err) {
           console.error("[Notify] Failed:", err);
         }
+        extractLessonFromChangesRequest(input.letterId, input.internalNote, input.userVisibleNote, ctx.user.id).catch(console.error);
         if (input.retriggerPipeline && letter.intakeJson) {
           retryPipelineFromStage(
             input.letterId,
@@ -1488,6 +1499,63 @@ export const appRouter = router({
 
         return { success: true, findings };
       }),
+
+    lessons: adminProcedure.query(async () => getAllLessons()),
+
+    lessonsFiltered: adminProcedure
+      .input(z.object({
+        letterType: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }).optional())
+      .query(async ({ input }) => getAllLessons(input ?? undefined)),
+
+    createLesson: adminProcedure
+      .input(z.object({
+        letterType: z.string().optional(),
+        jurisdiction: z.string().optional(),
+        pipelineStage: z.enum(["research", "drafting", "assembly", "vetting"]).optional(),
+        category: z.enum(["citation_error", "jurisdiction_error", "tone_issue", "structure_issue", "factual_error", "bloat_detected", "missing_section", "style_preference", "legal_accuracy", "general"]).default("general"),
+        lessonText: z.string().min(10),
+        sourceAction: z.enum(["attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual"]).default("manual"),
+        weight: z.number().min(0).max(100).default(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await createPipelineLesson({
+          letterType: input.letterType as any,
+          jurisdiction: input.jurisdiction,
+          pipelineStage: input.pipelineStage as any,
+          category: input.category as any,
+          lessonText: input.lessonText,
+          sourceAction: input.sourceAction as any,
+          createdByUserId: ctx.user.id,
+          weight: input.weight,
+        });
+        return { success: true };
+      }),
+
+    updateLesson: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        isActive: z.boolean().optional(),
+        weight: z.number().min(0).max(100).optional(),
+        lessonText: z.string().min(10).optional(),
+        category: z.enum(["citation_error", "jurisdiction_error", "tone_issue", "structure_issue", "factual_error", "bloat_detected", "missing_section", "style_preference", "legal_accuracy", "general"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await updatePipelineLesson(input.id, {
+          isActive: input.isActive,
+          weight: input.weight,
+          lessonText: input.lessonText,
+          category: input.category as any,
+        });
+        return { success: true };
+      }),
+
+    qualityStats: adminProcedure.query(async () => getQualityScoreStats()),
+
+    qualityTrend: adminProcedure
+      .input(z.object({ days: z.number().default(30) }).optional())
+      .query(async ({ input }) => getQualityScoreTrend(input?.days ?? 30)),
   }),
 
   // ─── Notifications ─────────────────────────────────────────────────────────

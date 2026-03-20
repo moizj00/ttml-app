@@ -29,6 +29,7 @@ import {
   AdminAllLettersSkeleton,
   AdminLetterDetailSkeleton,
   AdminAffiliateSkeleton,
+  AdminLearningSkeleton,
 } from "./components/skeletons";
 
 // ─── Eagerly loaded (public landing + auth — needed on first paint) ───
@@ -74,6 +75,7 @@ const AdminJobs = lazy(() => import("./pages/admin/Jobs"));
 const AdminAllLetters = lazy(() => import("./pages/admin/AllLetters"));
 const AdminLetterDetail = lazy(() => import("./pages/admin/LetterDetail"));
 const AdminAffiliate = lazy(() => import("./pages/admin/Affiliate"));
+const AdminLearning = lazy(() => import("./pages/admin/Learning"));
 
 function Router() {
   return (
@@ -296,6 +298,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <Suspense fallback={<AdminAffiliateSkeleton />}>
             <AdminAffiliate />
+          </Suspense>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/learning">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <Suspense fallback={<AdminLearningSkeleton />}>
+            <AdminLearning />
           </Suspense>
         </ProtectedRoute>
       </Route>

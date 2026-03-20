@@ -22,6 +22,7 @@ import {
   PlusCircle,
   Briefcase,
   CreditCard,
+  Brain,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
@@ -145,6 +146,11 @@ function getNavItems(role: string): NavItem[] {
         label: "Failed Jobs",
         href: "/admin/jobs",
         icon: <AlertCircle className="w-4 h-4" />,
+      },
+      {
+        label: "Learning",
+        href: "/admin/learning",
+        icon: <Brain className="w-4 h-4" />,
       },
       {
         label: "Settings",

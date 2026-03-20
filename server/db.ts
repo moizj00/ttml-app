@@ -9,14 +9,17 @@ import {
   emailVerificationTokens,
   letterRequests,
   letterVersions,
+  letterQualityScores,
   notifications,
   payoutRequests,
+  pipelineLessons,
   researchRuns,
   reviewActions,
   subscriptions,
   users,
   workflowJobs,
 } from "../drizzle/schema";
+import type { InsertPipelineLesson, InsertLetterQualityScore } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1543,4 +1546,195 @@ export async function getUserByEmail(email: string) {
     .where(eq(users.email, email))
     .limit(1);
   return result[0];
+}
+
+// ═══════════════════════════════════════════════════════
+// PIPELINE LESSONS HELPERS (Recursive Learning)
+// ═══════════════════════════════════════════════════════
+
+export async function createPipelineLesson(data: InsertPipelineLesson) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .insert(pipelineLessons)
+    .values(data)
+    .returning({ insertId: pipelineLessons.id });
+  return result[0];
+}
+
+export async function getActiveLessons(filters: {
+  letterType?: string;
+  jurisdiction?: string;
+  pipelineStage?: string;
+  limit?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(pipelineLessons.isActive, true)];
+  if (filters.letterType) {
+    conditions.push(
+      or(
+        eq(pipelineLessons.letterType, filters.letterType as any),
+        isNull(pipelineLessons.letterType),
+      )!
+    );
+  }
+  if (filters.jurisdiction) {
+    conditions.push(
+      or(
+        eq(pipelineLessons.jurisdiction, filters.jurisdiction),
+        isNull(pipelineLessons.jurisdiction),
+      )!
+    );
+  }
+  if (filters.pipelineStage) {
+    conditions.push(
+      or(
+        eq(pipelineLessons.pipelineStage, filters.pipelineStage as any),
+        isNull(pipelineLessons.pipelineStage),
+      )!
+    );
+  }
+  return db
+    .select()
+    .from(pipelineLessons)
+    .where(and(...conditions))
+    .orderBy(desc(pipelineLessons.weight))
+    .limit(filters.limit ?? 10);
+}
+
+export async function getAllLessons(filters?: {
+  letterType?: string;
+  jurisdiction?: string;
+  pipelineStage?: string;
+  isActive?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions: any[] = [];
+  if (filters?.letterType) conditions.push(eq(pipelineLessons.letterType, filters.letterType as any));
+  if (filters?.jurisdiction) conditions.push(eq(pipelineLessons.jurisdiction, filters.jurisdiction));
+  if (filters?.pipelineStage) conditions.push(eq(pipelineLessons.pipelineStage, filters.pipelineStage as any));
+  if (filters?.isActive !== undefined) conditions.push(eq(pipelineLessons.isActive, filters.isActive));
+  const query = db.select().from(pipelineLessons).orderBy(desc(pipelineLessons.createdAt));
+  if (conditions.length > 0) return query.where(and(...conditions));
+  return query;
+}
+
+export async function getLessonById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(pipelineLessons).where(eq(pipelineLessons.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updatePipelineLesson(id: number, data: {
+  lessonText?: string;
+  category?: string;
+  letterType?: string | null;
+  jurisdiction?: string | null;
+  pipelineStage?: string | null;
+  isActive?: boolean;
+  weight?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(pipelineLessons)
+    .set({ ...data, updatedAt: new Date() } as any)
+    .where(eq(pipelineLessons.id, id));
+}
+
+export async function deletePipelineLesson(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(pipelineLessons).where(eq(pipelineLessons.id, id));
+}
+
+// ═══════════════════════════════════════════════════════
+// LETTER QUALITY SCORES HELPERS
+// ═══════════════════════════════════════════════════════
+
+export async function createLetterQualityScore(data: InsertLetterQualityScore) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .insert(letterQualityScores)
+    .values(data)
+    .onConflictDoUpdate({
+      target: letterQualityScores.letterRequestId,
+      set: {
+        firstPassApproved: data.firstPassApproved,
+        revisionCount: data.revisionCount,
+        vettingPassCount: data.vettingPassCount,
+        vettingFailCount: data.vettingFailCount,
+        attorneyEditDistance: data.attorneyEditDistance,
+        timeToFirstReviewMs: data.timeToFirstReviewMs,
+        timeToApprovalMs: data.timeToApprovalMs,
+        computedScore: data.computedScore,
+      } as any,
+    })
+    .returning({ insertId: letterQualityScores.id });
+  return result[0];
+}
+
+export async function getQualityScoreByLetterId(letterRequestId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(letterQualityScores)
+    .where(eq(letterQualityScores.letterRequestId, letterRequestId))
+    .limit(1);
+  return result[0];
+}
+
+export async function getQualityScoreStats() {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*)::int as "totalScored",
+      ROUND(AVG(CASE WHEN first_pass_approved THEN 100 ELSE 0 END), 1) as "firstPassRate",
+      ROUND(AVG(revision_count), 1) as "avgRevisions",
+      ROUND(AVG(computed_score), 1) as "avgScore",
+      ROUND(AVG(attorney_edit_distance), 1) as "avgEditDistance",
+      ROUND(AVG(vetting_pass_count), 1) as "avgVettingPasses",
+      ROUND(AVG(vetting_fail_count), 1) as "avgVettingFails"
+    FROM letter_quality_scores
+  `);
+  return result[0];
+}
+
+export async function getQualityScoresByLetterType() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.execute(sql`
+    SELECT
+      lr.letter_type,
+      COUNT(*) as total,
+      ROUND(AVG(CASE WHEN lqs.first_pass_approved THEN 100 ELSE 0 END), 1) as approval_rate,
+      ROUND(AVG(lqs.revision_count), 1) as avg_revisions,
+      ROUND(AVG(lqs.computed_score), 1) as avg_score
+    FROM letter_quality_scores lqs
+    JOIN letter_requests lr ON lqs.letter_request_id = lr.id
+    GROUP BY lr.letter_type
+    ORDER BY total DESC
+  `);
+}
+
+export async function getQualityScoreTrend(days: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.execute(sql`
+    SELECT
+      DATE_TRUNC('day', lqs.created_at)::text as "date",
+      COUNT(*)::int as "count",
+      ROUND(AVG(CASE WHEN lqs.first_pass_approved THEN 100 ELSE 0 END), 1) as "firstPassRate",
+      ROUND(AVG(lqs.computed_score), 1) as "avgScore"
+    FROM letter_quality_scores lqs
+    WHERE lqs.created_at >= NOW() - INTERVAL '1 day' * ${days}
+    GROUP BY DATE_TRUNC('day', lqs.created_at)
+    ORDER BY "date" ASC
+  `);
 }

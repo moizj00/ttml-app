@@ -18,6 +18,7 @@ import {
   createLetterVersion,
   createResearchRun,
   createWorkflowJob,
+  getActiveLessons,
   getLatestResearchRun,
   hasLetterBeenPreviouslyUnlocked,
   logReviewAction,
@@ -35,6 +36,30 @@ import {
 import { sendLetterReadyEmail, sendStatusUpdateEmail, sendNewReviewNeededEmail } from "./email";
 import { getUserById, getLetterRequestById as getLetterById, getAllUsers, setLetterResearchUnverified } from "./db";
 import { captureServerException } from "./sentry";
+
+async function buildLessonsPromptBlock(
+  letterType: string,
+  jurisdiction: string | null,
+  stage: string,
+): Promise<string> {
+  try {
+    const lessons = await getActiveLessons({
+      letterType,
+      jurisdiction: jurisdiction ?? undefined,
+      pipelineStage: stage,
+      limit: 15,
+    });
+    if (!lessons || lessons.length === 0) return "";
+    const lines = lessons.map(
+      (l: any, i: number) =>
+        `${i + 1}. [${l.category}] ${l.lessonText}`,
+    );
+    return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n${lines.join("\n")}\n`;
+  } catch (err) {
+    console.error("[Pipeline] Failed to load lessons for prompt injection:", err);
+    return "";
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // MODEL PROVIDERS
@@ -471,7 +496,7 @@ export function validateContentConsistency(
   const expectedStateNormalized = expectedStateFullName ?? expectedState;
   const jurisdictionFound =
     textLower.includes(expectedState.toLowerCase()) ||
-    (expectedStateFullName && textLower.includes(expectedStateFullName.toLowerCase()));
+    !!(expectedStateFullName && textLower.includes(expectedStateFullName.toLowerCase()));
   if (!jurisdictionFound) {
     warnings.push(`Expected jurisdiction "${expectedStateNormalized}" not found in output text`);
   }
@@ -1098,7 +1123,8 @@ export async function runDraftingStage(
   const citationRegistryBlock = pipelineCtx?.citationRegistry
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
-  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock;
+  const lessonsBlockDrafting = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "drafting");
+  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting;
   // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
@@ -1366,7 +1392,8 @@ export async function runAssemblyStage(
   const citationRegistryBlock = pipelineCtx?.citationRegistry
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
-  const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock;
+  const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly");
+  const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
     : "";
@@ -1882,7 +1909,8 @@ export async function runVettingStage(
     preVetIssues.push(`JURISDICTION MISMATCH: Letter references "${preVetConsistency.foundJurisdiction}" law but should only reference "${preVetConsistency.expectedJurisdiction}". Remove all cross-jurisdiction citations.`);
   }
 
-  const systemPrompt = buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat);
+  const lessonsBlockVetting = await buildLessonsPromptBlock(letterType, jurisdiction, "vetting");
+  const systemPrompt = buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) + lessonsBlockVetting;
   const baseUserPrompt = buildVettingUserPrompt(assembledLetter, intake, research, citationRegistry);
   const preVetBlock = preVetIssues.length > 0
     ? `\n\n## PRE-VET ISSUES DETECTED (MUST FIX)\n${preVetIssues.map((issue, i) => `${i + 1}. ${issue}`).join("\n")}\n`
