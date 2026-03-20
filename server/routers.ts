@@ -88,6 +88,7 @@ import {
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, computeAndStoreQualityScore } from "./learning";
+import type { InsertPipelineLesson } from "../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
 import { invalidateUserCache } from "./supabaseAuth";
@@ -1644,12 +1645,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await createPipelineLesson({
-          letterType: input.letterType as any,
+          letterType: input.letterType as InsertPipelineLesson["letterType"],
           jurisdiction: input.jurisdiction,
-          pipelineStage: input.pipelineStage as any,
-          category: input.category as any,
+          pipelineStage: input.pipelineStage as InsertPipelineLesson["pipelineStage"],
+          category: input.category as InsertPipelineLesson["category"],
           lessonText: input.lessonText,
-          sourceAction: input.sourceAction as any,
+          sourceAction: input.sourceAction as InsertPipelineLesson["sourceAction"],
           createdByUserId: ctx.user.id,
           weight: input.weight,
         });
@@ -1669,7 +1670,7 @@ export const appRouter = router({
           isActive: input.isActive,
           weight: input.weight,
           lessonText: input.lessonText,
-          category: input.category as any,
+          category: input.category as InsertPipelineLesson["category"],
         });
         return { success: true };
       }),

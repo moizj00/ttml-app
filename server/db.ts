@@ -1619,7 +1619,7 @@ export async function getActiveLessons(filters: {
   if (filters.letterType) {
     conditions.push(
       or(
-        eq(pipelineLessons.letterType, filters.letterType as any),
+        eq(pipelineLessons.letterType, filters.letterType as NonNullable<InsertPipelineLesson["letterType"]>),
         isNull(pipelineLessons.letterType),
       )!
     );
@@ -1635,7 +1635,7 @@ export async function getActiveLessons(filters: {
   if (filters.pipelineStage) {
     conditions.push(
       or(
-        eq(pipelineLessons.pipelineStage, filters.pipelineStage as any),
+        eq(pipelineLessons.pipelineStage, filters.pipelineStage as NonNullable<InsertPipelineLesson["pipelineStage"]>),
         isNull(pipelineLessons.pipelineStage),
       )!
     );
@@ -1656,10 +1656,10 @@ export async function getAllLessons(filters?: {
 }) {
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [];
-  if (filters?.letterType) conditions.push(eq(pipelineLessons.letterType, filters.letterType as any));
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (filters?.letterType) conditions.push(eq(pipelineLessons.letterType, filters.letterType as NonNullable<InsertPipelineLesson["letterType"]>));
   if (filters?.jurisdiction) conditions.push(eq(pipelineLessons.jurisdiction, filters.jurisdiction));
-  if (filters?.pipelineStage) conditions.push(eq(pipelineLessons.pipelineStage, filters.pipelineStage as any));
+  if (filters?.pipelineStage) conditions.push(eq(pipelineLessons.pipelineStage, filters.pipelineStage as NonNullable<InsertPipelineLesson["pipelineStage"]>));
   if (filters?.isActive !== undefined) conditions.push(eq(pipelineLessons.isActive, filters.isActive));
   const query = db.select().from(pipelineLessons).orderBy(desc(pipelineLessons.createdAt));
   if (conditions.length > 0) return query.where(and(...conditions));

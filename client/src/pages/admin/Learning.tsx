@@ -38,19 +38,19 @@ import { toast } from "sonner";
 import { useState } from "react";
 
 const CATEGORIES = [
-  "citation_error",
-  "jurisdiction_error",
-  "tone_issue",
-  "structure_issue",
-  "factual_error",
-  "bloat_detected",
-  "missing_section",
-  "style_preference",
-  "legal_accuracy",
-  "general",
+  "citation_error", "jurisdiction_error", "tone_issue", "structure_issue",
+  "factual_error", "bloat_detected", "missing_section", "style_preference",
+  "legal_accuracy", "general",
 ] as const;
+type LessonCategory = (typeof CATEGORIES)[number];
 
 const STAGES = ["research", "drafting", "assembly", "vetting"] as const;
+type PipelineStage = (typeof STAGES)[number];
+
+const LETTER_TYPES = [
+  "demand-letter", "cease-and-desist", "contract-breach", "eviction-notice",
+  "employment-dispute", "consumer-complaint", "general-legal",
+] as const;
 
 function categoryColor(cat: string): string {
   const map: Record<string, string> = {
@@ -146,12 +146,19 @@ function LessonsTab({
   const [filterActive, setFilterActive] = useState("__all__");
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterJurisdiction, setFilterJurisdiction] = useState("");
+  const [filterLetterType, setFilterLetterType] = useState("__all__");
 
-  const filters: Record<string, any> = {};
-  if (filterStage && filterStage !== "__all__") filters.pipelineStage = filterStage;
+  const filters: {
+    pipelineStage?: string;
+    isActive?: boolean;
+    jurisdiction?: string;
+    letterType?: string;
+  } = {};
+  if (filterStage !== "__all__") filters.pipelineStage = filterStage;
   if (filterActive === "active") filters.isActive = true;
   if (filterActive === "inactive") filters.isActive = false;
   if (filterJurisdiction) filters.jurisdiction = filterJurisdiction;
+  if (filterLetterType !== "__all__") filters.letterType = filterLetterType;
 
   const hasFilters = Object.keys(filters).length > 0;
 
@@ -159,8 +166,8 @@ function LessonsTab({
     hasFilters ? filters : undefined
   );
 
-  const filteredLessons = filterCategory && filterCategory !== "__all__"
-    ? lessons?.filter((l: any) => l.category === filterCategory)
+  const filteredLessons = filterCategory !== "__all__"
+    ? lessons?.filter((l) => l.category === filterCategory)
     : lessons;
 
   const updateLesson = trpc.admin.updateLesson.useMutation({
@@ -179,22 +186,29 @@ function LessonsTab({
     onError: (e) => toast.error("Creation failed", { description: e.message }),
   });
 
-  const activeCount = lessons?.filter((l: any) => l.isActive).length ?? 0;
+  const activeCount = lessons?.filter((l) => l.isActive).length ?? 0;
   const totalCount = lessons?.length ?? 0;
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ lessonText: "", category: "", weight: 50 });
 
-  const [newLesson, setNewLesson] = useState({
+  const [newLesson, setNewLesson] = useState<{
+    lessonText: string;
+    category: LessonCategory;
+    pipelineStage: string;
+    letterType: string;
+    jurisdiction: string;
+    weight: number;
+  }>({
     lessonText: "",
-    category: "general" as (typeof CATEGORIES)[number],
-    pipelineStage: "" as string,
-    letterType: "" as string,
+    category: "general",
+    pipelineStage: "",
+    letterType: "",
     jurisdiction: "",
     weight: 50,
   });
 
-  function startEdit(lesson: any) {
+  function startEdit(lesson: { id: number; lessonText: string; category: string | null; weight: number | null }) {
     setEditingId(lesson.id);
     setEditForm({
       lessonText: lesson.lessonText,
@@ -212,7 +226,7 @@ function LessonsTab({
     updateLesson.mutate({
       id: editingId,
       lessonText: editForm.lessonText,
-      category: editForm.category as any,
+      category: editForm.category as LessonCategory,
       weight: editForm.weight,
     }, {
       onSuccess: () => {
@@ -226,6 +240,7 @@ function LessonsTab({
     setFilterActive("__all__");
     setFilterCategory("__all__");
     setFilterJurisdiction("");
+    setFilterLetterType("__all__");
   }
 
   return (
@@ -289,7 +304,7 @@ function LessonsTab({
                       <Select
                         value={newLesson.category}
                         onValueChange={(v) =>
-                          setNewLesson({ ...newLesson, category: v as any })
+                          setNewLesson({ ...newLesson, category: v as LessonCategory })
                         }
                       >
                         <SelectTrigger data-testid="select-category">
@@ -327,6 +342,26 @@ function LessonsTab({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
+                      <label className="text-sm font-medium">Letter Type</label>
+                      <Select
+                        value={newLesson.letterType}
+                        onValueChange={(v) =>
+                          setNewLesson({ ...newLesson, letterType: v })
+                        }
+                      >
+                        <SelectTrigger data-testid="select-letter-type">
+                          <SelectValue placeholder="All types" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LETTER_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t.replace(/-/g, " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
                       <label className="text-sm font-medium">Jurisdiction</label>
                       <Input
                         value={newLesson.jurisdiction}
@@ -337,22 +372,22 @@ function LessonsTab({
                         data-testid="input-jurisdiction"
                       />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium">Weight (0-100)</label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={newLesson.weight}
-                        onChange={(e) =>
-                          setNewLesson({
-                            ...newLesson,
-                            weight: parseInt(e.target.value) || 50,
-                          })
-                        }
-                        data-testid="input-weight"
-                      />
-                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Weight (0-100)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newLesson.weight}
+                      onChange={(e) =>
+                        setNewLesson({
+                          ...newLesson,
+                          weight: parseInt(e.target.value) || 50,
+                        })
+                      }
+                      data-testid="input-weight"
+                    />
                   </div>
                   <Button
                     className="w-full"
@@ -363,7 +398,8 @@ function LessonsTab({
                       createLesson.mutate({
                         lessonText: newLesson.lessonText,
                         category: newLesson.category,
-                        pipelineStage: (newLesson.pipelineStage || undefined) as any,
+                        pipelineStage: (newLesson.pipelineStage || undefined) as PipelineStage | undefined,
+                        letterType: newLesson.letterType || undefined,
                         jurisdiction: newLesson.jurisdiction || undefined,
                         weight: newLesson.weight,
                         sourceAction: "manual",
@@ -413,6 +449,19 @@ function LessonsTab({
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filterLetterType} onValueChange={setFilterLetterType}>
+              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="filter-letter-type">
+                <SelectValue placeholder="All letter types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All letter types</SelectItem>
+                {LETTER_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t.replace(/-/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filterActive} onValueChange={setFilterActive}>
               <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="filter-active">
                 <SelectValue placeholder="All status" />
@@ -430,7 +479,7 @@ function LessonsTab({
               className="w-[140px] h-8 text-xs"
               data-testid="filter-jurisdiction"
             />
-            {(filterStage !== "__all__" || filterCategory !== "__all__" || filterActive !== "__all__" || filterJurisdiction) && (
+            {(filterStage !== "__all__" || filterCategory !== "__all__" || filterActive !== "__all__" || filterLetterType !== "__all__" || filterJurisdiction) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -463,7 +512,7 @@ function LessonsTab({
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredLessons.map((lesson: any) => (
+          {filteredLessons.map((lesson) => (
             <Card
               key={lesson.id}
               className={`transition-opacity ${!lesson.isActive ? "opacity-50" : ""}`}
@@ -711,10 +760,12 @@ function QualityTab() {
                       </tr>
                     </thead>
                     <tbody>
-                      {byLetterType.map((row: any, i: number) => (
+                      {byLetterType.map((row, i: number) => {
+                        const lt = String(row.letterType ?? "Unknown");
+                        return (
                         <tr key={i} className="border-b last:border-0" data-testid={`row-quality-type-${i}`}>
                           <td className="py-2.5 font-medium capitalize">
-                            {(row.letterType ?? "Unknown").replace(/_/g, " ")}
+                            {lt.replace(/[-_]/g, " ")}
                           </td>
                           <td className="py-2.5 text-right">
                             <span className={`font-semibold ${
@@ -738,10 +789,11 @@ function QualityTab() {
                               : "—"}
                           </td>
                           <td className="py-2.5 text-right text-muted-foreground">
-                            {row.total ?? 0}
+                            {String(row.total ?? 0)}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -756,14 +808,14 @@ function QualityTab() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {trend.map((entry: any, i: number) => (
+                  {trend.map((entry, i: number) => (
                     <div
                       key={i}
                       className="flex items-center gap-3 text-sm"
                       data-testid={`row-trend-${i}`}
                     >
                       <span className="text-muted-foreground w-24 shrink-0">
-                        {new Date(entry.date).toLocaleDateString("en-US", {
+                        {new Date(String(entry.date)).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                         })}
@@ -780,7 +832,7 @@ function QualityTab() {
                         {Math.round(Number(entry.avgScore))}
                       </span>
                       <span className="text-muted-foreground w-8 text-right">
-                        ({entry.count})
+                        ({String(entry.count)})
                       </span>
                     </div>
                   ))}

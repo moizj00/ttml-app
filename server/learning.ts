@@ -8,6 +8,8 @@ import {
 } from "./db";
 import type { InsertPipelineLesson } from "../drizzle/schema";
 
+type LetterType = InsertPipelineLesson["letterType"];
+
 function computeWordLevelEditDistance(a: string, b: string): number {
   const wordsA = a.split(/\s+/).filter(Boolean);
   const wordsB = b.split(/\s+/).filter(Boolean);
@@ -60,7 +62,7 @@ export async function extractLessonFromApproval(
     if (!letter) return;
 
     const versions = await getLetterVersionsByRequestId(letterId, true);
-    const aiDraft = versions?.find((v: any) => v.versionType === "ai_draft");
+    const aiDraft = versions?.find((v) => v.versionType === "ai_draft");
 
     if (aiDraft && aiDraft.content) {
       const editDistance = computeWordLevelEditDistance(aiDraft.content, finalContent);
@@ -70,7 +72,7 @@ export async function extractLessonFromApproval(
           : `Attorney made significant edits (${editDistance}% word-level change) during approval. The AI draft needed substantial revision for this ${letter.letterType} letter in ${letter.jurisdictionState ?? "unknown"} jurisdiction.`;
 
         await createPipelineLesson({
-          letterType: letter.letterType as any,
+          letterType: letter.letterType as LetterType,
           jurisdiction: letter.jurisdictionState,
           pipelineStage: "assembly",
           category: categorizeFromNote(internalNote ?? lessonText),
@@ -85,7 +87,7 @@ export async function extractLessonFromApproval(
 
     if (internalNote && internalNote.length > 20) {
       await createPipelineLesson({
-        letterType: letter.letterType as any,
+        letterType: letter.letterType as LetterType,
         jurisdiction: letter.jurisdictionState,
         pipelineStage: "drafting",
         category: categorizeFromNote(internalNote),
@@ -111,7 +113,7 @@ export async function extractLessonFromRejection(
     if (!letter) return;
 
     await createPipelineLesson({
-      letterType: letter.letterType as any,
+      letterType: letter.letterType as LetterType,
       jurisdiction: letter.jurisdictionState,
       pipelineStage: "drafting",
       category: categorizeFromNote(reason),
@@ -138,7 +140,7 @@ export async function extractLessonFromChangesRequest(
 
     const noteToUse = internalNote || userVisibleNote;
     await createPipelineLesson({
-      letterType: letter.letterType as any,
+      letterType: letter.letterType as LetterType,
       jurisdiction: letter.jurisdictionState,
       pipelineStage: "drafting",
       category: categorizeFromNote(noteToUse),
@@ -164,7 +166,7 @@ export async function extractLessonFromEdit(
     if (!letter) return;
 
     const versions = await getLetterVersionsByRequestId(letterId, true);
-    const aiDraft = versions?.find((v: any) => v.versionType === "ai_draft");
+    const aiDraft = versions?.find((v) => v.versionType === "ai_draft");
 
     if (aiDraft?.content) {
       const editDistance = computeWordLevelEditDistance(aiDraft.content, editContent);
@@ -174,7 +176,7 @@ export async function extractLessonFromEdit(
           : `Attorney made ${editDistance}% word-level edits to ${letter.letterType} letter in ${letter.jurisdictionState ?? "unknown"} jurisdiction.`;
 
         await createPipelineLesson({
-          letterType: letter.letterType as any,
+          letterType: letter.letterType as LetterType,
           jurisdiction: letter.jurisdictionState,
           pipelineStage: "assembly",
           category: categorizeFromNote(note ?? lessonText),
@@ -206,24 +208,24 @@ export async function computeAndStoreQualityScore(
 
     const revisionCount = versions?.length ?? 0;
 
-    const vettingJobs = workflowJobsList?.filter((j: any) => {
-      const meta = j.requestPayloadJson as any;
+    const vettingJobs = workflowJobsList?.filter((j) => {
+      const meta = j.requestPayloadJson as Record<string, unknown> | null;
       return j.jobType === "generation_pipeline" ||
         j.jobType === "retry" ||
         (meta?.stage === "vetting");
     }) ?? [];
-    const vettingPassCount = vettingJobs.filter((j: any) => j.status === "completed").length;
-    const vettingFailCount = vettingJobs.filter((j: any) => j.status === "failed").length;
+    const vettingPassCount = vettingJobs.filter((j) => j.status === "completed").length;
+    const vettingFailCount = vettingJobs.filter((j) => j.status === "failed").length;
 
     let editDistance: number | undefined;
     if (outcome === "approved" && finalContent) {
-      const aiDraft = versions?.find((v: any) => v.versionType === "ai_draft");
+      const aiDraft = versions?.find((v) => v.versionType === "ai_draft");
       if (aiDraft?.content) {
         editDistance = computeWordLevelEditDistance(aiDraft.content, finalContent);
       }
     }
 
-    const changesRequestedActions = reviewActionsList?.filter((a: any) =>
+    const changesRequestedActions = reviewActionsList?.filter((a) =>
       a.action === "requested_changes" || a.action === "rejected"
     ) ?? [];
     const firstPassApproved = changesRequestedActions.length === 0 && outcome === "approved";
@@ -232,14 +234,14 @@ export async function computeAndStoreQualityScore(
     let timeToApprovalMs: number | undefined;
 
     const sortedActions = [...(reviewActionsList ?? [])].sort(
-      (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
 
-    const submittedAction = sortedActions.find((a: any) =>
+    const submittedAction = sortedActions.find((a) =>
       a.toStatus === "submitted" || a.toStatus === "under_review"
     );
-    const firstClaim = sortedActions.find((a: any) => a.action === "claimed_for_review");
-    const finalAction = sortedActions.find((a: any) =>
+    const firstClaim = sortedActions.find((a) => a.action === "claimed_for_review");
+    const finalAction = sortedActions.find((a) =>
       a.action === "approved" || a.action === "rejected"
     );
 
