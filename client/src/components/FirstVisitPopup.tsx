@@ -5,10 +5,10 @@ import { X, Gift, Clock } from "lucide-react";
 const FIRST_VISIT_KEY = "ttml_first_visit_popup_seen";
 const COUNTDOWN_SECONDS = 5 * 60;
 
-function formatTime(seconds: number): string {
+function formatTime(seconds: number): { minutes: string; secs: string } {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  return { minutes: m.toString(), secs: s.toString().padStart(2, "0") };
 }
 
 export default function FirstVisitPopup() {
@@ -57,62 +57,82 @@ export default function FirstVisitPopup() {
 
   if (!visible) return null;
 
+  const { minutes, secs } = formatTime(timeLeft);
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-popup-overlay"
       data-testid="first-visit-popup-overlay"
     >
       <div
-        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-sm rounded-3xl shadow-[0_25px_60px_-12px_rgba(0,0,0,0.35)] overflow-hidden animate-popup-card border border-white/20"
+        style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(245,245,255,0.9) 100%)" }}
         data-testid="first-visit-popup"
       >
         <button
           onClick={dismiss}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors z-10"
+          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-black/5 text-slate-400 hover:bg-black/10 hover:text-slate-600 transition-all duration-200 z-10"
           aria-label="Close"
           data-testid="first-visit-popup-close"
         >
-          <X className="w-5 h-5" />
+          <X className="w-3.5 h-3.5" />
         </button>
 
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 px-6 py-8 text-center text-white">
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Gift className="w-8 h-8 text-white" />
+        <div className="relative px-6 pt-8 pb-6 text-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-blue-700 to-violet-800" />
+          <div className="absolute inset-0 animate-popup-shimmer" />
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+
+          <div className="relative z-10">
+            <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 animate-popup-icon-glow border border-white/20">
+              <Gift className="w-8 h-8 text-white drop-shadow-sm" />
+            </div>
+            <h2 className="text-2xl font-bold text-white tracking-tight mb-1" data-testid="first-visit-popup-title">
+              Congratulations!
+            </h2>
+            <p className="text-blue-200 text-sm font-medium tracking-wide uppercase">
+              As a first time client
+            </p>
           </div>
-          <h2 className="text-2xl font-bold mb-2" data-testid="first-visit-popup-title">
-            Congratulations!
-          </h2>
-          <p className="text-blue-100 text-sm">
-            As a first time client
-          </p>
         </div>
 
-        <div className="px-6 py-6 text-center">
+        <div className="px-6 py-5 text-center">
           <p
-            className="text-lg font-semibold text-slate-800 mb-4"
+            className="text-lg font-semibold text-slate-800 mb-5 tracking-tight leading-snug"
             data-testid="first-visit-popup-message"
           >
             View your first letter for free
           </p>
 
-          <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg px-4 py-2 mb-6">
-            <Clock className="w-4 h-4 text-slate-500" />
-            <span
-              className="text-lg font-mono font-bold text-slate-800"
+          <div className="flex items-center justify-center gap-2.5 mb-6">
+            <Clock className="w-4 h-4 text-indigo-400 animate-popup-pulse" />
+            <div
+              className="flex items-center gap-1"
               data-testid="first-visit-popup-timer"
             >
-              {formatTime(timeLeft)}
-            </span>
-            <span className="text-xs text-slate-500">remaining</span>
+              <span className="inline-flex items-center justify-center min-w-[2rem] h-9 bg-slate-900 text-white font-mono font-bold text-lg rounded-lg px-2 shadow-sm">
+                {minutes}
+              </span>
+              <span className="text-slate-400 font-bold text-lg leading-none">:</span>
+              <span className="inline-flex items-center justify-center min-w-[2rem] h-9 bg-slate-900 text-white font-mono font-bold text-lg rounded-lg px-2 shadow-sm">
+                {secs}
+              </span>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">remaining</span>
           </div>
 
           <button
             onClick={handleGetStarted}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors"
+            className="w-full py-3 rounded-xl font-semibold text-white text-sm tracking-wide transition-all duration-200 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 hover:shadow-[0_4px_20px_rgba(79,70,229,0.4)] active:scale-[0.98]"
             data-testid="first-visit-popup-cta"
           >
             Get Started
           </button>
+
+          <p className="text-[11px] text-slate-400 mt-3">
+            No credit card required
+          </p>
         </div>
       </div>
     </div>
