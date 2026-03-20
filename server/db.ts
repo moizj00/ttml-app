@@ -371,6 +371,7 @@ export async function updateLetterStatus(
   if (!options?.force) {
     const letter = await getLetterRequestById(id);
     if (!letter) throw new Error(`Letter ${id} not found`);
+    if (letter.status === status) return;
     if (!isValidTransition(letter.status, status)) {
       throw new Error(
         `Invalid status transition: ${letter.status} → ${status}. ` +
