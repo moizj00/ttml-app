@@ -214,7 +214,7 @@ export default function SubmitLetter() {
         /* storage full — ignore */
       }
     }
-  }, [form, step]);
+  }, [form, step, DRAFT_KEY]);
 
   const { data: canSubmitData, isLoading: checkingSubscription } =
     trpc.billing.checkCanSubmit.useQuery();
