@@ -168,12 +168,16 @@ export const letterRequests = pgTable("letter_requests", {
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   priority: priorityEnum("priority").default("normal").notNull(),
   lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow(),
-  // Tracks when the 48-hour draft-ready reminder email was sent (null = not yet sent)
   draftReminderSentAt: timestamp("draft_reminder_sent_at", { withTimezone: true }),
   researchUnverified: boolean("research_unverified").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_letter_requests_user_id").on(t.userId),
+  index("idx_letter_requests_status").on(t.status),
+  index("idx_letter_requests_assigned_reviewer_id").on(t.assignedReviewerId),
+  index("idx_letter_requests_created_at").on(t.createdAt),
+]);
 
 export type LetterRequest = typeof letterRequests.$inferSelect;
 export type InsertLetterRequest = typeof letterRequests.$inferInsert;
@@ -190,7 +194,9 @@ export const letterVersions = pgTable("letter_versions", {
   createdByUserId: integer("created_by_user_id"),
   metadataJson: jsonb("metadata_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_letter_versions_letter_request_id").on(t.letterRequestId),
+]);
 
 export type LetterVersion = typeof letterVersions.$inferSelect;
 export type InsertLetterVersion = typeof letterVersions.$inferInsert;
@@ -209,7 +215,9 @@ export const reviewActions = pgTable("review_actions", {
   fromStatus: varchar("from_status", { length: 50 }),
   toStatus: varchar("to_status", { length: 50 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_review_actions_letter_request_id").on(t.letterRequestId),
+]);
 
 export type ReviewAction = typeof reviewActions.$inferSelect;
 export type InsertReviewAction = typeof reviewActions.$inferInsert;
@@ -231,7 +239,10 @@ export const workflowJobs = pgTable("workflow_jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_workflow_jobs_letter_request_id").on(t.letterRequestId),
+  index("idx_workflow_jobs_status").on(t.status),
+]);
 
 export type WorkflowJob = typeof workflowJobs.$inferSelect;
 export type InsertWorkflowJob = typeof workflowJobs.$inferInsert;
@@ -251,7 +262,9 @@ export const researchRuns = pgTable("research_runs", {
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_research_runs_letter_request_id").on(t.letterRequestId),
+]);
 
 export type ResearchRun = typeof researchRuns.$inferSelect;
 export type InsertResearchRun = typeof researchRuns.$inferInsert;
@@ -270,7 +283,9 @@ export const attachments = pgTable("attachments", {
   sizeBytes: bigint("size_bytes", { mode: "number" }),
   metadataJson: jsonb("metadata_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_attachments_letter_request_id").on(t.letterRequestId),
+]);
 
 export type Attachment = typeof attachments.$inferSelect;
 export type InsertAttachment = typeof attachments.$inferInsert;
@@ -289,7 +304,9 @@ export const notifications = pgTable("notifications", {
   readAt: timestamp("read_at", { withTimezone: true }),
   metadataJson: jsonb("metadata_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_notifications_user_id").on(t.userId),
+]);
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;

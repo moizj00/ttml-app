@@ -83,7 +83,9 @@ scripts/         # Post-merge setup, DB helpers
     3.  **Claude Opus Assembly**: Consolidated validation for structure, word count, and consistency.
     4.  **Claude Sonnet Vetting**: Jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness.
     5.  **Recursive Learning System**: Captures structured lessons from attorney feedback (approvals/rejections/changes) and computes 0-100 quality scores. Lessons are automatically injected into future AI drafting, assembly, and vetting stages to ensure continuous quality improvement.
-- **Rate Limiting**: Implemented using Upstash Redis.
+- **Pipeline Resilience**: Automatic retry (up to 3 attempts with 10s/20s exponential backoff) via `runPipelineWithRetry()` before marking as `pipeline_failed`. All pipeline catch handlers consolidated into single reusable function.
+- **Rate Limiting**: Implemented using Upstash Redis. Pipeline-triggering endpoints (submit, updateForChanges, retryFromRejected) use fail-closed mode — requests are denied when Redis is unavailable.
+- **Database Indexes**: Comprehensive btree indexes on frequently queried columns: `letter_requests` (userId, status, assignedReviewerId, createdAt), `workflow_jobs` (letterRequestId, status), `review_actions` (letterRequestId), `letter_versions` (letterRequestId), `notifications` (userId), `attachments` (letterRequestId), `research_runs` (letterRequestId).
 - **Error Tracking**: Sentry for error tracking and alerting.
 - **Deployment**: Railway.
 

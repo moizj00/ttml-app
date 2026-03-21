@@ -163,6 +163,79 @@ const intakeJsonSchema = z.object({
     .optional(),
 });
 
+const PIPELINE_MAX_RETRIES = 2;
+const PIPELINE_BASE_DELAY_MS = 10_000;
+
+async function runPipelineWithRetry(
+  letterId: number,
+  intake: any,
+  userId: number | undefined,
+  appUrl: string,
+  label: string
+): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        console.log(`[Pipeline] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
+        await new Promise(r => setTimeout(r, delay));
+        const current = await getLetterRequestById(letterId);
+        const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
+        if (current && !retryableStatuses.includes(current.status)) {
+          console.log(`[Pipeline] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
+          return;
+        }
+        await updateLetterStatus(letterId, "submitted", { force: true });
+      }
+      await runFullPipeline(letterId, intake, undefined, userId);
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, err instanceof Error ? err.message : err);
+    }
+  }
+  console.error(`[Pipeline] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
+  try {
+    const admins = await getAllUsers("admin");
+    for (const admin of admins) {
+      try {
+        if (admin.email) {
+          await sendJobFailedAlertEmail({
+            to: admin.email,
+            name: admin.name ?? "Admin",
+            letterId,
+            jobType: "generation_pipeline",
+            errorMessage: lastErr instanceof Error ? lastErr.message : String(lastErr),
+            appUrl,
+          });
+        }
+      } catch (emailErr) {
+        console.error("[Pipeline] Failed to email admin:", emailErr);
+      }
+      try {
+        await createNotification({
+          userId: admin.id,
+          type: "job_failed",
+          category: "letters",
+          title: `Pipeline failed for letter #${letterId}`,
+          body: lastErr instanceof Error ? lastErr.message : String(lastErr),
+          link: `/admin/jobs`,
+        });
+      } catch (notifErr) {
+        console.error("[Pipeline] Failed to create notification:", notifErr);
+      }
+    }
+  } catch (notifyErr) {
+    console.error("[Pipeline] Failed to notify admins:", notifyErr);
+  }
+  try {
+    await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+  } catch (statusErr) {
+    console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
+  }
+}
+
 // ─── Role Guards ──────────────────────────────────────────────────────────────
 
 const employeeProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -328,50 +401,7 @@ export const appRouter = router({
             console.error("[Email] Submission confirmation failed:", err)
           );
 
-        // Trigger AI pipeline in background (non-blocking)
-        runFullPipeline(letterId, input.intakeJson as any, undefined, ctx.user.id).catch(async err => {
-          console.error("[Pipeline] Failed:", err);
-          try {
-            const admins = await getAllUsers("admin");
-            const appUrl = getAppUrl(ctx.req);
-            for (const admin of admins) {
-              try {
-                if (admin.email) {
-                  await sendJobFailedAlertEmail({
-                    to: admin.email,
-                    name: admin.name ?? "Admin",
-                    letterId,
-                    jobType: "generation_pipeline",
-                    errorMessage:
-                      err instanceof Error ? err.message : String(err),
-                    appUrl,
-                  });
-                }
-              } catch (emailErr) {
-                console.error("[Pipeline] Failed to email admin:", emailErr);
-              }
-              try {
-                await createNotification({
-                  userId: admin.id,
-                  type: "job_failed",
-                  category: "letters",
-                  title: `Pipeline failed for letter #${letterId}`,
-                  body: err instanceof Error ? err.message : String(err),
-                  link: `/admin/jobs`,
-                });
-              } catch (notifErr) {
-                console.error("[Pipeline] Failed to create notification:", notifErr);
-              }
-            }
-          } catch (notifyErr) {
-            console.error("[Pipeline] Failed to notify admins:", notifyErr);
-          }
-          try {
-            await updateLetterStatus(letterId, "pipeline_failed", { force: true });
-          } catch (statusErr) {
-            console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
-          }
-        });
+        runPipelineWithRetry(letterId, input.intakeJson as any, ctx.user.id, appUrl, "submit");
 
         try {
           await notifyAdmins({
@@ -464,43 +494,10 @@ export const appRouter = router({
         // This allows the pipeline to properly set researching → drafting → generated_locked
         await updateLetterStatus(input.letterId, "submitted");
 
-        // Re-trigger full pipeline (not just from drafting — subscriber changes may affect research)
         const intake = input.updatedIntakeJson ?? letter.intakeJson;
         if (intake) {
           const appUrl = getAppUrl(ctx.req);
-          runFullPipeline(input.letterId, intake as any, undefined, letter.userId).catch(async err => {
-            console.error(
-              "[Pipeline] Retry after subscriber update failed:",
-              err
-            );
-            try {
-              const admins = await getAllUsers("admin");
-              for (const admin of admins) {
-                try {
-                  if (admin.email) {
-                    await sendJobFailedAlertEmail({
-                      to: admin.email,
-                      name: admin.name ?? "Admin",
-                      letterId: input.letterId,
-                      jobType: "generation_pipeline",
-                      errorMessage:
-                        err instanceof Error ? err.message : String(err),
-                      appUrl,
-                    });
-                  }
-                } catch (emailErr) {
-                  console.error("[Pipeline] Failed to email admin:", emailErr);
-                }
-              }
-            } catch (notifyErr) {
-              console.error("[Pipeline] Failed to notify admins:", notifyErr);
-            }
-            try {
-              await updateLetterStatus(input.letterId, "pipeline_failed", { force: true });
-            } catch (statusErr) {
-              console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
-            }
-          });
+          runPipelineWithRetry(input.letterId, intake as any, letter.userId, appUrl, "updateForChanges");
         }
 
         return { success: true };
@@ -563,39 +560,7 @@ export const appRouter = router({
         await updateLetterStatus(input.letterId, "submitted");
 
         const appUrl = getAppUrl(ctx.req);
-        runFullPipeline(input.letterId, intake as any, undefined, letter.userId).catch(async err => {
-          console.error(
-            "[Pipeline] Retry after rejection failed:",
-            err
-          );
-          try {
-            const admins = await getAllUsers("admin");
-            for (const admin of admins) {
-              try {
-                if (admin.email) {
-                  await sendJobFailedAlertEmail({
-                    to: admin.email,
-                    name: admin.name ?? "Admin",
-                    letterId: input.letterId,
-                    jobType: "generation_pipeline",
-                    errorMessage:
-                      err instanceof Error ? err.message : String(err),
-                    appUrl,
-                  });
-                }
-              } catch (emailErr) {
-                console.error("[Pipeline] Failed to email admin:", emailErr);
-              }
-            }
-          } catch (notifyErr) {
-            console.error("[Pipeline] Failed to notify admins:", notifyErr);
-          }
-          try {
-            await updateLetterStatus(input.letterId, "pipeline_failed", { force: true });
-          } catch (statusErr) {
-            console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
-          }
-        });
+        runPipelineWithRetry(input.letterId, intake as any, letter.userId, appUrl, "retryFromRejected");
 
         return { success: true };
       }),
