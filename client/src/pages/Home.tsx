@@ -147,6 +147,13 @@ export default function Home() {
             >
               FAQ
             </button>
+            <Link
+              href="/analyze"
+              className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors"
+              data-testid="nav-analyze"
+            >
+              Doc Analyzer
+            </Link>
             <div className="w-px h-4 bg-slate-200" />
             <button
               onClick={goToLogin}
@@ -211,6 +218,14 @@ export default function Home() {
               >
                 FAQ
               </button>
+              <Link
+                href="/analyze"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-semibold text-blue-600 py-2 uppercase tracking-wide text-left"
+                data-testid="mobile-analyze"
+              >
+                Doc Analyzer
+              </Link>
               <div className="h-px bg-slate-100 my-1" />
               <button
                 onClick={goToLogin}

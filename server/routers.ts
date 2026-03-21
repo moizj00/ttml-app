@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { checkTrpcRateLimit } from "./rateLimiter";
+import { checkTrpcRateLimit, getClientIp } from "./rateLimiter";
+import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../shared/types";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -2519,6 +2520,154 @@ export const appRouter = router({
           });
         }
         return { success: true };
+      }),
+  }),
+
+  // ─── Document Analyzer (public, rate-limited) ─────────────────────────────
+  documents: router({
+    analyze: publicProcedure
+      .input(
+        z.object({
+          fileName: z.string().min(1).max(500),
+          fileType: z.enum(["pdf", "docx", "txt"]),
+          // Max base64 string length for a ~7.5MB file (accounts for ~33% base64 overhead)
+          fileBase64: z.string().min(1).max(10_485_760), // 10MB base64 string = ~7.5MB actual file
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Rate-limit: 3/hour for unauthenticated (by trusted IP), general limit for authenticated
+        if (!ctx.user) {
+          const clientIp = getClientIp(ctx.req);
+          await checkTrpcRateLimit("document", `ip:${clientIp}`);
+        } else {
+          await checkTrpcRateLimit("general", `user:${ctx.user.id}`);
+        }
+
+        // Enforce binary size limit: 7.5MB decoded
+        const fileBuffer = Buffer.from(input.fileBase64, "base64");
+        if (fileBuffer.byteLength > 7_864_320) {
+          throw new TRPCError({
+            code: "PAYLOAD_TOO_LARGE",
+            message: "File exceeds the 7.5 MB size limit. Please upload a smaller document.",
+          });
+        }
+
+        // Extract text from document
+        let documentText = "";
+        try {
+          if (input.fileType === "pdf") {
+            const { PDFParse } = await import("pdf-parse");
+            const parser = new PDFParse({ data: fileBuffer });
+            const pdfData = await parser.getText();
+            await parser.destroy();
+            documentText = pdfData.text;
+          } else if (input.fileType === "docx") {
+            const mammoth = await import("mammoth");
+            const result = await mammoth.extractRawText({ buffer: fileBuffer });
+            documentText = result.value;
+          } else {
+            documentText = fileBuffer.toString("utf-8");
+          }
+        } catch (err) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not extract text from the document. Please ensure it is a valid file.",
+          });
+        }
+
+        if (!documentText || documentText.trim().length < 50) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "The document appears to be empty or contains no readable text.",
+          });
+        }
+
+        // Truncate to avoid token limits (~100k chars)
+        const truncatedText = documentText.length > 100_000
+          ? documentText.slice(0, 100_000) + "\n\n[Document truncated due to length]"
+          : documentText;
+
+        // Build Claude prompt
+        const anthropic = (await import("@ai-sdk/anthropic")).createAnthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+        });
+        const { generateText: aiGenerateText } = await import("ai");
+
+        const prompt = `You are a legal document analyst. Analyze the following document and return a JSON object with this exact structure:
+
+{
+  "summary": "A clear 2-4 paragraph summary of what this document is about, its purpose, and the key parties involved.",
+  "actionItems": [
+    "Action item or obligation 1",
+    "Action item or obligation 2"
+  ],
+  "flaggedRisks": [
+    {
+      "clause": "The specific clause or section title",
+      "description": "Why this is risky or important",
+      "severity": "high"
+    }
+  ]
+}
+
+Rules:
+- summary: Comprehensive yet readable overview (2-4 paragraphs)
+- actionItems: Array of 3-10 concrete obligations, deadlines, or required actions
+- flaggedRisks: Array of 2-8 important clauses, risks, or provisions that deserve attention. severity must be "low", "medium", or "high"
+- Return ONLY valid JSON, no markdown, no explanation
+- If this is not a legal or contractual document, still provide a helpful analysis
+
+Document to analyze:
+---
+${truncatedText}
+---`;
+
+        let analysisResult: DocumentAnalysisResult;
+
+        try {
+          const { text } = await aiGenerateText({
+            model: anthropic("claude-opus-4-5"),
+            prompt,
+            maxOutputTokens: 2000,
+          });
+
+          // Parse and strip JSON from possible markdown code fences
+          let jsonStr = text.trim();
+          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (jsonMatch) jsonStr = jsonMatch[1].trim();
+          const objMatch = jsonStr.match(/\{[\s\S]*\}/);
+          if (objMatch) jsonStr = objMatch[0];
+
+          const parsed: unknown = JSON.parse(jsonStr);
+
+          // Validate via lenient schema (applies safe defaults for partial/malformed AI output)
+          analysisResult = documentAnalysisResultLenientSchema.parse(parsed);
+        } catch (err) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "AI analysis failed. Please try again.",
+          });
+        }
+
+        // Persist result to DB (best-effort, non-blocking)
+        (async () => {
+          try {
+            const db = await (await import("./db")).getDb();
+            if (db) {
+              const { documentAnalyses } = await import("../drizzle/schema");
+              await db.insert(documentAnalyses).values({
+                documentName: input.fileName,
+                fileType: input.fileType,
+                analysisJson: analysisResult,
+                userId: ctx.user?.id ?? null,
+              });
+            }
+          } catch (dbErr) {
+            console.error("[DocumentAnalyzer] DB insert failed (non-fatal):", dbErr);
+          }
+        })();
+
+        return analysisResult;
       }),
   }),
 });

@@ -5,6 +5,8 @@
 
 export type * from "../drizzle/schema";
 
+import { z } from "zod";
+
 // ─── Status Machine (single source of truth) ───
 // This is the CANONICAL transition map. server/db.ts imports from here.
 // Admin forceStatusTransition bypasses this map (force=true).
@@ -392,3 +394,40 @@ export interface DraftOutput {
   reviewNotes?: string;
   groundingWarnings?: string[];
 }
+
+// ─── Document Analysis Result ───
+export const flaggedRiskSchema = z.object({
+  clause: z.string(),
+  description: z.string(),
+  severity: z.enum(["low", "medium", "high"]),
+});
+export type FlaggedRisk = z.infer<typeof flaggedRiskSchema>;
+
+// Canonical (strict) result schema — use for return types and DB storage
+export const documentAnalysisResultSchema = z.object({
+  summary: z.string(),
+  actionItems: z.array(z.string()),
+  flaggedRisks: z.array(flaggedRiskSchema),
+});
+export type DocumentAnalysisResult = z.infer<typeof documentAnalysisResultSchema>;
+
+// Lenient schema for parsing raw AI output — applies safe defaults for missing/malformed fields
+export const documentAnalysisResultLenientSchema = z.object({
+  summary: z.string().default("Summary unavailable."),
+  actionItems: z.array(z.string()).default([]),
+  flaggedRisks: z.array(
+    z.object({
+      clause: z.string().default("Unknown clause"),
+      description: z.string().default(""),
+      severity: z.enum(["low", "medium", "high"]).default("medium"),
+    })
+  ).default([]),
+});
+
+// Zod insert schema for the document_analyses table
+export const insertDocumentAnalysisSchema = z.object({
+  documentName: z.string().min(1).max(500),
+  fileType: z.enum(["pdf", "docx", "txt"]),
+  analysisJson: documentAnalysisResultSchema,
+  userId: z.number().int().nullable().optional(),
+});

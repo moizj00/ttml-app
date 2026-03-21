@@ -461,3 +461,21 @@ export const letterQualityScores = pgTable("letter_quality_scores", {
 
 export type LetterQualityScore = typeof letterQualityScores.$inferSelect;
 export type InsertLetterQualityScore = typeof letterQualityScores.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: document_analyses (document analyzer tool)
+// ═══════════════════════════════════════════════════════
+export const documentAnalyses = pgTable("document_analyses", {
+  id: serial("id").primaryKey(),
+  documentName: varchar("document_name", { length: 500 }).notNull(),
+  fileType: varchar("file_type", { length: 20 }).notNull(), // pdf, docx, txt
+  analysisJson: jsonb("analysis_json").notNull(),
+  userId: integer("user_id"), // null = unauthenticated
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  userIdx: index("idx_document_analyses_user_id").on(t.userId),
+  createdAtIdx: index("idx_document_analyses_created_at").on(t.createdAt),
+}));
+
+export type DocumentAnalysis = typeof documentAnalyses.$inferSelect;
+export type InsertDocumentAnalysis = typeof documentAnalyses.$inferInsert;

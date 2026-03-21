@@ -132,6 +132,27 @@ function AppLayoutSkeleton({ children }: { children: React.ReactNode }) {
 // PUBLIC PAGE SKELETONS
 // ═══════════════════════════════════════════════════════════════
 
+/** DocumentAnalyzer — public nav + upload zone + results skeleton */
+export function DocumentAnalyzerSkeleton() {
+  return (
+    <div className="min-h-screen bg-background">
+      <NavBarSkeleton />
+      <div className="pt-24 pb-16 px-4 max-w-4xl mx-auto space-y-8">
+        <div className="text-center space-y-3">
+          <Skeleton className="h-10 w-72 mx-auto" />
+          <Skeleton className="h-5 w-96 mx-auto" />
+        </div>
+        <div className="rounded-xl border bg-card p-10 flex flex-col items-center gap-4">
+          <Skeleton className="w-16 h-16 rounded-full" />
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-64" />
+          <Skeleton className="h-10 w-40 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Pricing / FAQ — public nav + centered content cards */
 export function PublicPageSkeleton() {
   return (

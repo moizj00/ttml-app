@@ -183,9 +183,9 @@ async function startServer() {
     express.raw({ type: "application/json" }),
     stripeWebhookHandler
   );
-  // Body parser — 10 MB cap (base64-encodes up to ~7 MB actual files)
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ limit: "10mb", extended: true }));
+  // Body parser — 12 MB cap: 7.5 MB actual file base64-encodes to ~10 MB, plus JSON envelope overhead
+  app.use(express.json({ limit: "12mb" }));
+  app.use(express.urlencoded({ limit: "12mb", extended: true }));
 
   // ─── Rate Limiting ──────────────────────────────────────────────────────────
   app.use("/api/auth/login", authRateLimitMiddleware);

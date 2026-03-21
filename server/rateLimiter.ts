@@ -39,6 +39,7 @@ let authLimiter: Ratelimit | null = null;
 let letterSubmitLimiter: Ratelimit | null = null;
 let paymentLimiter: Ratelimit | null = null;
 let generalLimiter: Ratelimit | null = null;
+let documentAnalysisLimiter: Ratelimit | null = null;
 
 function getAuthLimiter(): Ratelimit | null {
   const r = getRedis();
@@ -96,9 +97,23 @@ function getGeneralLimiter(): Ratelimit | null {
   return generalLimiter;
 }
 
+function getDocumentAnalysisLimiter(): Ratelimit | null {
+  const r = getRedis();
+  if (!r) return null;
+  if (!documentAnalysisLimiter) {
+    documentAnalysisLimiter = new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(3, "1 h"),
+      prefix: "ttml:docanalyze",
+      analytics: true,
+    });
+  }
+  return documentAnalysisLimiter;
+}
+
 // ─── IP Extraction ────────────────────────────────────────────────────────────
 
-function getClientIp(req: Request): string {
+export function getClientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
     // Take the rightmost IP — it is appended by our trusted reverse proxy (Railway)
@@ -229,7 +244,7 @@ export function generalRateLimitMiddleware(
  * Returns true if allowed, throws TRPCError if rate limited.
  */
 export async function checkTrpcRateLimit(
-  limiterType: "letter" | "payment" | "general",
+  limiterType: "letter" | "payment" | "general" | "document",
   identifier: string,
   failClosed = false
 ): Promise<void> {
@@ -240,6 +255,9 @@ export async function checkTrpcRateLimit(
       break;
     case "payment":
       limiter = getPaymentLimiter();
+      break;
+    case "document":
+      limiter = getDocumentAnalysisLimiter();
       break;
     default:
       limiter = getGeneralLimiter();

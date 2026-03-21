@@ -30,6 +30,7 @@ import {
   AdminLetterDetailSkeleton,
   AdminAffiliateSkeleton,
   AdminLearningSkeleton,
+  DocumentAnalyzerSkeleton,
 } from "./components/skeletons";
 
 // ─── Eagerly loaded (public landing + auth — needed on first paint) ───
@@ -48,6 +49,7 @@ const FAQ = lazy(() => import("./pages/FAQ"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const DocumentAnalyzer = lazy(() => import("./pages/DocumentAnalyzer"));
 
 // ─── Lazy-loaded: Subscriber pages ───
 const SubscriberDashboard = lazy(() => import("./pages/subscriber/Dashboard"));
@@ -100,6 +102,11 @@ function Router() {
       <Route path="/privacy">
         <Suspense fallback={<PublicPageSkeleton />}>
           <Privacy />
+        </Suspense>
+      </Route>
+      <Route path="/analyze">
+        <Suspense fallback={<DocumentAnalyzerSkeleton />}>
+          <DocumentAnalyzer />
         </Suspense>
       </Route>
 
