@@ -127,6 +127,13 @@
       "when": 1774105162442,
       "tag": "0017_nice_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1774109762509,
+      "tag": "0018_mean_greymalkin",
+      "breakpoints": true
     }
   ]
 }
