@@ -102,6 +102,66 @@ import {
   hasActiveRecurringSubscription,
 } from "./stripe";
 
+const intakeJsonSchema = z.object({
+  schemaVersion: z.string().default("1.0"),
+  letterType: z.string(),
+  sender: z.object({
+    name: z.string(),
+    address: z.string(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+  }),
+  recipient: z.object({
+    name: z.string(),
+    address: z.string(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+  }),
+  jurisdiction: z.object({
+    country: z.string(),
+    state: z.string(),
+    city: z.string().optional(),
+  }),
+  matter: z.object({
+    category: z.string(),
+    subject: z.string(),
+    description: z.string(),
+    incidentDate: z.string().optional(),
+  }),
+  financials: z
+    .object({
+      amountOwed: z.number().optional(),
+      currency: z.string().optional(),
+    })
+    .optional(),
+  desiredOutcome: z.string(),
+  deadlineDate: z.string().optional(),
+  additionalContext: z.string().optional(),
+  tonePreference: z
+    .enum(["firm", "moderate", "aggressive"])
+    .optional(),
+  language: z.string().optional(),
+  priorCommunication: z.string().optional(),
+  deliveryMethod: z.string().optional(),
+  communications: z
+    .object({
+      summary: z.string(),
+      lastContactDate: z.string().optional(),
+      method: z
+        .enum(["email", "phone", "letter", "in-person", "other"])
+        .optional(),
+    })
+    .optional(),
+  toneAndDelivery: z
+    .object({
+      tone: z.enum(["firm", "moderate", "aggressive"]),
+      deliveryMethod: z
+        .enum(["email", "certified-mail", "hand-delivery"])
+        .optional(),
+    })
+    .optional(),
+});
+
 // ─── Role Guards ──────────────────────────────────────────────────────────────
 
 const employeeProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -222,73 +282,14 @@ export const appRouter = router({
           jurisdictionCountry: z.string().default("US"),
           jurisdictionState: z.string().min(2),
           jurisdictionCity: z.string().optional(),
-          intakeJson: z.object({
-            schemaVersion: z.string().default("1.0"),
-            letterType: z.string(),
-            sender: z.object({
-              name: z.string(),
-              address: z.string(),
-              email: z.string().optional(),
-              phone: z.string().optional(),
-            }),
-            recipient: z.object({
-              name: z.string(),
-              address: z.string(),
-              email: z.string().optional(),
-              phone: z.string().optional(),
-            }),
-            jurisdiction: z.object({
-              country: z.string(),
-              state: z.string(),
-              city: z.string().optional(),
-            }),
-            matter: z.object({
-              category: z.string(),
-              subject: z.string(),
-              description: z.string(),
-              incidentDate: z.string().optional(),
-            }),
-            financials: z
-              .object({
-                amountOwed: z.number().optional(),
-                currency: z.string().optional(),
-              })
-              .optional(),
-            desiredOutcome: z.string(),
-            deadlineDate: z.string().optional(),
-            additionalContext: z.string().optional(),
-            tonePreference: z
-              .enum(["firm", "moderate", "aggressive"])
-              .optional(),
-            language: z.string().optional(),
-            priorCommunication: z.string().optional(),
-            deliveryMethod: z.string().optional(),
-            communications: z
-              .object({
-                summary: z.string(),
-                lastContactDate: z.string().optional(),
-                method: z
-                  .enum(["email", "phone", "letter", "in-person", "other"])
-                  .optional(),
-              })
-              .optional(),
-            toneAndDelivery: z
-              .object({
-                tone: z.enum(["firm", "moderate", "aggressive"]),
-                deliveryMethod: z
-                  .enum(["email", "certified-mail", "hand-delivery"])
-                  .optional(),
-              })
-              .optional(),
-          }),
+          intakeJson: intakeJsonSchema,
           priority: z
             .enum(["low", "normal", "high", "urgent"])
             .default("normal"),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // Rate limit: 5 letter submissions per hour per user
-        await checkTrpcRateLimit("letter", `user:${ctx.user.id}`);
+        await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
         const result = await createLetterRequest({
           userId: ctx.user.id,
           letterType: input.letterType,
@@ -333,28 +334,41 @@ export const appRouter = router({
             const admins = await getAllUsers("admin");
             const appUrl = getAppUrl(ctx.req);
             for (const admin of admins) {
-              if (admin.email) {
-                await sendJobFailedAlertEmail({
-                  to: admin.email,
-                  name: admin.name ?? "Admin",
-                  letterId,
-                  jobType: "generation_pipeline",
-                  errorMessage:
-                    err instanceof Error ? err.message : String(err),
-                  appUrl,
-                });
+              try {
+                if (admin.email) {
+                  await sendJobFailedAlertEmail({
+                    to: admin.email,
+                    name: admin.name ?? "Admin",
+                    letterId,
+                    jobType: "generation_pipeline",
+                    errorMessage:
+                      err instanceof Error ? err.message : String(err),
+                    appUrl,
+                  });
+                }
+              } catch (emailErr) {
+                console.error("[Pipeline] Failed to email admin:", emailErr);
               }
-              await createNotification({
-                userId: admin.id,
-                type: "job_failed",
-                category: "letters",
-                title: `Pipeline failed for letter #${letterId}`,
-                body: err instanceof Error ? err.message : String(err),
-                link: `/admin/jobs`,
-              });
+              try {
+                await createNotification({
+                  userId: admin.id,
+                  type: "job_failed",
+                  category: "letters",
+                  title: `Pipeline failed for letter #${letterId}`,
+                  body: err instanceof Error ? err.message : String(err),
+                  link: `/admin/jobs`,
+                });
+              } catch (notifErr) {
+                console.error("[Pipeline] Failed to create notification:", notifErr);
+              }
             }
           } catch (notifyErr) {
             console.error("[Pipeline] Failed to notify admins:", notifyErr);
+          }
+          try {
+            await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+          } catch (statusErr) {
+            console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
           }
         });
 
@@ -400,10 +414,11 @@ export const appRouter = router({
         z.object({
           letterId: z.number(),
           additionalContext: z.string().min(10),
-          updatedIntakeJson: z.any().optional(),
+          updatedIntakeJson: intakeJsonSchema.optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -460,20 +475,29 @@ export const appRouter = router({
             try {
               const admins = await getAllUsers("admin");
               for (const admin of admins) {
-                if (admin.email) {
-                  await sendJobFailedAlertEmail({
-                    to: admin.email,
-                    name: admin.name ?? "Admin",
-                    letterId: input.letterId,
-                    jobType: "generation_pipeline",
-                    errorMessage:
-                      err instanceof Error ? err.message : String(err),
-                    appUrl,
-                  });
+                try {
+                  if (admin.email) {
+                    await sendJobFailedAlertEmail({
+                      to: admin.email,
+                      name: admin.name ?? "Admin",
+                      letterId: input.letterId,
+                      jobType: "generation_pipeline",
+                      errorMessage:
+                        err instanceof Error ? err.message : String(err),
+                      appUrl,
+                    });
+                  }
+                } catch (emailErr) {
+                  console.error("[Pipeline] Failed to email admin:", emailErr);
                 }
               }
             } catch (notifyErr) {
               console.error("[Pipeline] Failed to notify admins:", notifyErr);
+            }
+            try {
+              await updateLetterStatus(input.letterId, "pipeline_failed", { force: true });
+            } catch (statusErr) {
+              console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
             }
           });
         }
@@ -486,10 +510,11 @@ export const appRouter = router({
         z.object({
           letterId: z.number(),
           additionalContext: z.string().min(10).optional(),
-          updatedIntakeJson: z.any().optional(),
+          updatedIntakeJson: intakeJsonSchema.optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
@@ -545,20 +570,29 @@ export const appRouter = router({
           try {
             const admins = await getAllUsers("admin");
             for (const admin of admins) {
-              if (admin.email) {
-                await sendJobFailedAlertEmail({
-                  to: admin.email,
-                  name: admin.name ?? "Admin",
-                  letterId: input.letterId,
-                  jobType: "generation_pipeline",
-                  errorMessage:
-                    err instanceof Error ? err.message : String(err),
-                  appUrl,
-                });
+              try {
+                if (admin.email) {
+                  await sendJobFailedAlertEmail({
+                    to: admin.email,
+                    name: admin.name ?? "Admin",
+                    letterId: input.letterId,
+                    jobType: "generation_pipeline",
+                    errorMessage:
+                      err instanceof Error ? err.message : String(err),
+                    appUrl,
+                  });
+                }
+              } catch (emailErr) {
+                console.error("[Pipeline] Failed to email admin:", emailErr);
               }
             }
           } catch (notifyErr) {
             console.error("[Pipeline] Failed to notify admins:", notifyErr);
+          }
+          try {
+            await updateLetterStatus(input.letterId, "pipeline_failed", { force: true });
+          } catch (statusErr) {
+            console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
           }
         });
 

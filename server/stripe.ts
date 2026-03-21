@@ -283,32 +283,9 @@ export async function activateSubscription(params: {
 
   const lettersAllowed = plan.lettersAllowed;
 
-  // Check if subscription already exists for this user
-  const existing = await db
-    .select({ id: subscriptions.id })
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, params.userId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    // Update existing
-    await db
-      .update(subscriptions)
-      .set({
-        stripeCustomerId: params.stripeCustomerId,
-        stripeSubscriptionId: params.stripeSubscriptionId,
-        stripePaymentIntentId: params.stripePaymentIntentId,
-        plan: params.planId as any,
-        status: params.status,
-        lettersAllowed,
-        currentPeriodStart: params.currentPeriodStart ?? null,
-        currentPeriodEnd: params.currentPeriodEnd ?? null,
-        cancelAtPeriodEnd: params.cancelAtPeriodEnd ?? false,
-      })
-      .where(eq(subscriptions.userId, params.userId));
-  } else {
-    // Insert new
-    await db.insert(subscriptions).values({
+  await db
+    .insert(subscriptions)
+    .values({
       userId: params.userId,
       stripeCustomerId: params.stripeCustomerId,
       stripeSubscriptionId: params.stripeSubscriptionId,
@@ -320,8 +297,22 @@ export async function activateSubscription(params: {
       currentPeriodStart: params.currentPeriodStart ?? null,
       currentPeriodEnd: params.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: params.cancelAtPeriodEnd ?? false,
+    })
+    .onConflictDoUpdate({
+      target: subscriptions.userId,
+      set: {
+        stripeCustomerId: params.stripeCustomerId,
+        stripeSubscriptionId: params.stripeSubscriptionId,
+        stripePaymentIntentId: params.stripePaymentIntentId,
+        plan: params.planId as any,
+        status: params.status,
+        lettersAllowed,
+        currentPeriodStart: params.currentPeriodStart ?? null,
+        currentPeriodEnd: params.currentPeriodEnd ?? null,
+        cancelAtPeriodEnd: params.cancelAtPeriodEnd ?? false,
+        updatedAt: new Date(),
+      },
     });
-  }
 }
 
 // ─── Increment Letters Used ───────────────────────────────────────────────────

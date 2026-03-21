@@ -230,7 +230,8 @@ export function generalRateLimitMiddleware(
  */
 export async function checkTrpcRateLimit(
   limiterType: "letter" | "payment" | "general",
-  identifier: string
+  identifier: string,
+  failClosed = false
 ): Promise<void> {
   let limiter: Ratelimit | null;
   switch (limiterType) {
@@ -245,7 +246,13 @@ export async function checkTrpcRateLimit(
   }
 
   if (!limiter) {
-    // Redis not configured — fail open for tRPC (general operations still work)
+    if (failClosed) {
+      const { TRPCError } = await import("@trpc/server");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Service temporarily unavailable. Please try again shortly.",
+      });
+    }
     return;
   }
 
@@ -260,7 +267,15 @@ export async function checkTrpcRateLimit(
     }
   } catch (err: any) {
     if (err?.code === "TOO_MANY_REQUESTS") throw err;
-    // Redis error — allow (fail open)
+    if (err?.code === "INTERNAL_SERVER_ERROR") throw err;
+    if (failClosed) {
+      console.error("[RateLimit] Redis error on critical endpoint, denying:", err?.message);
+      const { TRPCError } = await import("@trpc/server");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Service temporarily unavailable. Please try again shortly.",
+      });
+    }
     console.warn("[RateLimit] tRPC check error, allowing:", err?.message);
   }
 }

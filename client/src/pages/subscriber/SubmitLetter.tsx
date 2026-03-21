@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ChevronRight,
   ChevronLeft,
@@ -133,9 +134,24 @@ const INITIAL: FormData = {
   communicationsMethod: "",
 };
 
-const DRAFT_KEY = "ttml_draft_letter";
+const DRAFT_KEY_PREFIX = "ttml_draft_letter";
+
+function getTabSessionId(): string {
+  let tabId = sessionStorage.getItem("ttml_tab_id");
+  if (!tabId) {
+    tabId = Math.random().toString(36).slice(2, 10);
+    sessionStorage.setItem("ttml_tab_id", tabId);
+  }
+  return tabId;
+}
 
 export default function SubmitLetter() {
+  const { user } = useAuth();
+  const DRAFT_KEY = useMemo(() => {
+    const userId = user?.id ?? "anon";
+    const tabId = getTabSessionId();
+    return `${DRAFT_KEY_PREFIX}_${userId}_${tabId}`;
+  }, [user?.id]);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
   const [exhibits, setExhibits] = useState<ExhibitRow[]>([
@@ -158,7 +174,7 @@ export default function SubmitLetter() {
     } catch {
       /* ignore corrupt data */
     }
-  }, []);
+  }, [DRAFT_KEY]);
 
   const resumeDraft = () => {
     try {

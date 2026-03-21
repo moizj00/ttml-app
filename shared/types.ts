@@ -9,17 +9,18 @@ export type * from "../drizzle/schema";
 // This is the CANONICAL transition map. server/db.ts imports from here.
 // Admin forceStatusTransition bypasses this map (force=true).
 export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  submitted: ["researching"],
-  researching: ["drafting", "submitted"],       // "submitted" = pipeline failure reset
-  drafting: ["generated_locked", "submitted"],   // "submitted" = pipeline failure reset
-  generated_locked: ["pending_review"],           // free unlock or paid unlock
+  submitted: ["researching", "pipeline_failed"],
+  researching: ["drafting", "submitted", "pipeline_failed"],
+  drafting: ["generated_locked", "submitted", "pipeline_failed"],
+  generated_locked: ["pending_review"],
   pending_review: ["under_review"],
   under_review: ["approved", "rejected", "needs_changes"],
-  needs_changes: ["submitted", "researching", "drafting"], // "submitted" = subscriber resubmit after changes
-  approved: ["client_approval_pending"],         // attorney can request client approval
-  client_approval_pending: ["client_approved"],  // subscriber confirms
-  client_approved: [],                           // terminal
-  rejected: ["submitted"],                       // subscriber can retry from scratch
+  needs_changes: ["submitted", "researching", "drafting"],
+  approved: ["client_approval_pending"],
+  client_approval_pending: ["client_approved"],
+  client_approved: [],
+  rejected: ["submitted"],
+  pipeline_failed: ["submitted"],
 };
 
 export function isValidTransition(from: string, to: string): boolean {
@@ -82,6 +83,11 @@ export const STATUS_CONFIG: Record<
     bgColor: "bg-emerald-100",
   },
   rejected: { label: "Rejected", color: "text-red-700", bgColor: "bg-red-200" },
+  pipeline_failed: {
+    label: "Pipeline Failed",
+    color: "text-red-600",
+    bgColor: "bg-red-100",
+  },
 };
 
 // ─── Letter Type display config ───

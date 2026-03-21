@@ -113,6 +113,20 @@
       "when": 1774005219690,
       "tag": "0015_heavy_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1774104921355,
+      "tag": "0016_low_gorilla_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1774105162442,
+      "tag": "0017_nice_sasquatch",
+      "breakpoints": true
     }
   ]
 }

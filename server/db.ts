@@ -367,19 +367,6 @@ export async function updateLetterStatus(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Validate transition unless force=true (admin override)
-  if (!options?.force) {
-    const letter = await getLetterRequestById(id);
-    if (!letter) throw new Error(`Letter ${id} not found`);
-    if (letter.status === status) return;
-    if (!isValidTransition(letter.status, status)) {
-      throw new Error(
-        `Invalid status transition: ${letter.status} → ${status}. ` +
-          `Allowed: [${(ALLOWED_TRANSITIONS[letter.status] ?? []).join(", ")}]`
-      );
-    }
-  }
-
   const updateData: Record<string, unknown> = {
     status,
     lastStatusChangedAt: new Date(),
@@ -387,10 +374,50 @@ export async function updateLetterStatus(
   };
   if (options?.assignedReviewerId !== undefined)
     updateData.assignedReviewerId = options.assignedReviewerId;
-  await db
+
+  if (options?.force) {
+    const result = await db
+      .update(letterRequests)
+      .set(updateData as any)
+      .where(eq(letterRequests.id, id))
+      .returning({ id: letterRequests.id });
+    if (result.length === 0) {
+      throw new Error(`Letter ${id} not found`);
+    }
+    return;
+  }
+
+  const allowedFromStatuses = Object.entries(ALLOWED_TRANSITIONS)
+    .filter(([, targets]) => targets.includes(status))
+    .map(([from]) => from);
+
+  const statusConditions = [
+    eq(letterRequests.status, status as any),
+    ...(allowedFromStatuses.length > 0
+      ? [inArray(letterRequests.status, allowedFromStatuses as any)]
+      : []),
+  ];
+
+  const result = await db
     .update(letterRequests)
     .set(updateData as any)
-    .where(eq(letterRequests.id, id));
+    .where(
+      and(
+        eq(letterRequests.id, id),
+        or(...statusConditions),
+      )
+    )
+    .returning({ id: letterRequests.id, status: letterRequests.status });
+
+  if (result.length === 0) {
+    const letter = await getLetterRequestById(id);
+    if (!letter) throw new Error(`Letter ${id} not found`);
+    if (letter.status === status) return;
+    throw new Error(
+      `Invalid status transition: ${letter.status} → ${status}. ` +
+        `Allowed from ${letter.status}: [${(ALLOWED_TRANSITIONS[letter.status] ?? []).join(", ")}]`
+    );
+  }
 }
 
 export async function updateLetterVersionPointers(

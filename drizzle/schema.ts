@@ -26,7 +26,7 @@ export const LETTER_STATUSES = [
   "submitted",
   "researching",
   "drafting",
-  "generated_locked",   // AI draft complete, awaiting subscriber payment to unlock
+  "generated_locked",
   "pending_review",
   "under_review",
   "needs_changes",
@@ -34,6 +34,7 @@ export const LETTER_STATUSES = [
   "client_approval_pending",
   "client_approved",
   "rejected",
+  "pipeline_failed",
 ] as const;
 export type LetterStatus = (typeof LETTER_STATUSES)[number];
 
@@ -77,7 +78,7 @@ export type Priority = (typeof PRIORITIES)[number];
 export const userRoleEnum = pgEnum("user_role", ["subscriber", "employee", "admin", "attorney"]);
 export const letterStatusEnum = pgEnum("letter_status", [
   "submitted", "researching", "drafting", "generated_locked", "generated_unlocked",
-  "upsell_dismissed",
+  "upsell_dismissed", "pipeline_failed",
   "pending_review", "under_review", "needs_changes", "approved",
   "client_approval_pending", "client_approved",
   "rejected",
@@ -304,7 +305,7 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().unique(),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
