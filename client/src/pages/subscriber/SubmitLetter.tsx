@@ -197,6 +197,7 @@ export default function SubmitLetter() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
   // ── Show prefill banner on mount if prefill was applied ─────────────────
@@ -278,24 +279,44 @@ export default function SubmitLetter() {
   const submit = trpc.letters.submit.useMutation();
   const uploadAttachment = trpc.letters.uploadAttachment.useMutation();
 
-  const update = (field: keyof FormData, value: string) =>
+  const update = (field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
-
-  const canProceed = () => {
-    if (step === 1) return !!form.letterType && form.subject.length >= 5;
-    if (step === 2) return !!form.jurisdictionState;
-    if (step === 3)
-      return (
-        form.senderName.trim().length > 0 &&
-        form.senderAddress.trim().length > 0 &&
-        form.recipientName.trim().length > 0 &&
-        form.recipientAddress.trim().length > 0
-      );
-    if (step === 4) return form.description.length >= 20;
-    if (step === 5) return form.desiredOutcome.length >= 10;
-    if (step === 6) return true; // exhibits are optional
-    return true;
+    if (stepErrors[field]) {
+      setStepErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
+
+  const getStepErrors = (s: number): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    if (s === 1) {
+      if (!form.letterType) errors.letterType = "Letter type is required.";
+      if (form.subject.length < 5) errors.subject = "Subject must be at least 5 characters.";
+    } else if (s === 2) {
+      if (!form.jurisdictionState) errors.jurisdictionState = "State / jurisdiction is required.";
+    } else if (s === 3) {
+      if (!form.senderName.trim()) errors.senderName = "Sender name is required.";
+      if (!form.senderAddress.trim()) errors.senderAddress = "Sender address is required.";
+      if (!form.recipientName.trim()) errors.recipientName = "Recipient name is required.";
+      if (!form.recipientAddress.trim()) errors.recipientAddress = "Recipient address is required.";
+    } else if (s === 4) {
+      if (form.description.length < 20) errors.description = "Description must be at least 20 characters.";
+    } else if (s === 5) {
+      if (form.desiredOutcome.length < 10) errors.desiredOutcome = "Desired outcome must be at least 10 characters.";
+    }
+    return errors;
+  };
+
+  const validateStep = (): boolean => {
+    const errors = getStepErrors(step);
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const canProceed = () => Object.keys(getStepErrors(step)).length === 0;
 
   const readBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -606,6 +627,9 @@ export default function SubmitLetter() {
                       </button>
                     ))}
                   </div>
+                  {stepErrors.letterType && (
+                    <p className="text-xs text-red-600 mt-1">{stepErrors.letterType}</p>
+                  )}
                 </div>
                 <div>
                   <Label
@@ -624,10 +648,13 @@ export default function SubmitLetter() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {form.subject.length}/500 characters
                   </p>
+                  {stepErrors.subject && (
+                    <p className="text-xs text-red-600 mt-1">{stepErrors.subject}</p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-sm font-medium mb-1.5 block">
-                    Tone Preference
+                    Tone Preference (Optional)
                   </Label>
                   <Select
                     value={form.tonePreference}
@@ -674,6 +701,9 @@ export default function SubmitLetter() {
                     This determines which laws and statutes apply to your
                     letter.
                   </p>
+                  {stepErrors.jurisdictionState && (
+                    <p className="text-xs text-red-600 mt-1">{stepErrors.jurisdictionState}</p>
+                  )}
                 </div>
                 <div>
                   <Label
@@ -713,13 +743,16 @@ export default function SubmitLetter() {
                         onChange={e => update("senderName", e.target.value)}
                         placeholder="John Smith"
                       />
+                      {stepErrors.senderName && (
+                        <p className="text-xs text-red-600 mt-1">{stepErrors.senderName}</p>
+                      )}
                     </div>
                     <div>
                       <Label
                         htmlFor="senderEmail"
                         className="text-xs mb-1 block"
                       >
-                        Email
+                        Email (Optional)
                       </Label>
                       <Input
                         id="senderEmail"
@@ -743,10 +776,13 @@ export default function SubmitLetter() {
                       onChange={e => update("senderAddress", e.target.value)}
                       placeholder="123 Main St, City, State 12345"
                     />
+                    {stepErrors.senderAddress && (
+                      <p className="text-xs text-red-600 mt-1">{stepErrors.senderAddress}</p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="senderPhone" className="text-xs mb-1 block">
-                      Phone
+                      Phone (Optional)
                     </Label>
                     <Input
                       id="senderPhone"
@@ -775,13 +811,16 @@ export default function SubmitLetter() {
                         onChange={e => update("recipientName", e.target.value)}
                         placeholder="Jane Doe / Acme Corp"
                       />
+                      {stepErrors.recipientName && (
+                        <p className="text-xs text-red-600 mt-1">{stepErrors.recipientName}</p>
+                      )}
                     </div>
                     <div>
                       <Label
                         htmlFor="recipientEmail"
                         className="text-xs mb-1 block"
                       >
-                        Email
+                        Email (Optional)
                       </Label>
                       <Input
                         id="recipientEmail"
@@ -805,6 +844,9 @@ export default function SubmitLetter() {
                       onChange={e => update("recipientAddress", e.target.value)}
                       placeholder="456 Other St, City, State 67890"
                     />
+                    {stepErrors.recipientAddress && (
+                      <p className="text-xs text-red-600 mt-1">{stepErrors.recipientAddress}</p>
+                    )}
                   </div>
                 </div>
               </>
@@ -831,6 +873,9 @@ export default function SubmitLetter() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {form.description.length} characters (minimum 20)
                   </p>
+                  {stepErrors.description && (
+                    <p className="text-xs text-red-600 mt-1">{stepErrors.description}</p>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -838,7 +883,7 @@ export default function SubmitLetter() {
                       htmlFor="incidentDate"
                       className="text-sm font-medium mb-1.5 block"
                     >
-                      Incident Date
+                      Incident Date (Optional)
                     </Label>
                     <Input
                       id="incidentDate"
@@ -852,7 +897,7 @@ export default function SubmitLetter() {
                       htmlFor="amountOwed"
                       className="text-sm font-medium mb-1.5 block"
                     >
-                      Amount Owed (USD)
+                      Amount Owed (USD) (Optional)
                     </Label>
                     <Input
                       id="amountOwed"
@@ -870,7 +915,7 @@ export default function SubmitLetter() {
                     htmlFor="additionalContext"
                     className="text-sm font-medium mb-1.5 block"
                   >
-                    Additional Context
+                    Additional Context (Optional)
                   </Label>
                   <Textarea
                     id="additionalContext"
@@ -902,13 +947,16 @@ export default function SubmitLetter() {
                     rows={4}
                     className="resize-none"
                   />
+                  {stepErrors.desiredOutcome && (
+                    <p className="text-xs text-red-600 mt-1">{stepErrors.desiredOutcome}</p>
+                  )}
                 </div>
                 <div>
                   <Label
                     htmlFor="deadlineDate"
                     className="text-sm font-medium mb-1.5 block"
                   >
-                    Response Deadline
+                    Response Deadline (Optional)
                   </Label>
                   <Input
                     id="deadlineDate"
@@ -924,7 +972,7 @@ export default function SubmitLetter() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label className="text-sm font-medium mb-1.5 block">
-                      Language Preference
+                      Language Preference (Optional)
                     </Label>
                     <Select
                       value={form.language}
@@ -945,7 +993,7 @@ export default function SubmitLetter() {
                   </div>
                   <div>
                     <Label className="text-sm font-medium mb-1.5 block">
-                      Prior Communication?
+                      Prior Communication? (Optional)
                     </Label>
                     <Select
                       value={form.priorCommunication}
@@ -968,7 +1016,7 @@ export default function SubmitLetter() {
                   </div>
                   <div>
                     <Label className="text-sm font-medium mb-1.5 block">
-                      Delivery Method
+                      Delivery Method (Optional)
                     </Label>
                     <Select
                       value={form.deliveryMethod}
@@ -1212,7 +1260,7 @@ export default function SubmitLetter() {
         <div className="flex items-center justify-between">
           <Button
             variant="outline"
-            onClick={() => setStep(s => s - 1)}
+            onClick={() => { setStepErrors({}); setStep(s => s - 1); }}
             disabled={step === 1}
             className="bg-background"
           >
@@ -1221,8 +1269,11 @@ export default function SubmitLetter() {
           </Button>
           {step < 6 ? (
             <Button
-              onClick={() => setStep(s => s + 1)}
-              disabled={!canProceed()}
+              onClick={() => {
+                if (validateStep()) {
+                  setStep(s => s + 1);
+                }
+              }}
             >
               Next
               <ChevronRight className="w-4 h-4 ml-1" />
