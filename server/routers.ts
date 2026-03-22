@@ -2558,7 +2558,7 @@ export const appRouter = router({
         });
         const { generateText: aiGenerateText } = await import("ai");
 
-        const prompt = `You are a legal document analyst. Analyze the following document and return a JSON object with this exact structure:
+        const prompt = `You are a legal document analyst specializing in identifying what legal action a recipient of a document should take. Analyze the following document and return a JSON object with this EXACT structure — no additional fields, no markdown, just valid JSON:
 
 {
   "summary": "A clear 2-4 paragraph summary of what this document is about, its purpose, and the key parties involved.",
@@ -2572,15 +2572,29 @@ export const appRouter = router({
       "description": "Why this is risky or important",
       "severity": "high"
     }
-  ]
+  ],
+  "recommendedLetterType": "demand-letter",
+  "urgencyLevel": "high",
+  "detectedDeadline": "30 days from receipt",
+  "detectedJurisdiction": "California",
+  "detectedParties": {
+    "senderName": "Acme Corp",
+    "recipientName": "John Smith"
+  },
+  "recommendedResponseSummary": "A one-sentence description of the most important thing the recipient should do in response to this document."
 }
 
-Rules:
+Field rules:
 - summary: Comprehensive yet readable overview (2-4 paragraphs)
-- actionItems: Array of 3-10 concrete obligations, deadlines, or required actions
+- actionItems: Array of 3-10 concrete obligations, deadlines, or required actions the document recipient must take
 - flaggedRisks: Array of 2-8 important clauses, risks, or provisions that deserve attention. severity must be "low", "medium", or "high"
-- Return ONLY valid JSON, no markdown, no explanation
-- If this is not a legal or contractual document, still provide a helpful analysis
+- recommendedLetterType: The type of response letter the recipient should consider sending. Must be exactly one of: "demand-letter", "cease-and-desist", "contract-breach", "eviction-notice", "employment-dispute", "consumer-complaint", "general-legal". If no legal response letter is warranted, set to null.
+- urgencyLevel: How urgently the recipient needs to respond — "low", "medium", or "high" based on deadlines, legal consequences, and tone
+- detectedDeadline: Any specific deadline or response window mentioned in the document (e.g., "30 days from the date of this letter"). Set to null if none found.
+- detectedJurisdiction: The US state or jurisdiction mentioned or implied in the document (e.g., "California", "New York"). Set to null if unclear.
+- detectedParties: The party who sent this document (senderName) and the party it was sent to (recipientName). Use null for either if not clearly identified.
+- recommendedResponseSummary: One concise sentence (under 150 chars) describing the best action the document recipient should take.
+- Return ONLY valid JSON, no markdown fences, no explanation outside the JSON object.
 
 Document to analyze:
 ---
@@ -2593,7 +2607,7 @@ ${truncatedText}
           const { text } = await aiGenerateText({
             model: anthropic("claude-opus-4-5"),
             prompt,
-            maxOutputTokens: 2000,
+            maxOutputTokens: 3000,
           });
 
           // Parse and strip JSON from possible markdown code fences
@@ -2633,6 +2647,26 @@ ${truncatedText}
         })();
 
         return analysisResult;
+      }),
+
+    getMyAnalyses: protectedProcedure
+      .query(async ({ ctx }) => {
+        try {
+          const db = await (await import("./db")).getDb();
+          if (!db) return [];
+          const { documentAnalyses } = await import("../drizzle/schema");
+          const { eq, desc } = await import("drizzle-orm");
+          const rows = await db
+            .select()
+            .from(documentAnalyses)
+            .where(eq(documentAnalyses.userId, ctx.user.id))
+            .orderBy(desc(documentAnalyses.createdAt))
+            .limit(20);
+          return rows;
+        } catch (err) {
+          console.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
+          return [];
+        }
       }),
   }),
 });

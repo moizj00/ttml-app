@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -29,7 +29,8 @@ import {
   X,
   File as FileIcon,
 } from "lucide-react";
-import { LETTER_TYPE_CONFIG, US_STATES } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, US_STATES, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
+import type { AnalysisPrefill } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
 import { Link } from "wouter";
 
@@ -145,6 +146,32 @@ function getTabSessionId(): string {
   return tabId;
 }
 
+function readAndClearPrefill(): { prefill: AnalysisPrefill | null; found: boolean } {
+  try {
+    const raw = sessionStorage.getItem(ANALYZE_PREFILL_KEY);
+    if (raw) {
+      sessionStorage.removeItem(ANALYZE_PREFILL_KEY);
+      const prefill = JSON.parse(raw) as AnalysisPrefill;
+      return { prefill, found: true };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { prefill: null, found: false };
+}
+
+function buildInitialFormFromPrefill(prefill: AnalysisPrefill): FormData {
+  return {
+    ...INITIAL,
+    ...(prefill.letterType && { letterType: prefill.letterType }),
+    ...(prefill.subject && { subject: prefill.subject.slice(0, 200) }),
+    ...(prefill.jurisdictionState && { jurisdictionState: prefill.jurisdictionState }),
+    ...(prefill.senderName && { senderName: prefill.senderName }),
+    ...(prefill.recipientName && { recipientName: prefill.recipientName }),
+    ...(prefill.description && { description: prefill.description.slice(0, 600) }),
+  };
+}
+
 export default function SubmitLetter() {
   const { user } = useAuth();
   const DRAFT_KEY = useMemo(() => {
@@ -153,16 +180,35 @@ export default function SubmitLetter() {
     return `${DRAFT_KEY_PREFIX}_${userId}_${tabId}`;
   }, [user?.id]);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormData>(INITIAL);
+
+  const prefillApplied = useRef(false);
+  const [form, setForm] = useState<FormData>(() => {
+    const { prefill, found } = readAndClearPrefill();
+    if (found && prefill) {
+      prefillApplied.current = true;
+      return buildInitialFormFromPrefill(prefill);
+    }
+    return INITIAL;
+  });
+
   const [exhibits, setExhibits] = useState<ExhibitRow[]>([
     { id: "exhibit-0", description: "", file: null },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
   const [, navigate] = useLocation();
+
+  // ── Show prefill banner on mount if prefill was applied ─────────────────
+  useEffect(() => {
+    if (prefillApplied.current) {
+      setShowPrefillBanner(true);
+    }
+  }, []);
 
   // ── Resume draft: load saved draft on mount ─────────────────────────────
   useEffect(() => {
+    if (prefillApplied.current) return; // skip draft check if prefill was applied
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
@@ -403,6 +449,33 @@ export default function SubmitLetter() {
       ]}
     >
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Prefill Banner — from Document Analyzer */}
+        {showPrefillBanner && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-green-900">
+                  Pre-filled from your document analysis
+                </p>
+                <p className="text-xs text-green-700">
+                  We've populated the form with details detected from your uploaded document. Review and edit as needed.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPrefillBanner(false)}
+              className="shrink-0 border-green-300 text-green-700 hover:bg-green-100"
+              data-testid="button-dismiss-prefill-banner"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+        )}
+
         {/* Resume Draft Banner */}
         {showDraftBanner && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

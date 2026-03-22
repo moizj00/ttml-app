@@ -22,9 +22,13 @@ import {
   CreditCard,
   MessageSquare,
   Loader2,
+  ScanSearch,
+  Scale,
+  Calendar,
 } from "lucide-react";
-import { Link } from "wouter";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { Link, useLocation } from "wouter";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
+import type { AnalysisPrefill } from "../../../../shared/types";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -243,6 +247,7 @@ function PipelineStepper({ status }: { status: string }) {
 
 export default function SubscriberDashboard() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const {
     data: subscription,
@@ -263,12 +268,30 @@ export default function SubscriberDashboard() {
     },
   });
 
+  const { data: myAnalyses, isLoading: analysesLoading } =
+    trpc.documents.getMyAnalyses.useQuery();
+
   // Supabase Realtime — instant updates when any letter changes for this user
   useLetterListRealtime({
     userId: user?.id ?? null,
     onAnyChange: () => utils.letters.myLetters.invalidate(),
     enabled: !!user?.id,
   });
+
+  const handleUseAnalysis = (analysisJson: any) => {
+    const prefill: AnalysisPrefill = {};
+    if (analysisJson?.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
+    if (analysisJson?.recommendedResponseSummary) prefill.subject = (analysisJson.recommendedResponseSummary as string).slice(0, 200);
+    if (analysisJson?.detectedJurisdiction?.toLowerCase().includes("california") ||
+        analysisJson?.detectedJurisdiction?.toUpperCase() === "CA") {
+      prefill.jurisdictionState = "CA";
+    }
+    if (analysisJson?.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
+    if (analysisJson?.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
+    if (analysisJson?.summary) prefill.description = (analysisJson.summary as string).slice(0, 600);
+    try { sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
+    navigate("/submit");
+  };
 
   const stats = {
     total: letters?.length ?? 0,
@@ -625,6 +648,101 @@ export default function SubscriberDashboard() {
             </div>
           )}
         </div>
+
+        {/* Document Analysis History */}
+        {((myAnalyses && myAnalyses.length > 0) || analysesLoading) && (
+          <Card data-testid="card-analysis-history">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ScanSearch className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-base">Document Analysis History</CardTitle>
+              </div>
+              <Link href="/analyze">
+                <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-new-analysis">
+                  <ScanSearch className="w-3.5 h-3.5" />
+                  New Analysis
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {analysesLoading ? (
+                <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading analyses…
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(myAnalyses ?? []).map((row: any) => {
+                    const result = row.analysisJson as any;
+                    const letterType = result?.recommendedLetterType;
+                    const letterLabel = letterType
+                      ? (LETTER_TYPE_CONFIG[letterType as keyof typeof LETTER_TYPE_CONFIG]?.label ?? letterType)
+                      : null;
+                    const urgencyLevel = result?.urgencyLevel as string | undefined;
+                    const deadline = result?.detectedDeadline as string | null | undefined;
+                    const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+                    const hasUsefulPrefill = !!(letterType || result?.recommendedResponseSummary);
+
+                    return (
+                      <div
+                        key={row.id}
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors"
+                        data-testid={`row-analysis-${row.id}`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <FileText className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate" data-testid={`text-analysis-name-${row.id}`}>
+                              {row.documentName}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              {createdAt && (
+                                <span className="flex items-center gap-1 text-xs text-slate-400">
+                                  <Calendar className="w-3 h-3" />
+                                  {createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                </span>
+                              )}
+                              {letterLabel && (
+                                <Badge variant="secondary" className="text-xs flex items-center gap-1" data-testid={`badge-analysis-type-${row.id}`}>
+                                  <Scale className="w-3 h-3" />
+                                  {letterLabel}
+                                </Badge>
+                              )}
+                              {urgencyLevel === "high" && (
+                                <Badge variant="destructive" className="text-xs">
+                                  High Urgency
+                                </Badge>
+                              )}
+                              {deadline && (
+                                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                  Deadline: {deadline}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {hasUsefulPrefill && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUseAnalysis(result)}
+                            className="flex-shrink-0 gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+                            data-testid={`button-use-analysis-${row.id}`}
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            Draft Letter
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Status Guide — collapsible */}
         <Card>

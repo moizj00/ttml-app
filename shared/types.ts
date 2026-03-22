@@ -403,11 +403,31 @@ export const flaggedRiskSchema = z.object({
 });
 export type FlaggedRisk = z.infer<typeof flaggedRiskSchema>;
 
+export const TTML_LETTER_TYPES = [
+  "demand-letter",
+  "cease-and-desist",
+  "contract-breach",
+  "eviction-notice",
+  "employment-dispute",
+  "consumer-complaint",
+  "general-legal",
+] as const;
+export type TtmlLetterType = (typeof TTML_LETTER_TYPES)[number];
+
 // Canonical (strict) result schema — use for return types and DB storage
 export const documentAnalysisResultSchema = z.object({
   summary: z.string(),
   actionItems: z.array(z.string()),
   flaggedRisks: z.array(flaggedRiskSchema),
+  recommendedLetterType: z.enum(TTML_LETTER_TYPES).nullable(),
+  urgencyLevel: z.enum(["low", "medium", "high"]),
+  detectedDeadline: z.string().nullable(),
+  detectedJurisdiction: z.string().nullable(),
+  detectedParties: z.object({
+    senderName: z.string().nullable(),
+    recipientName: z.string().nullable(),
+  }),
+  recommendedResponseSummary: z.string(),
 });
 export type DocumentAnalysisResult = z.infer<typeof documentAnalysisResultSchema>;
 
@@ -422,6 +442,15 @@ export const documentAnalysisResultLenientSchema = z.object({
       severity: z.enum(["low", "medium", "high"]).default("medium"),
     })
   ).default([]),
+  recommendedLetterType: z.enum(TTML_LETTER_TYPES).nullable().default(null),
+  urgencyLevel: z.enum(["low", "medium", "high"]).default("medium"),
+  detectedDeadline: z.string().nullable().default(null),
+  detectedJurisdiction: z.string().nullable().default(null),
+  detectedParties: z.object({
+    senderName: z.string().nullable(),
+    recipientName: z.string().nullable(),
+  }).default({ senderName: null, recipientName: null }),
+  recommendedResponseSummary: z.string().default(""),
 });
 
 // Zod insert schema for the document_analyses table
@@ -431,3 +460,14 @@ export const insertDocumentAnalysisSchema = z.object({
   analysisJson: documentAnalysisResultSchema,
   userId: z.number().int().nullable().optional(),
 });
+
+// SessionStorage key and shape for passing analysis prefill to the SubmitLetter form
+export const ANALYZE_PREFILL_KEY = "documentAnalysisPrefill";
+export interface AnalysisPrefill {
+  letterType?: string;
+  subject?: string;
+  jurisdictionState?: string;
+  senderName?: string;
+  recipientName?: string;
+  description?: string;
+}
