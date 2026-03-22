@@ -7,7 +7,21 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
-// Role-specific loading skeletons
+function lazyRetry(importFn: () => Promise<any>) {
+  return lazy(() =>
+    importFn().catch((err: Error) => {
+      const reloaded = sessionStorage.getItem("chunk_reload");
+      if (!reloaded) {
+        sessionStorage.setItem("chunk_reload", "1");
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      sessionStorage.removeItem("chunk_reload");
+      throw err;
+    })
+  );
+}
+
 import {
   PublicPageSkeleton,
   AuthPageSkeleton,
@@ -33,51 +47,44 @@ import {
   DocumentAnalyzerSkeleton,
 } from "./components/skeletons";
 
-// ─── Eagerly loaded (public landing + auth — needed on first paint) ───
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 
-// ─── Lazy-loaded: Auth secondary pages ───
-const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
-const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ForgotPassword = lazyRetry(() => import("./pages/ForgotPassword"));
+const VerifyEmail = lazyRetry(() => import("./pages/VerifyEmail"));
+const ResetPassword = lazyRetry(() => import("./pages/ResetPassword"));
 
-// ─── Lazy-loaded: Public pages ───
-const Pricing = lazy(() => import("./pages/Pricing"));
-const FAQ = lazy(() => import("./pages/FAQ"));
-const Terms = lazy(() => import("./pages/Terms"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const DocumentAnalyzer = lazy(() => import("./pages/DocumentAnalyzer"));
+const Pricing = lazyRetry(() => import("./pages/Pricing"));
+const FAQ = lazyRetry(() => import("./pages/FAQ"));
+const Terms = lazyRetry(() => import("./pages/Terms"));
+const Privacy = lazyRetry(() => import("./pages/Privacy"));
+const Onboarding = lazyRetry(() => import("./pages/Onboarding"));
+const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
 
-// ─── Lazy-loaded: Subscriber pages ───
-const SubscriberDashboard = lazy(() => import("./pages/subscriber/Dashboard"));
-const SubmitLetter = lazy(() => import("./pages/subscriber/SubmitLetter"));
-const MyLetters = lazy(() => import("./pages/subscriber/MyLetters"));
-const LetterDetail = lazy(() => import("./pages/subscriber/LetterDetail"));
-const Billing = lazy(() => import("./pages/subscriber/Billing"));
-const Receipts = lazy(() => import("./pages/subscriber/Receipts"));
-const Profile = lazy(() => import("./pages/subscriber/Profile"));
+const SubscriberDashboard = lazyRetry(() => import("./pages/subscriber/Dashboard"));
+const SubmitLetter = lazyRetry(() => import("./pages/subscriber/SubmitLetter"));
+const MyLetters = lazyRetry(() => import("./pages/subscriber/MyLetters"));
+const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
+const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
+const Receipts = lazyRetry(() => import("./pages/subscriber/Receipts"));
+const Profile = lazyRetry(() => import("./pages/subscriber/Profile"));
 
-// ─── Lazy-loaded: Attorney pages (Review Center) ───
-const AttorneyDashboard = lazy(() => import("./pages/attorney/Dashboard"));
-const ReviewQueue = lazy(() => import("./pages/attorney/ReviewQueue"));
-const ReviewDetail = lazy(() => import("./pages/attorney/ReviewDetail"));
+const AttorneyDashboard = lazyRetry(() => import("./pages/attorney/Dashboard"));
+const ReviewQueue = lazyRetry(() => import("./pages/attorney/ReviewQueue"));
+const ReviewDetail = lazyRetry(() => import("./pages/attorney/ReviewDetail"));
 
-// ─── Lazy-loaded: Employee/Affiliate pages ───
-const EmployeeAffiliateDashboard = lazy(
+const EmployeeAffiliateDashboard = lazyRetry(
   () => import("./pages/employee/AffiliateDashboard")
 );
 
-// ─── Lazy-loaded: Admin pages ───
-const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
-const AdminUsers = lazy(() => import("./pages/admin/Users"));
-const AdminJobs = lazy(() => import("./pages/admin/Jobs"));
-const AdminAllLetters = lazy(() => import("./pages/admin/AllLetters"));
-const AdminLetterDetail = lazy(() => import("./pages/admin/LetterDetail"));
-const AdminAffiliate = lazy(() => import("./pages/admin/Affiliate"));
-const AdminLearning = lazy(() => import("./pages/admin/Learning"));
+const AdminDashboard = lazyRetry(() => import("./pages/admin/Dashboard"));
+const AdminUsers = lazyRetry(() => import("./pages/admin/Users"));
+const AdminJobs = lazyRetry(() => import("./pages/admin/Jobs"));
+const AdminAllLetters = lazyRetry(() => import("./pages/admin/AllLetters"));
+const AdminLetterDetail = lazyRetry(() => import("./pages/admin/LetterDetail"));
+const AdminAffiliate = lazyRetry(() => import("./pages/admin/Affiliate"));
+const AdminLearning = lazyRetry(() => import("./pages/admin/Learning"));
 
 function Router() {
   return (
