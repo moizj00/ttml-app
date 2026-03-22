@@ -28,7 +28,8 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
-import type { AnalysisPrefill } from "../../../../shared/types";
+import type { AnalysisPrefill, DocumentAnalysisResult } from "../../../../shared/types";
+import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -268,7 +269,7 @@ export default function SubscriberDashboard() {
     },
   });
 
-  const { data: myAnalyses, isLoading: analysesLoading } =
+  const { data: analysesData, isLoading: analysesLoading } =
     trpc.documents.getMyAnalyses.useQuery();
 
   // Supabase Realtime — instant updates when any letter changes for this user
@@ -278,17 +279,21 @@ export default function SubscriberDashboard() {
     enabled: !!user?.id,
   });
 
-  const handleUseAnalysis = (analysisJson: any) => {
+  // Safely cast the jsonb field — Drizzle types jsonb as unknown; we validate fields at runtime
+  const getAnalysisJson = (row: DocumentAnalysis): Partial<DocumentAnalysisResult> =>
+    (row.analysisJson ?? {}) as Partial<DocumentAnalysisResult>;
+
+  const handleUseAnalysis = (analysisJson: Partial<DocumentAnalysisResult>) => {
     const prefill: AnalysisPrefill = {};
-    if (analysisJson?.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
-    if (analysisJson?.recommendedResponseSummary) prefill.subject = (analysisJson.recommendedResponseSummary as string).slice(0, 200);
-    if (analysisJson?.detectedJurisdiction?.toLowerCase().includes("california") ||
-        analysisJson?.detectedJurisdiction?.toUpperCase() === "CA") {
+    if (analysisJson.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
+    if (analysisJson.recommendedResponseSummary) prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
+    const jurisdiction = analysisJson.detectedJurisdiction;
+    if (jurisdiction?.toLowerCase().includes("california") || jurisdiction?.toUpperCase() === "CA") {
       prefill.jurisdictionState = "CA";
     }
-    if (analysisJson?.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
-    if (analysisJson?.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
-    if (analysisJson?.summary) prefill.description = (analysisJson.summary as string).slice(0, 600);
+    if (analysisJson.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
+    if (analysisJson.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
+    if (analysisJson.summary) prefill.description = analysisJson.summary.slice(0, 600);
     try { sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
     navigate("/submit");
   };
@@ -650,7 +655,7 @@ export default function SubscriberDashboard() {
         </div>
 
         {/* Document Analysis History */}
-        {((myAnalyses && myAnalyses.length > 0) || analysesLoading) && (
+        {((analysesData?.rows && analysesData.rows.length > 0) || analysesLoading) && (
           <Card data-testid="card-analysis-history">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
@@ -672,16 +677,14 @@ export default function SubscriberDashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {(myAnalyses ?? []).map((row: any) => {
-                    const result = row.analysisJson as any;
-                    const letterType = result?.recommendedLetterType;
+                  {(analysesData?.rows ?? []).map((row: DocumentAnalysis) => {
+                    const analysis = getAnalysisJson(row);
+                    const letterType = analysis.recommendedLetterType;
                     const letterLabel = letterType
-                      ? (LETTER_TYPE_CONFIG[letterType as keyof typeof LETTER_TYPE_CONFIG]?.label ?? letterType)
+                      ? (LETTER_TYPE_CONFIG[letterType]?.label ?? letterType)
                       : null;
-                    const urgencyLevel = result?.urgencyLevel as string | undefined;
-                    const deadline = result?.detectedDeadline as string | null | undefined;
                     const createdAt = row.createdAt ? new Date(row.createdAt) : null;
-                    const hasUsefulPrefill = !!(letterType || result?.recommendedResponseSummary);
+                    const hasUsefulPrefill = !!(letterType || analysis.recommendedResponseSummary);
 
                     return (
                       <div
@@ -710,14 +713,14 @@ export default function SubscriberDashboard() {
                                   {letterLabel}
                                 </Badge>
                               )}
-                              {urgencyLevel === "high" && (
+                              {analysis.urgencyLevel === "high" && (
                                 <Badge variant="destructive" className="text-xs">
                                   High Urgency
                                 </Badge>
                               )}
-                              {deadline && (
+                              {analysis.detectedDeadline && (
                                 <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                                  Deadline: {deadline}
+                                  Deadline: {analysis.detectedDeadline}
                                 </span>
                               )}
                             </div>
@@ -727,7 +730,7 @@ export default function SubscriberDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleUseAnalysis(result)}
+                            onClick={() => handleUseAnalysis(analysis)}
                             className="flex-shrink-0 gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
                             data-testid={`button-use-analysis-${row.id}`}
                           >

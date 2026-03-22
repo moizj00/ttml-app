@@ -246,11 +246,9 @@ export default function DocumentAnalyzer() {
       // ignore sessionStorage errors
     }
 
-    if (isSubscriber) {
-      navigate("/submit");
-    } else {
-      navigate("/login");
-    }
+    // Always navigate to /submit — route guard will redirect to /login if unauthenticated,
+    // and the prefill remains in sessionStorage so it will be applied when they return.
+    navigate("/submit");
   };
 
   const handleCopy = () => {

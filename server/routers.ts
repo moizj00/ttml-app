@@ -2650,22 +2650,42 @@ ${truncatedText}
       }),
 
     getMyAnalyses: protectedProcedure
-      .query(async ({ ctx }) => {
+      .input(
+        z.object({
+          limit: z.number().int().min(1).max(50).default(20),
+          cursor: z.number().int().optional(), // id of the last row seen (for keyset pagination)
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const limit = input?.limit ?? 20;
+        const cursor = input?.cursor;
         try {
           const db = await (await import("./db")).getDb();
-          if (!db) return [];
+          if (!db) return { rows: [], nextCursor: undefined };
           const { documentAnalyses } = await import("../drizzle/schema");
-          const { eq, desc } = await import("drizzle-orm");
-          const rows = await db
+          const { eq, desc, lt, and } = await import("drizzle-orm");
+
+          const conditions = cursor
+            ? and(eq(documentAnalyses.userId, ctx.user.id), lt(documentAnalyses.id, cursor))
+            : eq(documentAnalyses.userId, ctx.user.id);
+
+          const fetched = await db
             .select()
             .from(documentAnalyses)
-            .where(eq(documentAnalyses.userId, ctx.user.id))
-            .orderBy(desc(documentAnalyses.createdAt))
-            .limit(20);
-          return rows;
+            .where(conditions)
+            .orderBy(desc(documentAnalyses.createdAt), desc(documentAnalyses.id))
+            .limit(limit + 1);
+
+          let nextCursor: number | undefined;
+          if (fetched.length > limit) {
+            nextCursor = fetched[limit].id;
+            fetched.pop();
+          }
+
+          return { rows: fetched, nextCursor };
         } catch (err) {
           console.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
-          return [];
+          return { rows: [], nextCursor: undefined };
         }
       }),
   }),
