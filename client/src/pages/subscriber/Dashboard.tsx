@@ -27,7 +27,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "../../../../shared/types";
 import type { AnalysisPrefill, DocumentAnalysisResult } from "../../../../shared/types";
 import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
@@ -283,14 +283,25 @@ export default function SubscriberDashboard() {
   const getAnalysisJson = (row: DocumentAnalysis): Partial<DocumentAnalysisResult> =>
     (row.analysisJson ?? {}) as Partial<DocumentAnalysisResult>;
 
+  const resolveJurisdictionCode = (detected: string | null | undefined): string | undefined => {
+    if (!detected) return undefined;
+    const upper = detected.trim().toUpperCase();
+    const byCode = US_STATES.find(s => s.code === upper);
+    if (byCode) return byCode.code;
+    const lower = detected.trim().toLowerCase();
+    const byName = US_STATES.find(s => s.name.toLowerCase() === lower);
+    if (byName) return byName.code;
+    const byPrefix = US_STATES.find(s => lower.startsWith(s.name.toLowerCase()));
+    if (byPrefix) return byPrefix.code;
+    return undefined;
+  };
+
   const handleUseAnalysis = (analysisJson: Partial<DocumentAnalysisResult>) => {
     const prefill: AnalysisPrefill = {};
     if (analysisJson.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
     if (analysisJson.recommendedResponseSummary) prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
-    const jurisdiction = analysisJson.detectedJurisdiction;
-    if (jurisdiction?.toLowerCase().includes("california") || jurisdiction?.toUpperCase() === "CA") {
-      prefill.jurisdictionState = "CA";
-    }
+    const jurisdictionCode = resolveJurisdictionCode(analysisJson.detectedJurisdiction);
+    if (jurisdictionCode) prefill.jurisdictionState = jurisdictionCode;
     if (analysisJson.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
     if (analysisJson.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
     if (analysisJson.summary) prefill.description = analysisJson.summary.slice(0, 600);
@@ -654,8 +665,8 @@ export default function SubscriberDashboard() {
           )}
         </div>
 
-        {/* Document Analysis History */}
-        {((analysesData?.rows && analysesData.rows.length > 0) || analysesLoading) && (
+        {/* Document Analysis History — always visible once data has been fetched or is loading */}
+        {(analysesLoading || analysesData !== undefined) && (
           <Card data-testid="card-analysis-history">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
@@ -674,6 +685,24 @@ export default function SubscriberDashboard() {
                 <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading analyses…
+                </div>
+              ) : !analysesData?.rows?.length ? (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                    <ScanSearch className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-600">No analyses yet</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Upload a legal document to get an instant AI analysis and recommended action.
+                    </p>
+                  </div>
+                  <Link href="/analyze">
+                    <Button size="sm" variant="outline" className="gap-1.5 mt-1" data-testid="button-start-analysis-empty">
+                      <ScanSearch className="w-3.5 h-3.5" />
+                      Analyze a Document
+                    </Button>
+                  </Link>
                 </div>
               ) : (
                 <div className="space-y-2">

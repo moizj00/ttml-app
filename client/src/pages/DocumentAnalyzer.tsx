@@ -29,8 +29,25 @@ import {
   CheckCircle,
 } from "lucide-react";
 import type { DocumentAnalysisResult, FlaggedRisk } from "@shared/types";
-import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "@shared/types";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "@shared/types";
 import type { AnalysisPrefill } from "@shared/types";
+
+/** Resolve a detected jurisdiction string to a US state code, or undefined if not found. */
+function detectJurisdictionCode(detected: string | null | undefined): string | undefined {
+  if (!detected) return undefined;
+  const upper = detected.trim().toUpperCase();
+  // Try direct abbreviation match first
+  const byCode = US_STATES.find(s => s.code === upper);
+  if (byCode) return byCode.code;
+  // Try full name match (case-insensitive)
+  const lower = detected.trim().toLowerCase();
+  const byName = US_STATES.find(s => s.name.toLowerCase() === lower);
+  if (byName) return byName.code;
+  // Try prefix match (e.g. "California law" → "California")
+  const byPrefix = US_STATES.find(s => lower.startsWith(s.name.toLowerCase()));
+  if (byPrefix) return byPrefix.code;
+  return undefined;
+}
 
 const ALLOWED_TYPES: Record<string, "pdf" | "docx" | "txt"> = {
   "application/pdf": "pdf",
@@ -224,9 +241,9 @@ export default function DocumentAnalyzer() {
         : truncated;
     }
 
-    if (result.detectedJurisdiction?.toLowerCase().includes("california") ||
-        result.detectedJurisdiction?.toUpperCase() === "CA") {
-      prefill.jurisdictionState = "CA";
+    const jurisdictionCode = detectJurisdictionCode(result.detectedJurisdiction);
+    if (jurisdictionCode) {
+      prefill.jurisdictionState = jurisdictionCode;
     }
 
     if (result.detectedParties.senderName) {
@@ -618,13 +635,13 @@ export default function DocumentAnalyzer() {
                 {isSubscriber ? (
                   <>
                     <Scale className="w-4 h-4 mr-2" />
-                    Draft My Response Letter
+                    Draft Your Response Letter
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </>
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4 mr-2" />
-                    Sign In to Draft Your Response
+                    Draft Your Response Letter
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </>
                 )}
