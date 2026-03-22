@@ -1,6 +1,6 @@
 import { captureException } from "@/lib/sentry";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 import { Component, ErrorInfo, ReactNode } from "react";
 
 interface Props {
@@ -10,6 +10,17 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+}
+
+function isChunkLoadError(error: Error | null): boolean {
+  if (!error) return false;
+  const msg = error.message || "";
+  return (
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("Loading chunk") ||
+    msg.includes("Loading CSS chunk") ||
+    msg.includes("error loading dynamically imported module")
+  );
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -23,7 +34,6 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Send to Sentry with React component stack as extra context
     captureException(error, {
       componentStack: errorInfo.componentStack ?? "unknown",
       boundary: "ErrorBoundary",
@@ -32,21 +42,35 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const isChunk = isChunkLoadError(this.state.error);
+
       return (
         <div className="flex items-center justify-center min-h-screen p-8 bg-background">
           <div className="flex flex-col items-center w-full max-w-2xl p-8">
-            <AlertTriangle
-              size={48}
-              className="text-destructive mb-6 flex-shrink-0"
-            />
+            {isChunk ? (
+              <RefreshCw size={48} className="text-primary mb-6 flex-shrink-0" />
+            ) : (
+              <AlertTriangle size={48} className="text-destructive mb-6 flex-shrink-0" />
+            )}
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-4">
+              {isChunk
+                ? "A new version is available."
+                : "An unexpected error occurred."}
+            </h2>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.message}
-              </pre>
-            </div>
+            {isChunk ? (
+              <p className="text-sm text-muted-foreground mb-6 text-center">
+                The app has been updated since you last loaded this page. Please
+                reload to get the latest version.
+              </p>
+            ) : (
+              <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+                <pre className="text-sm text-muted-foreground whitespace-break-spaces">
+                  {this.state.error?.message}
+                </pre>
+              </div>
+            )}
 
             <button
               onClick={() => window.location.reload()}

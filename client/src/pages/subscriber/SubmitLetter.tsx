@@ -447,7 +447,7 @@ export default function SubmitLetter() {
         .filter(e => e.file && e.file.status === "ready")
         .map(e => e.file!);
       if (exhibitFiles.length > 0) {
-        await Promise.allSettled(
+        const uploadResults = await Promise.allSettled(
           exhibitFiles.map(f =>
             uploadAttachment.mutateAsync({
               letterId,
@@ -457,6 +457,13 @@ export default function SubmitLetter() {
             })
           )
         );
+        const failedUploads = exhibitFiles.filter((_, i) => uploadResults[i].status === "rejected");
+        if (failedUploads.length > 0) {
+          toast.warning(`${failedUploads.length} attachment(s) failed to upload`, {
+            description: `${failedUploads.map(f => f.name).join(", ")} — you can re-upload from the letter detail page.`,
+            duration: 8000,
+          });
+        }
       }
       // Clear saved draft on successful submission
       localStorage.removeItem(DRAFT_KEY);

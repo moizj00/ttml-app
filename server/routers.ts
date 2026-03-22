@@ -448,7 +448,7 @@ export const appRouter = router({
       .input(
         z.object({
           letterId: z.number(),
-          additionalContext: z.string().min(10),
+          additionalContext: z.string().min(10).max(5000),
           updatedIntakeJson: intakeJsonSchema.optional(),
         })
       )
@@ -513,7 +513,7 @@ export const appRouter = router({
       .input(
         z.object({
           letterId: z.number(),
-          additionalContext: z.string().min(10).optional(),
+          additionalContext: z.string().min(10).max(5000).optional(),
           updatedIntakeJson: intakeJsonSchema.optional(),
         })
       )
@@ -930,7 +930,7 @@ export const appRouter = router({
       .input(
         z.object({
           letterId: z.number(),
-          finalContent: z.string().min(50),
+          finalContent: z.string().min(50).max(50000),
           internalNote: z.string().optional(),
           userVisibleNote: z.string().optional(),
           acknowledgedUnverifiedResearch: z.boolean().optional(),
@@ -1071,7 +1071,7 @@ export const appRouter = router({
       .input(
         z.object({
           letterId: z.number(),
-          reason: z.string().min(10),
+          reason: z.string().min(10).max(5000),
           userVisibleReason: z.string().optional(),
         })
       )
@@ -1155,7 +1155,7 @@ export const appRouter = router({
         z.object({
           letterId: z.number(),
           internalNote: z.string().optional(),
-          userVisibleNote: z.string().min(10),
+          userVisibleNote: z.string().min(10).max(5000),
           retriggerPipeline: z.boolean().default(false),
         })
       )
@@ -1244,8 +1244,8 @@ export const appRouter = router({
       .input(
         z.object({
           letterId: z.number(),
-          content: z.string().min(50),
-          note: z.string().optional(),
+          content: z.string().min(50).max(50000),
+          note: z.string().max(5000).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1460,7 +1460,7 @@ export const appRouter = router({
             "client_approved",
             "rejected",
           ]),
-          reason: z.string().min(5),
+          reason: z.string().min(5).max(5000),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1649,7 +1649,7 @@ export const appRouter = router({
         jurisdiction: z.string().optional(),
         pipelineStage: z.enum(["research", "drafting", "assembly", "vetting"]).optional(),
         category: z.enum(["citation_error", "jurisdiction_error", "tone_issue", "structure_issue", "factual_error", "bloat_detected", "missing_section", "style_preference", "legal_accuracy", "general"]).default("general"),
-        lessonText: z.string().min(10),
+        lessonText: z.string().min(10).max(5000),
         sourceAction: z.enum(["attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual"]).default("manual"),
         weight: z.number().min(0).max(100).default(50),
       }))
@@ -1672,7 +1672,7 @@ export const appRouter = router({
         id: z.number(),
         isActive: z.boolean().optional(),
         weight: z.number().min(0).max(100).optional(),
-        lessonText: z.string().min(10).optional(),
+        lessonText: z.string().min(10).max(5000).optional(),
         category: z.enum(["citation_error", "jurisdiction_error", "tone_issue", "structure_issue", "factual_error", "bloat_detected", "missing_section", "style_preference", "legal_accuracy", "general"]).optional(),
       }))
       .mutation(async ({ input }) => {

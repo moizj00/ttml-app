@@ -79,7 +79,10 @@ export default function Pricing() {
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: data => {
       toast.info("Redirecting to secure checkout...");
-      window.open(data.url, "_blank");
+      const win = window.open(data.url, "_blank");
+      if (!win) {
+        window.location.href = data.url;
+      }
     },
     onError: err => {
       toast.error(err.message || "Failed to create checkout session");
@@ -89,6 +92,10 @@ export default function Pricing() {
   const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
       navigate("/login");
+      return;
+    }
+    if (planId === "single") {
+      navigate("/submit");
       return;
     }
     checkoutMutation.mutate({
