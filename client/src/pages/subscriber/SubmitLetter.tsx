@@ -227,8 +227,18 @@ export default function SubmitLetter() {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.form) setForm({ ...INITIAL, ...parsed.form });
-        if (parsed.step) setStep(parsed.step);
+        const restoredForm = parsed.form ? { ...INITIAL, ...parsed.form } : INITIAL;
+        setForm(restoredForm);
+        const maxValidStep = (() => {
+          if (!restoredForm.letterType || restoredForm.subject.length < 5) return 1;
+          if (!restoredForm.jurisdictionState) return 2;
+          if (!restoredForm.senderName?.trim() || !restoredForm.senderAddress?.trim() || !restoredForm.recipientName?.trim() || !restoredForm.recipientAddress?.trim()) return 3;
+          if (restoredForm.description.length < 20) return 4;
+          if (restoredForm.desiredOutcome.length < 10) return 5;
+          return 6;
+        })();
+        const targetStep = parsed.step ? Math.min(parsed.step, maxValidStep) : 1;
+        setStep(targetStep);
         toast.success("Draft restored", {
           description: "Your previously saved progress has been loaded.",
         });
@@ -297,6 +307,41 @@ export default function SubmitLetter() {
 
   // ── Submit with attachments ───────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (!form.jurisdictionState || form.jurisdictionState.length < 2) {
+      toast.error("Missing jurisdiction", {
+        description: "Please go back to Step 2 and select a state.",
+      });
+      setStep(2);
+      return;
+    }
+    if (!form.letterType || form.subject.length < 5) {
+      toast.error("Missing letter details", {
+        description: "Please go back to Step 1 and fill in the required fields.",
+      });
+      setStep(1);
+      return;
+    }
+    if (!form.senderName.trim() || !form.senderAddress.trim() || !form.recipientName.trim() || !form.recipientAddress.trim()) {
+      toast.error("Missing party information", {
+        description: "Please go back to Step 3 and fill in sender and recipient details.",
+      });
+      setStep(3);
+      return;
+    }
+    if (form.description.length < 20) {
+      toast.error("Description too short", {
+        description: "Please go back to Step 4 and provide more detail.",
+      });
+      setStep(4);
+      return;
+    }
+    if (form.desiredOutcome.length < 10) {
+      toast.error("Desired outcome too short", {
+        description: "Please go back to Step 5 and describe your desired outcome.",
+      });
+      setStep(5);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const intakeJson = {
