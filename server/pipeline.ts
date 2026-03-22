@@ -491,9 +491,15 @@ export function validateContentConsistency(
     }
   }
 
-  const expectedState = intake.jurisdiction.state;
-  const expectedStateFullName = STATE_ABBREV_TO_NAME[expectedState.toUpperCase()] ?? null;
+  const expectedState = (intake.jurisdiction.state ?? "").trim();
+  const expectedStateFromAbbrev = STATE_ABBREV_TO_NAME[expectedState.toUpperCase()] ?? null;
+  const expectedStateIsFullName = US_STATE_NAMES.some(
+    (s) => s.toLowerCase() === expectedState.toLowerCase()
+  );
+  const expectedStateFullName = expectedStateFromAbbrev ?? (expectedStateIsFullName ? expectedState : null);
   const expectedStateNormalized = expectedStateFullName ?? expectedState;
+  const expectedStateIsKnown =
+    expectedStateFromAbbrev !== null || expectedStateIsFullName;
   const jurisdictionFound =
     textLower.includes(expectedState.toLowerCase()) ||
     !!(expectedStateFullName && textLower.includes(expectedStateFullName.toLowerCase()));
@@ -503,7 +509,10 @@ export function validateContentConsistency(
 
   let jurisdictionMismatch = false;
   let foundJurisdiction: string | null = null;
-  for (const state of US_STATE_NAMES) {
+  if (!expectedStateIsKnown) {
+    console.warn(`[Pipeline] validateContentConsistency: expectedState "${expectedState}" is not a known US state; skipping jurisdiction mismatch loop`);
+  }
+  for (const state of expectedStateIsKnown ? US_STATE_NAMES : []) {
     if (state.toLowerCase() === expectedState.toLowerCase()) continue;
     if (expectedStateFullName && state.toLowerCase() === expectedStateFullName.toLowerCase()) continue;
     const stateRegex = new RegExp(`\\b${state}\\b`, "i");
@@ -858,7 +867,7 @@ export async function runResearchStage(
 
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
   await updateResearchRun(runId, { status: "running" });
-  await updateLetterStatus(letterId, "researching");
+  await updateLetterStatus(letterId, "researching", { force: true });
   try {
     const { notifyAdmins } = await import("./db");
     await notifyAdmins({
@@ -1119,7 +1128,7 @@ export async function runDraftingStage(
   const jobId = (job as any)?.insertId ?? 0;
 
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
-  await updateLetterStatus(letterId, "drafting");
+  await updateLetterStatus(letterId, "drafting", { force: true });
   try {
     const { notifyAdmins } = await import("./db");
     await notifyAdmins({
@@ -1863,21 +1872,26 @@ export async function runVettingStage(
   research: ResearchPacket,
   pipelineCtx?: PipelineContext,
 ): Promise<{ vettedLetter: string; vettingReport: VettingReport; critical: boolean }> {
-  const job = await createWorkflowJob({
-    letterRequestId: letterId,
-    jobType: "vetting",
-    provider: "anthropic",
-    requestPayloadJson: {
-      letterId,
-      userId: pipelineCtx?.userId,
-      stage: "vetting",
-    },
-  });
-  const rawJobId = (job as any)?.insertId;
-  if (rawJobId == null) {
-    console.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
+  let jobId = 0;
+  try {
+    const job = await createWorkflowJob({
+      letterRequestId: letterId,
+      jobType: "vetting",
+      provider: "anthropic",
+      requestPayloadJson: {
+        letterId,
+        userId: pipelineCtx?.userId,
+        stage: "vetting",
+      },
+    });
+    const rawJobId = (job as any)?.insertId;
+    if (rawJobId == null) {
+      console.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
+    }
+    jobId = rawJobId ?? 0;
+  } catch (jobCreateErr) {
+    console.warn(`[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`, jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr);
   }
-  const jobId = rawJobId ?? 0;
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
   const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
@@ -2760,6 +2774,7 @@ export async function retryPipelineFromStage(
 
   try {
     if (stage === "research") {
+      await updateLetterStatus(letterId, "submitted", { force: true });
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
       pipelineCtx.researchProvider = researchProvider;
       pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";

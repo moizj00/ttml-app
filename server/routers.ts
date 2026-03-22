@@ -180,13 +180,17 @@ async function runPipelineWithRetry(
         const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
         console.log(`[Pipeline] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
         await new Promise(r => setTimeout(r, delay));
+      }
+      {
         const current = await getLetterRequestById(letterId);
         const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
-        if (current && !retryableStatuses.includes(current.status)) {
+        if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
           console.log(`[Pipeline] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
           return;
         }
-        await updateLetterStatus(letterId, "submitted", { force: true });
+        if (!current || current.status !== "submitted") {
+          await updateLetterStatus(letterId, "submitted", { force: true });
+        }
       }
       await runFullPipeline(letterId, intake, undefined, userId);
       return;
