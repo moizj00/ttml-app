@@ -112,6 +112,7 @@ export type LessonCategory = (typeof LESSON_CATEGORIES)[number];
 
 export const LESSON_SOURCES = [
   "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
+  "subscriber_update", "subscriber_retry",
 ] as const;
 export type LessonSource = (typeof LESSON_SOURCES)[number];
 
@@ -123,6 +124,7 @@ export const lessonCategoryEnum = pgEnum("lesson_category", [
 ]);
 export const lessonSourceEnum = pgEnum("lesson_source", [
   "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
+  "subscriber_update", "subscriber_retry",
 ]);
 
 // ═══════════════════════════════════════════════════════

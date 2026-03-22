@@ -88,7 +88,7 @@ import {
   sendLetterToRecipient,
 } from "./email";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
-import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, computeAndStoreQualityScore } from "./learning";
+import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore } from "./learning";
 import type { InsertPipelineLesson } from "../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
@@ -475,6 +475,8 @@ export const appRouter = router({
           toStatus: "submitted",
         });
 
+        extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.user.id, "subscriber_update").catch(console.error);
+
         // If updated intake provided, update the letter request
         if (input.updatedIntakeJson) {
           const db = await (await import("./db")).getDb();
@@ -536,6 +538,10 @@ export const appRouter = router({
           fromStatus: "rejected",
           toStatus: "submitted",
         });
+
+        if (input.additionalContext) {
+          extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.user.id, "subscriber_retry").catch(console.error);
+        }
 
         if (input.updatedIntakeJson) {
           const db = await (await import("./db")).getDb();

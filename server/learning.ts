@@ -193,6 +193,34 @@ export async function extractLessonFromEdit(
   }
 }
 
+export async function extractLessonFromSubscriberFeedback(
+  letterId: number,
+  additionalContext: string,
+  subscriberId: number,
+  sourceAction: "subscriber_update" | "subscriber_retry",
+): Promise<void> {
+  try {
+    const letter = await getLetterRequestById(letterId);
+    if (!letter) return;
+
+    if (!additionalContext || additionalContext.trim().length < 10) return;
+
+    await createPipelineLesson({
+      letterType: letter.letterType as LetterType,
+      jurisdiction: letter.jurisdictionState,
+      pipelineStage: "drafting",
+      category: categorizeFromNote(additionalContext),
+      lessonText: `SUBSCRIBER FEEDBACK (${sourceAction}): ${additionalContext}`,
+      sourceLetterRequestId: letterId,
+      sourceAction,
+      createdByUserId: subscriberId,
+      weight: 35,
+    });
+  } catch (err) {
+    console.error(`[Learning] Failed to extract lesson from subscriber feedback for letter #${letterId}:`, err);
+  }
+}
+
 export async function computeAndStoreQualityScore(
   letterId: number,
   outcome: "approved" | "rejected",
