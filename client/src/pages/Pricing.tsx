@@ -94,7 +94,7 @@ export default function Pricing() {
       navigate("/login");
       return;
     }
-    if (planId === "single") {
+    if (planId === "single_letter") {
       navigate("/submit");
       return;
     }
