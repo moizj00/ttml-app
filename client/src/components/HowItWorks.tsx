@@ -23,7 +23,7 @@ const steps = [
 ];
 
 const LAST_CARD_DELAY = 150 + 2 * 200;
-const SHIMMER_DELAY = LAST_CARD_DELAY + 600;
+const SHIMMER_DELAY = LAST_CARD_DELAY + 900;
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -102,7 +102,7 @@ export default function HowItWorks() {
                       box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1);
         }
         .hiw-card-inner:hover {
-          transform: translateY(-6px);
+          transform: translateY(-6px) scale(1.02);
           box-shadow: 0 20px 40px rgba(37, 99, 235, 0.08),
                       0 8px 16px rgba(0, 0, 0, 0.04);
         }
