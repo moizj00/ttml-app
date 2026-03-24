@@ -464,9 +464,9 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                 const invoiceAmount = invoice.amount_paid ?? 0;
                 if (invoiceAmount > 0) {
                   // Use invoice payment_intent as idempotency key
-                  const invoicePaymentIntent = typeof invoice.payment_intent === "string"
-                    ? invoice.payment_intent
-                    : invoice.payment_intent?.id ?? undefined;
+                  const invoicePaymentIntent = typeof (invoice as any).payment_intent === "string"
+                    ? (invoice as any).payment_intent
+                    : (invoice as any).payment_intent?.id ?? undefined;
                   const commissionRate = 500; // 5% = 500 basis points
                   const commissionAmount = Math.round(invoiceAmount * commissionRate / 10000);
                   await createCommission({
