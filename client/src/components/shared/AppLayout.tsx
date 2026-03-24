@@ -190,6 +190,15 @@ export default function AppLayout({
   const utils = trpc.useUtils();
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarClosing, setSidebarClosing] = useState(false);
+
+  const closeSidebar = () => {
+    setSidebarClosing(true);
+    setTimeout(() => {
+      setSidebarOpen(false);
+      setSidebarClosing(false);
+    }, 200);
+  };
 
   const isAdmin = user?.role === "admin";
   const { data: notifications } = trpc.notifications.list.useQuery(
@@ -312,14 +321,14 @@ export default function AppLayout({
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              onClick={() => closeSidebar()}
+              className={`sidebar-nav-item sidebar-active-indicator flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
                 isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground is-active"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`}
             >
-              {item.icon}
+              <span className="sidebar-nav-icon inline-flex">{item.icon}</span>
               {item.label}
             </Link>
           );
@@ -335,9 +344,9 @@ export default function AppLayout({
             });
             logout();
           }}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent w-full transition-colors"
+          className="sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent w-full"
         >
-          <LogOut className="w-4 h-4" />
+          <span className="sidebar-nav-icon inline-flex"><LogOut className="w-4 h-4" /></span>
           Sign Out
         </button>
       </div>
@@ -363,12 +372,12 @@ export default function AppLayout({
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
           <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => setSidebarOpen(false)}
+            className={`fixed inset-0 bg-black/50 ${sidebarClosing ? "animate-backdrop-out" : "animate-backdrop-in"}`}
+            onClick={closeSidebar}
           />
-          <aside className="relative flex h-full w-[min(18rem,calc(100vw-2rem))] max-w-full flex-col bg-sidebar shadow-xl">
+          <aside className={`relative flex h-full w-[min(18rem,calc(100vw-2rem))] max-w-full flex-col bg-sidebar shadow-xl ${sidebarClosing ? "animate-sidebar-out" : "animate-sidebar-in"}`}>
             <button
-              onClick={() => setSidebarOpen(false)}
+              onClick={closeSidebar}
               className="absolute top-4 right-4 text-sidebar-foreground hover:text-sidebar-primary"
               aria-label="Close sidebar"
             >
@@ -412,7 +421,7 @@ export default function AppLayout({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="relative"
+                  className={`relative ${unreadCount > 0 ? "bell-ping-indicator" : ""}`}
                   aria-label="Notifications"
                 >
                   <Bell className="w-4 h-4" />
@@ -437,10 +446,11 @@ export default function AppLayout({
                   )}
                 </div>
                 {notifications && notifications.length > 0 ? (
-                  notifications.slice(0, isAdmin ? 15 : 5).map(n => (
+                  notifications.slice(0, isAdmin ? 15 : 5).map((n, idx) => (
                     <DropdownMenuItem
                       key={n.id}
-                      className={`flex flex-col items-start gap-0.5 py-3 cursor-pointer ${n.readAt ? "opacity-60" : ""}`}
+                      className={`notification-stagger-item flex flex-col items-start gap-0.5 py-3 cursor-pointer ${n.readAt ? "opacity-60" : ""}`}
+                      style={{ animationDelay: `${idx * 50}ms` }}
                       onClick={() => {
                         if (!n.readAt) markRead.mutate({ id: n.id });
                         if (n.link) {
@@ -485,7 +495,7 @@ export default function AppLayout({
         </header>
 
         {/* Page Content */}
-        <main id="main-content" className="flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6">
+        <main id="main-content" key={location} className="flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6 animate-page-enter">
           {children}
         </main>
       </div>

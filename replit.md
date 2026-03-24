@@ -48,6 +48,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Review Modal**: Designed for attorney efficiency, displaying key intake data and controlling UI elements for approval workflows.
 - **Letter Display**: Dynamically renders HTML content or plain text with appropriate styling.
 - **How It Works**: Features scroll-paced animations, SVG gradients, and accessibility considerations (`aria-live="polite"`, `prefers-reduced-motion`).
+- **Platform Animation Foundation** (index.css): Reusable CSS keyframes and utility classes — `animate-page-enter` (fade + rise for page transitions), `card-hover-lift` (3px lift + shadow on hover), `sidebar-nav-item`/`sidebar-nav-icon` (sidebar hover pill + icon micro-interaction), `animate-sidebar-in`/`animate-backdrop-in` (mobile drawer slide-in), `bell-ping-indicator` (notification attention pulse), `notification-stagger-item` (staggered dropdown reveal), `badge-transition` (smooth color changes on status badges), `animate-tab-enter` (tab content fade). All animations respect `prefers-reduced-motion`. Button components have `active:scale-[0.98]` press feedback globally.
 
 ```
 client/          # React frontend (Vite root)
