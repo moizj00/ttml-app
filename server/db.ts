@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { captureServerException } from "./sentry";
 import type { InsertUser } from "../drizzle/schema";
 import {
   attachments,
@@ -37,6 +38,7 @@ export async function getDb() {
       console.log("[Database] Connected to Supabase (PostgreSQL)");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
+      captureServerException(error, { tags: { component: "database", error_type: "connection_failed" } });
       _db = null;
     }
   }
@@ -986,6 +988,7 @@ export async function notifyAdmins(opts: {
     }
   } catch (err) {
     console.error("[notifyAdmins] Failed:", err);
+    captureServerException(err, { tags: { component: "notifications", error_type: "notify_admins_failed" } });
   }
 }
 

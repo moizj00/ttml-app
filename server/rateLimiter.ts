@@ -20,7 +20,7 @@ import { ENV } from "./_core/env";
 
 let redis: Redis | null = null;
 
-function getRedis(): Redis | null {
+export function getRedis(): Redis | null {
   if (!ENV.upstashRedisRestUrl || !ENV.upstashRedisRestToken) {
     return null;
   }

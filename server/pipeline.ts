@@ -57,6 +57,7 @@ async function buildLessonsPromptBlock(
     return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n${lines.join("\n")}\n`;
   } catch (err) {
     console.error("[Pipeline] Failed to load lessons for prompt injection:", err);
+    captureServerException(err, { tags: { component: "pipeline", error_type: "lessons_load_failed" } });
     return "";
   }
 }
@@ -879,6 +880,7 @@ export async function runResearchStage(
     });
   } catch (err) {
     console.error("[notifyAdmins] pipeline_researching:", err);
+    captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
   }
 
   // Build normalized intake for the research prompt
@@ -1140,6 +1142,7 @@ export async function runDraftingStage(
     });
   } catch (err) {
     console.error("[notifyAdmins] pipeline_drafting:", err);
+    captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_drafting" } });
   }
 
   const normalizedIntake = buildNormalizedPromptInput(
@@ -1891,6 +1894,7 @@ export async function runVettingStage(
     jobId = rawJobId ?? 0;
   } catch (jobCreateErr) {
     console.warn(`[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`, jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr);
+    captureServerException(jobCreateErr, { tags: { component: "pipeline", error_type: "workflow_job_create_failed" }, extra: { letterId } });
   }
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
@@ -2623,6 +2627,7 @@ export async function runFullPipeline(
         `[Pipeline] Auto-unlock check failed for letter #${letterId} (pipeline still succeeded):`,
         autoUnlockErr
       );
+      captureServerException(autoUnlockErr, { tags: { component: "pipeline", error_type: "auto_unlock_failed" }, extra: { letterId } });
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

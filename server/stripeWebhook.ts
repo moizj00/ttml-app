@@ -13,9 +13,9 @@ import {
   getUserById, createNotification, notifyAdmins, getDiscountCodeByCode,
   incrementDiscountCodeUsage, createCommission,
 } from "./db";
-import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendNewReviewNeededEmail } from "./email";
-import { users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendNewReviewNeededEmail, sendPaymentFailedEmail } from "./email";
+import { users, processedStripeEvents } from "../drizzle/schema";
+import { eq, lt, sql } from "drizzle-orm";
 import { captureServerException, addServerBreadcrumb } from "./sentry";
 
 async function getUserIdFromStripeCustomer(customerId: string): Promise<number | null> {
@@ -65,6 +65,20 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
   }
 
   console.log(`[StripeWebhook] Processing event: ${event.type} (${event.id})`);
+
+  const db = await getDb();
+  if (db) {
+    const existing = await db
+      .select({ eventId: processedStripeEvents.eventId })
+      .from(processedStripeEvents)
+      .where(eq(processedStripeEvents.eventId, event.id))
+      .limit(1);
+    if (existing.length > 0) {
+      console.log(`[StripeWebhook] Duplicate event ${event.id}, skipping`);
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+  }
 
   try {
     switch (event.type) {
@@ -425,16 +439,53 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         break;
       }
 
-      // ─── Invoice payment failedd ────────────────────────────────────────────
+      // ─── Invoice payment failed ────────────────────────────────────────────
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         console.warn(`[StripeWebhook] Invoice payment failed: ${invoice.id}`);
-        // Could send email notification here
+        try {
+          const parentSub = (invoice.parent as any)?.subscription_details?.subscription;
+          const subId = typeof parentSub === "string" ? parentSub : parentSub?.id;
+          if (subId) {
+            const stripe = getStripe();
+            const sub = await stripe.subscriptions.retrieve(subId) as any;
+            const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+            const resolvedUserId = parseInt(sub.metadata?.user_id ?? "0", 10);
+            const userId = resolvedUserId || (customerId ? await getUserIdFromStripeCustomer(customerId) : null) || 0;
+            if (userId) {
+              const user = await getUserById(userId);
+              if (user?.email) {
+                await sendPaymentFailedEmail({
+                  to: user.email,
+                  name: user.name ?? "Subscriber",
+                  billingUrl: "https://www.talk-to-my-lawyer.com/subscriber/billing",
+                }).catch(err => {
+                  console.error("[StripeWebhook] Failed to send payment failed email:", err);
+                  captureServerException(err, {
+                    tags: { component: "stripe_webhook", error_type: "payment_failed_email" },
+                  });
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[StripeWebhook] Error handling payment_failed:", err);
+          captureServerException(err, {
+            tags: { component: "stripe_webhook", error_type: "payment_failed_handler" },
+          });
+        }
         break;
       }
 
       default:
         console.log(`[StripeWebhook] Unhandled event type: ${event.type}`);
+    }
+
+    if (db) {
+      await db.insert(processedStripeEvents).values({
+        eventId: event.id,
+        eventType: event.type,
+      }).onConflictDoNothing();
     }
 
     res.json({ received: true });

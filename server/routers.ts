@@ -87,6 +87,7 @@ import {
   sendPayoutRejectedEmail,
   sendLetterToRecipient,
 } from "./email";
+import { captureServerException } from "./sentry";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore } from "./learning";
 import type { InsertPipelineLesson } from "../drizzle/schema";
@@ -197,6 +198,7 @@ async function runPipelineWithRetry(
     } catch (err) {
       lastErr = err;
       console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, err instanceof Error ? err.message : err);
+      captureServerException(err, { tags: { component: "pipeline", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
     }
   }
   console.error(`[Pipeline] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
@@ -216,6 +218,7 @@ async function runPipelineWithRetry(
         }
       } catch (emailErr) {
         console.error("[Pipeline] Failed to email admin:", emailErr);
+        captureServerException(emailErr, { tags: { component: "pipeline", error_type: "admin_email_failed" } });
       }
       try {
         await createNotification({
@@ -228,15 +231,18 @@ async function runPipelineWithRetry(
         });
       } catch (notifErr) {
         console.error("[Pipeline] Failed to create notification:", notifErr);
+        captureServerException(notifErr, { tags: { component: "pipeline", error_type: "notification_failed" } });
       }
     }
   } catch (notifyErr) {
     console.error("[Pipeline] Failed to notify admins:", notifyErr);
+    captureServerException(notifyErr, { tags: { component: "pipeline", error_type: "notify_admins_failed" } });
   }
   try {
     await updateLetterStatus(letterId, "pipeline_failed", { force: true });
   } catch (statusErr) {
     console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
+    captureServerException(statusErr, { tags: { component: "pipeline", error_type: "status_update_failed" } });
   }
 }
 
@@ -402,7 +408,7 @@ export const appRouter = router({
             jurisdictionState: input.jurisdictionState,
             appUrl,
           }).catch(err =>
-            console.error("[Email] Submission confirmation failed:", err)
+            { console.error("[Email] Submission confirmation failed:", err); captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } }); }
           );
 
         runPipelineWithRetry(letterId, input.intakeJson as any, ctx.user.id, appUrl, "submit");
@@ -417,6 +423,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_submitted:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
         }
 
         return { letterId, status: "submitted" };
@@ -636,6 +643,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_sent_to_recipient:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
         }
 
         return { success: true };
@@ -726,6 +734,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[requestClientApproval] Notification error:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "client_approval_notification_failed" } });
         }
         try {
           await notifyAdmins({
@@ -737,6 +746,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_pending_client_approval:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_pending_approval" } });
         }
         return { success: true };
       }),
@@ -782,6 +792,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] client_approved:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_approved" } });
         }
         return { success: true };
       }),
@@ -883,6 +894,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[Notify] Claim subscriber notification failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "claim_notification_failed" } });
         }
         // ── Notify attorney: review assignment confirmation ──
         try {
@@ -911,6 +923,7 @@ export const appRouter = router({
           }
         } catch (err) {
           console.error("[Notify] Claim attorney notification failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "attorney_notification_failed" } });
         }
         try {
           await notifyAdmins({
@@ -922,6 +935,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_claimed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_claimed" } });
         }
         return { success: true };
       }),
@@ -1013,6 +1027,7 @@ export const appRouter = router({
             `[Approve] PDF generated for letter #${input.letterId}: ${pdfUrl}`
           );
         } catch (pdfErr) {
+          captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
           console.error(
             `[Approve] PDF generation failed for letter #${input.letterId}:`,
             pdfErr
@@ -1042,6 +1057,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[Notify] Failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "approval_notification_failed" } });
         }
         extractLessonFromApproval(input.letterId, input.finalContent, ctx.user.id, input.internalNote).catch(console.error);
         computeAndStoreQualityScore(input.letterId, "approved", input.finalContent).catch(console.error);
@@ -1063,6 +1079,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_approved_by_attorney:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_approved" } });
         }
         return { success: true, versionId, pdfUrl };
       }),
@@ -1133,6 +1150,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[Notify] Failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "rejection_notification_failed" } });
         }
         extractLessonFromRejection(input.letterId, input.reason, ctx.user.id).catch(console.error);
         computeAndStoreQualityScore(input.letterId, "rejected").catch(console.error);
@@ -1146,6 +1164,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_rejected:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_rejected" } });
         }
         return { success: true };
       }),
@@ -1216,6 +1235,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[Notify] Failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "changes_notification_failed" } });
         }
         extractLessonFromChangesRequest(input.letterId, input.internalNote, input.userVisibleNote, ctx.user.id).catch(console.error);
         try {
@@ -1228,6 +1248,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] letter_changes_requested:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_changes_requested" } });
         }
         if (input.retriggerPipeline && letter.intakeJson) {
           retryPipelineFromStage(
@@ -1360,6 +1381,7 @@ export const appRouter = router({
           } catch (err) {
             // Non-blocking — role update still succeeds even if notification fails
             console.error("[updateRole] Failed to send attorney promotion notification:", err);
+            captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
           }
         }
         try {
@@ -1373,6 +1395,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] user_role_changed:", err);
+          captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
         }
         return { success: true };
       }),
@@ -1547,6 +1570,7 @@ export const appRouter = router({
           }
         } catch (err) {
           console.error("[Notify] Failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "unlock_notification_failed" } });
         }
         return { success: true };
       }),
@@ -1941,6 +1965,7 @@ export const appRouter = router({
           });
         } catch (e) {
           console.error("[freeUnlock] Email error:", e);
+          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_email_failed" } });
         }
 
         try {
@@ -1953,6 +1978,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] free_unlock:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_free_unlock" } });
         }
 
         return { ok: true as const, free: true };
@@ -2079,6 +2105,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] discount_code_created:", err);
+          captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_discount_code" } });
         }
       }
       return code;
@@ -2154,6 +2181,7 @@ export const appRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] payout_request:", err);
+          captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_payout_request" } });
         }
         return { success: true, payoutRequestId: result.insertId };
       }),
@@ -2280,6 +2308,7 @@ export const appRouter = router({
           }
         } catch (emailErr) {
           console.error("[adminProcessPayout] Notification email error:", emailErr);
+          captureServerException(emailErr, { tags: { component: "payout", error_type: "notification_email_failed" } });
         }
 
         return { success: true };
@@ -2435,6 +2464,7 @@ export const appRouter = router({
             verifyUrl,
           });
         } catch (emailErr) {
+          captureServerException(emailErr, { tags: { component: "profile", error_type: "verification_email_failed" } });
           console.error(
             "[Profile] Failed to send verification email:",
             emailErr
@@ -2653,6 +2683,7 @@ ${truncatedText}
             }
           } catch (dbErr) {
             console.error("[DocumentAnalyzer] DB insert failed (non-fatal):", dbErr);
+            captureServerException(dbErr, { tags: { component: "document_analyzer", error_type: "db_insert_failed" } });
           }
         })();
 
@@ -2695,6 +2726,7 @@ ${truncatedText}
           return { rows: fetched, nextCursor };
         } catch (err) {
           console.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
+          captureServerException(err, { tags: { component: "document_analyzer", error_type: "get_analyses_failed" } });
           return { rows: [], nextCursor: undefined };
         }
       }),

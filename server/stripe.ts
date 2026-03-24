@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import { ENV } from "./_core/env";
 import { getDb, countCompletedLetters, getDiscountCodeByCode } from "./db";
 import { subscriptions } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   PLANS,
   getPlanConfig,
@@ -315,18 +315,23 @@ export async function activateSubscription(params: {
     });
 }
 
-// ─── Increment Letters Used ───────────────────────────────────────────────────
-export async function incrementLettersUsed(userId: number): Promise<void> {
+// ─── Increment Letters Used (Atomic, Race-Safe) ─────────────────────────────
+export async function incrementLettersUsed(userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return false;
 
-  const sub = await getUserSubscription(userId);
-  if (!sub) return;
-
-  await db
+  const result = await db
     .update(subscriptions)
-    .set({ lettersUsed: sub.lettersUsed + 1 })
-    .where(eq(subscriptions.userId, userId));
+    .set({ lettersUsed: sql`${subscriptions.lettersUsed} + 1` })
+    .where(
+      and(
+        eq(subscriptions.userId, userId),
+        sql`${subscriptions.lettersUsed} < ${subscriptions.lettersAllowed}`
+      )
+    )
+    .returning({ id: subscriptions.id });
+
+  return result.length > 0;
 }
 
 // ─── Check if User Can Submit Letter ─────────────────────────────────────────

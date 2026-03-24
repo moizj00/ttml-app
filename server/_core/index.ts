@@ -8,6 +8,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
+import { sql } from "drizzle-orm";
 import { registerSupabaseAuthRoutes } from "../supabaseAuth";
 import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
@@ -22,6 +23,7 @@ import { getDb } from "../db";
 import {
   authRateLimitMiddleware,
   generalRateLimitMiddleware,
+  getRedis,
 } from "../rateLimiter";
 import { validateRequiredEnv } from "./env";
 
@@ -171,9 +173,33 @@ async function startServer() {
 
   // ─── Standalone health check (plain HTTP GET, no tRPC overhead) ───────────
   // Used by Railway health checks and load balancers.
-  // The tRPC system.health procedure also works but requires a ?input= param.
-  app.get("/api/health", (_req, res) => {
-    res.status(200).json({ ok: true, timestamp: Date.now() });
+  // Checks DB connectivity; returns 503 if DB is unreachable.
+  app.get("/api/health", async (_req, res) => {
+    let dbOk = false;
+    try {
+      const db = await getDb();
+      if (db) {
+        await db.execute(sql`SELECT 1`);
+        dbOk = true;
+      }
+    } catch {
+      dbOk = false;
+    }
+
+    let redisOk: boolean | null = null;
+    const redis = getRedis();
+    if (redis) {
+      try {
+        await redis.ping();
+        redisOk = true;
+      } catch {
+        redisOk = false;
+      }
+    }
+
+    const ok = dbOk && (redisOk === null || redisOk);
+    const status = ok ? 200 : 503;
+    res.status(status).json({ ok, db: dbOk, redis: redisOk, timestamp: Date.now() });
   });
   // ──────────────────────────────────────────────────────────────────────────
 

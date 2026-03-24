@@ -211,6 +211,41 @@ async function sendEmail(opts: {
   }
 }
 
+async function sendWithRetry(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<void> {
+  const delays = [2000, 5000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const { error } = await getResend().emails.send({
+        from: FROM,
+        to: opts.to,
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      });
+      if (error) {
+        console.error(`[Email] Resend error (attempt ${attempt + 1}):`, error);
+        lastErr = error;
+      } else {
+        return;
+      }
+    } catch (err) {
+      lastErr = err;
+      console.error(`[Email] Send failed (attempt ${attempt + 1}):`, err);
+    }
+    if (attempt < delays.length) {
+      await new Promise(r => setTimeout(r, delays[attempt]));
+    }
+  }
+  console.error("[Email] All retry attempts exhausted:", lastErr);
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 // ─── Transactional Email Templates ───────────────────────────────────────────
 
 /** Notify subscriber when their letter has been approved */
@@ -241,7 +276,7 @@ export async function sendLetterApprovedEmail(opts: {
     ctaUrl,
     accentColor: "#059669", // green — approval
   });
-  await sendEmail({
+  await sendWithRetry({
     to: opts.to,
     subject: `[${APP_NAME}] Your letter has been approved`,
     html,
@@ -367,7 +402,7 @@ export async function sendNewReviewNeededEmail(opts: {
     ctaUrl,
     accentColor: "#7C3AED", // purple — attorney action
   });
-  await sendEmail({
+  await sendWithRetry({
     to: opts.to,
     subject: `[${APP_NAME}] New letter ready for review: ${opts.letterSubject}`,
     html,
@@ -575,20 +610,30 @@ export async function sendLetterToRecipient(opts: {
     body: `You have received an attorney-reviewed legal letter via ${APP_NAME}.${notePlain}\n\nSubject: ${opts.letterSubject}\nPrepared by: ${APP_NAME} Legal Team\n\nThis letter has been reviewed and approved by a licensed attorney.${showInlineContent ? `\n\n--- Letter Content ---\n${opts.htmlContent!.replace(/<[^>]+>/g, "").trim()}\n--- End of Letter ---` : ""}`,
   });
 
-  try {
-    const { error } = await getResend().emails.send({
-      from: FROM,
-      to: opts.recipientEmail,
-      subject: emailSubject,
-      html,
-      text: plainText,
-      attachments: attachments.length > 0 ? attachments : undefined,
-    });
-    if (error) throw new Error(error.message);
-  } catch (err) {
-    console.error("[Email] sendLetterToRecipient failed:", err);
-    throw err;
+  const delays = [2000, 5000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const { error } = await getResend().emails.send({
+        from: FROM,
+        to: opts.recipientEmail,
+        subject: emailSubject,
+        html,
+        text: plainText,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      });
+      if (error) throw new Error(error.message);
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.error(`[Email] sendLetterToRecipient attempt ${attempt + 1} failed:`, err);
+      if (attempt < delays.length) {
+        await new Promise(r => setTimeout(r, delays[attempt]));
+      }
+    }
   }
+  console.error("[Email] sendLetterToRecipient all retry attempts exhausted:", lastErr);
+  throw lastErr;
 }
 
 /** Validate Resend credentials (used in tests) */
@@ -789,7 +834,7 @@ export async function sendLetterUnlockedEmail(opts: {
     ctaUrl,
     accentColor: "#7C3AED", // purple — attorney review stage
   });
-  await sendEmail({
+  await sendWithRetry({
     to: opts.to,
     subject: `[${APP_NAME}] Payment confirmed — your letter is in attorney review`,
     html,
@@ -1289,6 +1334,44 @@ export async function sendPayoutRejectedEmail(opts: {
     text: buildPlainText({
       title: "Payout Rejected",
       body: `Hello ${opts.name}, your payout request of ${opts.amount} was rejected. Reason: ${opts.reason}. Your pending balance has not been affected.`,
+    }),
+  });
+}
+
+export async function sendPaymentFailedEmail(opts: {
+  to: string;
+  name: string;
+  letterSubject?: string;
+  billingUrl: string;
+}) {
+  const body = `
+    <p>Hello ${opts.name},</p>
+    <p>We were unable to process your most recent payment${opts.letterSubject ? ` for "<strong>${opts.letterSubject}</strong>"` : ""}.</p>
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#FEF2F2;border-radius:8px;margin:16px 0;border:1px solid #FECACA;">
+      <tr><td style="padding:16px;">
+        <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#DC2626;font-weight:700;">Payment Failed</p>
+        <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;">Please update your payment method to continue using ${APP_NAME}. If your payment method is not updated, your subscription may be canceled.</p>
+      </td></tr>
+    </table>
+    <p>If you believe this is an error, please check with your bank or try a different payment method.</p>
+  `;
+  const html = buildEmailHtml({
+    preheader: "Your payment could not be processed. Please update your payment method.",
+    title: "Payment Failed",
+    body,
+    ctaText: "Update Payment Method",
+    ctaUrl: opts.billingUrl,
+    accentColor: "#DC2626",
+  });
+  await sendWithRetry({
+    to: opts.to,
+    subject: `[${APP_NAME}] Payment failed — please update your payment method`,
+    html,
+    text: buildPlainText({
+      title: "Payment Failed",
+      body: `Hello ${opts.name}, your payment${opts.letterSubject ? ` for "${opts.letterSubject}"` : ""} could not be processed. Please update your payment method at: ${opts.billingUrl}`,
+      ctaText: "Update Payment Method",
+      ctaUrl: opts.billingUrl,
     }),
   });
 }

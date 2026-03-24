@@ -143,7 +143,9 @@ export const users = pgTable("users", {
   lastSignedIn: timestamp("last_signed_in", { withTimezone: true }).defaultNow().notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   freeReviewUsedAt: timestamp("free_review_used_at", { withTimezone: true }),
-});
+}, (t) => [
+  index("idx_users_email").on(t.email),
+]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -308,6 +310,7 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_notifications_user_id").on(t.userId),
+  index("idx_notifications_read_at").on(t.readAt),
 ]);
 
 export type Notification = typeof notifications.$inferSelect;
@@ -338,7 +341,11 @@ export const subscriptions = pgTable("subscriptions", {
   metadataJson: jsonb("metadata_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index("idx_subscriptions_stripe_subscription_id").on(t.stripeSubscriptionId),
+  index("idx_subscriptions_stripe_customer_id").on(t.stripeCustomerId),
+  index("idx_subscriptions_status").on(t.status),
+]);
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
@@ -498,3 +505,12 @@ export const documentAnalyses = pgTable("document_analyses", {
 
 export type DocumentAnalysis = typeof documentAnalyses.$inferSelect;
 export type InsertDocumentAnalysis = typeof documentAnalyses.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: processed_stripe_events (webhook idempotency)
+// ═══════════════════════════════════════════════════════
+export const processedStripeEvents = pgTable("processed_stripe_events", {
+  eventId: varchar("event_id", { length: 255 }).primaryKey(),
+  eventType: varchar("event_type", { length: 100 }).notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).defaultNow().notNull(),
+});
