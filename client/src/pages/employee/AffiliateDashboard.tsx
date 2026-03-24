@@ -44,6 +44,7 @@ import {
   Clock,
   Loader2,
   Wallet,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -143,16 +144,24 @@ export default function AffiliateDashboard() {
     const codeToCopy = discountCode.code;
     navigator.clipboard.writeText(codeToCopy).then(
       () => {
-        toast.success("Copied & refreshed", {
-          description: `${codeToCopy} copied. A new code is now ready for your next share.`,
+        toast.success("Copied", {
+          description: `${codeToCopy} copied to clipboard.`,
         });
-        rotateCode.mutate();
       },
       () =>
         toast.error("Copy failed", {
           description: "Please select and copy the code manually.",
         })
     );
+  };
+
+  const handleRegenerateCode = () => {
+    rotateCode.mutate(undefined, {
+      onSuccess: () =>
+        toast.success("Code regenerated", {
+          description: "A new discount code has been generated.",
+        }),
+    });
   };
 
   const referralLink = useMemo(
@@ -192,7 +201,7 @@ export default function AffiliateDashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-primary/20 bg-primary/5 shadow-sm">
+          <Card className="border-primary/20 bg-primary/5 shadow-sm" data-testid="card-stat-total-earned">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-primary">
                 Total Earned
@@ -200,7 +209,7 @@ export default function AffiliateDashboard() {
               <DollarSign className="w-4 h-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-primary">
+              <div className="text-3xl font-bold text-primary" data-testid="text-total-earned">
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
@@ -213,7 +222,7 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="card-stat-pending">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Pending
@@ -221,7 +230,7 @@ export default function AffiliateDashboard() {
               <Clock className="w-4 h-4 text-amber-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600">
+              <div className="text-2xl font-bold text-amber-600" data-testid="text-pending-balance">
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
@@ -234,7 +243,7 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="card-stat-paid-out">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Paid Out
@@ -242,7 +251,7 @@ export default function AffiliateDashboard() {
               <TrendingUp className="w-4 h-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-green-600" data-testid="text-paid-out">
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
@@ -255,7 +264,7 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="card-stat-referrals">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Referrals
@@ -263,7 +272,7 @@ export default function AffiliateDashboard() {
               <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold" data-testid="text-referral-count">
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
@@ -308,6 +317,7 @@ export default function AffiliateDashboard() {
                           variant="default"
                           size="lg"
                           className="shrink-0"
+                          data-testid="button-copy-referral-link"
                         >
                           <Copy className="w-4 h-4 mr-2" />
                           Copy Link
@@ -318,14 +328,14 @@ export default function AffiliateDashboard() {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase text-muted-foreground">Discount Code</span>
-                        <span className="text-[10px] text-muted-foreground/70 italic">Single-use · rotates on copy</span>
+                        <span className="text-[10px] text-muted-foreground/70 italic">Unlimited use</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1 rounded-lg bg-muted px-4 py-2 text-center font-mono text-lg font-bold tracking-wider">
                           {rotateCode.isPending ? (
                             <span className="text-muted-foreground text-sm font-normal flex items-center justify-center gap-1.5">
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              Refreshing…
+                              Regenerating…
                             </span>
                           ) : discountCode.code}
                         </div>
@@ -335,17 +345,27 @@ export default function AffiliateDashboard() {
                           size="sm"
                           disabled={rotateCode.isPending}
                           data-testid="button-copy-discount-code"
-                          title="Copy code — a new code is generated after each copy"
+                          title="Copy discount code"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          onClick={handleRegenerateCode}
+                          variant="ghost"
+                          size="sm"
+                          disabled={rotateCode.isPending}
+                          data-testid="button-regenerate-code"
+                          title="Generate a new code (e.g. if you suspect it was leaked)"
                         >
                           {rotateCode.isPending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Copy className="w-4 h-4" />
+                            <RefreshCw className="w-4 h-4" />
                           )}
                         </Button>
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-tight">
-                        Each code can only be used by <strong>one account</strong>. When you copy, the code refreshes so every share is unique.
+                        Share this code with anyone — it can be used by multiple people. Use "Regenerate" only if you suspect the code was leaked.
                       </p>
                     </div>
                   </div>
@@ -480,6 +500,7 @@ export default function AffiliateDashboard() {
                     onClick={handleRequestPayout}
                     disabled={requestPayout.isPending}
                     className="bg-indigo-600 hover:bg-indigo-700"
+                    data-testid="button-submit-payout"
                   >
                     {requestPayout.isPending && (
                       <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -507,7 +528,7 @@ export default function AffiliateDashboard() {
                 </TableHeader>
                 <TableBody>
                   {payouts.map(p => (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} data-testid={`row-payout-${p.id}`}>
                       <TableCell className="text-sm">
                         {formatDate(p.createdAt)}
                       </TableCell>
@@ -565,7 +586,7 @@ export default function AffiliateDashboard() {
                 </TableHeader>
                 <TableBody>
                   {commissions.map(c => (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} data-testid={`row-commission-${c.id}`}>
                       <TableCell className="text-sm">
                         {formatDate(c.createdAt)}
                       </TableCell>

@@ -23,6 +23,7 @@ import {
 import type { InsertPipelineLesson, InsertLetterQualityScore } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _startupMigrationRan = false;
 
 export async function getDb() {
   const dbUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
@@ -40,6 +41,19 @@ export async function getDb() {
       console.warn("[Database] Failed to connect:", error);
       captureServerException(error, { tags: { component: "database", error_type: "connection_failed" } });
       _db = null;
+    }
+  }
+  if (_db && !_startupMigrationRan) {
+    _startupMigrationRan = true;
+    // One-time migration: remove maxUses:1 limit from all existing discount codes
+    try {
+      await _db
+        .update(discountCodes)
+        .set({ maxUses: null })
+        .where(eq(discountCodes.maxUses, 1));
+      console.log("[Database] Migration: cleared maxUses:1 from discount codes");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (maxUses cleanup):", migErr);
     }
   }
   return _db;
@@ -1165,7 +1179,7 @@ export async function createDiscountCodeForEmployee(
       discountPercent: 20,
       isActive: true,
       usageCount: 0,
-      maxUses: 1,
+      maxUses: null,
     })
     .returning();
   return result[0];
@@ -1183,7 +1197,7 @@ export async function rotateDiscountCode(
     .set({
       code: newCode,
       usageCount: 0,
-      maxUses: 1,
+      maxUses: null,
       updatedAt: new Date(),
     })
     .where(eq(discountCodes.employeeId, employeeId))

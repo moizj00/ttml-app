@@ -208,6 +208,13 @@ export async function createCheckoutSession(params: {
       metadata: {
         user_id: userId.toString(),
         plan_id: planId,
+        ...(discountCode ? { discount_code: discountCode } : {}),
+        ...(resolved
+          ? {
+              employee_id: resolved.employeeId.toString(),
+              discount_code_id: resolved.discountCodeId.toString(),
+            }
+          : {}),
       },
     };
   }
