@@ -22,6 +22,9 @@ const steps = [
   },
 ];
 
+const LAST_CARD_DELAY = 150 + 2 * 200;
+const SHIMMER_DELAY = LAST_CARD_DELAY + 600;
+
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -85,25 +88,25 @@ export default function HowItWorks() {
           0% { opacity: 0; transform: translateY(10px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-        @keyframes hiw-line-draw {
-          0% { stroke-dashoffset: var(--line-length); }
-          100% { stroke-dashoffset: 0; }
-        }
         @keyframes hiw-dot-pulse {
           0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
           50% { transform: translate(-50%, -50%) scale(1.6); opacity: 0.4; }
           100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
-        @keyframes hiw-shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
+        @keyframes hiw-shimmer-sweep {
+          0% { transform: translateX(-100%); opacity: 1; }
+          100% { transform: translateX(300%); opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .hiw-card, .hiw-heading, .hiw-icon-wrap, .hiw-watermark {
+          .hiw-card, .hiw-heading, .hiw-icon-wrap, .hiw-watermark,
+          .hiw-line-fill, .hiw-mobile-fill, .hiw-dot, .hiw-shimmer-overlay {
             animation: none !important;
             opacity: 1 !important;
             transform: none !important;
+            transition: none !important;
           }
+          .hiw-line-fill { transform: scaleX(1) !important; }
+          .hiw-mobile-fill { transform: scaleY(1) !important; }
         }
       `}</style>
 
@@ -141,6 +144,8 @@ export default function HowItWorks() {
               />
             ))}
           </div>
+
+          <ShimmerSweep revealed={revealed} skip={skip} />
         </div>
 
         <div className="sr-only" aria-live="polite" role="status">
@@ -151,36 +156,43 @@ export default function HowItWorks() {
   );
 }
 
+function ShimmerSweep({ revealed, skip }: { revealed: boolean; skip: boolean }) {
+  if (skip) return null;
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none overflow-hidden hiw-shimmer-overlay"
+      aria-hidden="true"
+    >
+      <div
+        className="absolute inset-y-0 w-1/3"
+        style={{
+          background: "linear-gradient(90deg, transparent 0%, rgba(37, 99, 235, 0.06) 40%, rgba(37, 99, 235, 0.03) 60%, transparent 100%)",
+          animation: revealed ? `hiw-shimmer-sweep 1000ms cubic-bezier(0.16, 1, 0.3, 1) ${SHIMMER_DELAY}ms both` : "none",
+        }}
+      />
+    </div>
+  );
+}
+
 function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean }) {
   return (
     <div className="hidden md:block absolute top-[62px] left-0 right-0 z-0 pointer-events-none" aria-hidden="true">
       <div className="relative mx-auto" style={{ width: "66.66%", height: 4 }}>
         <div className="absolute inset-0 bg-slate-200/60 rounded-full" />
 
-        <svg
-          className="absolute inset-0 w-full"
-          style={{ height: 4 }}
-          preserveAspectRatio="none"
-        >
-          <line
-            x1="0" y1="2" x2="100%" y2="2"
-            stroke="url(#hiw-line-gradient)"
-            strokeWidth="3"
-            strokeLinecap="round"
-            style={skip ? {} : {
-              strokeDasharray: "1000",
-              strokeDashoffset: revealed ? "0" : "1000",
-              transition: "stroke-dashoffset 1200ms cubic-bezier(0.16, 1, 0.3, 1) 600ms",
-            }}
-          />
-          <defs>
-            <linearGradient id="hiw-line-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#3b82f6" />
-              <stop offset="50%" stopColor="#2563eb" />
-              <stop offset="100%" stopColor="#1d4ed8" />
-            </linearGradient>
-          </defs>
-        </svg>
+        <div
+          className="absolute inset-0 rounded-full hiw-line-fill"
+          style={skip ? {
+            transform: "scaleX(1)",
+            background: "linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8)",
+          } : {
+            background: "linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8)",
+            transformOrigin: "left center",
+            transform: revealed ? "scaleX(1)" : "scaleX(0)",
+            opacity: revealed ? 1 : 0,
+            transition: "transform 1200ms cubic-bezier(0.16, 1, 0.3, 1) 600ms, opacity 300ms ease 600ms",
+          }}
+        />
 
         {[0, 50, 100].map((pos, i) => (
           <div
@@ -189,7 +201,7 @@ function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean 
             style={{ left: `${pos}%` }}
           >
             <div
-              className="w-3 h-3 rounded-full"
+              className="w-3 h-3 rounded-full hiw-dot"
               style={skip ? {
                 transform: "translate(-50%, -50%) scale(1)",
                 opacity: 1,
@@ -210,21 +222,37 @@ function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean 
 
 function MobileConnector({ skip, revealed, delay }: { skip: boolean; revealed: boolean; delay: number }) {
   return (
-    <div className="md:hidden flex justify-center" style={{ height: 48 }} aria-hidden="true">
-      <div className="relative w-[3px] h-full">
+    <div className="md:hidden flex flex-col items-center" style={{ height: 48 }} aria-hidden="true">
+      <div className="relative w-[3px] flex-1">
         <div className="absolute inset-0 bg-slate-200/60 rounded-full" />
         <div
-          className="absolute inset-x-0 top-0 rounded-full"
+          className="absolute inset-0 rounded-full hiw-mobile-fill"
           style={skip ? {
-            height: "100%",
+            transform: "scaleY(1)",
+            transformOrigin: "top center",
             background: "linear-gradient(180deg, #3b82f6, #1d4ed8)",
           } : {
-            height: revealed ? "100%" : "0%",
             background: "linear-gradient(180deg, #3b82f6, #1d4ed8)",
-            transition: `height 600ms cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms`,
+            transformOrigin: "top center",
+            transform: revealed ? "scaleY(1)" : "scaleY(0)",
+            opacity: revealed ? 1 : 0,
+            transition: `transform 600ms cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms, opacity 200ms ease ${delay}ms`,
           }}
         />
       </div>
+      <div
+        className="w-2.5 h-2.5 rounded-full hiw-dot"
+        style={skip ? {
+          backgroundColor: "#2563eb",
+          boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.15)",
+          opacity: 1,
+          transform: "scale(1)",
+        } : {
+          backgroundColor: "#2563eb",
+          boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.15)",
+          animation: revealed ? `hiw-dot-pulse 500ms cubic-bezier(0.16, 1, 0.3, 1) ${delay + 400}ms both` : "none",
+        }}
+      />
     </div>
   );
 }
@@ -308,19 +336,6 @@ function StepCard({
           <p className="text-slate-500 leading-relaxed text-[15px]" data-testid={`text-step-desc-${item.step}`}>
             {item.desc}
           </p>
-
-          <div
-            className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
-            aria-hidden="true"
-          >
-            <div
-              className="absolute inset-0"
-              style={skip ? {} : {
-                background: "linear-gradient(90deg, transparent 0%, rgba(37, 99, 235, 0.04) 50%, transparent 100%)",
-                animation: revealed ? `hiw-shimmer 800ms cubic-bezier(0.16, 1, 0.3, 1) ${900 + index * 150}ms both` : "none",
-              }}
-            />
-          </div>
         </div>
       </div>
 
