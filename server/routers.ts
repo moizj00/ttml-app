@@ -713,25 +713,27 @@ export const appRouter = router({
           toStatus: "client_approval_pending",
         });
         try {
-          const subscriber = await getUserById(letter.userId);
-          const appUrl = getAppUrl(ctx.req);
-          if (subscriber?.email) {
-            await sendStatusUpdateEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              letterId: input.letterId,
-              newStatus: "client_approval_pending",
-              appUrl,
+          if (letter.userId != null) {
+            const subscriber = await getUserById(letter.userId);
+            const appUrl = getAppUrl(ctx.req);
+            if (subscriber?.email) {
+              await sendStatusUpdateEmail({
+                to: subscriber.email,
+                name: subscriber.name ?? "Subscriber",
+                subject: letter.subject,
+                letterId: input.letterId,
+                newStatus: "client_approval_pending",
+                appUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.userId,
+              type: "client_approval_pending",
+              title: "Your letter is ready for final approval",
+              body: "Please review your attorney-approved letter and click Approve & Proceed to confirm delivery.",
+              link: `/letters/${input.letterId}`,
             });
           }
-          await createNotification({
-            userId: letter.userId,
-            type: "client_approval_pending",
-            title: "Your letter is ready for final approval",
-            body: "Please review your attorney-approved letter and click Approve & Proceed to confirm delivery.",
-            link: `/letters/${input.letterId}`,
-          });
         } catch (err) {
           console.error("[requestClientApproval] Notification error:", err);
           captureServerException(err, { tags: { component: "letters", error_type: "client_approval_notification_failed" } });
@@ -873,25 +875,27 @@ export const appRouter = router({
         });
         // ── Notify subscriber: letter is now under attorney review ──
         try {
-          const subscriber = await getUserById(letter.userId);
-          const appUrl = getAppUrl(ctx.req);
-          if (subscriber?.email) {
-            await sendStatusUpdateEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              letterId: input.letterId,
-              newStatus: "under_review",
-              appUrl,
+          if (letter.userId != null) {
+            const subscriber = await getUserById(letter.userId);
+            const appUrl = getAppUrl(ctx.req);
+            if (subscriber?.email) {
+              await sendStatusUpdateEmail({
+                to: subscriber.email,
+                name: subscriber.name ?? "Subscriber",
+                subject: letter.subject,
+                letterId: input.letterId,
+                newStatus: "under_review",
+                appUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.userId,
+              type: "letter_under_review",
+              title: "Your letter is being reviewed",
+              body: `An attorney has claimed your letter "${letter.subject}" and is currently reviewing it.`,
+              link: `/letters/${input.letterId}`,
             });
           }
-          await createNotification({
-            userId: letter.userId,
-            type: "letter_under_review",
-            title: "Your letter is being reviewed",
-            body: `An attorney has claimed your letter "${letter.subject}" and is currently reviewing it.`,
-            link: `/letters/${input.letterId}`,
-          });
         } catch (err) {
           console.error("[Notify] Claim subscriber notification failed:", err);
           captureServerException(err, { tags: { component: "review", error_type: "claim_notification_failed" } });
@@ -900,7 +904,7 @@ export const appRouter = router({
         try {
           const attorney = await getUserById(ctx.user.id);
           const appUrl = getAppUrl(ctx.req);
-          const subscriber = await getUserById(letter.userId);
+          const subscriber = letter.userId != null ? await getUserById(letter.userId) : null;
           if (attorney?.email) {
             const jurisdiction =
               [
@@ -1036,25 +1040,27 @@ export const appRouter = router({
         }
         // ── Notify subscriber with PDF link ──
         try {
-          const appUrl = getAppUrl(ctx.req);
-          const subscriber = await getUserById(letter.userId);
-          if (subscriber?.email) {
-            await sendLetterApprovedEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              letterId: input.letterId,
-              appUrl,
-              pdfUrl,
+          if (letter.userId != null) {
+            const appUrl = getAppUrl(ctx.req);
+            const subscriber = await getUserById(letter.userId);
+            if (subscriber?.email) {
+              await sendLetterApprovedEmail({
+                to: subscriber.email,
+                name: subscriber.name ?? "Subscriber",
+                subject: letter.subject,
+                letterId: input.letterId,
+                appUrl,
+                pdfUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.userId,
+              type: "letter_approved",
+              title: "Your letter has been approved!",
+              body: `Your letter "${letter.subject}" is ready to download.${pdfUrl ? " A PDF copy is available." : ""}`,
+              link: `/letters/${input.letterId}`,
             });
           }
-          await createNotification({
-            userId: letter.userId,
-            type: "letter_approved",
-            title: "Your letter has been approved!",
-            body: `Your letter "${letter.subject}" is ready to download.${pdfUrl ? " A PDF copy is available." : ""}`,
-            link: `/letters/${input.letterId}`,
-          });
         } catch (err) {
           console.error("[Notify] Failed:", err);
           captureServerException(err, { tags: { component: "review", error_type: "approval_notification_failed" } });
@@ -1129,25 +1135,27 @@ export const appRouter = router({
           noteVisibility: "user_visible",
         });
         try {
-          const appUrl = getAppUrl(ctx.req);
-          const subscriber = await getUserById(letter.userId);
-          if (subscriber?.email) {
-            await sendLetterRejectedEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              letterId: input.letterId,
-              reason: visibleReason,
-              appUrl,
+          if (letter.userId != null) {
+            const appUrl = getAppUrl(ctx.req);
+            const subscriber = await getUserById(letter.userId);
+            if (subscriber?.email) {
+              await sendLetterRejectedEmail({
+                to: subscriber.email,
+                name: subscriber.name ?? "Subscriber",
+                subject: letter.subject,
+                letterId: input.letterId,
+                reason: visibleReason,
+                appUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.userId,
+              type: "letter_rejected",
+              title: "Update on your letter request",
+              body: visibleReason,
+              link: `/letters/${input.letterId}`,
             });
           }
-          await createNotification({
-            userId: letter.userId,
-            type: "letter_rejected",
-            title: "Update on your letter request",
-            body: visibleReason,
-            link: `/letters/${input.letterId}`,
-          });
         } catch (err) {
           console.error("[Notify] Failed:", err);
           captureServerException(err, { tags: { component: "review", error_type: "rejection_notification_failed" } });
@@ -1214,25 +1222,27 @@ export const appRouter = router({
           noteVisibility: "user_visible",
         });
         try {
-          const appUrl = getAppUrl(ctx.req);
-          const subscriber = await getUserById(letter.userId);
-          if (subscriber?.email) {
-            await sendNeedsChangesEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              letterId: input.letterId,
-              attorneyNote: input.userVisibleNote,
-              appUrl,
+          if (letter.userId != null) {
+            const appUrl = getAppUrl(ctx.req);
+            const subscriber = await getUserById(letter.userId);
+            if (subscriber?.email) {
+              await sendNeedsChangesEmail({
+                to: subscriber.email,
+                name: subscriber.name ?? "Subscriber",
+                subject: letter.subject,
+                letterId: input.letterId,
+                attorneyNote: input.userVisibleNote,
+                appUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.userId,
+              type: "needs_changes",
+              title: "Changes requested for your letter",
+              body: input.userVisibleNote,
+              link: `/letters/${input.letterId}`,
             });
           }
-          await createNotification({
-            userId: letter.userId,
-            type: "needs_changes",
-            title: "Changes requested for your letter",
-            body: input.userVisibleNote,
-            link: `/letters/${input.letterId}`,
-          });
         } catch (err) {
           console.error("[Notify] Failed:", err);
           captureServerException(err, { tags: { component: "review", error_type: "changes_notification_failed" } });
@@ -1255,7 +1265,7 @@ export const appRouter = router({
             input.letterId,
             letter.intakeJson as any,
             "drafting",
-            letter.userId
+            letter.userId ?? undefined
           ).catch(console.error);
         }
         return { success: true };
@@ -1427,7 +1437,7 @@ export const appRouter = router({
           input.letterId,
           letter.intakeJson as any,
           input.stage,
-          letter.userId
+          letter.userId ?? undefined
         ).catch(console.error);
         return {
           success: true,

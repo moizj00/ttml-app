@@ -1382,10 +1382,12 @@ export async function getAllEmployeeEarnings(): Promise<
   >();
   for (const row of rows) {
     if (row.status === "voided") continue;
-    let entry = map.get(row.employeeId);
+    const empId = row.employeeId;
+    if (empId == null) continue;
+    let entry = map.get(empId);
     if (!entry) {
       entry = { totalEarned: 0, pending: 0, paid: 0, referralCount: 0 };
-      map.set(row.employeeId, entry);
+      map.set(empId, entry);
     }
     entry.totalEarned += row.amount;
     if (row.status === "pending") entry.pending += row.amount;

@@ -2288,7 +2288,7 @@ async function finalizeLetterAfterVetting(
     (() => {
       const record = letterRecord;
       if (!record) return;
-      getUserById(record.userId)
+      (record.userId != null ? getUserById(record.userId) : Promise.resolve(null))
         .then(async subscriber => {
           const appBaseUrl =
             process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
@@ -2683,7 +2683,7 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   if (letterRecord) {
     const appBaseUrl =
       process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-    const subscriber = await getUserById(letterRecord.userId);
+    const subscriber = letterRecord.userId != null ? await getUserById(letterRecord.userId) : null;
     if (subscriber?.email) {
       sendStatusUpdateEmail({
         to: subscriber.email,

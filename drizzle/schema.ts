@@ -155,7 +155,7 @@ export type InsertUser = typeof users.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const letterRequests = pgTable("letter_requests", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
   letterType: letterTypeEnum("letter_type").notNull(),
   subject: varchar("subject", { length: 500 }).notNull(),
   issueSummary: text("issue_summary"),
@@ -164,7 +164,7 @@ export const letterRequests = pgTable("letter_requests", {
   jurisdictionCity: varchar("jurisdiction_city", { length: 200 }),
   intakeJson: jsonb("intake_json"),
   status: letterStatusEnum("status").default("submitted").notNull(),
-  assignedReviewerId: integer("assigned_reviewer_id"),
+  assignedReviewerId: integer("assigned_reviewer_id").references(() => users.id, { onDelete: "set null" }),
   currentAiDraftVersionId: integer("current_ai_draft_version_id"),
   currentFinalVersionId: integer("current_final_version_id"),
   pdfUrl: text("pdf_url"),
@@ -191,7 +191,7 @@ export type InsertLetterRequest = typeof letterRequests.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const letterVersions = pgTable("letter_versions", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
   versionType: versionTypeEnum("version_type").notNull(),
   content: text("content").notNull(),
   createdByType: actorTypeEnum("created_by_type").notNull(),
@@ -210,8 +210,8 @@ export type InsertLetterVersion = typeof letterVersions.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const reviewActions = pgTable("review_actions", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
-  reviewerId: integer("reviewer_id"),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
+  reviewerId: integer("reviewer_id").references(() => users.id, { onDelete: "set null" }),
   actorType: actorTypeEnum("actor_type").notNull(),
   action: varchar("action", { length: 100 }).notNull(),
   noteText: text("note_text"),
@@ -231,7 +231,7 @@ export type InsertReviewAction = typeof reviewActions.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const workflowJobs = pgTable("workflow_jobs", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
   jobType: jobTypeEnum("job_type").notNull(),
   provider: varchar("provider", { length: 50 }),
   status: jobStatusEnum("status").default("queued").notNull(),
@@ -256,7 +256,7 @@ export type InsertWorkflowJob = typeof workflowJobs.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const researchRuns = pgTable("research_runs", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
   workflowJobId: integer("workflow_job_id"),
   provider: varchar("provider", { length: 50 }).default("perplexity"),
   status: researchStatusEnum("status").default("queued").notNull(),
@@ -278,7 +278,7 @@ export type InsertResearchRun = typeof researchRuns.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const attachments = pgTable("attachments", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
   uploadedByUserId: integer("uploaded_by_user_id").notNull(),
   storagePath: varchar("storage_path", { length: 1000 }).notNull(),
   storageUrl: varchar("storage_url", { length: 2000 }),
@@ -299,7 +299,7 @@ export type InsertAttachment = typeof attachments.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 100 }).notNull(),
   category: varchar("category", { length: 50 }).default("general").notNull(),
   title: varchar("title", { length: 500 }).notNull(),
@@ -327,7 +327,7 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique(),
+  userId: integer("user_id").unique().references(() => users.id, { onDelete: "set null" }),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
@@ -377,7 +377,7 @@ export type InsertDiscountCode = typeof discountCodes.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const commissionLedger = pgTable("commission_ledger", {
   id: serial("id").primaryKey(),
-  employeeId: integer("employee_id").notNull(),
+  employeeId: integer("employee_id").references(() => users.id, { onDelete: "set null" }),
   letterRequestId: integer("letter_request_id"),
   subscriberId: integer("subscriber_id"),
   discountCodeId: integer("discount_code_id"),

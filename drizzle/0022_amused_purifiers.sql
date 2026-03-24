@@ -1,0 +1,14 @@
+ALTER TABLE "commission_ledger" ALTER COLUMN "employee_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "letter_requests" ALTER COLUMN "user_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "subscriptions" ALTER COLUMN "user_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "commission_ledger" ADD CONSTRAINT "commission_ledger_employee_id_users_id_fk" FOREIGN KEY ("employee_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "letter_requests" ADD CONSTRAINT "letter_requests_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "letter_requests" ADD CONSTRAINT "letter_requests_assigned_reviewer_id_users_id_fk" FOREIGN KEY ("assigned_reviewer_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "letter_versions" ADD CONSTRAINT "letter_versions_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "research_runs" ADD CONSTRAINT "research_runs_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "review_actions" ADD CONSTRAINT "review_actions_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "review_actions" ADD CONSTRAINT "review_actions_reviewer_id_users_id_fk" FOREIGN KEY ("reviewer_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "workflow_jobs" ADD CONSTRAINT "workflow_jobs_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;

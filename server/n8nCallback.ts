@@ -362,7 +362,7 @@ export function registerN8nCallbackRoute(app: Express): void {
             try {
               const letterRecord = await getLetterRequestById(letterId);
               if (letterRecord) {
-                const subscriber = await getUserById(letterRecord.userId);
+                const subscriber = letterRecord.userId != null ? await getUserById(letterRecord.userId) : null;
                 const appBaseUrl = getAppBaseUrl();
                 if (subscriber?.email) {
                   await sendLetterReadyEmail({

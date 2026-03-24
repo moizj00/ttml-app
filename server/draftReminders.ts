@@ -89,6 +89,15 @@ export async function processDraftReminders(): Promise<ReminderResult> {
 
   for (const letter of eligibleLetters) {
     try {
+      if (letter.userId == null) {
+        result.skipped++;
+        result.details.push({
+          letterId: letter.id,
+          status: "skipped",
+          reason: "no user associated",
+        });
+        continue;
+      }
       const subscriber = await getUserById(letter.userId);
 
       if (!subscriber?.email) {
