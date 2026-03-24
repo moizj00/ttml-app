@@ -7,10 +7,6 @@ import {
   Shield,
   FileText,
   Play,
-  Zap,
-  Copy,
-  Share2,
-  History,
   HelpCircle,
   Menu,
   X,
@@ -22,6 +18,7 @@ import {
 } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
 import HowItWorks from "@/components/HowItWorks";
+import FeaturesSection from "@/components/FeaturesSection";
 import FirstVisitPopup from "@/components/FirstVisitPopup";
 
 const letterTypes = [
@@ -32,28 +29,6 @@ const letterTypes = [
   "Debt Collection",
 ];
 
-const supportingFeatures = [
-  {
-    icon: FileText,
-    title: "7 Letter Types",
-    desc: "Demand letters, cease and desist notices, contract breach, eviction, employment disputes, consumer complaints, and general legal correspondence.",
-  },
-  {
-    icon: Copy,
-    title: "Real-Time Status Tracking",
-    desc: "Follow your letter from submission through attorney drafting, review, and final approval with live status updates and email notifications.",
-  },
-  {
-    icon: History,
-    title: "Full Audit Trail",
-    desc: "Every action is logged — from intake to attorney drafting, edits, and final approval. Complete transparency at every step.",
-  },
-  {
-    icon: Shield,
-    title: "Encrypted & Confidential",
-    desc: "Your case details are encrypted in transit and at rest. Attorneys are bound by professional confidentiality obligations. Your data is never shared.",
-  },
-];
 
 const faqs = [
   {
@@ -366,210 +341,7 @@ export default function Home() {
       <HowItWorks />
 
       {/* Alternating Layout Features */}
-      <section
-        id="features"
-        className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-white overflow-hidden"
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-24">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-              Built for Real Legal Situations
-            </h2>
-            <p className="text-lg text-slate-600">
-              Every feature exists to get you a stronger letter, faster
-            </p>
-          </div>
-
-          <div className="space-y-16 sm:space-y-24 md:space-y-32">
-            {/* Feature Row 1: Jurisdiction Research */}
-            <div className="flex flex-col lg:flex-row items-center gap-8 sm:gap-12 lg:gap-24">
-              <div className="w-full lg:w-1/2">
-                <div
-                  className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-blue-50 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center"
-                >
-                  <div
-                    className="absolute inset-0 bg-blue-600/5 rounded-3xl"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(circle at 2px 2px, rgba(37, 99, 235, 0.15) 1px, transparent 0)",
-                      backgroundSize: "24px 24px",
-                    }}
-                  ></div>
-
-                  <div className="relative w-full h-full bg-white rounded-2xl shadow-xl p-8 flex flex-col justify-between border border-blue-100">
-                    <div className="flex justify-between items-start mb-8">
-                      <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-bold">
-                        CALIFORNIA
-                      </div>
-                      <Shield className="text-blue-600 w-6 h-6" />
-                    </div>
-                    <div className="space-y-4 flex-1">
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <div className="h-2 w-20 bg-blue-200 rounded mb-2"></div>
-                        <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      </div>
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 relative">
-                        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                          ✓
-                        </div>
-                        <div className="h-2 w-32 bg-blue-300 rounded mb-2 ml-4"></div>
-                        <div className="h-2 w-full bg-blue-200 rounded ml-4"></div>
-                      </div>
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <div className="h-2 w-24 bg-blue-200 rounded mb-2"></div>
-                        <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full lg:w-1/2 flex flex-col justify-center">
-                <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
-                  <Zap className="w-7 h-7 text-blue-600" />
-                </div>
-                <h3 className="text-3xl font-bold mb-4">
-                  Jurisdiction-Aware Research
-                </h3>
-                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                  Our attorneys identify statutes, regulations, and case law
-                  specific to your state and situation — cited directly in your
-                  letter. We don't just use generic templates; we provide real
-                  legal authority.
-                </p>
-                <ul className="space-y-4">
-                  {[
-                    "State-specific legal codes applied",
-                    "Relevant case law citations included",
-                    "Statute of limitations checked",
-                    "Local regulatory compliance verified",
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                      <span className="text-slate-700 font-medium">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Feature Row 2: Attorney Review Center (Reversed) */}
-            <div className="flex flex-col lg:flex-row-reverse items-center gap-8 sm:gap-12 lg:gap-24">
-              <div className="w-full lg:w-1/2">
-                <div className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-slate-100 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center">
-                  <div className="relative w-full h-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-                      <span className="text-white font-medium text-sm">
-                        Attorney Review Portal
-                      </span>
-                      <div className="flex gap-2">
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                      </div>
-                    </div>
-                    <div className="flex-1 p-6 bg-slate-50 flex gap-4">
-                      <div className="w-1/3 space-y-3">
-                        <div className="p-3 bg-white rounded shadow-sm border-l-4 border-blue-600">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-1/2 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="p-3 bg-white/50 rounded shadow-sm">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-2/3 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="p-3 bg-white/50 rounded shadow-sm">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-3/4 bg-slate-200 rounded"></div>
-                        </div>
-                      </div>
-                      <div className="w-2/3 bg-white rounded shadow-sm border border-slate-200 p-6 flex flex-col">
-                        <div className="space-y-4 mb-auto">
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                          <div className="p-2 bg-yellow-50 rounded border border-yellow-200 relative">
-                            <div className="h-2 w-full bg-yellow-200 rounded mb-2"></div>
-                            <div className="h-2 w-4/5 bg-yellow-200 rounded"></div>
-                            <div className="absolute top-1/2 -right-12 translate-x-full -translate-y-1/2 bg-white shadow-lg rounded p-2 text-[10px] text-slate-500 border border-slate-100 w-24 hidden sm:block">
-                              Strengthened claim here.
-                            </div>
-                          </div>
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                        </div>
-                        <div className="mt-8 flex justify-end gap-2 border-t border-slate-100 pt-4">
-                          <div className="h-6 w-16 bg-slate-100 rounded"></div>
-                          <div className="h-6 w-20 bg-blue-600 rounded"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full lg:w-1/2 flex flex-col justify-center">
-                <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center mb-6">
-                  <Share2 className="w-7 h-7 text-indigo-600" />
-                </div>
-                <h3 className="text-3xl font-bold mb-4">
-                  Attorney Review Center
-                </h3>
-                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                  Licensed attorneys work in a dedicated Review Center — editing
-                  language, verifying citations, and ensuring professional
-                  quality. No letter is delivered without human legal oversight.
-                </p>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      100%
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Human reviewed
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      24-48h
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Average turnaround
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      50+
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Jurisdictions covered
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      Inline
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Draft feedback
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Supporting Feature Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 pt-12 border-t border-slate-100">
-              {supportingFeatures.map((f, i) => (
-                <div
-                  key={i}
-                  className="p-6 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors"
-                  data-testid={`feature-card-${i}`}
-                >
-                  <f.icon className="w-8 h-8 text-blue-600 mb-6" />
-                  <h4 className="text-xl font-bold mb-3">{f.title}</h4>
-                  <p className="text-slate-600 leading-relaxed">{f.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <FeaturesSection />
 
       {/* Pricing - Horizontal Stacked Cards */}
       <section
