@@ -97,6 +97,15 @@ export default function HowItWorks() {
           0% { transform: translateX(-100%); opacity: 1; }
           100% { transform: translateX(300%); opacity: 0; }
         }
+        .hiw-card-inner {
+          transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                      box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .hiw-card-inner:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 20px 40px rgba(37, 99, 235, 0.08),
+                      0 8px 16px rgba(0, 0, 0, 0.04);
+        }
         @media (prefers-reduced-motion: reduce) {
           .hiw-card, .hiw-heading, .hiw-icon-wrap, .hiw-watermark,
           .hiw-line-fill, .hiw-mobile-fill, .hiw-dot, .hiw-shimmer-overlay {
@@ -107,6 +116,8 @@ export default function HowItWorks() {
           }
           .hiw-line-fill { transform: scaleX(1) !important; }
           .hiw-mobile-fill { transform: scaleY(1) !important; }
+          .hiw-card-inner { transition: none !important; }
+          .hiw-card-inner:hover { transform: none !important; }
         }
       `}</style>
 
@@ -167,7 +178,7 @@ function ShimmerSweep({ revealed, skip }: { revealed: boolean; skip: boolean }) 
         className="absolute inset-y-0 w-1/3"
         style={{
           background: "linear-gradient(90deg, transparent 0%, rgba(37, 99, 235, 0.06) 40%, rgba(37, 99, 235, 0.03) 60%, transparent 100%)",
-          animation: revealed ? `hiw-shimmer-sweep 1000ms cubic-bezier(0.16, 1, 0.3, 1) ${SHIMMER_DELAY}ms both` : "none",
+          animation: revealed ? `hiw-shimmer-sweep 600ms cubic-bezier(0.16, 1, 0.3, 1) ${SHIMMER_DELAY}ms both` : "none",
         }}
       />
     </div>
@@ -176,7 +187,7 @@ function ShimmerSweep({ revealed, skip }: { revealed: boolean; skip: boolean }) 
 
 function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean }) {
   return (
-    <div className="hidden md:block absolute top-[62px] left-0 right-0 z-0 pointer-events-none" aria-hidden="true">
+    <div className="hidden md:block absolute top-[66px] left-0 right-0 z-0 pointer-events-none" aria-hidden="true">
       <div className="relative mx-auto" style={{ width: "66.66%", height: 4 }}>
         <div className="absolute inset-0 bg-slate-200/60 rounded-full" />
 
@@ -284,7 +295,7 @@ function StepCard({
           opacity: revealed ? undefined : 0,
         }}
       >
-        <div className="relative bg-white rounded-2xl border border-slate-200/80 px-6 pt-14 pb-8 w-full hover-elevate">
+        <div className="relative bg-white rounded-2xl border border-slate-200/80 px-6 pt-16 pb-8 w-full hiw-card-inner">
           <div
             className="absolute top-3 right-4 font-black text-[72px] leading-none select-none pointer-events-none hiw-watermark"
             style={skip ? {
@@ -298,11 +309,15 @@ function StepCard({
             {item.step}
           </div>
 
-          <div className="absolute left-1/2 -translate-x-1/2 -top-[34px]">
+          <div className="absolute left-1/2 -translate-x-1/2 -top-[50px]">
             <div
-              className="w-[68px] h-[68px] rounded-2xl flex items-center justify-center relative bg-white border-2 border-blue-500/20"
+              className="w-[100px] h-[100px] rounded-full flex items-center justify-center relative bg-white"
               style={{
-                boxShadow: "0 8px 32px rgba(37, 99, 235, 0.12), 0 0 0 6px rgba(37, 99, 235, 0.06)",
+                border: "3px solid transparent",
+                backgroundImage: "linear-gradient(white, white), linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                backgroundOrigin: "border-box",
+                backgroundClip: "padding-box, border-box",
+                boxShadow: "0 12px 40px rgba(37, 99, 235, 0.15), 0 0 0 8px rgba(37, 99, 235, 0.08)",
               }}
             >
               <div
@@ -312,7 +327,7 @@ function StepCard({
                 }}
               >
                 <item.icon
-                  className="w-8 h-8 text-blue-600"
+                  className="w-10 h-10 text-blue-600"
                   strokeWidth={1.8}
                 />
               </div>
