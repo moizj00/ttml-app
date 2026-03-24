@@ -162,6 +162,13 @@
       "when": 1774365670287,
       "tag": "0022_amused_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774375340136,
+      "tag": "0023_magenta_sentinel",
+      "breakpoints": true
     }
   ]
 }
