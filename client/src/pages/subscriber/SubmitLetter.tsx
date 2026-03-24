@@ -606,7 +606,7 @@ export default function SubmitLetter() {
               {STEPS[step - 1].label}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
             {/* Step 1: Letter Type */}
             {step === 1 && (
               <>

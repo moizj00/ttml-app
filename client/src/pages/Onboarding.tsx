@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { getRoleDashboard } from "@/components/ProtectedRoute";
 import BrandLogo from "@/components/shared/BrandLogo";
+import { useMounted, useReducedMotion } from "@/hooks/useAnimations";
 
 type SelectedRole = "subscriber" | "employee";
 
@@ -117,6 +118,8 @@ export default function Onboarding() {
   const [jurisdiction, setJurisdiction] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(false);
+  const mounted = useMounted();
+  const reduced = useReducedMotion();
 
   const completeOnboarding = trpc.auth.completeOnboarding.useMutation({
     onSuccess: data => {
@@ -169,7 +172,7 @@ export default function Onboarding() {
         </div>
 
         {step === "role" && (
-          <div className="space-y-4">
+          <div className="space-y-4" style={mounted && !reduced ? { animation: 'dashboard-fade-up 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards' } : undefined}>
             <h2 className="text-xl font-semibold text-center text-slate-800 mb-6">
               How will you use Talk to My Lawyer?
             </h2>
@@ -206,7 +209,7 @@ export default function Onboarding() {
         )}
 
         {step === "profile" && selectedRole && (
-          <Card>
+          <Card className="animate-dashboard-fade-up">
             <CardHeader>
               <CardTitle>
                 {selectedRole === "subscriber" && "Almost there!"}

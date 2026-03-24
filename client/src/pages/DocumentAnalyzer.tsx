@@ -442,7 +442,7 @@ export default function DocumentAnalyzer() {
                 file
                   ? "border-blue-300 bg-blue-50/40 cursor-default"
                   : dragging
-                  ? "border-blue-500 bg-blue-50 cursor-pointer scale-[1.01]"
+                  ? "border-blue-500 bg-blue-50 cursor-pointer scale-[1.01] animate-drag-glow"
                   : "border-slate-200 hover:border-blue-300 hover:bg-slate-50 cursor-pointer"
               } p-8 sm:p-12 flex flex-col items-center gap-4 text-center`}
               data-testid="upload-dropzone"

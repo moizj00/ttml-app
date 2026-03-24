@@ -9,6 +9,7 @@ import { ClipboardList, Clock, CheckCircle, ArrowRight, FileText, AlertCircle, A
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 /** Calculate hours since a given date */
 function hoursSince(dateStr: string | Date): number {
@@ -47,6 +48,8 @@ export default function AttorneyDashboard() {
     totalReviewed: allLetters?.filter((l) => ["approved", "rejected"].includes(l.status)).length ?? 0,
     overdue: slaData.overdueCount,
   };
+
+  const statCardVisible = useStaggerReveal(4, 80);
 
   return (
     <AppLayout breadcrumb={[{ label: "Review Center" }]}>
@@ -89,8 +92,8 @@ export default function AttorneyDashboard() {
             { label: "Overdue (>24h)", value: stats.overdue, icon: <AlertTriangle className="w-5 h-5" />, color: "text-red-600", bg: "bg-red-50", urgent: stats.overdue > 0 },
             { label: "My Active", value: stats.myActive, icon: <FileText className="w-5 h-5" />, color: "text-blue-600", bg: "bg-blue-50", urgent: false },
             { label: "Total Reviewed", value: stats.totalReviewed, icon: <CheckCircle className="w-5 h-5" />, color: "text-green-600", bg: "bg-green-50", urgent: false },
-          ].map((stat) => (
-            <Card key={stat.label} className={stat.urgent ? "border-red-300 bg-red-50/30" : ""}>
+          ].map((stat, idx) => (
+            <Card key={stat.label} className={stat.urgent ? "border-red-300 bg-red-50/30" : ""} style={staggerStyle(idx, statCardVisible[idx])}>
               <CardContent className="p-4">
                 <div className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3 ${stat.color}`}>
                   {stat.icon}

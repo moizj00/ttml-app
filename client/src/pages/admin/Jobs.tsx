@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 export default function AdminJobs() {
   const { data: failedJobs, isLoading, refetch } = trpc.admin.failedJobs.useQuery();
@@ -43,6 +44,7 @@ export default function AdminJobs() {
   });
 
   const jobCount = failedJobs?.length ?? 0;
+  const jobVisible = useStaggerReveal(jobCount, 60);
 
   const handleRetry = (letterId: number, jobType: string) => {
     const stage = jobType.includes("research") ? "research" : "drafting";
@@ -109,8 +111,9 @@ export default function AdminJobs() {
           </div>
         ) : (
           <div className="space-y-3">
-            {failedJobs.map((job) => (
-              <Card key={job.id} className="border-red-200">
+            {failedJobs.map((job, idx) => (
+              <Card key={job.id} className="border-red-200" style={staggerStyle(idx, jobVisible[idx])}>
+
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">

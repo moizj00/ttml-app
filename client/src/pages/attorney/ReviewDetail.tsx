@@ -352,7 +352,7 @@ export default function ReviewDetail() {
         { label: letter.subject },
       ]}
     >
-      <div className="flex flex-col h-full gap-0">
+      <div className="flex flex-col h-full gap-0 animate-dashboard-fade-up">
         {/* ── Top bar ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 pb-3">
           <div className="min-w-0">
@@ -466,7 +466,7 @@ export default function ReviewDetail() {
                   variant="outline"
                   size="sm"
                   onClick={() => setRejectDialog(true)}
-                  className="bg-background border-red-300 text-red-700 hover:bg-red-50"
+                  className="bg-background border-red-300 text-red-700 hover:bg-red-50 active:scale-[0.98] transition-transform"
                 >
                   <XCircle className="w-4 h-4 mr-1.5" />
                   Reject
@@ -475,7 +475,7 @@ export default function ReviewDetail() {
                   data-testid="button-approve"
                   size="sm"
                   onClick={openApproveDialog}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-green-600 hover:bg-green-700 text-white active:scale-[0.98] transition-transform"
                 >
                   <CheckCircle className="w-4 h-4 mr-1.5" />
                   Approve

@@ -20,6 +20,7 @@ import { FileText, Search, ArrowRight, ClipboardList, Eye } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 const REVIEWABLE_STATUSES = [
   "pending_review",
@@ -50,6 +51,7 @@ export default function AdminAllLetters() {
     const matchStatus = statusFilter === "all" || l.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const letterVisible = useStaggerReveal(filtered.length, 50);
 
   const handleLetterClick = (letter: { id: number; status: string }) => {
     if (REVIEWABLE_STATUSES.includes(letter.status)) {
@@ -115,7 +117,7 @@ export default function AdminAllLetters() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map(letter => {
+            {filtered.map((letter, idx) => {
               const isClaimable = CLAIMABLE_STATUSES.includes(letter.status);
               const isUnderReview = letter.status === "under_review";
               const isClaiming =
@@ -125,6 +127,7 @@ export default function AdminAllLetters() {
               return (
                 <div
                   key={letter.id}
+                  style={staggerStyle(idx, letterVisible[idx])}
                   onClick={() => handleLetterClick(letter)}
                   className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
                 >

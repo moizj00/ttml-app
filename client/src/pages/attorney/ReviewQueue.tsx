@@ -9,6 +9,7 @@ import { FileText, Search, ArrowRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useReviewQueueRealtime } from "@/hooks/useLetterRealtime";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 // Letters that arrived in the queue within the last 24 hours are considered "New"
 const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
@@ -47,6 +48,7 @@ export default function ReviewQueue() {
     });
 
   const pendingCount = (letters ?? []).filter((l) => l.status === "pending_review").length;
+  const letterVisible = useStaggerReveal(filtered.length, 50);
 
   return (
     <AppLayout breadcrumb={[{ label: "Review Center", href: "/review" }, { label: "Queue" }]}>
@@ -103,7 +105,7 @@ export default function ReviewQueue() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((letter) => {
+            {filtered.map((letter, idx) => {
               const isNew =
                 letter.status === "pending_review" &&
                 Date.now() - new Date(letter.createdAt).getTime() < NEW_THRESHOLD_MS;
@@ -113,6 +115,7 @@ export default function ReviewQueue() {
                   key={letter.id}
                   data-testid={`card-letter-${letter.id}`}
                   onClick={() => setSelectedLetterId(letter.id)}
+                  style={staggerStyle(idx, letterVisible[idx])}
                   className={`bg-card border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${
                     isNew ? "border-amber-300 bg-amber-50/30" : "border-border"
                   }`}

@@ -55,6 +55,7 @@ import {
   PayoutStatusBadge,
 } from "@/components/shared/CommissionBadges";
 import { useState, useMemo } from "react";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 export default function AffiliateDashboard() {
   const { user } = useAuth();
@@ -184,6 +185,7 @@ export default function AffiliateDashboard() {
   };
 
   const isLoading = codeLoading || earningsLoading;
+  const statCardVisible = useStaggerReveal(4, 80);
 
   return (
     <AppLayout title="Affiliate Dashboard">
@@ -201,7 +203,8 @@ export default function AffiliateDashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-primary/20 bg-primary/5 shadow-sm" data-testid="card-stat-total-earned">
+          <Card className="border-primary/20 bg-primary/5 shadow-sm" data-testid="card-stat-total-earned" style={staggerStyle(0, statCardVisible[0])}>
+
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-primary">
                 Total Earned
@@ -222,7 +225,8 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card data-testid="card-stat-pending">
+          <Card data-testid="card-stat-pending" style={staggerStyle(1, statCardVisible[1])}>
+
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Pending
@@ -243,7 +247,8 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card data-testid="card-stat-paid-out">
+          <Card data-testid="card-stat-paid-out" style={staggerStyle(2, statCardVisible[2])}>
+
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Paid Out
@@ -264,7 +269,8 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-          <Card data-testid="card-stat-referrals">
+          <Card data-testid="card-stat-referrals" style={staggerStyle(3, statCardVisible[3])}>
+
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Referrals

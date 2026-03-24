@@ -33,6 +33,7 @@ import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 // Statuses where the dashboard should auto-refresh
 const ACTIVE_STATUSES = [
@@ -324,6 +325,8 @@ export default function SubscriberDashboard() {
   };
 
   const recentLetters = letters?.slice(0, 5) ?? [];
+  const statCardVisible = useStaggerReveal(4, 80);
+  const letterVisible = useStaggerReveal(recentLetters.length, 60);
 
   return (
     <AppLayout breadcrumb={[{ label: "Dashboard" }]}>
@@ -487,8 +490,8 @@ export default function SubscriberDashboard() {
               color: "text-red-600",
               bg: "bg-red-50",
             },
-          ].map(stat => (
-            <Card key={stat.label}>
+          ].map((stat, idx) => (
+            <Card key={stat.label} style={staggerStyle(idx, statCardVisible[idx])}>
               <CardContent className="p-4">
                 <div
                   className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3 ${stat.color}`}
@@ -574,7 +577,7 @@ export default function SubscriberDashboard() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {recentLetters.map(letter => {
+              {recentLetters.map((letter, idx) => {
                 const cta = getStatusCTA(letter.status, letter.id);
                 const CTAIcon = cta.icon;
                 const isActionRequired = [
@@ -585,6 +588,7 @@ export default function SubscriberDashboard() {
                 return (
                   <Card
                     key={letter.id}
+                    style={staggerStyle(idx, letterVisible[idx])}
                     className={`overflow-hidden transition-all hover:shadow-md ${
                       isActionRequired
                         ? "ring-1 ring-amber-300 bg-amber-50/30"

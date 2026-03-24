@@ -20,6 +20,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { Link } from "wouter";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 export default function AdminDashboard() {
   const {
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
   } = trpc.admin.stats.useQuery();
   const { data: failedJobs } = trpc.admin.failedJobs.useQuery();
   const s = stats as any;
+  const statCardVisible = useStaggerReveal(4, 80);
 
   return (
     <AppLayout breadcrumb={[{ label: "Admin Dashboard" }]}>
@@ -102,10 +104,11 @@ export default function AdminDashboard() {
                   bg: "bg-red-50",
                   alert: (s.failedJobs ?? 0) > 0,
                 },
-              ].map(stat => (
+              ].map((stat, idx) => (
                 <Card
                   key={stat.label}
                   className={stat.alert ? "border-red-300" : ""}
+                  style={staggerStyle(idx, statCardVisible[idx])}
                 >
                   <CardContent className="p-4">
                     <div
