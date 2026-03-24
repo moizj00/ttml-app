@@ -21,6 +21,7 @@ import cron from "node-cron";
 import { processDraftReminders } from "./draftReminders";
 import { syncSubscriptionsWithStripe, pruneProcessedStripeEvents } from "./subscriptionSync";
 import { captureServerException } from "./sentry";
+import { releaseStaleReviews } from "./staleReviewReleaser";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
@@ -87,7 +88,25 @@ export function startCronScheduler(): void {
     }
   });
 
-  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00)");
+  // Stale review detection: runs every hour at :30
+  // Releases letters that have been under_review for 48+ hours back to pending_review
+  cron.schedule("30 * * * *", async () => {
+    const startTime = Date.now();
+    console.log(`[Cron] [${new Date().toISOString()}] Running stale review detection...`);
+    try {
+      const result = await releaseStaleReviews();
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `[Cron] Stale review detection done in ${elapsed}ms — released: ${result.released}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Cron] Stale review detection failed: ${msg}`);
+      captureServerException(err, { tags: { component: "cron", job: "stale_review_detection" } });
+    }
+  });
+
+  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30)");
 }
 
 /**

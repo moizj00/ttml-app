@@ -633,6 +633,24 @@ export const appRouter = router({
           htmlContent: finalVersion.content,
         });
 
+        // Mark letter as sent now that delivery succeeded
+        try {
+          await updateLetterStatus(input.letterId, "sent", { force: true });
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: ctx.user.role as any,
+            action: "letter_sent_to_recipient",
+            noteText: `Letter delivered to ${input.recipientEmail}`,
+            noteVisibility: "internal",
+            fromStatus: letter.status,
+            toStatus: "sent",
+          });
+        } catch (err) {
+          console.error("[sendToRecipient] Failed to update status to sent:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
+        }
+
         try {
           await notifyAdmins({
             category: "letters",
@@ -944,6 +962,65 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    unclaim: attorneyProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        if (letter.status !== "under_review")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not under review",
+          });
+        if (ctx.user.role !== "admin" && letter.assignedReviewerId !== ctx.user.id)
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You are not assigned to this letter",
+          });
+        await updateLetterStatus(input.letterId, "pending_review", { assignedReviewerId: null });
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: ctx.user.role as any,
+          action: "released_back_to_queue",
+          noteText: "Attorney released letter back to the review queue",
+          noteVisibility: "internal",
+          fromStatus: "under_review",
+          toStatus: "pending_review",
+        });
+        // ── Notify subscriber ──
+        try {
+          const subscriber = letter.userId ? await getUserById(letter.userId) : null;
+          const appUrl = getAppUrl(ctx.req);
+          if (subscriber?.email) {
+            await sendStatusUpdateEmail({
+              to: subscriber.email,
+              name: subscriber.name ?? "Subscriber",
+              subject: letter.subject,
+              letterId: input.letterId,
+              newStatus: "pending_review",
+              appUrl,
+            });
+          }
+        } catch (err) {
+          console.error("[Notify] Unclaim subscriber notification failed:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "unclaim_notification_failed" } });
+        }
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "letter_released",
+            title: `Letter #${input.letterId} released back to queue`,
+            body: `${ctx.user.name ?? "An attorney"} released "${letter.subject}" back to the review queue.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] letter_released:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_released" } });
+        }
+        return { success: true };
+      }),
+
     approve: attorneyProcedure
       .input(
         z.object({
@@ -987,6 +1064,12 @@ export const appRouter = router({
           },
         });
         const versionId = (version as any)?.insertId;
+        if (typeof versionId !== "number" || isNaN(versionId)) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create final approved version — version ID was not returned. Approval aborted.",
+          });
+        }
         await updateLetterVersionPointers(input.letterId, {
           currentFinalVersionId: versionId,
         });
@@ -1202,7 +1285,7 @@ export const appRouter = router({
             code: "BAD_REQUEST",
             message: "Letter must be under_review",
           });
-        await updateLetterStatus(input.letterId, "needs_changes");
+        await updateLetterStatus(input.letterId, "needs_changes", { assignedReviewerId: null });
         await logReviewAction({
           letterRequestId: input.letterId,
           reviewerId: ctx.user.id,
@@ -1289,6 +1372,11 @@ export const appRouter = router({
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "You are not assigned to this letter",
+          });
+        if (letter.status !== "under_review")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter must be under_review to edit",
           });
         const version = await createLetterVersion({
           letterRequestId: input.letterId,
@@ -1491,7 +1579,9 @@ export const appRouter = router({
             "approved",
             "client_approval_pending",
             "client_approved",
+            "sent",
             "rejected",
+            "pipeline_failed",
           ]),
           reason: z.string().min(5).max(5000),
         })

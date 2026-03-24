@@ -16,11 +16,12 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   drafting: ["generated_locked", "submitted", "pipeline_failed"],
   generated_locked: ["pending_review"],
   pending_review: ["under_review"],
-  under_review: ["approved", "rejected", "needs_changes"],
-  needs_changes: ["submitted", "researching", "drafting"],
+  under_review: ["approved", "rejected", "needs_changes", "pending_review"],
+  needs_changes: ["submitted"],
   approved: ["client_approval_pending"],
   client_approval_pending: ["client_approved"],
-  client_approved: [],
+  client_approved: ["sent"],
+  sent: [],
   rejected: ["submitted"],
   pipeline_failed: ["submitted"],
 };
@@ -83,6 +84,11 @@ export const STATUS_CONFIG: Record<
     label: "Client Approved",
     color: "text-emerald-600",
     bgColor: "bg-emerald-100",
+  },
+  sent: {
+    label: "Sent to Recipient",
+    color: "text-sky-700",
+    bgColor: "bg-sky-100",
   },
   rejected: { label: "Rejected", color: "text-red-700", bgColor: "bg-red-200" },
   pipeline_failed: {

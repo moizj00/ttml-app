@@ -142,6 +142,19 @@ export default function ReviewDetail() {
       toast.error("Could not claim letter", { description: e.message }),
   });
 
+  const unclaimMutation = trpc.review.unclaim.useMutation({
+    onSuccess: () => {
+      toast.success("Letter released", {
+        description: "The letter has been returned to the review queue.",
+      });
+      setEditMode(false);
+      setHasUnsavedChanges(false);
+      invalidate();
+    },
+    onError: e =>
+      toast.error("Could not release letter", { description: e.message }),
+  });
+
   const saveMutation = trpc.review.saveEdit.useMutation({
     onSuccess: () => {
       toast.success("Draft saved", {
@@ -347,7 +360,7 @@ export default function ReviewDetail() {
               {letter.subject}
             </h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <StatusBadge status={letter.status} />
+              <StatusBadge status={letter.status} data-testid="status-badge-letter" />
               <span className="text-xs text-muted-foreground">
                 {LETTER_TYPE_CONFIG[letter.letterType]?.label ??
                   letter.letterType}
@@ -367,6 +380,7 @@ export default function ReviewDetail() {
           <div className="flex flex-wrap gap-2 flex-shrink-0">
             {letter.status === "pending_review" && (
               <Button
+                data-testid="button-claim"
                 onClick={() => claimMutation.mutate({ letterId })}
                 disabled={claimMutation.isPending}
                 size="sm"
@@ -381,6 +395,7 @@ export default function ReviewDetail() {
                 {editMode ? (
                   <>
                     <Button
+                      data-testid="button-cancel-edit"
                       variant="outline"
                       size="sm"
                       onClick={cancelEdit}
@@ -390,6 +405,7 @@ export default function ReviewDetail() {
                       Cancel Edit
                     </Button>
                     <Button
+                      data-testid="button-save-edit"
                       size="sm"
                       onClick={() =>
                         saveMutation.mutate({
@@ -409,6 +425,7 @@ export default function ReviewDetail() {
                   </>
                 ) : (
                   <Button
+                    data-testid="button-edit-draft"
                     variant="outline"
                     size="sm"
                     onClick={enterEditMode}
@@ -419,6 +436,23 @@ export default function ReviewDetail() {
                 )}
 
                 <Button
+                  data-testid="button-release"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm("Release this letter back to the review queue?")) {
+                      unclaimMutation.mutate({ letterId });
+                    }
+                  }}
+                  disabled={unclaimMutation.isPending}
+                  className="bg-background border-gray-300 text-gray-600 hover:bg-gray-50"
+                >
+                  <X className="w-4 h-4 mr-1.5" />
+                  {unclaimMutation.isPending ? "Releasing..." : "Release"}
+                </Button>
+
+                <Button
+                  data-testid="button-request-changes"
                   variant="outline"
                   size="sm"
                   onClick={() => setChangesDialog(true)}
@@ -428,6 +462,7 @@ export default function ReviewDetail() {
                   Changes
                 </Button>
                 <Button
+                  data-testid="button-reject"
                   variant="outline"
                   size="sm"
                   onClick={() => setRejectDialog(true)}
@@ -437,6 +472,7 @@ export default function ReviewDetail() {
                   Reject
                 </Button>
                 <Button
+                  data-testid="button-approve"
                   size="sm"
                   onClick={openApproveDialog}
                   className="bg-green-600 hover:bg-green-700 text-white"
@@ -526,6 +562,7 @@ export default function ReviewDetail() {
                 </div>
               ) : editMode ? (
                 <RichTextEditor
+                  data-testid="editor-letter-edit"
                   content={editContent}
                   onChange={html => {
                     setEditContent(html);
@@ -538,6 +575,7 @@ export default function ReviewDetail() {
                 />
               ) : (
                 <RichTextEditor
+                  data-testid="editor-letter-view"
                   content={highlightCitationsInHtml(plainTextToHtml(latestDraft?.content ?? ""))}
                   editable={false}
                   minHeight="100%"
@@ -550,12 +588,12 @@ export default function ReviewDetail() {
           {/* Right: Intake / Research / Citations / History panel */}
           <div className="w-80 flex-shrink-0 flex flex-col min-h-0">
             <Tabs defaultValue="intake" className="flex flex-col h-full">
-              <TabsList className="w-full flex-shrink-0">
-                <TabsTrigger value="intake" className="flex-1 text-xs">
+              <TabsList className="w-full flex-shrink-0" data-testid="tabs-review-panel">
+                <TabsTrigger value="intake" className="flex-1 text-xs" data-testid="tab-intake">
                   <ClipboardList className="w-3 h-3 mr-1" />
                   Intake
                 </TabsTrigger>
-                <TabsTrigger value="research" className="flex-1 text-xs">
+                <TabsTrigger value="research" className="flex-1 text-xs" data-testid="tab-research">
                   <BookOpen className="w-3 h-3 mr-1" />
                   Research
                 </TabsTrigger>
@@ -563,7 +601,7 @@ export default function ReviewDetail() {
                   <Scale className="w-3 h-3 mr-1" />
                   Citations
                 </TabsTrigger>
-                <TabsTrigger value="history" className="flex-1 text-xs">
+                <TabsTrigger value="history" className="flex-1 text-xs" data-testid="tab-history">
                   <History className="w-3 h-3 mr-1" />
                   History
                 </TabsTrigger>
@@ -1013,7 +1051,7 @@ export default function ReviewDetail() {
         setApproveDialog(open);
         if (!open) setAcknowledgedUnverified(false);
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogContent data-testid="dialog-approve" className="max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-700">
               <CheckCircle className="w-5 h-5" />
@@ -1025,6 +1063,7 @@ export default function ReviewDetail() {
               Final Letter Content — review and edit before approving
             </Label>
             <RichTextEditor
+              data-testid="editor-approve-content"
               content={approveContent}
               onChange={setApproveContent}
               editable={true}
@@ -1056,6 +1095,7 @@ export default function ReviewDetail() {
           </div>
           <DialogFooter className="flex-shrink-0">
             <Button
+              data-testid="button-approve-cancel"
               variant="outline"
               onClick={() => setApproveDialog(false)}
               className="bg-background"
@@ -1063,6 +1103,7 @@ export default function ReviewDetail() {
               Cancel
             </Button>
             <Button
+              data-testid="button-approve-confirm"
               onClick={() =>
                 approveMutation.mutate({
                   letterId,
@@ -1085,7 +1126,7 @@ export default function ReviewDetail() {
 
       {/* ── Reject Dialog ──────────────────────────────────────────────────── */}
       <Dialog open={rejectDialog} onOpenChange={setRejectDialog}>
-        <DialogContent>
+        <DialogContent data-testid="dialog-reject">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-700">
               <XCircle className="w-5 h-5" />
@@ -1097,6 +1138,7 @@ export default function ReviewDetail() {
               Reason for Rejection *
             </Label>
             <Textarea
+              data-testid="input-reject-reason"
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
               placeholder="Explain why this letter is being rejected..."
@@ -1106,6 +1148,7 @@ export default function ReviewDetail() {
           </div>
           <DialogFooter>
             <Button
+              data-testid="button-reject-cancel"
               variant="outline"
               onClick={() => setRejectDialog(false)}
               className="bg-background"
@@ -1113,6 +1156,7 @@ export default function ReviewDetail() {
               Cancel
             </Button>
             <Button
+              data-testid="button-reject-confirm"
               onClick={() =>
                 rejectMutation.mutate({ letterId, reason: rejectReason })
               }
@@ -1127,7 +1171,7 @@ export default function ReviewDetail() {
 
       {/* ── Request Changes Dialog ─────────────────────────────────────────── */}
       <Dialog open={changesDialog} onOpenChange={setChangesDialog}>
-        <DialogContent>
+        <DialogContent data-testid="dialog-request-changes">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700">
               <MessageSquare className="w-5 h-5" />
@@ -1140,6 +1184,7 @@ export default function ReviewDetail() {
                 Note to Subscriber *
               </Label>
               <Textarea
+                data-testid="input-changes-note"
                 value={changesNote}
                 onChange={e => setChangesNote(e.target.value)}
                 placeholder="Explain what changes are needed..."
@@ -1149,6 +1194,7 @@ export default function ReviewDetail() {
             </div>
             <div className="flex items-center gap-2">
               <input
+                data-testid="checkbox-retrigger-pipeline"
                 type="checkbox"
                 id="retrigger"
                 checked={retrigger}
@@ -1162,6 +1208,7 @@ export default function ReviewDetail() {
           </div>
           <DialogFooter>
             <Button
+              data-testid="button-changes-cancel"
               variant="outline"
               onClick={() => setChangesDialog(false)}
               className="bg-background"
@@ -1169,6 +1216,7 @@ export default function ReviewDetail() {
               Cancel
             </Button>
             <Button
+              data-testid="button-changes-confirm"
               onClick={() =>
                 changesMutation.mutate({
                   letterId,

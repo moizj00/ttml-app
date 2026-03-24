@@ -69,10 +69,10 @@ export default function ReviewQueue() {
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search letters..." className="pl-9" />
+            <Input data-testid="input-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search letters..." className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger data-testid="select-status-filter" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,6 +111,7 @@ export default function ReviewQueue() {
               return (
                 <div
                   key={letter.id}
+                  data-testid={`card-letter-${letter.id}`}
                   onClick={() => setSelectedLetterId(letter.id)}
                   className={`bg-card border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${
                     isNew ? "border-amber-300 bg-amber-50/30" : "border-border"
@@ -125,7 +126,7 @@ export default function ReviewQueue() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-foreground leading-tight">{letter.subject}</p>
+                          <p data-testid={`text-subject-${letter.id}`} className="text-sm font-semibold text-foreground leading-tight">{letter.subject}</p>
                           {isNew && (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
                               <Sparkles className="w-2.5 h-2.5" />
@@ -140,7 +141,7 @@ export default function ReviewQueue() {
                         {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
                       </p>
                       <div className="flex items-center gap-3 mt-2">
-                        <StatusBadge status={letter.status} size="sm" />
+                        <StatusBadge status={letter.status} size="sm" data-testid={`status-badge-${letter.id}`} />
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString()}
                         </span>

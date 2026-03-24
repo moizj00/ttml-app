@@ -35,6 +35,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   minHeight?: string;
+  "data-testid"?: string;
 }
 
 function ToolbarButton({
@@ -236,6 +237,7 @@ export default function RichTextEditor({
   placeholder = "Start editing...",
   className,
   minHeight = "400px",
+  "data-testid": testId,
 }: RichTextEditorProps) {
   const isFocusedRef = useRef(false);
 
@@ -288,6 +290,7 @@ export default function RichTextEditor({
 
   return (
     <div
+      data-testid={testId}
       className={cn(
         "border border-border rounded-lg overflow-hidden bg-background",
         !editable && "opacity-80",

@@ -33,6 +33,7 @@ export const LETTER_STATUSES = [
   "approved",
   "client_approval_pending",
   "client_approved",
+  "sent",
   "rejected",
   "pipeline_failed",
 ] as const;
@@ -80,7 +81,7 @@ export const letterStatusEnum = pgEnum("letter_status", [
   "submitted", "researching", "drafting", "generated_locked", "generated_unlocked",
   "upsell_dismissed", "pipeline_failed",
   "pending_review", "under_review", "needs_changes", "approved",
-  "client_approval_pending", "client_approved",
+  "client_approval_pending", "client_approved", "sent",
   "rejected",
 ]);
 export const letterTypeEnum = pgEnum("letter_type", [
