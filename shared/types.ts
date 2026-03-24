@@ -420,6 +420,43 @@ export const TTML_LETTER_TYPES = [
 ] as const;
 export type TtmlLetterType = (typeof TTML_LETTER_TYPES)[number];
 
+export const EMOTION_LABELS = [
+  "anger",
+  "fear",
+  "urgency",
+  "friendliness",
+  "condescension",
+  "sarcasm",
+  "guilt-tripping",
+  "confidence",
+  "deception",
+  "desperation",
+] as const;
+export type EmotionLabel = (typeof EMOTION_LABELS)[number];
+
+export const emotionBreakdownItemSchema = z.object({
+  emotion: z.string(),
+  intensity: z.number().min(0).max(100),
+});
+export type EmotionBreakdownItem = z.infer<typeof emotionBreakdownItemSchema>;
+
+export const redFlagItemSchema = z.object({
+  passage: z.string(),
+  explanation: z.string(),
+});
+export type RedFlagItem = z.infer<typeof redFlagItemSchema>;
+
+export const emotionalIntelligenceSchema = z.object({
+  overallTone: z.string(),
+  toneConfidence: z.enum(["low", "medium", "high"]),
+  emotionBreakdown: z.array(emotionBreakdownItemSchema),
+  hiddenImplications: z.array(z.string()),
+  redFlags: z.array(redFlagItemSchema),
+  manipulationTactics: z.array(z.string()),
+  trueIntentSummary: z.string(),
+});
+export type EmotionalIntelligence = z.infer<typeof emotionalIntelligenceSchema>;
+
 // Canonical (strict) result schema — use for return types and DB storage
 export const documentAnalysisResultSchema = z.object({
   summary: z.string(),
@@ -434,6 +471,7 @@ export const documentAnalysisResultSchema = z.object({
     recipientName: z.string().nullable(),
   }),
   recommendedResponseSummary: z.string(),
+  emotionalIntelligence: emotionalIntelligenceSchema.nullable(),
 });
 export type DocumentAnalysisResult = z.infer<typeof documentAnalysisResultSchema>;
 
@@ -457,6 +495,25 @@ export const documentAnalysisResultLenientSchema = z.object({
     recipientName: z.string().nullable(),
   }).default({ senderName: null, recipientName: null }),
   recommendedResponseSummary: z.string().default(""),
+  emotionalIntelligence: z.object({
+    overallTone: z.string().default("Neutral"),
+    toneConfidence: z.enum(["low", "medium", "high"]).default("medium"),
+    emotionBreakdown: z.array(
+      z.object({
+        emotion: z.string().default("neutral"),
+        intensity: z.number().min(0).max(100).default(50),
+      })
+    ).default([]),
+    hiddenImplications: z.array(z.string()).default([]),
+    redFlags: z.array(
+      z.object({
+        passage: z.string().default(""),
+        explanation: z.string().default(""),
+      })
+    ).default([]),
+    manipulationTactics: z.array(z.string()).default([]),
+    trueIntentSummary: z.string().default(""),
+  }).nullable().default(null),
 });
 
 // Zod insert schema for the document_analyses table

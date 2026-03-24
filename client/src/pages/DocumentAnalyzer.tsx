@@ -27,8 +27,13 @@ import {
   UserPlus,
   Clock,
   CheckCircle,
+  Brain,
+  Eye,
+  Quote,
+  Target,
+  MessageSquareWarning,
 } from "lucide-react";
-import type { DocumentAnalysisResult, FlaggedRisk } from "@shared/types";
+import type { DocumentAnalysisResult, FlaggedRisk, EmotionalIntelligence } from "@shared/types";
 import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "@shared/types";
 import type { AnalysisPrefill } from "@shared/types";
 
@@ -152,6 +157,54 @@ function buildTextReport(
         `${i + 1}. [${risk.severity.toUpperCase()}] ${risk.clause}\n   ${risk.description}`
     ),
   );
+
+  const ei = result.emotionalIntelligence;
+  if (ei) {
+    lines.push(
+      "",
+      "",
+      "━━━ EMOTIONAL INTELLIGENCE ANALYSIS ━━━",
+      "",
+      `Overall Tone: ${ei.overallTone} (Confidence: ${ei.toneConfidence})`,
+      "",
+    );
+
+    if (ei.emotionBreakdown.length > 0) {
+      lines.push("── Emotion Breakdown ──");
+      ei.emotionBreakdown.forEach((e) => {
+        const bar = "█".repeat(Math.round(e.intensity / 5)) + "░".repeat(20 - Math.round(e.intensity / 5));
+        lines.push(`  ${e.emotion}: ${bar} ${e.intensity}%`);
+      });
+      lines.push("");
+    }
+
+    if (ei.hiddenImplications.length > 0) {
+      lines.push("── Hidden Implications ──");
+      ei.hiddenImplications.forEach((imp, i) => lines.push(`  ${i + 1}. ${imp}`));
+      lines.push("");
+    }
+
+    if (ei.redFlags.length > 0) {
+      lines.push("── Red Flags & Dark Corners ──");
+      ei.redFlags.forEach((rf, i) => {
+        lines.push(`  ${i + 1}. "${rf.passage}"`);
+        lines.push(`     → ${rf.explanation}`);
+      });
+      lines.push("");
+    }
+
+    if (ei.manipulationTactics.length > 0) {
+      lines.push("── Manipulation Tactics ──");
+      ei.manipulationTactics.forEach((t, i) => lines.push(`  ${i + 1}. ${t}`));
+      lines.push("");
+    }
+
+    if (ei.trueIntentSummary) {
+      lines.push("── True Intent Summary ──");
+      lines.push(ei.trueIntentSummary);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -725,6 +778,185 @@ export default function DocumentAnalyzer() {
                 </div>
               )}
             </div>
+
+            {/* ─── Emotional Intelligence Section ─── */}
+            {result.emotionalIntelligence && (
+              <div className="relative overflow-hidden rounded-2xl shadow-lg" data-testid="card-emotional-intelligence">
+                {/* Header banner */}
+                <div className="relative bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 sm:px-8 pt-6 pb-8">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_70%)]" />
+                  <div className="relative flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30">
+                      <Brain className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight">Emotional Intelligence</h2>
+                      <p className="text-xs text-purple-200">Reading between the lines</p>
+                    </div>
+                    <Badge variant="outline" className="ml-auto border-white/30 text-white bg-white/10 backdrop-blur-sm text-[10px] uppercase tracking-widest font-bold">AI Insight</Badge>
+                  </div>
+
+                  {/* Overall Tone — hero-style */}
+                  <div className="relative rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 p-5" data-testid="section-overall-tone">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="text-xs font-semibold text-purple-200 uppercase tracking-wider">Detected Tone</span>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        result.emotionalIntelligence.toneConfidence === "high"
+                          ? "bg-emerald-400/20 text-emerald-200 ring-1 ring-emerald-400/30"
+                          : result.emotionalIntelligence.toneConfidence === "medium"
+                          ? "bg-amber-400/20 text-amber-200 ring-1 ring-amber-400/30"
+                          : "bg-white/10 text-white/70 ring-1 ring-white/20"
+                      }`} data-testid="badge-tone-confidence">
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          result.emotionalIntelligence.toneConfidence === "high" ? "bg-emerald-400" :
+                          result.emotionalIntelligence.toneConfidence === "medium" ? "bg-amber-400" : "bg-white/50"
+                        }`} />
+                        {result.emotionalIntelligence.toneConfidence} confidence
+                      </span>
+                    </div>
+                    <p className="text-xl sm:text-2xl font-bold text-white leading-tight" data-testid="text-overall-tone">
+                      {result.emotionalIntelligence.overallTone}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Body content — white card area */}
+                <div className="bg-white border border-slate-200 border-t-0 rounded-b-2xl px-6 sm:px-8 py-6 space-y-6">
+
+                  {/* Emotion Breakdown */}
+                  {result.emotionalIntelligence.emotionBreakdown.length > 0 && (
+                    <div data-testid="section-emotion-breakdown">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-purple-100 flex items-center justify-center">
+                          <Zap className="w-3.5 h-3.5 text-purple-600" />
+                        </div>
+                        Emotion Breakdown
+                      </h3>
+                      <div className="grid gap-3">
+                        {result.emotionalIntelligence.emotionBreakdown.map((item, i) => {
+                          const barGradient = item.intensity >= 70
+                            ? "from-rose-400 to-red-500"
+                            : item.intensity >= 40
+                            ? "from-amber-300 to-orange-400"
+                            : "from-sky-300 to-blue-400";
+                          const dotColor = item.intensity >= 70
+                            ? "bg-red-500"
+                            : item.intensity >= 40
+                            ? "bg-amber-400"
+                            : "bg-blue-400";
+                          return (
+                            <div key={i} className="group flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors" data-testid={`emotion-bar-${i}`}>
+                              <div className="flex items-center gap-2 w-32 min-w-[8rem]">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                                <span className="text-xs font-semibold text-slate-700 capitalize truncate">{item.emotion}</span>
+                              </div>
+                              <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out`}
+                                  style={{ width: `${item.intensity}%` }}
+                                />
+                              </div>
+                              <span className={`text-xs font-bold w-10 text-right tabular-nums ${
+                                item.intensity >= 70 ? "text-red-600" : item.intensity >= 40 ? "text-amber-600" : "text-blue-600"
+                              }`}>{item.intensity}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hidden Implications */}
+                  {result.emotionalIntelligence.hiddenImplications.length > 0 && (
+                    <div data-testid="section-hidden-implications">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center">
+                          <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                        </div>
+                        Hidden Implications
+                      </h3>
+                      <div className="space-y-2">
+                        {result.emotionalIntelligence.hiddenImplications.map((imp, i) => (
+                          <div key={i} className="flex items-start gap-3 text-sm text-slate-700 bg-indigo-50/50 rounded-xl border border-indigo-100 p-4 hover:bg-indigo-50 transition-colors" data-testid={`hidden-implication-${i}`}>
+                            <div className="w-5 h-5 rounded-full bg-indigo-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[10px] font-bold text-indigo-700">{i + 1}</span>
+                            </div>
+                            <span className="leading-relaxed">{imp}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Red Flags & Dark Corners */}
+                  {result.emotionalIntelligence.redFlags.length > 0 && (
+                    <div data-testid="section-red-flags">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-red-100 flex items-center justify-center">
+                          <MessageSquareWarning className="w-3.5 h-3.5 text-red-600" />
+                        </div>
+                        Red Flags & Dark Corners
+                      </h3>
+                      <div className="space-y-3">
+                        {result.emotionalIntelligence.redFlags.map((rf, i) => (
+                          <div key={i} className="rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-rose-50 overflow-hidden" data-testid={`red-flag-${i}`}>
+                            <div className="px-4 pt-4 pb-3 border-b border-red-100 bg-red-50/50">
+                              <div className="flex items-start gap-2.5">
+                                <Quote className="w-4 h-4 text-red-400 flex-shrink-0 mt-1" />
+                                <p className="text-sm font-medium text-red-900 italic leading-relaxed">"{rf.passage}"</p>
+                              </div>
+                            </div>
+                            <div className="px-4 py-3 flex items-start gap-2.5">
+                              <ArrowRight className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm text-slate-700 leading-relaxed">{rf.explanation}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Manipulation Tactics */}
+                  {result.emotionalIntelligence.manipulationTactics.length > 0 && (
+                    <div data-testid="section-manipulation-tactics">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center">
+                          <Target className="w-3.5 h-3.5 text-amber-600" />
+                        </div>
+                        Manipulation Tactics
+                      </h3>
+                      <div className="space-y-2">
+                        {result.emotionalIntelligence.manipulationTactics.map((tactic, i) => (
+                          <div key={i} className="flex items-start gap-3 text-sm text-slate-700 bg-amber-50/50 rounded-xl border border-amber-200 p-4 hover:bg-amber-50 transition-colors" data-testid={`manipulation-tactic-${i}`}>
+                            <div className="w-5 h-5 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <AlertTriangle className="w-3 h-3 text-amber-700" />
+                            </div>
+                            <span className="leading-relaxed">{tactic}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* True Intent Summary */}
+                  {result.emotionalIntelligence.trueIntentSummary && (
+                    <div className="relative rounded-xl overflow-hidden" data-testid="section-true-intent">
+                      <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700" />
+                      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.1),transparent_60%)]" />
+                      <div className="relative p-5 sm:p-6">
+                        <h3 className="text-xs font-bold text-purple-200 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <ShieldAlert className="w-4 h-4" />
+                          What This Document Is Really Saying
+                        </h3>
+                        <p className="text-sm sm:text-base text-white/95 leading-relaxed font-medium">
+                          {result.emotionalIntelligence.trueIntentSummary}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Bottom nudge for guests */}
             {!me ? (

@@ -2692,13 +2692,13 @@ export const appRouter = router({
           ? documentText.slice(0, 100_000) + "\n\n[Document truncated due to length]"
           : documentText;
 
-        // Build Claude prompt
-        const anthropic = (await import("@ai-sdk/anthropic")).createAnthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
+        // Build OpenAI prompt
+        const openai = (await import("@ai-sdk/openai")).createOpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
         });
         const { generateText: aiGenerateText } = await import("ai");
 
-        const prompt = `You are a legal document analyst specializing in identifying what legal action a recipient of a document should take. Analyze the following document and return a JSON object with this EXACT structure — no additional fields, no markdown, just valid JSON:
+        const prompt = `You are a legal document analyst specializing in identifying what legal action a recipient of a document should take, AND in reading between the lines to detect emotional tone, hidden intent, veiled threats, and manipulative language. Analyze the following document and return a JSON object with this EXACT structure — no additional fields, no markdown, just valid JSON:
 
 {
   "summary": "A clear 2-4 paragraph summary of what this document is about, its purpose, and the key parties involved.",
@@ -2721,7 +2721,29 @@ export const appRouter = router({
     "senderName": "Acme Corp",
     "recipientName": "John Smith"
   },
-  "recommendedResponseSummary": "A one-sentence description of the most important thing the recipient should do in response to this document."
+  "recommendedResponseSummary": "A one-sentence description of the most important thing the recipient should do in response to this document.",
+  "emotionalIntelligence": {
+    "overallTone": "Threatening but Polite",
+    "toneConfidence": "high",
+    "emotionBreakdown": [
+      { "emotion": "urgency", "intensity": 85 },
+      { "emotion": "anger", "intensity": 30 },
+      { "emotion": "condescension", "intensity": 60 }
+    ],
+    "hiddenImplications": [
+      "Implies legal action if you don't comply within 10 days, though phrased as a suggestion"
+    ],
+    "redFlags": [
+      {
+        "passage": "We kindly request your prompt attention to this matter",
+        "explanation": "Despite the polite wording, this is a veiled threat implying consequences for non-compliance"
+      }
+    ],
+    "manipulationTactics": [
+      "False urgency — creates artificial time pressure to prevent careful consideration"
+    ],
+    "trueIntentSummary": "Plain-English paragraph explaining what this document is really saying beneath all the formality."
+  }
 }
 
 Field rules:
@@ -2734,6 +2756,16 @@ Field rules:
 - detectedJurisdiction: The US state or jurisdiction mentioned or implied in the document (e.g., "California", "New York"). Set to null if unclear.
 - detectedParties: The party who sent this document (senderName) and the party it was sent to (recipientName). Use null for either if not clearly identified.
 - recommendedResponseSummary: One concise sentence (under 150 chars) describing the best action the document recipient should take.
+
+Emotional Intelligence field rules:
+- overallTone: A short labeled tone description (e.g., "Threatening but Polite", "Passive-Aggressive", "Genuinely Cooperative", "Coldly Professional", "Manipulatively Friendly"). Be specific and nuanced.
+- toneConfidence: How confident you are in the tone assessment — "low", "medium", or "high"
+- emotionBreakdown: Array of 4-8 detected emotions with intensity 0-100. Include emotions like: anger, fear, urgency, friendliness, condescension, sarcasm, guilt-tripping, confidence, deception, desperation. Only include emotions that are actually present (intensity > 0).
+- hiddenImplications: Array of 2-6 things the document implies without saying directly. Look for unstated consequences, implied threats wrapped in polite language, assumptions the document makes without stating, and obligations it tries to create through implication rather than explicit statement.
+- redFlags: Array of 1-5 specific passages where language wraps threats, pressure, or unfavorable terms in friendly/neutral/humorous tone. Quote the actual passage and explain what's really being said. Look for: polite language disguising demands, humor masking serious consequences, casual framing of significant obligations, and professional language softening harsh realities.
+- manipulationTactics: Array of 1-5 identified persuasion or manipulation techniques. Look for: false urgency, appeal to authority, guilt-tripping, minimization of the recipient's rights, anchoring bias, social proof manipulation, fear of loss framing, and false dichotomies.
+- trueIntentSummary: A plain-English paragraph (2-4 sentences) explaining what this document is REALLY saying when you strip away all the formality, politeness, and legal language. Be direct and honest about the sender's true motivations and goals.
+
 - Return ONLY valid JSON, no markdown fences, no explanation outside the JSON object.
 
 Document to analyze:
@@ -2745,9 +2777,9 @@ ${truncatedText}
 
         try {
           const { text } = await aiGenerateText({
-            model: anthropic("claude-opus-4-5"),
+            model: openai("gpt-4o"),
             prompt,
-            maxOutputTokens: 3000,
+            maxOutputTokens: 5000,
           });
 
           // Parse and strip JSON from possible markdown code fences
