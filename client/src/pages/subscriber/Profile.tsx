@@ -58,6 +58,7 @@ function ResendVerificationButton({ email }: { email: string }) {
           const res = await fetch("/api/auth/resend-verification", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ email }),
           });
           const d = await res.json();

@@ -52,7 +52,7 @@ export default function ProtectedRoute({
       setAdmin2FAChecked(true);
       return;
     }
-    fetch("/api/auth/admin-2fa/status")
+    fetch("/api/auth/admin-2fa/status", { credentials: "include" })
       .then(r => r.json())
       .then(data => {
         setAdmin2FAVerified(data.verified === true);

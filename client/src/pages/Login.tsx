@@ -88,6 +88,7 @@ export default function Login() {
         const response = await fetch("/api/auth/google/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -188,6 +189,7 @@ export default function Login() {
           const resp = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ email, password }),
             signal: controller.signal,
           });
@@ -277,6 +279,7 @@ export default function Login() {
       const response = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           intent: "login",
           next: nextPath,
@@ -355,6 +358,7 @@ export default function Login() {
                                   headers: {
                                     "Content-Type": "application/json",
                                   },
+                                  credentials: "include",
                                   body: JSON.stringify({ email }),
                                 }
                               );

@@ -50,7 +50,7 @@ export default function VerifyEmail() {
     };
 
     const verifyCustomToken = async () => {
-      const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token!)}`);
+      const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token!)}`, { credentials: "include" });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Verification failed. The link may have expired.");
@@ -63,6 +63,7 @@ export default function VerifyEmail() {
       const res = await fetch("/api/auth/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -126,6 +127,7 @@ export default function VerifyEmail() {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email: resendEmail }),
       });
       const data = await res.json();

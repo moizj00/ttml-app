@@ -138,6 +138,7 @@ export default function Signup() {
         const response = await fetch("/api/auth/google/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -205,6 +206,7 @@ export default function Signup() {
           const resp = await fetch("/api/auth/signup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               email,
               password,
@@ -287,6 +289,7 @@ export default function Signup() {
       const response = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           intent: "signup",
           role,
@@ -350,6 +353,7 @@ export default function Signup() {
                   const res = await fetch("/api/auth/resend-verification", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    credentials: "include",
                     body: JSON.stringify({ email: signedUpEmail }),
                   });
                   const d = await res.json();
