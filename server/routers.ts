@@ -374,6 +374,15 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
+
+        const entitlement = await checkLetterSubmissionAllowed(ctx.user.id);
+        if (!entitlement.allowed) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: entitlement.reason ?? "You are not allowed to submit a letter at this time.",
+          });
+        }
+
         const result = await createLetterRequest({
           userId: ctx.user.id,
           letterType: input.letterType,
