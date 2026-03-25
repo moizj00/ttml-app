@@ -46,6 +46,9 @@ async function resolveStripeCoupon(
       await stripe.coupons.retrieve(couponId);
     } catch {
       // Coupon doesn't exist yet — create it
+      // Business intent: "once" means the discount applies only to the first invoice
+      // (i.e. the subscriber's first payment). This is a one-time introductory discount
+      // for customer acquisition — subsequent renewals are charged at full price.
       await stripe.coupons.create({
         id: couponId,
         percent_off: code.discountPercent,

@@ -301,7 +301,7 @@ export default function AffiliateDashboard() {
                 Referral Program
               </CardTitle>
               <CardDescription>
-                Share your unique link. Subscribers get a 20% discount, and you earn 5% commission in real-time.
+                Share your unique link. New subscribers get 20% off their first payment, and you earn 5% commission in real-time.
               </CardDescription>
             </CardHeader>
             <CardContent>
