@@ -169,6 +169,13 @@
       "when": 1774375340136,
       "tag": "0023_magenta_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1774425082706,
+      "tag": "0024_young_fantastic_four",
+      "breakpoints": true
     }
   ]
 }
