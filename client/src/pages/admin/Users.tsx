@@ -2,6 +2,8 @@ import AppLayout from "@/components/shared/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -19,7 +21,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, Briefcase, User, Scale, AlertCircle, Gavel, CreditCard, ArrowUpDown, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Shield, Briefcase, User, Scale, AlertCircle, Gavel, CreditCard, ArrowUpDown, X, Mail, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 
@@ -72,7 +83,27 @@ export default function AdminUsers() {
   const [filterSub, setFilterSub] = useState<SubFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("name-asc");
 
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+
   const updateRole = trpc.admin.updateRole.useMutation();
+
+  const inviteAttorney = trpc.admin.inviteAttorney.useMutation({
+    onSuccess: (data) => {
+      toast.success("Attorney invitation sent", {
+        description: data.message,
+        duration: 8000,
+      });
+      setInviteDialogOpen(false);
+      setInviteEmail("");
+      setInviteName("");
+      refetch();
+    },
+    onError: (e) => {
+      toast.error("Invitation failed", { description: e.message });
+    },
+  });
 
   const markAsPaid = trpc.admin.markAsPaid.useMutation({
     onSuccess: () => {
@@ -175,6 +206,98 @@ export default function AdminUsers() {
               )}
             </p>
           </div>
+          <Dialog open={inviteDialogOpen} onOpenChange={(open) => {
+            setInviteDialogOpen(open);
+            if (!open) { setInviteEmail(""); setInviteName(""); }
+          }}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1.5" data-testid="button-invite-attorney">
+                <UserPlus className="w-4 h-4" />
+                Invite Attorney
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite Attorney</DialogTitle>
+                <DialogDescription>
+                  Send an invitation email to a new attorney. They will receive a link to set their password and access the Review Center.
+                </DialogDescription>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!inviteEmail.trim()) return;
+                  inviteAttorney.mutate({
+                    email: inviteEmail.trim(),
+                    name: inviteName.trim() || undefined,
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email">Email Address *</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      placeholder="attorney@example.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      required
+                      disabled={inviteAttorney.isPending}
+                      className="pl-9"
+                      data-testid="input-invite-email"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-name">Name (optional)</Label>
+                  <Input
+                    id="invite-name"
+                    type="text"
+                    placeholder="Jane Doe"
+                    value={inviteName}
+                    onChange={e => setInviteName(e.target.value)}
+                    disabled={inviteAttorney.isPending}
+                    data-testid="input-invite-name"
+                  />
+                </div>
+                <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                  <p className="text-xs text-purple-800">
+                    <strong>What happens next:</strong> The attorney will receive a branded email
+                    with a link to set their password. Once they set it, they can log in and
+                    access the Review Center immediately.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setInviteDialogOpen(false)}
+                    disabled={inviteAttorney.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-purple-600 hover:bg-purple-700"
+                    disabled={inviteAttorney.isPending || !inviteEmail.trim()}
+                    data-testid="button-send-invitation"
+                  >
+                    {inviteAttorney.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending…
+                      </>
+                    ) : (
+                      "Send Invitation"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Attorney promotion notice */}

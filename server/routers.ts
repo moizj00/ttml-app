@@ -94,6 +94,8 @@ import {
   sendPayoutCompletedEmail,
   sendPayoutRejectedEmail,
   sendLetterToRecipient,
+  sendAttorneyInvitationEmail,
+  sendAttorneyWelcomeEmail,
 } from "./email";
 import { captureServerException } from "./sentry";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
@@ -102,7 +104,7 @@ import type { InsertPipelineLesson } from "../drizzle/schema";
 import { BLOG_CATEGORIES } from "../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
-import { invalidateUserCache } from "./supabaseAuth";
+import { invalidateUserCache, getOriginUrl } from "./supabaseAuth";
 import {
   createCheckoutSession,
   createBillingPortalSession,
@@ -1518,6 +1520,187 @@ export const appRouter = router({
           captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
         }
         return { success: true };
+      }),
+
+    inviteAttorney: adminProcedure
+      .input(
+        z.object({
+          email: z.string().email("Invalid email address"),
+          name: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const email = input.email.toLowerCase().trim();
+        const name = input.name?.trim() || email.split("@")[0];
+
+        const existingUser = await getUserByEmail(email);
+        if (existingUser) {
+          if (existingUser.role === "attorney") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "This user is already an attorney.",
+            });
+          }
+          const hasActiveSub = await hasActiveRecurringSubscription(existingUser.id);
+          if (hasActiveSub) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "This user has an active subscription. Cancel their subscription before promoting them to Attorney.",
+            });
+          }
+          await updateUserRole(existingUser.id, "attorney");
+          try { await assignRoleId(existingUser.id, "attorney"); } catch (e) {
+            console.error("[inviteAttorney] Role ID assignment failed:", e);
+          }
+          if (existingUser.openId) invalidateUserCache(existingUser.openId);
+          try {
+            await createNotification({
+              userId: existingUser.id,
+              type: "role_updated",
+              title: "Your account has been upgraded to Attorney",
+              body: "You now have access to the Review Center. Please refresh your browser or log out and back in to activate your new role.",
+              link: "/attorney",
+            });
+          } catch (err) {
+            console.error("[inviteAttorney] notification failed:", err);
+          }
+          return { success: true, alreadyExisted: true, message: `${email} already had an account and has been promoted to attorney.` };
+        }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const sbUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+        const sbServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+        if (!sbUrl || !sbServiceKey) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Supabase configuration missing." });
+        }
+        const serviceClient = createClient(sbUrl, sbServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        const crypto = await import("crypto");
+        const randomPassword = crypto.randomBytes(32).toString("hex");
+        const { data: createData, error: createError } = await serviceClient.auth.admin.createUser({
+          email,
+          password: randomPassword,
+          email_confirm: true,
+          user_metadata: { name, invited_attorney: true },
+        });
+
+        if (createError) {
+          console.error("[inviteAttorney] Supabase createUser error:", createError.message);
+          if (createError.message.includes("already") || createError.message.includes("exists")) {
+            // User exists in Supabase auth but not in our app DB (first check above
+            // already handled app-level users). Try to recover by generating a recovery
+            // link for the existing auth user and creating the app record.
+            try {
+              const origin2 = getOriginUrl(ctx.req);
+              const { data: linkData2 } = await serviceClient.auth.admin.generateLink({
+                type: "recovery",
+                email,
+                options: { redirectTo: `${origin2}/accept-invitation` },
+              });
+              if (linkData2?.properties?.action_link && linkData2.user) {
+                const authUserId = linkData2.user.id;
+                const { upsertUser: upsertExisting, getUserByOpenId: getByOpenId } = await import("./db");
+                await upsertExisting({
+                  openId: authUserId,
+                  name,
+                  email,
+                  loginMethod: "email",
+                  lastSignedIn: new Date(),
+                  role: "attorney",
+                  emailVerified: true,
+                });
+                invalidateUserCache(authUserId);
+                const existingAppUser = await getByOpenId(authUserId);
+                if (existingAppUser) {
+                  try { await assignRoleId(existingAppUser.id, "attorney"); } catch (e) {
+                    console.error("[inviteAttorney] Role ID assignment for existing auth user:", e);
+                  }
+                }
+                await serviceClient.auth.admin.updateUserById(authUserId, {
+                  user_metadata: { name, invited_attorney: true },
+                });
+                await sendAttorneyInvitationEmail({ to: email, name, setPasswordUrl: linkData2.properties.action_link, invitedByName: ctx.user.name || undefined });
+                return { success: true, alreadyExisted: true, message: `${email} had an auth account and has been set up as an attorney. Invitation sent.` };
+              }
+            } catch (recoveryErr) {
+              console.error("[inviteAttorney] Recovery attempt for existing auth user failed:", recoveryErr);
+            }
+            throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists in the auth system." });
+          }
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: createError.message });
+        }
+
+        if (!createData.user) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create auth user." });
+        }
+
+        const { upsertUser, getUserByOpenId } = await import("./db");
+        await upsertUser({
+          openId: createData.user.id,
+          name,
+          email,
+          loginMethod: "email",
+          lastSignedIn: new Date(),
+          role: "attorney",
+          emailVerified: true,
+        });
+        invalidateUserCache(createData.user.id);
+
+        const appUser = await getUserByOpenId(createData.user.id);
+        if (appUser) {
+          try { await assignRoleId(appUser.id, "attorney"); } catch (e) {
+            console.error("[inviteAttorney] Role ID assignment failed:", e);
+          }
+        }
+
+        const origin = getOriginUrl(ctx.req);
+        const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+          type: "recovery",
+          email,
+          options: { redirectTo: `${origin}/accept-invitation` },
+        });
+
+        if (linkError || !linkData?.properties?.action_link) {
+          console.error("[inviteAttorney] generateLink error:", linkError?.message);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",
+          });
+        }
+
+        const setPasswordUrl = linkData.properties.action_link;
+
+        try {
+          await sendAttorneyInvitationEmail({
+            to: email,
+            name,
+            setPasswordUrl,
+            invitedByName: ctx.user.name || undefined,
+          });
+        } catch (emailErr) {
+          console.error("[inviteAttorney] Failed to send invitation email:", emailErr);
+          captureServerException(emailErr, { tags: { component: "admin", error_type: "attorney_invitation_email_failed" } });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Attorney account created but invitation email failed to send. They can use 'Forgot Password' to access their account.",
+          });
+        }
+
+        try {
+          await notifyAdmins({
+            category: "users",
+            type: "attorney_invited",
+            title: `Attorney invited: ${name}`,
+            body: `${email} was invited as an attorney by ${ctx.user.name || ctx.user.email || "an admin"}.`,
+            link: `/admin/users`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] attorney_invited:", err);
+        }
+
+        return { success: true, alreadyExisted: false, message: `Invitation sent to ${email}.` };
       }),
 
     allLetters: adminProcedure

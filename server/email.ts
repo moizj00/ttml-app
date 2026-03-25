@@ -1427,3 +1427,50 @@ export async function sendAdminVerificationCodeEmail(opts: {
     throw err;
   }
 }
+
+export async function sendAttorneyInvitationEmail(opts: {
+  to: string;
+  name: string;
+  setPasswordUrl: string;
+  invitedByName?: string;
+}) {
+  const body = `
+    <p>Hello ${opts.name},</p>
+    <p>You have been invited to join <strong>${APP_NAME}</strong> as a <strong>Reviewing Attorney</strong>${opts.invitedByName ? ` by ${opts.invitedByName}` : ""}.</p>
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#F5F3FF;border-radius:8px;margin:16px 0;border:1px solid #DDD6FE;">
+      <tr><td style="padding:16px;">
+        <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#5B21B6;font-weight:700;">What is the Letter Review Center?</p>
+        <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#6B7280;">
+          The Review Center is where you will claim, edit, and approve or reject AI-generated legal letter drafts. Each letter includes jurisdiction research, a structured draft, and the subscriber intake details.
+        </p>
+      </td></tr>
+    </table>
+    <p>As a reviewing attorney, you will be able to:</p>
+    <ul style="margin:8px 0;padding-left:20px;font-family:Inter,Arial,sans-serif;font-size:15px;color:#374151;line-height:1.8;">
+      <li>Claim letters from the review queue</li>
+      <li>Edit AI-generated drafts using the in-app editor</li>
+      <li>Approve, reject, or request changes with detailed notes</li>
+      <li>View full audit trails and letter history</li>
+    </ul>
+    <p>To get started, click the button below to set your password and access your attorney dashboard.</p>
+  `;
+  const html = buildEmailHtml({
+    preheader: "You've been invited as a reviewing attorney.",
+    title: "Attorney Invitation",
+    body,
+    ctaText: "Set Your Password",
+    ctaUrl: opts.setPasswordUrl,
+    accentColor: "#7C3AED",
+  });
+  await sendWithRetry({
+    to: opts.to,
+    subject: `[${APP_NAME}] You've been invited as a Reviewing Attorney`,
+    html,
+    text: buildPlainText({
+      title: "Attorney Invitation",
+      body: `Hello ${opts.name}, you have been invited to join ${APP_NAME} as a Reviewing Attorney. Set your password to get started and access the Letter Review Center.`,
+      ctaText: "Set Your Password",
+      ctaUrl: opts.setPasswordUrl,
+    }),
+  });
+}

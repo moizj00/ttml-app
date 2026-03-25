@@ -1016,7 +1016,90 @@ export function registerSupabaseAuthRoutes(app: Express) {
         return;
       }
 
-      res.json({ success: true, message: "Password has been reset successfully." });
+      // If this is an attorney accepting an invitation (first-time password set),
+      // sign them in, send welcome email + in-app notification. We detect "first time"
+      // by checking if the user_metadata.invited_attorney flag is set (placed by inviteAttorney).
+      let isInvitedAttorney = false;
+      try {
+        const admin = getAdminClient();
+        const { data: { user: supaUser } } = await admin.auth.getUser(access_token);
+        if (supaUser?.user_metadata?.invited_attorney === true) {
+          const appUser = await db.getUserByOpenId(supaUser.id);
+          if (appUser?.role === "attorney") {
+            isInvitedAttorney = true;
+            const origin = getOriginUrl(req);
+
+            // Sign the attorney in by creating a new session with their new password
+            try {
+              const signInClient = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: { autoRefreshToken: false, persistSession: false },
+              });
+              const { data: sessionData } = await signInClient.auth.signInWithPassword({
+                email: supaUser.email!,
+                password,
+              });
+              if (sessionData?.session) {
+                const cookieOptions = getSessionCookieOptions(req);
+                res.cookie(SUPABASE_SESSION_COOKIE, JSON.stringify({
+                  access_token: sessionData.session.access_token,
+                  refresh_token: sessionData.session.refresh_token,
+                }), {
+                  ...cookieOptions,
+                  maxAge: sessionData.session.expires_in * 1000,
+                });
+                (res as any)._invitationSession = sessionData.session;
+              }
+            } catch (signInErr) {
+              console.error("[SupabaseAuth] Failed to auto-sign-in attorney after invitation:", signInErr);
+            }
+
+            try {
+              await sendAttorneyWelcomeEmail({
+                to: appUser.email || supaUser.email || "",
+                name: appUser.name || supaUser.email?.split("@")[0] || "Counselor",
+                dashboardUrl: `${origin}/attorney`,
+              });
+            } catch (welcomeErr) {
+              console.error("[SupabaseAuth] Failed to send attorney welcome email:", welcomeErr);
+            }
+            try {
+              await db.createNotification({
+                userId: appUser.id,
+                type: "role_updated",
+                title: "Welcome to the Review Center!",
+                body: "Your attorney account is now active. You can start claiming and reviewing letters.",
+                link: "/attorney",
+              });
+            } catch (notifErr) {
+              console.error("[SupabaseAuth] Failed to create attorney welcome notification:", notifErr);
+            }
+            // Clear the flag so welcome email isn't sent again on future resets
+            try {
+              await admin.auth.admin.updateUserById(supaUser.id, {
+                user_metadata: { invited_attorney: false },
+              });
+            } catch (clearErr) {
+              console.error("[SupabaseAuth] Failed to clear invited_attorney flag:", clearErr);
+            }
+          }
+        }
+      } catch (postResetErr) {
+        console.error("[SupabaseAuth] Post-reset attorney check error:", postResetErr);
+      }
+
+      const invitationSession = (res as any)._invitationSession;
+      res.json({
+        success: true,
+        message: "Password has been reset successfully.",
+        isInvitedAttorney,
+        redirectTo: isInvitedAttorney ? "/attorney" : undefined,
+        ...(invitationSession ? {
+          session: {
+            access_token: invitationSession.access_token,
+            refresh_token: invitationSession.refresh_token,
+          },
+        } : {}),
+      });
     } catch (err) {
       console.error("[SupabaseAuth] Reset password error:", err);
       res.status(500).json({ error: "Internal server error" });

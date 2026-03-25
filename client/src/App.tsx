@@ -62,6 +62,7 @@ import Signup from "./pages/Signup";
 const ForgotPassword = lazyRetry(() => import("./pages/ForgotPassword"));
 const VerifyEmail = lazyRetry(() => import("./pages/VerifyEmail"));
 const ResetPassword = lazyRetry(() => import("./pages/ResetPassword"));
+const AcceptInvitation = lazyRetry(() => import("./pages/AcceptInvitation"));
 
 const Pricing = lazyRetry(() => import("./pages/Pricing"));
 const FAQ = lazyRetry(() => import("./pages/FAQ"));
@@ -156,6 +157,11 @@ function Router() {
       <Route path="/reset-password">
         <SuspenseFade fallback={<AuthPageSkeleton />}>
           <ResetPassword />
+        </SuspenseFade>
+      </Route>
+      <Route path="/accept-invitation">
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
+          <AcceptInvitation />
         </SuspenseFade>
       </Route>
       <Route path="/onboarding">
