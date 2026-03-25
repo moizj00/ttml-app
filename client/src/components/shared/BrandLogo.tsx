@@ -10,6 +10,7 @@ interface BrandLogoProps {
   hideWordmarkOnMobile?: boolean;
   className?: string;
   variant?: "light" | "dark" | "sidebar";
+  loading?: "lazy" | "eager";
 }
 
 const LOGO_FULL = "/logo-full.png";
@@ -27,6 +28,7 @@ function BrandLogoContent({
   iconOnly = false,
   hideWordmarkOnMobile = false,
   variant,
+  loading = "eager",
 }: Omit<BrandLogoProps, "href" | "className">) {
   const config = SIZE_CONFIG[size];
 
@@ -34,8 +36,11 @@ function BrandLogoContent({
     return (
       <img
         src={LOGO_ICON}
-        alt="Talk to My Lawyer"
+        alt="Talk to My Lawyer logo"
+        width={config.mobileH}
+        height={config.mobileH}
         style={{ height: config.mobileH }}
+        loading={loading}
         className={cn(
           "object-contain flex-shrink-0 block",
           variant === "dark" && "brightness-0 invert"
@@ -50,13 +55,19 @@ function BrandLogoContent({
         <img
           src={LOGO_FULL}
           alt="Talk to My Lawyer"
+          width={Math.round(config.mobileH * 4.5)}
+          height={config.mobileH}
           style={{ height: config.mobileH }}
+          loading={loading}
           className="object-contain flex-shrink-0 block md:hidden"
         />
         <img
           src={LOGO_FULL}
           alt="Talk to My Lawyer"
+          width={Math.round(config.h * 4.5)}
+          height={config.h}
           style={{ height: config.h }}
+          loading={loading}
           className="object-contain flex-shrink-0 hidden md:block"
         />
       </>
@@ -67,7 +78,10 @@ function BrandLogoContent({
     <img
       src={LOGO_FULL}
       alt="Talk to My Lawyer"
+      width={Math.round(config.h * 4.5)}
+      height={config.h}
       style={{ height: config.h }}
+      loading={loading}
       className="object-contain flex-shrink-0 block max-w-full"
     />
   );
@@ -80,6 +94,7 @@ export default function BrandLogo({
   hideWordmarkOnMobile = false,
   className,
   variant,
+  loading = "eager",
 }: BrandLogoProps) {
   const content = (
     <span className={cn("inline-flex items-center", className)}>
@@ -88,6 +103,7 @@ export default function BrandLogo({
         iconOnly={iconOnly}
         hideWordmarkOnMobile={hideWordmarkOnMobile}
         variant={variant}
+        loading={loading}
       />
     </span>
   );

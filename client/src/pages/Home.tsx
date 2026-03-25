@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import {
   CheckCircle2,
   ArrowRight,
@@ -63,9 +64,6 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  useEffect(() => {
-    document.title = "Talk to My Lawyer — Professional Legal Letters";
-  }, []);
 
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
@@ -91,8 +89,71 @@ export default function Home() {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const homeJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      logo: "https://www.talk-to-my-lawyer.com/logo-main.png",
+      description: "Professional attorney-reviewed legal letters drafted in minutes. Demand letters, cease and desist, breach of contract, and more.",
+      contactPoint: {
+        "@type": "ContactPoint",
+        email: "support@talk-to-my-lawyer.com",
+        contactType: "customer support",
+      },
+      sameAs: [],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      applicationCategory: "LegalService",
+      operatingSystem: "Web",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        description: "First letter free, no credit card required",
+      },
+      description: "Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more.",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://www.talk-to-my-lawyer.com/?q={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ];
+
   return (
     <>
+    <Helmet>
+      <title>Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters</title>
+      <meta name="description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is completely free." />
+      <link rel="canonical" href="https://www.talk-to-my-lawyer.com/" />
+      <meta property="og:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
+      <meta property="og:description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is free." />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content="https://www.talk-to-my-lawyer.com/" />
+      <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
+      <meta name="twitter:description" content="Professional attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract — your first letter is free." />
+      <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      <script type="application/ld+json">{JSON.stringify(homeJsonLd)}</script>
+    </Helmet>
     <FirstVisitPopup />
     <div className="min-h-screen bg-white font-['Inter'] text-slate-900 overflow-x-hidden">
       {/* Nav */}
@@ -221,6 +282,7 @@ export default function Home() {
         )}
       </nav>
 
+      <main>
       {/* Split Hero */}
       <section className="relative min-h-screen flex flex-col lg:flex-row pt-[64px] md:pt-[72px]">
         <div className="w-full lg:w-[60%] flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 py-8 sm:py-12 lg:py-0">
@@ -550,11 +612,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-400 py-8 sm:py-12 px-4 sm:px-6 lg:px-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6">
-          <BrandLogo href="/" variant="dark" size="sm" />
+          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
 
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm font-medium">
             <button

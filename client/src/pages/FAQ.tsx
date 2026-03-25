@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -128,6 +129,21 @@ const FAQ_CATEGORIES = [
 export default function FAQ() {
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Frequently Asked Questions — Legal Letter Service | Talk to My Lawyer</title>
+        <meta name="description" content="Get answers to common questions about our attorney-reviewed legal letter service. Pricing, process, legal validity, attorney review, and more — everything you need to know." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/faq" />
+        <meta property="og:title" content="FAQ — Legal Letter Service | Talk to My Lawyer" />
+        <meta property="og:description" content="Answers to common questions about attorney-reviewed legal letters, pricing, turnaround times, and how our legal letter service works." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/faq" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="FAQ — Legal Letter Service | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Answers to common questions about attorney-reviewed legal letters, pricing, and how our service works." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      </Helmet>
+
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
@@ -176,10 +192,11 @@ export default function FAQ() {
       </section>
 
       {/* FAQ Content */}
+      <main>
       <section className="py-12 px-4">
         <div className="max-w-3xl mx-auto space-y-10">
           {FAQ_CATEGORIES.map(cat => (
-            <div key={cat.category}>
+            <article key={cat.category}>
               <h2 className="text-xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">
                 {cat.category}
               </h2>
@@ -199,10 +216,11 @@ export default function FAQ() {
                   </AccordionItem>
                 ))}
               </Accordion>
-            </div>
+            </article>
           ))}
         </div>
       </section>
+      </main>
 
       {/* CTA */}
       <section className="py-16 px-4 bg-gradient-to-r from-blue-600 to-indigo-600">
@@ -237,7 +255,7 @@ export default function FAQ() {
       {/* Footer */}
       <footer className="bg-slate-900 py-8 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <BrandLogo href="/" variant="dark" size="sm" />
+          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
           <div className="flex items-center gap-6 text-slate-400 text-sm">
             <Link href="/" className="hover:text-white transition-colors">
               Home

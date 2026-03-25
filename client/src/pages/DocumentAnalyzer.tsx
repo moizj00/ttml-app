@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import BrandLogo from "@/components/shared/BrandLogo";
@@ -347,8 +348,47 @@ export default function DocumentAnalyzer() {
 
   const isAnalyzing = analyzeMutation.isPending;
 
+  const analyzerJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Talk to My Lawyer — Document Analyzer",
+    url: "https://www.talk-to-my-lawyer.com/analyze",
+    applicationCategory: "LegalService",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+      description: "Free AI-powered legal document analysis",
+    },
+    description: "Upload any legal document (PDF, DOCX, or TXT) and instantly get AI analysis, flagged risks, action items, and a recommended legal response letter.",
+    featureList: [
+      "AI-powered legal document analysis",
+      "Risk flagging and severity classification",
+      "Recommended action items",
+      "Auto-detection of jurisdiction and parties",
+      "One-click letter drafting from analysis",
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] text-slate-900">
+      <Helmet>
+        <title>Free Legal Document Analyzer — AI Risk Analysis | Talk to My Lawyer</title>
+        <meta name="description" content="Upload any legal document (PDF, DOCX, TXT) and get instant AI-powered analysis. Identifies risks, flags important clauses, and recommends attorney-reviewed response letters." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/analyze" />
+        <meta property="og:title" content="Free Legal Document Analyzer | Talk to My Lawyer" />
+        <meta property="og:description" content="Instantly analyze legal documents with AI. Identifies risks, detects jurisdiction, flags key clauses, and recommends a professional legal response letter." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/analyze" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Free Legal Document Analyzer | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Upload any legal document and get instant AI risk analysis plus a path to an attorney-reviewed response letter." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <script type="application/ld+json">{JSON.stringify(analyzerJsonLd)}</script>
+      </Helmet>
+
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 h-16 flex items-center justify-between">
@@ -397,7 +437,7 @@ export default function DocumentAnalyzer() {
         </div>
       </nav>
 
-      <div className="pt-20 pb-16 px-4 max-w-4xl mx-auto">
+      <main className="pt-20 pb-16 px-4 max-w-4xl mx-auto">
         {/* Back link */}
         <div className="pt-6 mb-6">
           <Link
@@ -1002,7 +1042,7 @@ export default function DocumentAnalyzer() {
             ) : null}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

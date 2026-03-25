@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -112,13 +113,72 @@ export default function Pricing() {
     );
   };
 
+  const pricingJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "Talk to My Lawyer — Legal Letter Service",
+    url: "https://www.talk-to-my-lawyer.com/pricing",
+    provider: {
+      "@type": "Organization",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+    },
+    description: "Professional attorney-reviewed legal letters. Choose from single letter ($200), monthly subscription ($200/month for 4 letters), or yearly plan ($2,000/year).",
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: "Legal Letter Plans",
+      itemListElement: [
+        {
+          "@type": "Offer",
+          name: "Single Letter",
+          price: "200",
+          priceCurrency: "USD",
+          description: "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
+          eligibleQuantity: { "@type": "QuantitativeValue", value: 1 },
+        },
+        {
+          "@type": "Offer",
+          name: "Monthly Plan",
+          price: "200",
+          priceCurrency: "USD",
+          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1M" },
+          description: "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
+        },
+        {
+          "@type": "Offer",
+          name: "Yearly Plan",
+          price: "2000",
+          priceCurrency: "USD",
+          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1Y" },
+          description: "4 attorney-reviewed letters per month, billed annually. 2 months free vs monthly.",
+        },
+      ],
+    },
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My Lawyer</title>
+        <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $200, monthly $200/month (4 letters), or yearly $2,000. All plans include attorney review and PDF delivery." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/pricing" />
+        <meta property="og:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
+        <meta property="og:description" content="Choose the right plan for your legal needs. Single letter $200, monthly $200/month, or yearly $2,000. Attorney review included in every plan." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/pricing" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Transparent pricing for attorney-reviewed legal letters. Single, monthly, and yearly plans available." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <script type="application/ld+json">{JSON.stringify(pricingJsonLd)}</script>
+      </Helmet>
+
       {/* Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 px-4">
+      <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <div className="flex justify-center mb-4">
-            <Scale className="w-12 h-12 text-blue-500" />
+            <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
             Resolve your dispute faster with lawyer-drafted letters and negotiations
@@ -127,10 +187,10 @@ export default function Pricing() {
             Professionally drafted and attorney-reviewed legal letters. Choose the plan that fits your needs.
           </p>
         </div>
-      </div>
+      </header>
 
       {/* Plans */}
-      <div className="max-w-6xl mx-auto px-4 py-16">
+      <main className="max-w-6xl mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map(plan => (
             <Card
@@ -277,7 +337,7 @@ export default function Pricing() {
             </p>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

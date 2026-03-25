@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /submit
+Disallow: /letters
+Disallow: /attorney
+Disallow: /review
+Disallow: /employee
+Disallow: /subscriber
+Disallow: /profile
+Disallow: /onboarding
+
+Sitemap: https://www.talk-to-my-lawyer.com/sitemap.xml
