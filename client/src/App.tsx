@@ -94,6 +94,10 @@ const AdminAllLetters = lazyRetry(() => import("./pages/admin/AllLetters"));
 const AdminLetterDetail = lazyRetry(() => import("./pages/admin/LetterDetail"));
 const AdminAffiliate = lazyRetry(() => import("./pages/admin/Affiliate"));
 const AdminLearning = lazyRetry(() => import("./pages/admin/Learning"));
+const AdminBlogEditor = lazyRetry(() => import("./pages/admin/BlogEditor"));
+
+const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
+const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
 
 function Router() {
   return (
@@ -123,6 +127,16 @@ function Router() {
       <Route path="/analyze">
         <SuspenseFade fallback={<DocumentAnalyzerSkeleton />}>
           <DocumentAnalyzer />
+        </SuspenseFade>
+      </Route>
+      <Route path="/blog">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <BlogIndex />
+        </SuspenseFade>
+      </Route>
+      <Route path="/blog/:slug">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <BlogPost />
         </SuspenseFade>
       </Route>
 
@@ -338,6 +352,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <SuspenseFade fallback={<AdminLearningSkeleton />}>
             <AdminLearning />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/blog">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminBlogEditor />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

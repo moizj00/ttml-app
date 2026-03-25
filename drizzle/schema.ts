@@ -537,3 +537,43 @@ export const adminVerificationCodes = pgTable("admin_verification_codes", {
 
 export type AdminVerificationCode = typeof adminVerificationCodes.$inferSelect;
 export type InsertAdminVerificationCode = typeof adminVerificationCodes.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: blog_posts (CMS for public blog)
+// ═══════════════════════════════════════════════════════
+export const BLOG_CATEGORIES = [
+  "demand-letters",
+  "cease-and-desist",
+  "contract-disputes",
+  "document-analysis",
+  "pricing-and-roi",
+  "general",
+] as const;
+export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
+
+export const BLOG_STATUSES = ["draft", "published"] as const;
+export type BlogStatus = (typeof BLOG_STATUSES)[number];
+
+export const blogPosts = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 300 }).notNull().unique(),
+  title: varchar("title", { length: 300 }).notNull(),
+  excerpt: text("excerpt").notNull(),
+  content: text("content").notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  metaDescription: text("meta_description"),
+  ogImageUrl: varchar("og_image_url", { length: 2000 }),
+  authorName: varchar("author_name", { length: 200 }).default("Talk to My Lawyer").notNull(),
+  readingTimeMinutes: integer("reading_time_minutes").default(5).notNull(),
+  status: varchar("status", { length: 20 }).default("draft").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  slugIdx: uniqueIndex("idx_blog_posts_slug").on(t.slug),
+  statusIdx: index("idx_blog_posts_status").on(t.status),
+  publishedAtIdx: index("idx_blog_posts_published_at").on(t.publishedAt),
+}));
+
+export type BlogPost = typeof blogPosts.$inferSelect;
+export type InsertBlogPost = typeof blogPosts.$inferInsert;

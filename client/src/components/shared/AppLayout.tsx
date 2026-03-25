@@ -23,6 +23,7 @@ import {
   Briefcase,
   CreditCard,
   Brain,
+  BookOpen,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
@@ -151,6 +152,11 @@ function getNavItems(role: string): NavItem[] {
         label: "Learning",
         href: "/admin/learning",
         icon: <Brain className="w-4 h-4" />,
+      },
+      {
+        label: "Blog",
+        href: "/admin/blog",
+        icon: <BookOpen className="w-4 h-4" />,
       },
       {
         label: "Settings",

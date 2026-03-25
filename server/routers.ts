@@ -73,6 +73,12 @@ import {
   getQualityScoreTrend,
   getQualityScoresByLetterType,
   assignRoleId,
+  getPublishedBlogPosts,
+  getBlogPostBySlug,
+  getAllBlogPosts,
+  createBlogPost,
+  updateBlogPost,
+  deleteBlogPost,
 } from "./db";
 import {
   sendJobFailedAlertEmail,
@@ -93,6 +99,7 @@ import { captureServerException } from "./sentry";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore } from "./learning";
 import type { InsertPipelineLesson } from "../drizzle/schema";
+import { BLOG_CATEGORIES } from "../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
 import { storagePut } from "./storage";
 import { invalidateUserCache } from "./supabaseAuth";
@@ -2934,6 +2941,77 @@ ${truncatedText}
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "get_analyses_failed" } });
           return { rows: [], nextCursor: undefined };
         }
+      }),
+  }),
+
+  // ─── Blog ───────────────────────────────────────────────────────────────────
+  blog: router({
+    list: publicProcedure
+      .input(z.object({
+        category: z.string().optional(),
+        limit: z.number().int().min(1).max(50).default(12),
+        offset: z.number().int().min(0).default(0),
+      }).optional())
+      .query(async ({ input }) => {
+        return getPublishedBlogPosts({
+          category: input?.category,
+          limit: input?.limit ?? 12,
+          offset: input?.offset ?? 0,
+        });
+      }),
+
+    getBySlug: publicProcedure
+      .input(z.object({ slug: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const post = await getBlogPostBySlug(input.slug);
+        if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "Blog post not found" });
+        return post;
+      }),
+
+    adminList: adminProcedure.query(async () => {
+      return getAllBlogPosts();
+    }),
+
+    adminCreate: adminProcedure
+      .input(z.object({
+        slug: z.string().min(1).max(300),
+        title: z.string().min(1).max(300),
+        excerpt: z.string().min(1),
+        content: z.string().min(1),
+        category: z.enum(BLOG_CATEGORIES),
+        metaDescription: z.string().optional(),
+        ogImageUrl: z.string().optional(),
+        authorName: z.string().optional(),
+        status: z.enum(["draft", "published"]).default("draft"),
+      }))
+      .mutation(async ({ input }) => {
+        return createBlogPost(input);
+      }),
+
+    adminUpdate: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        slug: z.string().min(1).max(300).optional(),
+        title: z.string().min(1).max(300).optional(),
+        excerpt: z.string().min(1).optional(),
+        content: z.string().min(1).optional(),
+        category: z.enum(BLOG_CATEGORIES).optional(),
+        metaDescription: z.string().nullable().optional(),
+        ogImageUrl: z.string().nullable().optional(),
+        authorName: z.string().optional(),
+        status: z.enum(["draft", "published"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateBlogPost(id, data);
+        return { success: true };
+      }),
+
+    adminDelete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteBlogPost(input.id);
+        return { success: true };
       }),
   }),
 });

@@ -190,6 +190,13 @@ export default function Home() {
             >
               Doc Analyzer
             </Link>
+            <Link
+              href="/blog"
+              className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors"
+              data-testid="nav-blog"
+            >
+              Blog
+            </Link>
             <div className="w-px h-4 bg-slate-200" />
             <button
               onClick={goToLogin}
@@ -633,6 +640,13 @@ export default function Home() {
               data-testid="footer-faq"
             >
               FAQ
+            </Link>
+            <Link
+              href="/blog"
+              className="hover:text-white transition-colors"
+              data-testid="footer-blog"
+            >
+              Blog
             </Link>
             <Link
               href="/terms"

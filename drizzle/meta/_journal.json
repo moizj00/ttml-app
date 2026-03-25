@@ -176,6 +176,13 @@
       "when": 1774425082706,
       "tag": "0024_young_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1774428593832,
+      "tag": "0025_careful_prowler",
+      "breakpoints": true
     }
   ]
 }
