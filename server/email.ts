@@ -1381,6 +1381,7 @@ export async function sendAdminVerificationCodeEmail(opts: {
   name: string;
   code: string;
 }) {
+  console.log(`[Email] Sending admin 2FA code to=${opts.to}, from=${FROM}`);
   const codeDisplay = opts.code.split("").join(" ");
   const html = buildEmailHtml({
     preheader: `Your admin verification code: ${opts.code}`,
@@ -1409,13 +1410,19 @@ export async function sendAdminVerificationCodeEmail(opts: {
     footerNote: "This is an automated security notification. Do not share this code with anyone.",
     accentColor: "#DC2626",
   });
-  await sendWithRetry({
-    to: opts.to,
-    subject: `[${APP_NAME}] Admin Verification Code: ${opts.code}`,
-    html,
-    text: buildPlainText({
-      title: "Admin Verification Code",
-      body: `Hello ${opts.name}, your admin verification code is: ${opts.code}. This code expires in 10 minutes. If you did not attempt to sign in, please secure your account immediately.`,
-    }),
-  });
+  try {
+    await sendWithRetry({
+      to: opts.to,
+      subject: `[${APP_NAME}] Admin Verification Code: ${opts.code}`,
+      html,
+      text: buildPlainText({
+        title: "Admin Verification Code",
+        body: `Hello ${opts.name}, your admin verification code is: ${opts.code}. This code expires in 10 minutes. If you did not attempt to sign in, please secure your account immediately.`,
+      }),
+    });
+    console.log(`[Email] Admin 2FA code sent successfully to=${opts.to}`);
+  } catch (err) {
+    console.error(`[Email] Admin 2FA code FAILED to=${opts.to}, from=${FROM}, error:`, err);
+    throw err;
+  }
 }

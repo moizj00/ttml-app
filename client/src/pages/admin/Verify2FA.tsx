@@ -1,20 +1,25 @@
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { ShieldCheck, Loader2, AlertCircle, RefreshCw, MailWarning } from "lucide-react";
 import { toast } from "sonner";
 import BrandLogo from "@/components/shared/BrandLogo";
 
 export default function Verify2FA() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { user, loading: authLoading } = useAuth();
   const [digits, setDigits] = useState<string[]>(Array(8).fill(""));
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailSendFailed, setEmailSendFailed] = useState(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("emailFailed") === "1";
+  });
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -25,6 +30,12 @@ export default function Verify2FA() {
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
+    if (emailSendFailed) {
+      toast.warning("Verification code could not be sent", {
+        description: "Click \"Resend code\" below to try again.",
+        duration: 8000,
+      });
+    }
   }, []);
 
   const handleChange = (index: number, value: string) => {
@@ -108,12 +119,15 @@ export default function Verify2FA() {
       const data = await res.json();
       if (res.ok) {
         toast.success("New code sent", { description: "Check your email for a new 8-digit code." });
+        setEmailSendFailed(false);
         setDigits(Array(8).fill(""));
         inputRefs.current[0]?.focus();
       } else {
+        toast.error("Failed to send code", { description: data.error || "Please try again." });
         setError(data.error || "Failed to resend code");
       }
     } catch {
+      toast.error("Connection error", { description: "Could not reach the server. Please try again." });
       setError("Connection error. Please try again.");
     } finally {
       setResending(false);
@@ -149,6 +163,18 @@ export default function Verify2FA() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleVerify} className="space-y-6">
+              {emailSendFailed && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm" data-testid="text-email-failed-warning">
+                  <div className="flex items-start gap-2">
+                    <MailWarning className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Verification code could not be sent</p>
+                      <p className="mt-1 text-amber-700">Click "Resend code" below to try again. If the issue persists, check your spam folder or contact support.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm" data-testid="text-verify-error">
                   <div className="flex items-center gap-2">

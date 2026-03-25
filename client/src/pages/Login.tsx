@@ -113,10 +113,17 @@ export default function Login() {
         await utils.auth.me.invalidate();
 
         if (data.requires2FA) {
-          toast.info("Verification required", {
-            description: "A verification code has been sent to your email.",
-          });
-          navigate("/admin/verify");
+          if (data.emailFailed) {
+            toast.warning("Verification required", {
+              description: "Could not send the code automatically. Please use Resend Code on the next screen.",
+            });
+            navigate("/admin/verify?emailFailed=1");
+          } else {
+            toast.info("Verification required", {
+              description: "A verification code has been sent to your email.",
+            });
+            navigate("/admin/verify");
+          }
           return;
         }
 
@@ -225,10 +232,17 @@ export default function Login() {
         "subscriber";
 
       if (data.requires2FA) {
-        toast.info("Verification required", {
-          description: "A verification code has been sent to your email.",
-        });
-        navigate("/admin/verify");
+        if (data.emailFailed) {
+          toast.warning("Verification required", {
+            description: "Could not send the code automatically. Please use Resend Code on the next screen.",
+          });
+          navigate("/admin/verify?emailFailed=1");
+        } else {
+          toast.info("Verification required", {
+            description: "A verification code has been sent to your email.",
+          });
+          navigate("/admin/verify");
+        }
         return;
       }
 

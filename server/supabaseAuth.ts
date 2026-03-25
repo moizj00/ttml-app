@@ -755,6 +755,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
         maxAge: data.session.expires_in * 1000,
       });
 
+      let emailFailed = false;
       if (userRole === "admin" && appUser) {
         try {
           const code = await db.createAdminVerificationCode(appUser.id);
@@ -766,12 +767,14 @@ export function registerSupabaseAuthRoutes(app: Express) {
           console.log(`[SupabaseAuth] Admin 2FA code sent to ${email}`);
         } catch (err) {
           console.error("[SupabaseAuth] Failed to send admin 2FA code:", err);
+          emailFailed = true;
         }
       }
 
       res.json({
         success: true,
         requires2FA: userRole === "admin",
+        emailFailed,
         user: {
           id: data.user.id,
           email: data.user.email,
@@ -861,10 +864,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
         name: user.name || user.email!.split("@")[0],
         code,
       });
+      console.log(`[SupabaseAuth] Admin 2FA resend successful to=${user.email}`);
       res.json({ success: true, message: "A new verification code has been sent to your email." });
     } catch (err) {
       console.error("[SupabaseAuth] Admin 2FA resend error:", err);
-      res.status(500).json({ error: "Failed to resend code. Please try again." });
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: `Failed to send verification code: ${message}. Please check your email address or try again.` });
     }
   });
 
@@ -1437,6 +1442,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
       );
 
       const finalRole = dbUser?.role || resolvedRole;
+      let emailFailed = false;
       if (finalRole === "admin" && dbUser) {
         try {
           const code = await db.createAdminVerificationCode(dbUser.id);
@@ -1448,12 +1454,14 @@ export function registerSupabaseAuthRoutes(app: Express) {
           console.log(`[SupabaseAuth] Admin 2FA code sent to ${data.user.email} (Google OAuth)`);
         } catch (err) {
           console.error("[SupabaseAuth] Failed to send admin 2FA code (Google OAuth):", err);
+          emailFailed = true;
         }
       }
 
       res.json({
         success: true,
         requires2FA: finalRole === "admin",
+        emailFailed,
         user: {
           id: data.user.id,
           email: data.user.email,
@@ -1595,6 +1603,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
 
       const callbackRole = dbUser?.role || resolvedRole;
       if (callbackRole === "admin" && dbUser) {
+        let emailFailed = false;
         try {
           const code = await db.createAdminVerificationCode(dbUser.id);
           await sendAdminVerificationCodeEmail({
@@ -1605,8 +1614,9 @@ export function registerSupabaseAuthRoutes(app: Express) {
           console.log(`[SupabaseAuth] Admin 2FA code sent to ${user.email} (Google callback)`);
         } catch (err2) {
           console.error("[SupabaseAuth] Failed to send admin 2FA code (Google callback):", err2);
+          emailFailed = true;
         }
-        res.redirect("/admin/verify");
+        res.redirect(emailFailed ? "/admin/verify?emailFailed=1" : "/admin/verify");
       } else {
         const redirectPath = getPostAuthRedirectPath(callbackRole, next);
         res.redirect(redirectPath);
