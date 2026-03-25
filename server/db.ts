@@ -647,7 +647,8 @@ export async function createLetterVersion(data: {
 
 export async function getLetterVersionsByRequestId(
   letterRequestId: number,
-  includeInternal = false
+  includeInternal = false,
+  letterStatus?: string
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -659,7 +660,7 @@ export async function getLetterVersionsByRequestId(
       .orderBy(desc(letterVersions.createdAt));
   }
   // Subscriber-safe: return final_approved + ai_draft (for generated_locked preview)
-  return db
+  const rows = await db
     .select()
     .from(letterVersions)
     .where(
@@ -669,6 +670,22 @@ export async function getLetterVersionsByRequestId(
       )
     )
     .orderBy(desc(letterVersions.createdAt));
+
+  if (letterStatus === "generated_locked") {
+    return rows.map((v) => {
+      if (v.versionType === "ai_draft" && v.content) {
+        return { ...v, content: truncateContent(v.content), truncated: true };
+      }
+      return { ...v, truncated: false };
+    });
+  }
+  return rows.map((v) => ({ ...v, truncated: false }));
+}
+
+function truncateContent(content: string): string {
+  const lines = content.split("\n");
+  const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
+  return lines.slice(0, visibleCount).join("\n");
 }
 
 export async function getLetterVersionById(id: number) {

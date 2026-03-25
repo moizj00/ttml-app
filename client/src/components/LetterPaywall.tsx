@@ -1,16 +1,13 @@
 /**
  * LetterPaywall — shown when a letter is in `generated_locked` status.
  *
- * Simplified flow (Phase 69 + Phase 82):
- *   - Every letter ends at generated_locked after the drafting pipeline.
- *   - Subscriber sees the first ~20% of the draft clearly; the rest is blurred.
- *   - Non-subscribers → $200 CTA with optional promo code discount
- *   - Stripe webhook transitions generated_locked → pending_review on payment.
+ * The server returns only a truncated preview (first ~20% of content).
+ * Full content is never exposed before payment.
  */
 import { useState } from "react";
 import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
-  FileText, Eye, EyeOff, Gift, Loader2, Download,
+  FileText, Gift, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,16 +19,14 @@ interface LetterPaywallProps {
   letterId: number;
   letterType: string;
   subject: string;
-  /** The actual draft content from letter_versions (ai_draft) */
+  /** The truncated draft content from the server (ai_draft, first ~20%) */
   draftContent?: string;
 }
 
 export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [showFullPreview, setShowFullPreview] = useState(false);
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountCodeResult | null>(null);
 
-  // Check if user is eligible for free first letter
   const paywallStatus = trpc.billing.checkPaywallStatus.useQuery(undefined, {
     staleTime: 30_000,
   });
@@ -39,7 +34,6 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
   const isFreeEligible = paywallStatus.data?.state === "free";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
-  // Free unlock mutation
   const freeUnlockMutation = trpc.billing.freeUnlock.useMutation({
     onSuccess: () => {
       toast.success("Your letter has been submitted for free attorney review!");
@@ -50,7 +44,6 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
     },
   });
 
-  // $200 pay-per-letter checkout
   const payToUnlock = trpc.billing.payToUnlock.useMutation({
     onSuccess: (data) => {
       if (data.url) {
@@ -66,54 +59,19 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
 
   const isPending = payToUnlock.isPending || isRedirecting || freeUnlockMutation.isPending;
 
-  // Split draft into visible (first ~20%) and blurred remainder
-  const previewLines = draftContent?.split("\n") ?? [];
-  const visibleLineCount = Math.max(5, Math.floor(previewLines.length * 0.20));
-  const visibleText = previewLines.slice(0, visibleLineCount).join("\n");
-  const blurredText = previewLines.slice(visibleLineCount).join("\n");
-  const hasDraft = previewLines.length > 0;
-
-  // Download draft PDF handler
-  const [isDownloading, setIsDownloading] = useState(false);
-  async function handleDownloadDraft() {
-    setIsDownloading(true);
-    try {
-      const resp = await fetch(`/api/letters/${letterId}/draft-pdf`, {
-        credentials: "include",
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: "Download failed" }));
-        toast.error("Download failed", { description: err.error ?? "Please try again." });
-        return;
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `unreviewed-pdf-${letterId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Download failed", { description: "Please check your connection and try again." });
-    } finally {
-      setIsDownloading(false);
-    }
-  }
+  const hasDraft = !!draftContent && draftContent.length > 0;
 
   const basePrice = 200;
   const discountedPrice = appliedDiscount
     ? Math.round(basePrice * (1 - appliedDiscount.discountPercent / 100))
     : null;
 
-  // If subscribed, auto-unlock (this shouldn't normally show, but handle gracefully)
   if (isSubscribed) {
     return (
       <Card className="border-emerald-200 bg-emerald-50/30">
         <CardContent className="p-5 text-center">
           <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-          <p className="text-sm font-semibold text-emerald-800">
+          <p className="text-sm font-semibold text-emerald-800" data-testid="text-subscribed-status">
             You have an active subscription — this letter will be submitted for review automatically.
           </p>
         </CardContent>
@@ -124,84 +82,36 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
   return (
     <div className="space-y-5">
 
-      {/* ── Draft Preview (blurred) ── */}
+      {/* ── Draft Preview (truncated by server, blurred tail) ── */}
       {hasDraft && (
         <Card>
           <CardContent className="p-0 overflow-hidden rounded-xl">
-            {/* Visible portion */}
             <div className="p-5 pb-0">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Draft Preview</span>
-                <span className="text-xs text-muted-foreground">(first 20% — attorney review required)</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto h-7 text-xs gap-1.5 border-dashed"
-                  onClick={handleDownloadDraft}
-                  disabled={isDownloading}
-                  title="Download the full Unreviewed PDF (AI draft, not attorney-reviewed)"
-                >
-                  {isDownloading ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Download className="w-3 h-3" />
-                  )}
-                  {isDownloading ? "Generating..." : "Download Unreviewed PDF"}
-                </Button>
+                <span className="text-sm font-semibold text-foreground" data-testid="text-draft-preview-label">Draft Preview</span>
+                <span className="text-xs text-muted-foreground">(truncated — attorney review required)</span>
               </div>
-              <pre className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed">
-                {visibleText}
+              <pre className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed" data-testid="text-draft-preview">
+                {draftContent}
               </pre>
             </div>
 
-            {/* Blurred portion */}
-            {blurredText && (
-              <div className="relative">
-                <pre
-                  className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed p-5 pt-0 select-none"
-                  style={{
-                    filter: showFullPreview ? "none" : "blur(6px)",
-                    userSelect: "none",
-                    transition: "filter 0.3s ease",
-                  }}
-                  aria-hidden={!showFullPreview}
-                >
-                  {blurredText}
-                </pre>
-
-                {/* Gradient overlay + unlock prompt */}
-                {!showFullPreview && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-background/95 via-background/60 to-transparent">
-                    <div className="flex flex-col items-center gap-2 mt-8">
-                      <Lock className="w-8 h-8 text-muted-foreground/60" />
-                      <p className="text-sm font-medium text-muted-foreground text-center px-4">
-                        Full draft available after attorney review payment
-                      </p>
-                      <button
-                        onClick={() => setShowFullPreview(true)}
-                        className="text-xs text-primary underline underline-offset-2 flex items-center gap-1 mt-1"
-                      >
-                        <Eye className="w-3 h-3" />
-                        Preview blurred text
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {showFullPreview && (
-                  <div className="flex justify-center pb-3">
-                    <button
-                      onClick={() => setShowFullPreview(false)}
-                      className="text-xs text-muted-foreground underline underline-offset-2 flex items-center gap-1"
-                    >
-                      <EyeOff className="w-3 h-3" />
-                      Hide preview
-                    </button>
-                  </div>
-                )}
+            {/* Blurred fade-out + lock overlay */}
+            <div className="relative h-24">
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: "linear-gradient(to bottom, transparent, hsl(var(--background)) 80%)",
+                }}
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-end pb-3">
+                <Lock className="w-5 h-5 text-muted-foreground/60 mb-1" />
+                <p className="text-xs font-medium text-muted-foreground text-center px-4" data-testid="text-paywall-lock-message">
+                  Full draft available after attorney review payment
+                </p>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -222,7 +132,6 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
             </div>
           </div>
 
-          {/* What's included */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             {[
               { icon: Shield, text: "Licensed attorney review" },
@@ -246,6 +155,7 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
               disabled={freeUnlockMutation.isPending}
               size="lg"
               className="bg-white text-emerald-800 hover:bg-white/90 font-bold shadow-md w-full sm:w-auto"
+              data-testid="button-free-unlock"
             >
               {freeUnlockMutation.isPending ? (
                 <span className="flex items-center gap-2">
@@ -280,7 +190,6 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
             </div>
           </div>
 
-          {/* What's included */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             {[
               { icon: Shield, text: "Licensed attorney review" },
@@ -294,14 +203,12 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
             ))}
           </div>
 
-          {/* Promo code — reusable component */}
           <DiscountCodeInput
             variant="dark"
             className="mb-4"
             onCodeChange={(result) => setAppliedDiscount(result)}
           />
 
-          {/* Price + CTA */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               {discountedPrice !== null ? (
@@ -321,6 +228,7 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
               disabled={isPending}
               size="lg"
               className="bg-white text-blue-800 hover:bg-white/90 font-bold shadow-md w-full sm:w-auto"
+              data-testid="button-pay-unlock"
             >
               {isPending ? (
                 <span className="flex items-center gap-2">

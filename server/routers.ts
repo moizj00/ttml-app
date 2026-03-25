@@ -455,7 +455,7 @@ export const appRouter = router({
             message: "Letter not found",
           });
         const actions = await getReviewActions(input.id, false);
-        const versions = await getLetterVersionsByRequestId(input.id, false);
+        const versions = await getLetterVersionsByRequestId(input.id, false, letter.status);
         const attachmentList = await getAttachmentsByLetterId(input.id);
         return { letter, actions, versions, attachments: attachmentList };
       }),
@@ -1860,14 +1860,18 @@ export const appRouter = router({
           // They can also view ai_draft when the letter is generated_locked (paywall preview)
           if (version.versionType === "final_approved") return version;
           if (version.versionType === "ai_draft") {
-            // Verify the letter belongs to this subscriber and is in generated_locked
             const letter = await getLetterRequestById(version.letterRequestId);
             if (
               letter &&
               letter.userId === ctx.user.id &&
               letter.status === "generated_locked"
             ) {
-              return version;
+              if (version.content) {
+                const lines = version.content.split("\n");
+                const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
+                return { ...version, content: lines.slice(0, visibleCount).join("\n"), truncated: true };
+              }
+              return { ...version, truncated: true };
             }
           }
           throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });

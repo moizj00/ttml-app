@@ -59,10 +59,14 @@ export function registerDraftPdfRoute(app: Express) {
         return;
       }
 
-      // ── Status gate: only generated_locked ───────────────────────────────
-      if (letter.status !== "generated_locked") {
-        res.status(400).json({
-          error: "Draft PDF is only available for letters awaiting review",
+      // ── Status gate: only allow post-payment statuses ──────────────────
+      const allowedStatuses = [
+        "pending_review", "under_review", "needs_changes",
+        "client_approval_pending", "final_approved", "completed",
+      ];
+      if (!allowedStatuses.includes(letter.status)) {
+        res.status(403).json({
+          error: "Draft PDF is only available after payment for attorney review",
         });
         return;
       }
