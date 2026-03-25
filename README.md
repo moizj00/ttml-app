@@ -6,23 +6,20 @@ AI-powered legal letter drafting with mandatory attorney review.
 
 | Document | Purpose |
 |----------|---------|
-| [`docs/TTML_REMAINING_FEATURES_PROMPT.md`](docs/TTML_REMAINING_FEATURES_PROMPT.md) | Historical feature gap reference (all 4 gaps now completed as of Phase 48) |
-| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline routing decision (Perplexity → Anthropic × 2 active, n8n dormant) |
-| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–86) |
-| [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | Historical gap analysis from spec audit |
-| [`docs/SUPABASE_MCP_CAPABILITIES.md`](docs/SUPABASE_MCP_CAPABILITIES.md) | Supabase MCP connector usage guide |
+| [`STRUCTURE.md`](STRUCTURE.md) | Primary architecture reference — schema, routes, status machine, pipeline |
+| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–86+) |
+| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: Perplexity → Opus × 2 → Sonnet vetting) |
 | [`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md) | Spec compliance tracking |
-| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Architecture audit report |
+| [`docs/CODE_REVIEW_VERIFIED.md`](docs/CODE_REVIEW_VERIFIED.md) | Code review issue tracker |
+| [`docs/AUDIT_REPORT_PHASE74.md`](docs/AUDIT_REPORT_PHASE74.md) | Phase 74 full platform audit |
+| [`docs/SUPABASE_MCP_CAPABILITIES.md`](docs/SUPABASE_MCP_CAPABILITIES.md) | Supabase MCP connector reference |
+| [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | Historical gap analysis — all 9 gaps completed |
+| [`docs/TTML_REMAINING_FEATURES_PROMPT.md`](docs/TTML_REMAINING_FEATURES_PROMPT.md) | Historical feature gap prompt (Phase 48) |
+| [`docs/REVALIDATION_REPORT_PHASE62.md`](docs/REVALIDATION_REPORT_PHASE62.md) | Phase 62 validation snapshot (historical) |
+| [`docs/VALIDATION_REPORT_PHASE73.md`](docs/VALIDATION_REPORT_PHASE73.md) | Phase 73 validation snapshot (historical) |
+| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Phase 0 audit (historical) |
+| [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar, keyword map |
 | [`todo.md`](todo.md) | Full feature and bug tracking (all phases) |
-
-## Feature Gaps Status (from TTML_REMAINING_FEATURES_PROMPT.md)
-
-| Gap | Description | Status |
-|-----|-------------|--------|
-| Gap 1 | Freemium `generated_unlocked` status | ✅ Completed (Phase 48, later simplified in Phase 69 — all letters now use `generated_locked` path) |
-| Gap 2 | Payment Receipts page at `/subscriber/receipts` | ✅ Completed (Phase 48) |
-| Gap 3 | Intake form missing fields: `language`, `communications`, `toneAndDelivery` | ✅ Completed (Phase 48) |
-| Gap 4 | Mobile responsiveness fixes | ✅ Completed (Phase 48) |
 
 ## Tech Stack
 
@@ -31,8 +28,8 @@ AI-powered legal letter drafting with mandatory attorney review.
 - **Database:** Supabase (PostgreSQL + RLS)
 - **Auth:** Supabase Auth (JWT)
 - **Payments:** Stripe (subscriptions + per-letter checkout)
-- **Email:** Resend (transactional, 13 templates)
-- **AI Pipeline:** Perplexity API (research) → Anthropic Claude (draft + assembly)
+- **Email:** Resend (transactional, 17 templates)
+- **AI Pipeline:** Perplexity API (research) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting)
 
 ## Development
 
@@ -46,7 +43,7 @@ pnpm tsc --noEmit   # TypeScript check
 ## Validation Gate
 
 After every implementation:
-1. `pnpm test` — all ~617 tests must pass (38 test files)
+1. `pnpm test` — all ~617 tests must pass (41 test files)
 2. `pnpm tsc --noEmit` — 0 TypeScript errors
 3. `pnpm build` — production build must succeed
 4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types.ts`

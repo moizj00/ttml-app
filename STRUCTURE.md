@@ -16,9 +16,9 @@
 - Backend: Express, tRPC, Drizzle ORM
 - Database: Supabase PostgreSQL + Supabase Auth
 - Payments: Stripe (subscriptions + one-time per-letter unlock)
-- AI Pipeline: Perplexity (sonar-pro) for legal research, Anthropic Claude (claude-opus-4-5) for drafting and assembly
+- AI Pipeline: Perplexity (sonar-pro) for research → Anthropic Claude Opus for drafting + assembly → Anthropic Claude Sonnet for vetting (4-stage)
 - Email: Resend
-- Orchestration: n8n webhooks
+- Orchestration: n8n webhooks (dormant unless N8N_PRIMARY=true)
 - Monitoring: Sentry (frontend + backend)
 - Anti-spam: hCaptcha (CSP configured; not currently enforced in signup flow)
 - Deployment: Railway (Docker multi-stage build)
@@ -39,6 +39,9 @@ All routes defined in `client/src/App.tsx`.
 | `/faq` | FAQ page |
 | `/terms` | Terms of Service |
 | `/privacy` | Privacy Policy |
+| `/analyze` | Free AI document analyzer (PDF/DOCX/TXT upload, rate-limited 3/hour for unauthenticated users) |
+| `/blog` | Public blog listing with category filters and pagination |
+| `/blog/:slug` | Individual blog post with Article JSON-LD, OG tags, reading time |
 
 ### Auth Pages
 | Path | Description |
@@ -66,12 +69,14 @@ All routes defined in `client/src/App.tsx`.
 |------|-------------|
 | `/attorney` | Dashboard: pending queue count, recently claimed, stats |
 | `/attorney/queue` | Full review queue with filters, priority badges |
+| `/attorney/review/:id` | Admin "Claim & Review" redirect target (redirects to `/attorney/:id`) |
 | `/attorney/:id` | Review detail: read draft, edit inline, add internal/user-visible notes, approve/reject/request-changes |
 | `/review`, `/review/queue`, `/review/:id` | Backward-compatible aliases |
 
 ### Employee / Affiliate (roles: employee, admin)
 | Path | Description |
 |------|-------------|
+| `/employee/dashboard` | Redirect alias → `/employee` |
 | `/employee` | Affiliate dashboard: referral code, earnings summary, commission table, payout requests |
 | `/employee/referrals` | Same page (referrals tab) |
 | `/employee/earnings` | Same page (earnings tab) |
@@ -79,12 +84,15 @@ All routes defined in `client/src/App.tsx`.
 ### Admin (role: admin)
 | Path | Description |
 |------|-------------|
+| `/admin/verify` | Admin 2FA verification page (8-digit email code, required on every admin login) |
 | `/admin` | System dashboard: user counts, letter pipeline stats, revenue, job health |
 | `/admin/users` | User management: list, search, change roles |
 | `/admin/jobs` | Workflow job monitor: failed jobs, retry, purge |
 | `/admin/letters` | All letters across all users with full filters |
 | `/admin/letters/:id` | Admin letter detail view (same as attorney review + admin controls) |
 | `/admin/affiliate` | Affiliate management: all discount codes, commissions, payout processing, employee performance |
+| `/admin/learning` | Recursive learning: pipeline lesson CRUD, quality score trend visualization |
+| `/admin/blog` | Blog CMS: create, edit, delete, publish blog posts |
 
 ### Fallback
 | Path | Description |
@@ -257,18 +265,21 @@ PostgreSQL hosted on Supabase. ORM: Drizzle. Schema defined in `drizzle/schema.t
 |------|--------|
 | `user_role` | subscriber, employee, admin, attorney |
 | `letter_type` | demand-letter, cease-and-desist, contract-breach, eviction-notice, employment-dispute, consumer-complaint, general-legal |
-| `letter_status` | submitted, researching, drafting, generated_locked, generated_unlocked, upsell_dismissed, pending_review, under_review, needs_changes, approved, rejected |
+| `letter_status` | submitted, researching, drafting, generated_locked, generated_unlocked (legacy), upsell_dismissed (legacy), pipeline_failed, pending_review, under_review, needs_changes, approved, client_approval_pending, client_approved, sent, rejected |
 | `version_type` | ai_draft, attorney_edit, final_approved |
-| `actor_type` | system, subscriber, employee, admin, attorney |
+| `actor_type` | system, subscriber, employee, attorney, admin |
 | `note_visibility` | internal, user_visible |
-| `job_type` | research, draft_generation, generation_pipeline, retry |
+| `job_type` | research, draft_generation, generation_pipeline, retry, vetting |
 | `job_status` | queued, running, completed, failed |
 | `research_status` | queued, running, completed, failed, invalid |
 | `priority_level` | low, normal, high, urgent |
-| `subscription_plan` | per_letter, monthly, annual, free_trial_review, starter, professional |
+| `subscription_plan` | per_letter, monthly, monthly_basic, annual, free_trial_review, starter, professional, single_letter, yearly |
 | `subscription_status` | active, canceled, past_due, trialing, incomplete, none |
 | `commission_status` | pending, paid, voided |
 | `payout_status` | pending, processing, completed, rejected |
+| `pipeline_stage` | research, drafting, assembly, vetting |
+| `lesson_category` | citation_error, jurisdiction_error, tone_issue, structure_issue, factual_error, bloat_detected, missing_section, style_preference, legal_accuracy, general |
+| `lesson_source` | attorney_approval, attorney_rejection, attorney_changes, attorney_edit, manual, subscriber_update, subscriber_retry |
 
 ### Tables
 
@@ -482,6 +493,79 @@ PostgreSQL hosted on Supabase. ORM: Drizzle. Schema defined in `drizzle/schema.t
 | actor_user_id | int | nullable |
 | created_at | timestamptz | |
 
+#### `pipeline_lessons`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| letter_request_id | FK→letter_requests | nullable |
+| stage | pipeline_stage | which pipeline stage this lesson applies to |
+| category | lesson_category | default: general |
+| lesson_text | text | structured lesson content injected into future prompts |
+| source_letter_request_id | int | nullable |
+| source_action | lesson_source | attorney/subscriber action that generated this lesson |
+| is_active | bool | default: true; admin can deactivate |
+| weight | int | default: 50; lesson priority weight |
+| created_by_user_id | int | nullable |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+#### `letter_quality_scores`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| letter_request_id | FK→letter_requests | unique per letter |
+| first_pass_approved | bool | nullable; true if approved without changes |
+| edit_distance | int | nullable; character diff between AI draft and final |
+| revision_count | int | default: 0 |
+| score | int | nullable; 0–100 composite quality score |
+| computed_at | timestamptz | nullable |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+#### `document_analyses`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| user_id | FK→users | nullable (unauthenticated users) |
+| file_name | varchar | |
+| file_type | varchar | pdf, docx, txt |
+| summary | text | AI-generated document summary |
+| action_items | jsonb | array of action items |
+| risk_flags | jsonb | array of flagged risks with severity |
+| created_at | timestamptz | |
+
+#### `processed_stripe_events`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| stripe_event_id | varchar unique | Stripe event ID for idempotency |
+| processed_at | timestamptz | |
+
+#### `admin_verification_codes`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| user_id | FK→users | |
+| code | varchar | 8-digit verification code |
+| expires_at | timestamptz | |
+| used_at | timestamptz | nullable |
+| created_at | timestamptz | |
+
+#### `blog_posts`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | serial PK | |
+| title | varchar | |
+| slug | varchar unique | SEO-optimized URL slug |
+| content | text | Markdown content |
+| excerpt | text | nullable |
+| category | varchar | demand-letters, cease-and-desist, contract-disputes, document-analysis, pricing-and-roi, general |
+| status | varchar | draft, published |
+| author_id | FK→users | nullable |
+| published_at | timestamptz | nullable |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
 ### Indexes
 - `users_open_id_unique` on users(open_id)
 - `idx_letter_requests_user_status` on letter_requests(user_id, status)
@@ -541,12 +625,19 @@ The Supabase project has two storage buckets with RLS policies defined, but the 
 
 ## AI Pipeline
 
-Defined in `server/pipeline.ts`. Three-stage pipeline triggered at letter submission.
+Defined in `server/pipeline.ts`. Four-stage pipeline triggered at letter submission.
 
 ### Stages
 1. **Research** (`submitted` → `researching`): Calls Perplexity sonar-pro API with structured 8-task query plan to research jurisdiction-specific statutes, case law, statute of limitations, pre-suit requirements, available remedies, common defenses, and enforcement climate.
-2. **Drafting** (`researching` → `drafting`): Passes research packet to Anthropic Claude (claude-opus-4-5) to draft a professional legal letter with inline citations. Target word count varies by letter type (from `LETTER_TYPE_CONFIG`).
-3. **Assembly** (`drafting` → `generated_locked`): Final assembly stage; Claude produces the polished letter, creates `letter_versions` row with `version_type = ai_draft`, updates `current_ai_draft_version_id` pointer.
+2. **Drafting** (`researching` → `drafting`): Passes research packet to Anthropic Claude Opus (claude-opus-4-5) to draft a professional legal letter with inline citations. Target word count varies by letter type (from `LETTER_TYPE_CONFIG`).
+3. **Assembly** (status remains `drafting`): Anthropic Claude Opus (claude-opus-4-5) assembles the final polished letter, creates `letter_versions` row with `version_type = ai_draft`, updates `current_ai_draft_version_id` pointer. No status transition occurs — the letter stays in `drafting` until vetting completes.
+4. **Vetting** (`drafting` → `generated_locked`): Anthropic Claude Sonnet checks jurisdiction accuracy, anti-hallucination, anti-bloat, and geopolitical awareness. Transitions to `generated_locked` on pass.
+
+### Pipeline Resilience
+Automatic retry (up to 3 attempts with 10s/20s exponential backoff) via `runPipelineWithRetry()` before marking as `pipeline_failed`.
+
+### Recursive Learning System (`server/learning.ts`)
+Captures structured lessons from attorney approve/reject/changes actions into `pipeline_lessons` table. Computes 0–100 quality scores into `letter_quality_scores`. Lessons are injected into future drafting/assembly/vetting prompts via `buildLessonsPromptBlock()`.
 
 ### Validation Gates
 - `validateResearchPacket()` — hard requirements (researchSummary, jurisdictionProfile, issuesIdentified, applicableRules, draftingConstraints) + soft warnings for optional fields
@@ -557,6 +648,7 @@ Defined in `server/pipeline.ts`. Three-stage pipeline triggered at letter submis
 - Research: 90s
 - Drafting: 120s
 - Assembly: 120s
+- Vetting: 120s
 
 ### Retry
 Failed jobs can be retried from any stage via `admin.retryJob` → `retryPipelineFromStage()`. Prior pipeline runs are marked as superseded.

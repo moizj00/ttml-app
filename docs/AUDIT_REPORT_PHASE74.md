@@ -1,8 +1,10 @@
 # Talk-to-My-Lawyer — Full Platform Audit Report (Phase 74)
 
+> **HISTORICAL DOCUMENT — Phase 74 audit snapshot.** Test suite has since grown to ~617 tests across 41 files. Pipeline is now 4 stages (vetting stage added post-Phase 74). For current state, see `STRUCTURE.md` and `docs/FEATURE_MAP.md`.
+
 **Date:** Feb 27, 2026
 **Scope:** All 4 user roles, all routes, procedures, pages, and role guards
-**Test Suite:** 477/477 passing, 0 TypeScript errors
+**Test Suite:** 477/477 passing at time of audit (now ~617 tests, 41 files)
 
 ---
 

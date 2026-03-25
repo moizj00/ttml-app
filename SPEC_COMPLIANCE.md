@@ -2,7 +2,7 @@
 
 > **Purpose:** This document is the living feedback loop between the master architecture spec (`pasted_content_8.txt`) and the actual implementation. It is updated at the end of every significant work session. Use it to know exactly what is done, what is remaining, and what the risks are before starting any new phase.
 >
-> **Last audited:** 2026-03-16 | **Tests:** ~617 passing (38 test files) | **TypeScript:** 0 errors
+> **Last audited:** 2026-03-25 | **Tests:** ~617 passing (41 test files) | **TypeScript:** 0 errors
 
 ---
 
@@ -14,7 +14,7 @@
 | Phase 1 | Foundation — Schema / Tables / Indexes / RLS | ✅ Complete (indexes added Phase 19, attorney role Phase 57) |
 | Phase 2 | Canonical Intake + Normalization | ✅ Complete (gaps filled in Phase 48) |
 | Phase 3 | Backend Services / Actions | ✅ Complete |
-| Phase 4 | AI Pipeline (Three-Stage: Perplexity + Anthropic × 2) | ✅ Complete (intentional `generated_locked` paywall deviation) |
+| Phase 4 | AI Pipeline (Four-Stage: Perplexity + Anthropic Opus × 2 + Anthropic Sonnet vetting) | ✅ Complete (intentional `generated_locked` paywall deviation) |
 | Phase 5 | Frontend Portals | ✅ Complete (all portals functional) |
 | Phase 6 | Frontend ↔ Backend Integration | ✅ Complete |
 | Phase 7 | Verification (Success / Failure / Security) | ✅ Complete (~617 tests passing) |
@@ -149,17 +149,20 @@ The multi-step form (5 steps) captures: letterType, tonePreference, jurisdiction
 
 ## Phase 4 — AI Pipeline
 
-### Two-Stage Pipeline — Status
+### Four-Stage Pipeline — Status
 
 | Requirement | Status |
 |---|---|
-| Stage 1: Perplexity research with jurisdiction-aware, source-backed output | ✅ `runResearchStage` uses Perplexity sonar model |
-| Stage 2: Anthropic drafting using intake + validated research packet only | ✅ `runDraftingStage` uses Anthropic Claude |
+| Stage 1: Perplexity research with jurisdiction-aware, source-backed output | ✅ `runResearchStage` uses Perplexity sonar-pro model |
+| Stage 2: Anthropic Claude Opus drafting using intake + validated research packet | ✅ `runDraftingStage` uses claude-opus-4-5 |
+| Stage 3: Anthropic Claude Opus assembly (final polished letter) | ✅ `runAssemblyStage` uses claude-opus-4-5 |
+| Stage 4: Anthropic Claude Sonnet vetting (jurisdiction accuracy, anti-hallucination) | ✅ Vetting stage added in Phase 86+ |
 | Strict JSON research packet with all required fields | ✅ Validated by `validateResearchPacket` |
 | Deterministic research validation gate before drafting | ✅ Pipeline stops on invalid research |
 | Draft parser: strip code fences, extract first JSON, validate exact keys | ✅ `parseAndValidateDraftLlmOutput` |
 | On success: save ai_draft, update currentAiDraftVersionId, write audit rows | ✅ `runAssemblyStage` |
-| On failure: mark jobs failed, log error, STOP pipeline, no incorrect status advance | ✅ Error handling in all three stages |
+| On failure: mark jobs failed, log error, STOP pipeline, no incorrect status advance | ✅ Error handling in all four stages; `pipeline_failed` status |
+| Pipeline resilience: automatic retry with exponential backoff | ✅ `runPipelineWithRetry()` — 3 attempts, 10s/20s backoff |
 
 ### Status Machine Deviation
 
@@ -227,7 +230,7 @@ All UI is wired to real backend tRPC procedures. No mock data in production path
 | 3. Perplexity research runs | ✅ (confirmed via n8n workflow + in-app pipeline) |
 | 4. Research packet stored + validated | ✅ |
 | 5. Status → drafting | ✅ |
-| 6. ChatGPT drafting using intake + research packet | ✅ |
+| 6. Claude Opus drafting using intake + research packet | ✅ |
 | 7. ai_draft saved | ✅ |
 | 8. currentAiDraftVersionId updated | ✅ |
 | 9. Status → generated_locked (paywall) | ✅ (deviation from spec's pending_review) |

@@ -6,7 +6,7 @@
 
 ## 1. Platform Overview
 
-Talk-to-My-Lawyer is an AI-powered legal letter drafting platform with mandatory attorney review. Subscribers submit letter requests, a three-stage AI pipeline (Perplexity research, Anthropic drafting, Anthropic assembly) generates drafts, and licensed attorneys edit and approve letters through a dedicated Review Center. The platform enforces a strict paywall: subscribers see a blurred draft preview and must pay $200 for attorney review before any letter is finalized.
+Talk-to-My-Lawyer is an AI-powered legal letter drafting platform with mandatory attorney review. Subscribers submit letter requests, a four-stage AI pipeline (Perplexity research → Anthropic Claude Opus drafting → Anthropic Claude Opus assembly → Anthropic Claude Sonnet vetting) generates drafts, and licensed attorneys edit and approve letters through a dedicated Review Center. The platform enforces a strict paywall: subscribers see a blurred draft preview and must pay $200 for attorney review before any letter is finalized.
 
 ---
 
@@ -61,7 +61,7 @@ Manus OAuth was fully replaced with Supabase Auth in Phase 35. All auth flows us
 
 ## 4. Database Schema
 
-### 4.1 Tables (9 application tables + 1 auth token table)
+### 4.1 Tables (19 tables)
 
 | Table | Purpose | Key Columns |
 | --- | --- | --- |
@@ -78,16 +78,25 @@ Manus OAuth was fully replaced with Supabase Auth in Phase 35. All auth flows us
 | `commission_ledger` | Employee earnings from referrals | `id`, `employeeId`, `saleAmount`, `commissionAmount`, `status` |
 | `payout_requests` | Employee withdrawal requests | `id`, `employeeId`, `amount`, `status`, `processedBy` |
 | `email_verification_tokens` | Email verification tokens | `id`, `userId`, `token`, `email`, `expiresAt` |
+| `pipeline_lessons` | Recursive learning lessons from attorney actions | `id`, `letterRequestId`, `stage`, `category`, `source`, `lessonText`, `isActive` |
+| `letter_quality_scores` | Pipeline quality scoring (0–100) | `id`, `letterRequestId`, `firstPassApproved`, `editDistance`, `revisionCount`, `score` |
+| `document_analyses` | Document Analyzer results | `id`, `userId`, `fileName`, `fileType`, `summary`, `actionItems`, `riskFlags` |
+| `processed_stripe_events` | Stripe webhook idempotency | `id`, `stripeEventId`, `processedAt` |
+| `admin_verification_codes` | Admin 2FA 8-digit email codes | `id`, `userId`, `code`, `expiresAt`, `usedAt` |
+| `blog_posts` | Blog content management | `id`, `title`, `slug`, `content`, `category`, `status`, `authorId`, `publishedAt` |
 
 ### 4.2 Enums
 
 | Enum | Values |
 | --- | --- |
 | `user_role` | `subscriber`, `employee`, `attorney`, `admin` |
-| `letter_status` | `submitted`, `researching`, `drafting`, `generated_unlocked`, `generated_locked`, `pending_review`, `under_review`, `approved`, `rejected`, `needs_changes` |
-| `letter_type` | `demand`, `cease_and_desist`, `breach_of_contract`, `eviction_notice`, `employment_dispute`, `insurance_claim`, `debt_collection`, `general_legal` |
-| `subscription_plan` | `per_letter`, `monthly`, `annual`, `free_trial_review`, `starter`, `professional` |
+| `letter_status` | `submitted`, `researching`, `drafting`, `generated_locked`, `generated_unlocked` (legacy), `upsell_dismissed` (legacy), `pipeline_failed`, `pending_review`, `under_review`, `needs_changes`, `approved`, `client_approval_pending`, `client_approved`, `sent`, `rejected` |
+| `letter_type` | `demand-letter`, `cease-and-desist`, `contract-breach`, `eviction-notice`, `employment-dispute`, `consumer-complaint`, `general-legal` |
+| `subscription_plan` | `per_letter`, `monthly`, `monthly_basic`, `annual`, `free_trial_review`, `starter`, `professional`, `single_letter`, `yearly` |
 | `subscription_status` | `active`, `canceled`, `past_due`, `trialing`, `incomplete`, `none` |
+| `pipeline_stage` | `research`, `drafting`, `assembly`, `vetting` |
+| `lesson_category` | `citation_error`, `jurisdiction_error`, `tone_issue`, `structure_issue`, `factual_error`, `bloat_detected`, `missing_section`, `style_preference`, `legal_accuracy`, `general` |
+| `lesson_source` | `attorney_approval`, `attorney_rejection`, `attorney_changes`, `attorney_edit`, `manual`, `subscriber_update`, `subscriber_retry` |
 
 ### 4.3 Database-Level Atomic Functions (Phase 34)
 
@@ -118,21 +127,37 @@ The pipeline uses **direct API calls** as the primary path. n8n is dormant unles
 | 1 — Research | Perplexity | `sonar-pro` | 90s | 8-task deep legal research (statutes, case law, SOL, remedies, defenses, enforcement climate) |
 | 2 — Drafting | Anthropic | `claude-opus-4-5` | 120s | Professional legal letter draft from research |
 | 3 — Assembly | Anthropic | `claude-opus-4-5` | 120s | Final letter assembly combining research + draft |
+| 4 — Vetting | Anthropic | `claude-sonnet` | 120s | Jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness check |
 
-### 5.2 Status Flow (Simplified — Phase 69)
+### 5.2 Status Flow (Current)
 
 ```
 submitted → researching → drafting → generated_locked
-                                          │
-                                    [Subscriber pays $200]
-                                          │
-                                          ▼
-                                    pending_review → under_review → approved
-                                                                  → rejected
-                                                                  → needs_changes
+    │            │            │           │
+    └→ pipeline_failed  │    │     [Subscriber pays $200]
+         └→ pipeline_failed  │           │
+              └→ pipeline_failed   ▼
+              └→ submitted   pending_review → under_review → approved → client_approval_pending
+                                           ↻ (release)      → rejected → submitted    → client_approved
+                                                             → needs_changes → submitted    → sent
 ```
 
-The `generated_unlocked` status still exists in the DB enum but is no longer set by the pipeline (Phase 69 removed the free-unlock path). All letters now terminate at `generated_locked` regardless of whether it is the subscriber's first letter.
+Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
+- `submitted → researching | pipeline_failed`
+- `researching → drafting | submitted | pipeline_failed`
+- `drafting → generated_locked | submitted | pipeline_failed`
+- `generated_locked → pending_review`
+- `pending_review → under_review`
+- `under_review → approved | rejected | needs_changes | pending_review`
+- `needs_changes → submitted`
+- `approved → client_approval_pending`
+- `client_approval_pending → client_approved`
+- `client_approved → sent`
+- `sent → (terminal)`
+- `rejected → submitted`
+- `pipeline_failed → submitted`
+
+The `generated_unlocked` status still exists in the DB enum but is no longer set by the pipeline (Phase 69 removed the free-unlock path). All letters now terminate at `generated_locked` regardless of whether it is the subscriber's first letter. Pipeline resilience: `runPipelineWithRetry()` attempts up to 3 times with 10s/20s exponential backoff before marking `pipeline_failed`.
 
 ### 5.3 Pipeline Entry Points
 

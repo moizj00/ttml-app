@@ -1,9 +1,9 @@
 # TTML Code Review — Cross-Verified Against Actual Codebase
 
-**Date:** 2026-02-26
+**Date:** 2026-02-26 | **Last updated:** 2026-03-25 (Issues 1–3 marked RESOLVED)
 **Source:** Live codebase at `/home/ubuntu/talk-to-my-lawyer` (checkpoint `d3e13150`)
 **Method:** Every finding verified with exact file path and line number against the running code.
-**Status:** ✅ Source of Truth — all facts confirmed or corrected below.
+**Status:** Issues 1–3 RESOLVED. Issues 4–13 remain as documented (Manus OAuth cleanup, RLS, tests).
 
 ---
 
@@ -11,9 +11,9 @@
 
 | Issue | Claim in Review | Verified? | Notes |
 |-------|----------------|-----------|-------|
-| 1 | `USER_ROLES` / `ACTOR_TYPES` missing `attorney` | ✅ CORRECT | Exact lines confirmed |
-| 2 | `SPEC_COMPLIANCE.md` has 2 wrong statements | ✅ CORRECT | Lines 65 and 69 confirmed wrong |
-| 3 | `GAP_ANALYSIS.md` lists completed work as TODO | ✅ CORRECT | Lines 52–57 confirmed still unchecked |
+| 1 | `USER_ROLES` / `ACTOR_TYPES` missing `attorney` | ✅ RESOLVED | Fixed in drizzle/schema.ts — both constants now include `attorney` |
+| 2 | `SPEC_COMPLIANCE.md` has 2 wrong statements | ✅ RESOLVED | Lines 65 (roles) and 69 (database) fixed — now reads 4 roles and Supabase PostgreSQL |
+| 3 | `GAP_ANALYSIS.md` lists completed work as TODO | ✅ RESOLVED | All 9 gaps marked as COMPLETED with phase references; historical header added |
 | 4 | Dead Manus OAuth code (sdk.ts 304 lines, oauth.ts 53 lines) | ✅ CORRECT | Confirmed still registered at startup |
 | 5 | Legacy Manus constants still used in production | ⚠️ PARTIALLY CORRECT | `supabaseAuth.ts` uses hardcoded `"app_session_id"` string, NOT `COOKIE_NAME` import (lines 331, 339). Review stated lines 345, 353 — actual lines are 331, 339. |
 | 6 | RLS `is_app_employee_or_admin()` excludes attorney | ✅ CORRECT | Confirmed in migration 0002, no `is_app_attorney()` in any migration |
@@ -26,70 +26,25 @@
 
 ---
 
-## 🔴 ISSUE 1: `USER_ROLES` and `ACTOR_TYPES` Constants Missing `attorney`
+## ✅ ISSUE 1: `USER_ROLES` and `ACTOR_TYPES` Constants Missing `attorney` — RESOLVED
 
-**File: `drizzle/schema.ts`**
+> **STATUS: RESOLVED** — `attorney` has been added to both `USER_ROLES` and `ACTOR_TYPES` in `drizzle/schema.ts`. This issue no longer exists in the current codebase.
 
-| Line | Code | Has `attorney`? |
-|------|------|-----------------|
-| 15 | `export const USER_ROLES = ["subscriber", "employee", "admin"] as const;` | ❌ NO |
-| 16 | `export type UserRole = (typeof USER_ROLES)[number];` | ❌ (derived from line 15) |
-| 49 | `export const ACTOR_TYPES = ["system", "subscriber", "employee", "admin"] as const;` | ❌ NO |
-| 50 | `export type ActorType = (typeof ACTOR_TYPES)[number];` | ❌ (derived from line 49) |
-| 70 | `export const userRoleEnum = pgEnum("user_role", ["subscriber", "employee", "admin", "attorney"]);` | ✅ YES |
-| 80 | `export const actorTypeEnum = pgEnum("actor_type", ["system", "subscriber", "employee", "admin", "attorney"]);` | ✅ YES |
+**File: `drizzle/schema.ts`** (current state — fixed):
 
-The DB enum (`pgEnum`) includes `attorney`. The TypeScript `const`/`type` does **not**. So `UserRole = "subscriber" | "employee" | "admin"` — it excludes attorneys entirely at the type level. Any code that type-checks against `UserRole` will reject `"attorney"` at compile time.
-
-### Where `attorney` IS correctly handled
-
-| File | Line | Code |
-|------|------|------|
-| `client/src/components/ProtectedRoute.tsx` | 5 | `type Role = "subscriber" \| "employee" \| "admin" \| "attorney";` |
-| `client/src/pages/admin/Users.tsx` | 11 | `attorney: { label: "Attorney", icon: <Scale ...>, color: "text-purple-700 bg-purple-100" }` |
-| `server/routers.ts` | 93–98 | `const attorneyProcedure = protectedProcedure.use(...)` checks for `"attorney"` |
-| `drizzle/0002_ambitious_leper_queen.sql` | 1–2 | `ALTER TYPE "public"."user_role" ADD VALUE 'attorney';` |
-
-**Fix:** Add `"attorney"` to both `USER_ROLES` (line 15) and `ACTOR_TYPES` (line 49) in `drizzle/schema.ts`.
+Both `USER_ROLES = ["subscriber", "employee", "admin", "attorney"]` and `ACTOR_TYPES = ["system", "subscriber", "employee", "attorney", "admin"]` now include `attorney`. The TypeScript types `UserRole` and `ActorType` correctly include the `attorney` value.
 
 ---
 
-## 🔴 ISSUE 2: `SPEC_COMPLIANCE.md` Has Two Factually Wrong Statements
+## ✅ ISSUE 2: `SPEC_COMPLIANCE.md` Has Two Factually Wrong Statements — RESOLVED
 
-**File: `SPEC_COMPLIANCE.md`**
-
-**Line 65 — Claims 3 roles:**
-```
-The implementation uses 3 roles (`subscriber`, `employee`, `admin`).
-Attorneys use the `employee` role and access the review center.
-```
-**Reality:** `server/routers.ts` lines 93–98 has a dedicated `attorneyProcedure`. `client/src/App.tsx` lines 104–131 gates `/attorney/*` and `/review/*` to `["attorney", "admin"]`, not employee. The 4-role system has been live since Phase 57.
-
-**Line 69 — Previously claimed MySQL (now corrected):**
-The application uses Supabase (PostgreSQL). `drizzle/schema.ts` line 1 imports `pgTable`, `pgEnum` from `drizzle-orm/pg-core`. `drizzle/migrations/0002_rls_policies_and_indexes.sql` enables RLS on all 9 tables. The migration to Supabase PostgreSQL happened in Phase 33 (confirmed in `todo.md`). `SPEC_COMPLIANCE.md` line 69 has been updated to reflect this.
+> **STATUS: RESOLVED** — Both statements have been corrected in `SPEC_COMPLIANCE.md`. Line 65 now reads 4 roles with dedicated `attorneyProcedure`. Line 69 correctly states Supabase (PostgreSQL).
 
 ---
 
-## 🔴 ISSUE 3: `docs/GAP_ANALYSIS.md` Lists Completed Work as TODO
+## ✅ ISSUE 3: `docs/GAP_ANALYSIS.md` Lists Completed Work as TODO — RESOLVED
 
-**File: `docs/GAP_ANALYSIS.md`**, lines 52–57
-
-```
-### GAP 1: Role Split — Attorney vs Employee (HIGH PRIORITY)
-- [ ] Add `attorney` to userRoleEnum in drizzle/schema.ts
-- [ ] Create `attorneyProcedure` guard in routers.ts
-- [ ] Move review center routes from `/employee/` to `/attorney/` path
-- [ ] Update ProtectedRoute to handle attorney role
-```
-
-**Already done (confirmed in codebase):**
-
-| Task | Evidence |
-|------|----------|
-| `attorney` in `userRoleEnum` | `drizzle/schema.ts` line 70 |
-| `attorneyProcedure` exists | `server/routers.ts` lines 93–98 |
-| Routes moved to `/attorney/*` | `client/src/App.tsx` lines 104–131 |
-| `ProtectedRoute` has `attorney` | `client/src/components/ProtectedRoute.tsx` line 5 |
+> **STATUS: RESOLVED** — All 9 gaps in `docs/GAP_ANALYSIS.md` have been marked as COMPLETED with phase references. A historical document header has been added. The file is retained as a historical reference; the living feature inventory is maintained in `docs/FEATURE_MAP.md`.
 
 ---
 
@@ -272,9 +227,9 @@ This was true when written but is now incorrect — the app uses Supabase Auth s
 
 | # | Priority | Issue | File(s) | Effort |
 |---|----------|-------|---------|--------|
-| 1 | 🔴 | Add `"attorney"` to `USER_ROLES` and `ACTOR_TYPES` | `drizzle/schema.ts` lines 15, 49 | 2 min |
-| 2 | 🔴 | Fix stale claims in `SPEC_COMPLIANCE.md` | `SPEC_COMPLIANCE.md` lines 65, 69 | 10 min |
-| 3 | 🔴 | Mark completed items in `GAP_ANALYSIS.md` | `docs/GAP_ANALYSIS.md` lines 52–57 | 10 min |
+| 1 | ✅ | ~~Add `"attorney"` to `USER_ROLES` and `ACTOR_TYPES`~~ | RESOLVED — fixed in drizzle/schema.ts | Done |
+| 2 | ✅ | ~~Fix stale claims in `SPEC_COMPLIANCE.md`~~ | RESOLVED — lines 65 and 69 now correct (4 roles, Supabase PostgreSQL) | Done |
+| 3 | ✅ | ~~Mark completed items in `GAP_ANALYSIS.md`~~ | RESOLVED — all 9 gaps marked COMPLETED, historical header added | Done |
 | 4 | 🟡 | Delete dead Manus OAuth code | `server/_core/sdk.ts`, `oauth.ts`, `types/manusTypes.ts`, `client/src/const.ts` (`getLoginUrl`) | 30 min |
 | 5 | 🟡 | Remove OAuth registration from startup | `server/_core/index.ts` lines 6, 61 | 2 min |
 | 6 | 🟡 | Clean Manus error codes from const | `shared/const.ts` lines 3–5, `server/_core/trpc.ts` lines 17, 35 | 10 min |

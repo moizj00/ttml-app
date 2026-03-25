@@ -1,5 +1,7 @@
 # Talk-to-My-Lawyer — Comprehensive Gap Analysis
 
+> **HISTORICAL DOCUMENT — Point-in-time gap analysis from February 2026.** All 9 gaps listed below have been resolved in subsequent phases. For the current state of the platform, refer to `STRUCTURE.md` and `docs/FEATURE_MAP.md` as the living sources of truth.
+
 **Audited: 2026-02-25** | Based on: Google Doc Feature Map + Pasted Feature Prompt + Codebase Audit
 
 ---
@@ -43,78 +45,80 @@
 
 ---
 
-## GAPS — Features Still Needed (Priority Order)
+## GAPS — All Resolved
 
-### GAP 1: Role Split — Attorney vs Employee (HIGH PRIORITY)
-**Current:** 3 roles (subscriber, employee, admin). Employee role handles BOTH review center AND affiliate.
-**Required:** 4 roles: subscriber, employee (affiliate only), attorney (review center), admin (ops).
+All 9 gaps identified in this audit have been resolved in subsequent phases.
 
-- [ ] Add `attorney` to userRoleEnum in drizzle/schema.ts
-- [ ] Create `attorneyProcedure` guard in routers.ts
-- [ ] Move review center routes from `/employee/` to `/attorney/` path
-- [ ] Create new employee pages focused on affiliate/discount only
-- [ ] Update ProtectedRoute to handle attorney role
-- [ ] Update AppLayout nav items for attorney vs employee
+### GAP 1: Role Split — Attorney vs Employee — ✅ COMPLETED (Phase 57)
 
-### GAP 2: Onboarding Role Selection (HIGH PRIORITY)
-**Current:** Signup creates user with default role. No role selection screen.
-**Required:** Post-signup screen with "I am a Client" / "I am an Employee (Affiliate)" / "I am an Attorney"
+- [x] Add `attorney` to userRoleEnum in drizzle/schema.ts
+- [x] Create `attorneyProcedure` guard in routers.ts
+- [x] Move review center routes from `/employee/` to `/attorney/` path
+- [x] Create new employee pages focused on affiliate/discount only
+- [x] Update ProtectedRoute to handle attorney role
+- [x] Update AppLayout nav items for attorney vs employee
 
-- [ ] Create `/onboarding` page with role selection + profile completion (name, jurisdiction)
-- [ ] Auto-generate affiliate discount code for employee role
-- [ ] Redirect new users to onboarding before dashboard
+### GAP 2: Onboarding Role Selection — ✅ COMPLETED (Phase 41)
 
-### GAP 3: Employee Affiliate System (MEDIUM PRIORITY)
-**Current:** No affiliate/discount/commission system exists at all.
-**Required:** Full affiliate portal with discount codes, referral stats, commission tracking, payout requests.
+- [x] Create `/onboarding` page with role selection + profile completion (name, jurisdiction)
+- [x] Auto-generate affiliate discount code for employee role
+- [x] Redirect new users to onboarding before dashboard
 
-- [ ] Add discount_codes table (code, employeeId, usageCount, etc.)
-- [ ] Add commission_ledger table (employeeId, transactionId, amount, status)
-- [ ] Add payout_requests table (employeeId, amount, status)
-- [ ] Backend: auto-generate discount code on employee signup
-- [ ] Backend: commission calculation on Stripe payment with discount code
-- [ ] Employee dashboard: earnings widgets, referral stats, copy code button
-- [ ] Employee payout request workflow
+### GAP 3: Employee Affiliate System — ✅ COMPLETED (Phase 40 + Phase 68)
 
-### GAP 4: Subscriber Feature Completion (MEDIUM PRIORITY)
-- [ ] Copy to clipboard button (when letter is unlocked/approved)
-- [ ] Soft delete draft (add deletedAt column, filter in queries)
-- [ ] Resume unfinished draft / "Finish Draft" button on dashboard
-- [ ] Better processing progress modal with real step messages (researching → drafting → finalizing)
-- [ ] In-app payment receipts page (or link to Stripe portal)
+- [x] Add discount_codes table (code, employeeId, usageCount, etc.)
+- [x] Add commission_ledger table (employeeId, transactionId, amount, status)
+- [x] Add payout_requests table (employeeId, amount, status)
+- [x] Backend: auto-generate discount code on employee signup
+- [x] Backend: commission calculation on Stripe payment with discount code
+- [x] Employee dashboard: earnings widgets, referral stats, copy code button
+- [x] Employee payout request workflow
 
-### GAP 5: Intake Form Missing Fields (MEDIUM PRIORITY)
-- [ ] Language field (dropdown: English, Spanish, French, etc.)
-- [ ] Deadlines field (structured date + description)
-- [ ] Communications history field (textarea for prior correspondence)
-- [ ] toneAndDelivery as proper object (not just tonePreference string)
+### GAP 4: Subscriber Feature Completion — ✅ COMPLETED (Phase 41 + Phase 48)
 
-### GAP 6: Homepage Enhancements (LOW PRIORITY)
-- [ ] Hero section animated typing effect
-- [ ] Trust signals: SSL badge, Stripe verified logo, testimonials
-- [ ] "How it Works" timeline with icons (currently exists but could be enhanced)
+- [x] Copy to clipboard button (when letter is unlocked/approved)
+- [x] Soft delete draft (add deletedAt column, filter in queries)
+- [x] Resume unfinished draft / "Finish Draft" button on dashboard
+- [x] Better processing progress modal with real step messages (researching → drafting → finalizing)
+- [x] In-app payment receipts page (or link to Stripe portal)
 
-### GAP 7: Admin Dashboard Enhancements (LOW PRIORITY)
-- [ ] Financial charts (revenue, MRR, affiliate payouts)
-- [ ] SLA countdown timers on review queue (letters pending > 24h)
-- [ ] User management: ban/revoke access, adjust employee balance
+### GAP 5: Intake Form Missing Fields — ✅ COMPLETED (Phase 48)
 
-### GAP 8: Email Completeness (LOW PRIORITY)
-- [ ] Welcome email on signup
-- [ ] Payment receipt email
-- [ ] "Action Required" alert to attorney when $50 review is paid
+- [x] Language field (dropdown: English, Spanish, French, etc.)
+- [x] Deadlines field (structured date + description)
+- [x] Communications history field (textarea for prior correspondence)
+- [x] toneAndDelivery as proper object (not just tonePreference string)
 
-### GAP 9: Pricing Consistency (LOW PRIORITY)
-- [ ] Ensure $10 unlock fee + $50 attorney review fee are separate and consistent
-- [ ] Pricing page feature comparison table
-- [ ] "Contact Enterprise Sales" button
+### GAP 6: Homepage Enhancements — ✅ COMPLETED (Phase 27 + Phase 49)
+
+- [x] Hero section animated typing effect
+- [x] Trust signals: SSL badge, Stripe verified logo, testimonials
+- [x] "How it Works" timeline with icons (currently exists but could be enhanced)
+
+### GAP 7: Admin Dashboard Enhancements — ✅ COMPLETED (Phase 86)
+
+- [x] Financial charts (revenue, MRR, affiliate payouts)
+- [x] SLA countdown timers on review queue (letters pending > 24h)
+- [x] User management: ban/revoke access, adjust employee balance
+
+### GAP 8: Email Completeness — ✅ COMPLETED (Phase 44 + Phase 76)
+
+- [x] Welcome email on signup
+- [x] Payment receipt email
+- [x] "Action Required" alert to attorney when review is paid
+
+### GAP 9: Pricing Consistency — ✅ COMPLETED (Phase 67 + Phase 69)
+
+- [x] Pricing simplified: $200 per-letter unlock. Monthly plans available.
+- [x] Pricing page feature comparison table
+- [x] FAQ updated with current pricing
 
 ---
 
-## Implementation Priority Order
+## Implementation Priority Order (Historical — All Completed)
 
-1. **GAP 1 + GAP 2**: Role split + onboarding (foundation for everything else)
-2. **GAP 4**: Subscriber feature completion (copy, soft delete, resume draft, progress modal)
-3. **GAP 5**: Intake form missing fields
-4. **GAP 3**: Employee affiliate system (largest new feature)
-5. **GAP 6-9**: Polish items
+1. **GAP 1 + GAP 2**: Role split + onboarding → DONE Phase 41, 57
+2. **GAP 4**: Subscriber feature completion → DONE Phase 41, 48
+3. **GAP 5**: Intake form missing fields → DONE Phase 48
+4. **GAP 3**: Employee affiliate system → DONE Phase 40, 68
+5. **GAP 6-9**: Polish items → DONE Phase 27, 44, 49, 67, 69, 76, 86

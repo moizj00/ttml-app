@@ -1,5 +1,7 @@
 # Talk to My Lawyer — Content Strategy
 
+> **Last verified:** 2026-03-25 — All page routes confirmed against `client/src/App.tsx`. Pricing reflects $200/letter + subscription plans.
+
 ## 1. Target Keyword Map by Page
 
 ### Home (/)

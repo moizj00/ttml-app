@@ -1,5 +1,7 @@
 # Revalidation Report — Phase 62
 
+> **HISTORICAL DOCUMENT — Phase 62 validation snapshot.** The platform has since grown to ~617 tests across 41 files, 19 tables, and a 4-stage pipeline (vetting stage added post-Phase 62). For the current state, see `STRUCTURE.md` and `docs/FEATURE_MAP.md`.
+
 **Date:** Feb 26, 2026  
 **Auditor:** Manus  
 **Method:** Codebase grep audit against `ttml-feature-map` SKILL.md + `completed-features.md` + `missing-features.md`

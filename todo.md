@@ -52,18 +52,18 @@
 - [x] Idempotency protections for duplicate submissions/retries
 - [x] Note visibility (internal vs user_visible) in review actions
 - [x] Final approved version generation on approval (freeze version + current_final_version_id)
-- [ ] PDF export / downloadable output for final letters (future enhancement)
+- [x] PDF export / downloadable output for final letters (Phase 38 + 66)
 
 ## Phase 7: Testing & Delivery
 - [x] Vitest unit tests for critical paths (29 tests passing)
 - [x] End-to-end verification (TypeScript clean, server healthy)
-- [ ] Save checkpoint and deliver
+- [x] Save checkpoint and deliver
 
 ## Future Enhancements (legacy — most now completed)
 - [x] PDF export for final approved letters (Phase 38 + 66)
 - [x] n8n workflow integration for letter generation (Phase 73 — aligned but dormant)
 - [x] Stripe payment integration for subscriptions (Phase 12 + 67 + 76)
-- [ ] Mobile PWA optimization
+- [ ] Mobile PWA optimization (deferred)
 
 ## Phase 8: E2E Workflow Audit & Fix
 - [x] Audit intake form fields → pipeline input mapping
@@ -73,28 +73,28 @@
 - [x] Ensure approved letter appears in subscriber My Letters with full content
 - [x] Ensure subscriber detail page shows final approved letter (not AI drafts/research)
 
-## Phase 9: Stripe Payment Integration
-- [ ] Add Stripe feature via webdev_add_feature
-- [ ] Subscription plans: per-letter ($200), monthly ($200/mo 4 letters), annual ($2000/yr 4 letters/mo)
-- [ ] Checkout session creation with metadata
-- [ ] Webhook handler for checkout.session.completed
-- [ ] Atomic subscription activation (prevent race conditions)
-- [ ] Commission tracking (5% employee referral)
-- [ ] Employee coupon system (20% discount on per-letter)
-- [ ] Pricing page UI
-- [ ] Credit/letter allowance enforcement before letter submission
+## Phase 9: Stripe Payment Integration (superseded by Phase 12 + 67 + 76)
+- [x] Add Stripe feature via webdev_add_feature (Phase 12)
+- [x] Subscription plans: per-letter ($200), monthly, annual (Phase 67)
+- [x] Checkout session creation with metadata (Phase 12)
+- [x] Webhook handler for checkout.session.completed (Phase 12)
+- [x] Atomic subscription activation (prevent race conditions) (Phase 34)
+- [x] Commission tracking (5% employee referral) (Phase 68)
+- [x] Employee coupon system (discount on per-letter) (Phase 68)
+- [x] Pricing page UI (Phase 67)
+- [x] Credit/letter allowance enforcement before letter submission (Phase 34)
 
-## Phase 10: Spec Compliance Patches (from pasted_content_4)
-- [ ] Add buildNormalizedPromptInput helper (trim strings, safe defaults, filter empty rows)
-- [ ] Strengthen validateResearchPacket: require sourceUrl+sourceTitle per rule, prefer >= 3 rules
-- [ ] Add subscriber updateForChanges mutation (re-submit after needs_changes)
-- [ ] Add admin forceStatusTransition mutation (audited)
+## Phase 10: Spec Compliance Patches (from pasted_content_4) — all completed in later phases
+- [x] Add buildNormalizedPromptInput helper (trim strings, safe defaults, filter empty rows) (Phase 48)
+- [x] Strengthen validateResearchPacket: require sourceUrl+sourceTitle per rule, prefer >= 3 rules (Phase 51)
+- [x] Add subscriber updateForChanges mutation (re-submit after needs_changes) (Phase 23)
+- [x] Add admin forceStatusTransition mutation (audited) (Phase 23)
 - [x] Add frontend polling/revalidation for researching/drafting/pending_review statuses
-- [ ] Add status timeline component in subscriber LetterDetail
-- [ ] Add subscriber update form when status is needs_changes
-- [ ] Verify success path E2E (submit → research → draft → assembly → pending_review → claim → approve → subscriber sees final)
-- [ ] Verify failure path (invalid research stops pipeline, invalid draft stops pipeline)
-- [ ] Verify security (subscriber cannot access ai_draft/research/internal notes)
+- [x] Add status timeline component in subscriber LetterDetail (Phase 30)
+- [x] Add subscriber update form when status is needs_changes (Phase 23)
+- [x] Verify success path E2E (submit → research → draft → assembly → pending_review → claim → approve → subscriber sees final) (Phase 73)
+- [x] Verify failure path (invalid research stops pipeline, invalid draft stops pipeline) (Phase 73)
+- [x] Verify security (subscriber cannot access ai_draft/research/internal notes) (Phase 73)
 
 ## Phase 12: Stripe Payment Integration
 - [x] Fix TypeScript error in AdminLetterDetail page
@@ -113,26 +113,25 @@
 - [x] Admin: view subscriber subscription status
 - [x] Run tests and save checkpoint (29/29 passing, 0 TS errors)
 
-## Phase 11: n8n Workflow Integration & Frontend Polish
-- [ ] Get n8n workflow webhook URL for the best legal letter workflow
-- [ ] Activate the n8n workflow so webhook is live
-- [ ] Update pipeline.ts to call n8n webhook as primary, with in-app AI fallback
-- [ ] Add N8N_WEBHOOK_URL as environment variable
-- [ ] Build admin letter detail page with force status transition dialog
-- [ ] Add polling/revalidation to employee ReviewDetail for in-progress statuses
-- [ ] Verify TypeScript compiles cleanly
-- [ ] Run all tests
+## Phase 11: n8n Workflow Integration & Frontend Polish — completed/superseded
+- [x] n8n webhook URL configured (Phase 73 — aligned but dormant, direct API primary)
+- [x] N8N_WEBHOOK_URL as environment variable (set, but N8N_PRIMARY not set)
+- [x] pipeline.ts calls direct API as primary, n8n as optional fallback (Phase 21)
+- [x] Build admin letter detail page with force status transition dialog (Phase 23)
+- [x] Add polling/revalidation to employee ReviewDetail for in-progress statuses (Phase 23)
+- [x] Verify TypeScript compiles cleanly (0 errors)
+- [x] Run all tests (~617 passing)
 
-## Phase 13: Dashboard Enhancement — Letters History & Payment Receipts
-- [ ] Audit current subscriber dashboard, MyLetters, and Billing pages
-- [ ] Add backend: letters list with search/filter/sort/pagination (tRPC)
-- [ ] Add backend: payment receipts list from Stripe invoices (tRPC)
-- [ ] Rebuild MyLetters page as full Letters History with search, filter by status/type/date, sort, pagination
-- [ ] Build Payment Receipts page with Stripe invoice history, amounts, dates, downloadable receipt links
-- [ ] Enhance subscriber Dashboard with summary stats (total letters, active subscription, credits used, pending reviews)
-- [ ] Add recent activity feed on dashboard (last 5 letters with status)
-- [ ] Add quick action cards on dashboard (Submit Letter, View Letters, Billing)
-- [ ] Run tests, verify, save checkpoint
+## Phase 13: Dashboard Enhancement — Letters History & Payment Receipts — all completed
+- [x] Audit current subscriber dashboard, MyLetters, and Billing pages (Phase 30)
+- [x] Add backend: letters list with search/filter/sort/pagination (tRPC) (Phase 30)
+- [x] Add backend: payment receipts list from Stripe invoices (tRPC) (Phase 48)
+- [x] Rebuild MyLetters page as full Letters History with search, filter by status/type/date, sort, pagination (Phase 30)
+- [x] Build Payment Receipts page with Stripe invoice history, amounts, dates, downloadable receipt links (Phase 48)
+- [x] Enhance subscriber Dashboard with summary stats (total letters, active subscription, credits used, pending reviews) (Phase 30)
+- [x] Add recent activity feed on dashboard (last 5 letters with status) (Phase 30)
+- [x] Add quick action cards on dashboard (Submit Letter, View Letters, Billing) (Phase 30)
+- [x] Run tests, verify, save checkpoint
 
 ## Phase 14: Paywall Flow Revision + Dashboard Enhancements
 - [x] Add generated_locked status to schema enum and status machine
@@ -146,9 +145,9 @@
 - [x] Update StatusTimeline: generated_locked step with amber lock icon
 - [x] Update StatusBadge: generated_locked shows "Ready to Unlock" in yellow
 - [x] Tests: 31/31 passing, 0 TypeScript errors
-- [ ] Build Payment Receipts page with invoice history, amounts, dates, receipt links (future)
-- [ ] Enhance subscriber Dashboard: subscription status widget, activity feed, quick action cards (future)
-- [ ] Add date range filter to Letters History (future)
+- [x] Build Payment Receipts page with invoice history, amounts, dates, receipt links (Phase 48)
+- [x] Enhance subscriber Dashboard: subscription status widget, activity feed, quick action cards (Phase 30)
+- [ ] Add date range filter to Letters History (deferred)
 
 ## Phase 15: Post-Submission Email Notifications
 - [x] Add sendLetterSubmissionEmail: branded confirmation email sent immediately after letter submission
@@ -183,16 +182,16 @@
 - [x] Role-based access: subscriberProcedure, employeeProcedure, adminProcedure guards in place
 
 ## Phase 18: Spec Compliance Gaps (from SPEC_COMPLIANCE.md audit)
-- [ ] P1: Add 7 missing database indexes (letter_requests.status, user_id, assigned_reviewer_id; letter_versions.letter_request_id; review_actions.letter_request_id; workflow_jobs.letter_request_id+status; research_runs.letter_request_id+status)
-- [ ] P1: Add attachment upload UI to SubmitLetter form (step 6 — file upload with size validation)
-- [ ] P2: Add `language` field to intake normalizer and SubmitLetter form
-- [ ] P2: Add `deadlines` field to intake normalizer and SubmitLetter form
-- [ ] P2: Add `communications` field to intake normalizer and SubmitLetter form
-- [ ] P2: Normalize `toneAndDelivery` as proper intake object (not just tonePreference string)
-- [ ] P3: Add research_sources as a separate table (optional — sources currently embedded in resultJson)
-- [ ] P3: Consider role rename: employee→attorney_admin, admin→super_admin (requires migration)
-- [ ] P3: Build Payment Receipts page at /subscriber/receipts
-- [ ] P3: Add subscriber Dashboard stats widget (total letters, locked, in review)
+- [x] P1: Add 7 missing database indexes (Phase 19 — migration 0004)
+- [x] P1: Add attachment upload UI to SubmitLetter form (Phase 20)
+- [x] P2: Add `language` field to intake normalizer and SubmitLetter form (Phase 48)
+- [x] P2: Add `deadlines` field to intake normalizer and SubmitLetter form (Phase 48)
+- [x] P2: Add `communications` field to intake normalizer and SubmitLetter form (Phase 48)
+- [x] P2: Normalize `toneAndDelivery` as proper intake object (Phase 48)
+- [ ] P3: Add research_sources as a separate table (deferred — sources embedded in resultJson)
+- [x] P3: Role split completed with dedicated `attorney` role (Phase 57)
+- [x] P3: Build Payment Receipts page at /subscriber/receipts (Phase 48)
+- [x] P3: Add subscriber Dashboard stats widget (Phase 30)
 
 ## Phase 19: Database Indexes Migration
 - [x] Add 7 spec-required indexes to drizzle/schema.ts using Drizzle index() API
@@ -216,18 +215,17 @@
 - [x] 38/38 tests passing, 0 TypeScript errors
 
 ## Phase 22: Freemium Model (First Letter Free, Attorney Review Paid)
-- [ ] Add `generated_unlocked` status to schema enum and status machine
-- [ ] Add DB migration for new status value
-- [ ] Update pipeline: check if first letter → set generated_unlocked (free), else generated_locked (paywall)
-- [ ] Add sendForReview mutation: generated_unlocked → pending_review (free, no payment)
-- [ ] Update LetterDetail: show full AI draft when status = generated_unlocked, CTA = "Send for Attorney Review ($29)"
-- [ ] Update LetterPaywall copy: rename to "Get Attorney Review" gate
-- [ ] Update MyLetters: show "AI Draft Ready - Free" badge for generated_unlocked
-- [ ] Update StatusTimeline: add generated_unlocked step with green checkmark
-- [ ] Update StatusBadge: generated_unlocked = "AI Draft Ready" in green
-- [ ] Update Pricing page to reflect freemium model (first letter free)
-- [ ] Update email: sendLetterReadyEmail copy for free vs paid path
-- [ ] Run tests, update SPEC_COMPLIANCE.md, save checkpoint
+- [x] Add `generated_unlocked` status to schema enum and status machine (Phase 22, later removed in Phase 69)
+- [x] Add DB migration for new status value (Phase 22)
+- [x] Pipeline flow simplified: all letters use generated_locked path (Phase 69)
+- [x] Paywall flow: $200 per-letter or subscription unlock (Phase 67+69)
+- [x] LetterDetail paywall with blurred preview (Phase 69)
+- [x] LetterPaywall simplified to single $200 CTA (Phase 69)
+- [x] MyLetters status badges updated for simplified flow (Phase 69)
+- [x] StatusTimeline/StatusBadge updated for simplified flow (Phase 69 — generated_unlocked removed)
+- [x] Pricing page reflects $200/letter + subscription plans (Phase 67+69)
+- [x] Email templates updated for current flow (Phase 76)
+- [x] Run tests, update SPEC_COMPLIANCE.md, save checkpoint
 
 ## Phase 23: Critical Feature Additions
 - [x] Add subscriber updateForChanges mutation (re-submit after needs_changes status)
@@ -587,8 +585,8 @@
 - [x] Keep $200 pay-per-letter option as secondary option (not the only option)
 - [x] Write tests for the three paywall states
 
-## Phase 48: Master Validation — TTML_REMAINING_FEATURES_PROMPT.md
-> **Canonical reference:** `docs/TTML_REMAINING_FEATURES_PROMPT.md`
+## Phase 48: Master Validation — Feature Gaps
+> **Historical reference:** Feature gaps tracked in `docs/FEATURE_MAP.md` (TTML_REMAINING_FEATURES_PROMPT.md retained as historical reference)
 > All future implementation work MUST be validated against this document before delivery.
 
 ### Gap 1 — Freemium `generated_unlocked` Status (Phase 22 — HIGHEST COMPLEXITY)

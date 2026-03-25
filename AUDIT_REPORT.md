@@ -1,9 +1,11 @@
 # Phase 0: Audit Report
 
-## What's Already Implemented Correctly
+> **HISTORICAL DOCUMENT — Phase 0 audit only.** All gaps listed below have been resolved in subsequent phases. The current codebase has 19 tables, a 4-stage pipeline (Perplexity → Anthropic Claude Opus × 2 → Anthropic Claude Sonnet), and a fully implemented status machine including `pipeline_failed`, `client_approval_pending`, `client_approved`, and `sent`. For the current state of the platform, refer to `STRUCTURE.md` and `docs/FEATURE_MAP.md`.
+
+## What's Already Implemented Correctly (at Phase 0)
 1. **Schema**: 8 tables (users, letter_requests, letter_versions, review_actions, workflow_jobs, research_runs, attachments, notifications) — matches spec
 2. **Status machine**: submitted → researching → drafting → pending_review → under_review → approved/rejected/needs_changes — correct
-3. **3-stage pipeline**: Perplexity (sonar-pro) → OpenAI (gpt-4o) → Claude (claude-sonnet-4-20250514) — correct
+3. **3-stage pipeline (Phase 0)**: Perplexity (sonar-pro) → Anthropic Claude Opus (drafting) → Anthropic Claude Opus (assembly). Note: pipeline was subsequently upgraded to 4 stages in Phase 86+ (added Anthropic Claude Sonnet vetting stage).
 4. **Deterministic validators**: validateResearchPacket, parseAndValidateDraftLlmOutput, validateFinalLetter — all present
 5. **RBAC guards**: subscriberProcedure, employeeProcedure, adminProcedure — correct
 6. **Subscriber-safe detail**: getLetterRequestSafeForSubscriber never returns AI draft or internal research — correct

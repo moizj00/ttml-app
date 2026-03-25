@@ -1,5 +1,7 @@
 # Talk-to-My-Lawyer — Remaining Features Prompt
 
+> **HISTORICAL DOCUMENT — All 4 gaps completed.** This prompt was used to drive Phase 48 implementation. For the current feature inventory, see `docs/FEATURE_MAP.md`.
+>
 > **Status:** All 4 gaps COMPLETED as of Phase 48. Gap 1 was later simplified in Phase 69.  
 > **Stack:** Vite · Wouter · tRPC · Drizzle ORM · Supabase (PostgreSQL) · Stripe · Resend  
 > **All type names, route paths, tRPC procedure names, and DB column names below match the actual codebase exactly.**
@@ -9,16 +11,23 @@
 ## Context You Must Know Before Starting
 
 ### Status Machine (from `shared/types.ts` → `ALLOWED_TRANSITIONS`)
+
+> **Note:** The status machine below reflects the current state as of Phase 86+. See `STRUCTURE.md` for the canonical reference.
+
 ```
-submitted → researching
-researching → drafting | submitted (pipeline failure reset)
-drafting → generated_locked | submitted (pipeline failure reset)
-generated_locked → pending_review (free unlock or Stripe payment)
+submitted → researching | pipeline_failed
+researching → drafting | submitted | pipeline_failed
+drafting → generated_locked | submitted | pipeline_failed
+generated_locked → pending_review (Stripe $200 payment or subscription)
 pending_review → under_review
-under_review → approved | rejected | needs_changes
-needs_changes → submitted | researching | drafting
+under_review → approved | rejected | needs_changes | pending_review (release claim)
+needs_changes → submitted
+approved → client_approval_pending
+client_approval_pending → client_approved
+client_approved → sent
+sent → (terminal)
 rejected → submitted (subscriber retry)
-approved → (terminal)
+pipeline_failed → submitted (admin retry)
 ```
 
 Note: `generated_unlocked` still exists in the DB enum for backward compatibility but is NOT part of the active status machine (removed in Phase 69).
@@ -39,20 +48,25 @@ Guards: `subscriberProcedure` | `employeeProcedure` | `attorneyProcedure` | `adm
 - `Subscription` — `subscriptions` table
 
 ### Route Paths (Wouter, from `client/src/App.tsx`)
+
+> **Updated March 2026** — See `STRUCTURE.md` for the canonical route list.
+
 ```
 / | /pricing | /faq | /terms | /privacy | /login | /signup | /forgot-password
 /verify-email | /reset-password | /onboarding
-/dashboard | /submit | /letters | /letters/:id | /subscriber/billing | /subscriber/receipts
+/analyze | /blog | /blog/:slug
+/dashboard | /submit | /letters | /letters/:id | /my-letters | /subscriber/billing | /subscriber/receipts
 /profile
-/attorney | /attorney/queue | /attorney/:id
+/attorney | /attorney/queue | /attorney/:id | /attorney/review/:id
 /review | /review/queue | /review/:id (backward-compatible aliases)
-/employee | /employee/referrals | /employee/earnings
+/employee | /employee/referrals | /employee/earnings | /employee/dashboard (redirects to /employee)
 /admin | /admin/users | /admin/jobs | /admin/letters | /admin/letters/:id | /admin/affiliate
+/admin/verify | /admin/learning | /admin/blog
 /404
 ```
 
 ### tRPC Namespaces (from `server/routers.ts`)
-`auth` | `letters` | `review` | `admin` | `notifications` | `versions` | `billing` | `affiliate` | `profile`
+`auth` | `letters` | `review` | `admin` | `notifications` | `versions` | `billing` | `affiliate` | `profile` | `blog`
 
 ---
 

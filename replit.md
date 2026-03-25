@@ -56,23 +56,37 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 client/          # React frontend (Vite root)
   src/
     components/  # UI components (shared/, ui/)
-    pages/       # Route pages (subscriber/, attorney/, admin/)
+    pages/       # Route pages (subscriber/, attorney/, admin/, employee/)
     lib/         # Client utilities (trpc.ts, queryClient.ts)
     _core/       # Auth hooks, providers
   public/        # Static assets (logo-full.png, logo-icon-badge.png)
 server/          # Express backend
-  _core/         # Server setup (index.ts, env.ts, vite.ts, trpc.ts, cookies.ts)
+  _core/         # Server setup (index.ts, env.ts, vite.ts, trpc.ts, cookies.ts, admin2fa.ts)
   db.ts          # Drizzle DB connection + all DB helper functions
   supabaseAuth.ts # All auth endpoints (signup, login, verify-email, Google OAuth, session)
   routers.ts     # All tRPC procedures
-  pipeline.ts    # AI letter generation pipeline
+  pipeline.ts    # AI letter generation pipeline (4-stage)
   learning.ts    # Recursive learning: lesson extraction + quality scoring
   email.ts       # Email sending (Resend)
+  emailPreview.ts # Dev-only email template preview endpoint
   stripe.ts      # Stripe integration
   stripeWebhook.ts # Stripe webhook handler
+  stripe-products.ts # Stripe product/price configuration
+  subscriptionSync.ts # Subscription sync helpers
+  rateLimiter.ts  # Upstash Redis rate limiting middleware
+  cronScheduler.ts # node-cron scheduler for draft reminders
+  draftReminders.ts # 48-hour draft reminder logic
+  draftPdfRoute.ts # GET /api/letters/:letterId/draft-pdf route
+  staleReviewReleaser.ts # Releases stale under_review letters
+  storage.ts      # Forge proxy S3-compatible storage helpers
+  sentry.ts       # Sentry initialization
+  n8nCallback.ts  # n8n webhook callback handler (dormant)
+  intake-normalizer.ts # buildNormalizedPromptInput helper
+  pdfGenerator.ts # PDFKit-based PDF generation on approval
+  letterTemplates.ts # Letter HTML templates
 shared/          # Shared types (const.ts, pricing.ts, types.ts, schema.ts)
 drizzle/         # Drizzle ORM schema and migrations
-  schema.ts      # Database schema definitions
+  schema.ts      # Database schema definitions (19 tables + enums)
 scripts/         # Post-merge setup, DB helpers
 ```
 

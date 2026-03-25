@@ -7,7 +7,7 @@
 
 ## Active Pipeline Path
 
-**We use DIRECT 3-stage API calls. n8n is NOT active.**
+**We use DIRECT 4-stage API calls. n8n is NOT active.**
 
 ```
 Letter Submit
@@ -23,6 +23,11 @@ Stage 2: Anthropic claude-opus-4-5
     ▼
 Stage 3: Anthropic claude-opus-4-5
          (final polished letter assembly)
+    │
+    ▼
+Stage 4: Anthropic claude-sonnet (vetting)
+         (jurisdiction accuracy, anti-hallucination,
+          anti-bloat, geopolitical awareness)
     │
     ▼
 Status: generated_locked
@@ -62,7 +67,7 @@ const useN8nPrimary = process.env.N8N_PRIMARY === "true"
 | `N8N_WEBHOOK_URL` set | Set in secrets | ✅ |
 | URL starts with `https://` | Yes | ✅ |
 
-Because `N8N_PRIMARY` is not set, the pipeline **always** falls through to the direct 3-stage path.
+Because `N8N_PRIMARY` is not set, the pipeline **always** falls through to the direct 4-stage path.
 
 ---
 
@@ -73,6 +78,7 @@ Because `N8N_PRIMARY` is not set, the pipeline **always** falls through to the d
 | Research | Perplexity (OpenAI-compatible) | `sonar-pro` | 90s |
 | Draft | Anthropic | `claude-opus-4-5` | 120s |
 | Assembly | Anthropic | `claude-opus-4-5` | 120s |
+| Vetting | Anthropic | `claude-sonnet` | 120s |
 
 **Fallback:** If `PERPLEXITY_API_KEY` is not set, Stage 1 falls back to `claude-opus-4-5` for research.
 
@@ -91,29 +97,36 @@ Because `N8N_PRIMARY` is not set, the pipeline **always** falls through to the d
 
 ```
 submitted → researching → drafting → generated_locked
-                 ↑              ↑          │
-                 │              │    [free unlock or Stripe payment]
-                 │              │          │
-                 │              │          ▼
-                 │              │    pending_review → under_review → approved
-                 │              │                                  → rejected ──→ submitted
-                 │              │                                  → needs_changes
-                 │              │                                        │
-                 │              └────────────────────────────────────────┘
-                 │                        [re-submit / retry]
-                 └────────────────────────────────────────────
+    │            │            │           │
+    │            │            │     [Stripe $200 payment or subscription]
+    │            │            │           │
+    │            │            │           ▼
+    │            │            │     pending_review → under_review → approved
+    │            │            │                   ↻ (release)      → rejected → submitted
+    │            │            │                                     → needs_changes → submitted
+    │            │            │
+    │            │            └→ submitted (pipeline failure reset)
+    │            └→ submitted (pipeline failure reset)
+    └→ pipeline_failed (any stage failure after retries)
+    
+    approved → client_approval_pending → client_approved → sent
+    pipeline_failed → submitted (admin retry)
 ```
 
 Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
-- `submitted → researching`
-- `researching → drafting | submitted` (pipeline failure reset)
-- `drafting → generated_locked | submitted` (pipeline failure reset)
-- `generated_locked → pending_review` ($200 per-letter paywall or subscription unlocks this transition)
+- `submitted → researching | pipeline_failed`
+- `researching → drafting | submitted | pipeline_failed`
+- `drafting → generated_locked | submitted | pipeline_failed`
+- `generated_locked → pending_review` ($200 per-letter paywall or subscription)
 - `pending_review → under_review`
-- `under_review → approved | rejected | needs_changes`
-- `needs_changes → submitted | researching | drafting`
+- `under_review → approved | rejected | needs_changes | pending_review` (release claim)
+- `needs_changes → submitted`
+- `approved → client_approval_pending`
+- `client_approval_pending → client_approved`
+- `client_approved → sent`
+- `sent → (terminal)`
 - `rejected → submitted` (subscriber retry from scratch)
-- `approved → (terminal)`
+- `pipeline_failed → submitted` (admin-triggered retry)
 
 Note: `generated_unlocked` still exists in the DB enum for backward compatibility but is NOT part of the active status machine (removed in Phase 69).
 
@@ -123,7 +136,7 @@ Note: `generated_unlocked` still exists in the DB enum for backward compatibilit
 
 | File | Purpose |
 |------|---------|
-| `server/pipeline.ts` | 3-stage orchestrator + prompt builders |
+| `server/pipeline.ts` | 4-stage orchestrator + prompt builders |
 | `server/n8nCallback.ts` | n8n webhook handler (dormant) |
 | `server/pdfGenerator.ts` | PDFKit-based PDF generation on approval |
 | `server/routers.ts` | tRPC procedures that trigger pipeline |
