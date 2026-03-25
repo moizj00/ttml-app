@@ -2098,6 +2098,17 @@ export async function getBlogPostBySlug(slug: string) {
   return result[0] ?? null;
 }
 
+export async function getBlogPostBySlugAnyStatus(slug: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(blogPosts)
+    .where(eq(blogPosts.slug, slug))
+    .limit(1);
+  return result[0] ?? null;
+}
+
 export async function getAllBlogPosts() {
   const db = await getDb();
   if (!db) return [];
@@ -2151,7 +2162,7 @@ export async function updateBlogPost(id: number, data: Partial<{
 }>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const updates: Record<string, any> = { ...data, updatedAt: new Date() };
+  const updates: Record<string, string | number | Date | null | undefined> = { ...data, updatedAt: new Date() };
   if (data.content) {
     const wordCount = data.content.split(/\s+/).length;
     updates.readingTimeMinutes = Math.max(1, Math.round(wordCount / 200));

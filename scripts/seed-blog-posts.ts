@@ -1,4 +1,4 @@
-import { createBlogPost, getBlogPostBySlug } from "../server/db";
+import { createBlogPost, getBlogPostBySlugAnyStatus } from "../server/db";
 
 const samplePosts = [
   {
@@ -125,7 +125,7 @@ A breach of contract letter reviewed by an attorney is significantly more effect
 
 async function seedBlogPosts() {
   for (const post of samplePosts) {
-    const existing = await getBlogPostBySlug(post.slug);
+    const existing = await getBlogPostBySlugAnyStatus(post.slug);
     if (existing) {
       console.log(`Skipped (already exists): ${post.slug}`);
       continue;

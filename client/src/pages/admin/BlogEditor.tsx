@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import type { BlogPost } from "../../../drizzle/schema";
 import AppLayout from "@/components/shared/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +114,7 @@ export default function BlogEditor() {
     setDialogOpen(true);
   };
 
-  const openEdit = (post: any) => {
+  const openEdit = (post: BlogPost) => {
     setEditingId(post.id);
     setForm({
       slug: post.slug,
