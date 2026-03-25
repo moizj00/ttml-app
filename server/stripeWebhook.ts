@@ -236,7 +236,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                               category: "employee",
                               title: `Commission earned: $${(commissionAmount / 100).toFixed(2)}`,
                               body: `You earned a $${(commissionAmount / 100).toFixed(2)} commission from a per-letter sale (code: ${discountCodeStr}).`,
-                              link: `/employee/dashboard`,
+                              link: `/employee`,
                             });
                             if (employee?.email) {
                               const planCfg = getPlanConfig(planId);
@@ -247,7 +247,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                                 planName: planCfg?.name ?? "Pay Per Letter",
                                 commissionAmount: `$${(commissionAmount / 100).toFixed(2)}`,
                                 discountCode: discountCodeStr,
-                                dashboardUrl: `${appUrl}/employee/dashboard`,
+                                dashboardUrl: `${appUrl}/employee`,
                               });
                             }
                             await notifyAdmins({
@@ -326,7 +326,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       category: "employee",
                       title: `Commission earned: $${(commissionAmount / 100).toFixed(2)}`,
                       body: `You earned a $${(commissionAmount / 100).toFixed(2)} commission from a subscription signup (code: ${discountCodeStr}).`,
-                      link: `/employee/dashboard`,
+                      link: `/employee`,
                     });
                     if (employee?.email) {
                       const planCfg = getPlanConfig(planId);
@@ -337,7 +337,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         planName: planCfg?.name ?? planId,
                         commissionAmount: `$${(commissionAmount / 100).toFixed(2)}`,
                         discountCode: discountCodeStr,
-                        dashboardUrl: `${appUrl}/employee/dashboard`,
+                        dashboardUrl: `${appUrl}/employee`,
                       });
                     }
                     await notifyAdmins({
@@ -492,7 +492,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       category: "employee",
                       title: `Commission earned: $${(commissionAmount / 100).toFixed(2)}`,
                       body: `You earned a $${(commissionAmount / 100).toFixed(2)} commission from a subscription renewal (code: ${subDiscountCode}).`,
-                      link: `/employee/dashboard`,
+                      link: `/employee`,
                     });
                     if (employee?.email) {
                       await sendEmployeeCommissionEmail({
@@ -502,7 +502,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         planName: planCfg?.name ?? planId,
                         commissionAmount: `$${(commissionAmount / 100).toFixed(2)}`,
                         discountCode: subDiscountCode,
-                        dashboardUrl: `${appUrl}/employee/dashboard`,
+                        dashboardUrl: `${appUrl}/employee`,
                       });
                     }
                     await notifyAdmins({

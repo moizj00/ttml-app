@@ -243,7 +243,7 @@ export async function updateUserProfile(
     .where(eq(users.id, userId));
 }
 
-export async function getEmployees() {
+export async function getEmployeesAndAdmins() {
   const db = await getDb();
   if (!db) return [];
   return db

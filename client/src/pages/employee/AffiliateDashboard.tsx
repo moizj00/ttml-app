@@ -55,10 +55,21 @@ import {
   PayoutStatusBadge,
 } from "@/components/shared/CommissionBadges";
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
+
+type TabId = "overview" | "referrals" | "earnings";
+
+function pathToTab(path: string): TabId {
+  if (path === "/employee/referrals") return "referrals";
+  if (path === "/employee/earnings") return "earnings";
+  return "overview";
+}
 
 export default function AffiliateDashboard() {
   const { user } = useAuth();
+  const [location, navigate] = useLocation();
+  const activeTab = pathToTab(location);
   const utils = trpc.useUtils();
 
   // ─── Queries ────────────────────────────────────────────────
@@ -201,7 +212,38 @@ export default function AffiliateDashboard() {
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Tab Navigation */}
+        <div className="flex gap-1 rounded-lg bg-muted p-1" data-testid="tabs-employee">
+          <Button
+            variant={activeTab === "overview" ? "default" : "ghost"}
+            size="sm"
+            className="flex-1"
+            onClick={() => navigate("/employee")}
+            data-testid="tab-overview"
+          >
+            Overview
+          </Button>
+          <Button
+            variant={activeTab === "referrals" ? "default" : "ghost"}
+            size="sm"
+            className="flex-1"
+            onClick={() => navigate("/employee/referrals")}
+            data-testid="tab-referrals"
+          >
+            Referral Tools
+          </Button>
+          <Button
+            variant={activeTab === "earnings" ? "default" : "ghost"}
+            size="sm"
+            className="flex-1"
+            onClick={() => navigate("/employee/earnings")}
+            data-testid="tab-earnings"
+          >
+            Earnings & Payouts
+          </Button>
+        </div>
+
+        {/* Stats Cards — always visible */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-primary/20 bg-primary/5 shadow-sm" data-testid="card-stat-total-earned" style={staggerStyle(0, statCardVisible[0])}>
 
@@ -292,8 +334,8 @@ export default function AffiliateDashboard() {
           </Card>
         </div>
 
-        {/* Discount Code + Referral Link */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Discount Code + Referral Link — overview & referrals tabs */}
+        {(activeTab === "overview" || activeTab === "referrals") && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -392,10 +434,10 @@ export default function AffiliateDashboard() {
             </CardContent>
           </Card>
 
-        </div>
+        </div>}
 
-        {/* Payout Request Section */}
-        <Card>
+        {/* Payout Request Section — overview & earnings tabs */}
+        {(activeTab === "overview" || activeTab === "earnings") && <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -561,10 +603,10 @@ export default function AffiliateDashboard() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
 
-        {/* Commission History */}
-        <Card>
+        {/* Commission History — overview & earnings tabs */}
+        {(activeTab === "overview" || activeTab === "earnings") && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-indigo-600" />
@@ -620,7 +662,7 @@ export default function AffiliateDashboard() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
       </div>
     </AppLayout>
   );

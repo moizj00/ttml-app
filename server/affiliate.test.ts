@@ -97,7 +97,7 @@ vi.mock("./db", async () => {
     updateDiscountCode: vi.fn().mockResolvedValue(undefined),
     incrementDiscountCodeUsage: vi.fn().mockResolvedValue(undefined),
     createCommission: vi.fn().mockResolvedValue({ insertId: 2 }),
-    getEmployees: vi.fn().mockResolvedValue([
+    getEmployeesAndAdmins: vi.fn().mockResolvedValue([
       { id: 10, name: "John Doe", email: "john@example.com", role: "employee" },
     ]),
   };

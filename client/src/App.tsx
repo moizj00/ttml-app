@@ -258,6 +258,9 @@ function Router() {
       </Route>
 
       {/* ═══ Employee/Affiliate ═══ */}
+      <Route path="/employee/dashboard">
+        {() => { window.location.replace("/employee"); return null; }}
+      </Route>
       <Route path="/employee">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
           <SuspenseFade fallback={<EmployeeDashboardSkeleton />}>

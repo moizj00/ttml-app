@@ -22,7 +22,7 @@ import {
   getAllUsersWithSubscription,
   markAsPaidDb,
   getAttachmentsByLetterId,
-  getEmployees,
+  getEmployeesAndAdmins,
   getFailedJobs,
   getLetterRequestById,
   getLetterRequestSafeForSubscriber,
@@ -1551,7 +1551,7 @@ export const appRouter = router({
       .input(z.object({ letterId: z.number() }))
       .query(async ({ input }) => getWorkflowJobsByLetterId(input.letterId)),
 
-    employees: adminProcedure.query(async () => getEmployees()),
+    employees: adminProcedure.query(async () => getEmployeesAndAdmins()),
 
     getLetterDetail: adminProcedure
       .input(z.object({ letterId: z.number() }))
@@ -2430,7 +2430,7 @@ export const appRouter = router({
     adminEmployeePerformance: adminProcedure.query(async () => {
       // Batched: 3 queries total instead of 2N+1 (N+1 fix)
       const [employees, allCodes, allEarnings] = await Promise.all([
-        getEmployees(),
+        getEmployeesAndAdmins(),
         getAllDiscountCodes(),
         getAllEmployeeEarnings(),
       ]);
