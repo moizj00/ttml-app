@@ -186,14 +186,25 @@ export default function AdminAllLetters() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {letter.letterType} · {letter.jurisdictionState ?? "N/A"}
                       </p>
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <StatusBadge status={letter.status} size="sm" />
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString()}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          User #{letter.userId}
-                        </span>
+                        {letter.submitterRoleId ? (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                            {letter.submitterRoleId}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            User #{letter.userId}
+                          </span>
+                        )}
+                        {letter.reviewerRoleId && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                            {letter.reviewerRoleId}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

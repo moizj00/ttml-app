@@ -325,6 +325,25 @@ export default function AdminUsers() {
                         <p className="text-xs text-muted-foreground">
                           {user.email ?? "No email"}
                         </p>
+                        {(user.subscriberId || user.employeeId || user.attorneyId) && (
+                          <div className="flex gap-1.5 mt-1 flex-wrap">
+                            {user.subscriberId && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200" data-testid={`text-sub-id-${user.id}`}>
+                                {user.subscriberId}
+                              </span>
+                            )}
+                            {user.employeeId && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200" data-testid={`text-emp-id-${user.id}`}>
+                                {user.employeeId}
+                              </span>
+                            )}
+                            {user.attorneyId && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200" data-testid={`text-att-id-${user.id}`}>
+                                {user.attorneyId}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Subscription badge */}

@@ -12,7 +12,8 @@ import * as crypto from "crypto";
 import * as db from "./db";
 import type { User } from "../drizzle/schema";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { sendVerificationEmail, sendWelcomeEmail, sendEmployeeWelcomeEmail, sendAttorneyWelcomeEmail } from "./email";
+import { ADMIN_2FA_COOKIE, ADMIN_2FA_TTL_MS, signAdmin2FAToken, verifyAdmin2FAToken } from "./_core/admin2fa";
+import { sendVerificationEmail, sendWelcomeEmail, sendEmployeeWelcomeEmail, sendAttorneyWelcomeEmail, sendAdminVerificationCodeEmail } from "./email";
 
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
@@ -754,8 +755,23 @@ export function registerSupabaseAuthRoutes(app: Express) {
         maxAge: data.session.expires_in * 1000,
       });
 
+      if (userRole === "admin" && appUser) {
+        try {
+          const code = await db.createAdminVerificationCode(appUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: email,
+            name: appUser.name || email.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code sent to ${email}`);
+        } catch (err) {
+          console.error("[SupabaseAuth] Failed to send admin 2FA code:", err);
+        }
+      }
+
       res.json({
         success: true,
+        requires2FA: userRole === "admin",
         user: {
           id: data.user.id,
           email: data.user.email,
@@ -780,24 +796,95 @@ export function registerSupabaseAuthRoutes(app: Express) {
       const token = extractAccessToken(req);
       if (token) {
         const admin = getAdminClient();
-        // Get user to sign them out
         const { data: { user } } = await admin.auth.getUser(token);
         if (user) {
           await admin.auth.admin.signOut(user.id);
         }
       }
 
-      // Clear session cookie
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie(SUPABASE_SESSION_COOKIE, { ...cookieOptions, maxAge: -1 });
+      res.clearCookie(ADMIN_2FA_COOKIE, { ...cookieOptions, maxAge: -1 });
 
       res.json({ success: true });
     } catch (err) {
       console.error("[SupabaseAuth] Logout error:", err);
-      // Still clear cookies even if Supabase call fails
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie(SUPABASE_SESSION_COOKIE, { ...cookieOptions, maxAge: -1 });
+      res.clearCookie(ADMIN_2FA_COOKIE, { ...cookieOptions, maxAge: -1 });
       res.json({ success: true });
+    }
+  });
+
+  // POST /api/auth/admin-2fa/verify — Verify admin 8-digit code
+  app.post("/api/auth/admin-2fa/verify", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const { code } = req.body;
+      if (!code || typeof code !== "string" || code.length !== 8) {
+        res.status(400).json({ error: "A valid 8-digit code is required" });
+        return;
+      }
+      const valid = await db.verifyAdminCode(user.id, code);
+      if (!valid) {
+        res.status(401).json({ error: "Invalid or expired code. Please try again or request a new code." });
+        return;
+      }
+      const cookieOptions = getSessionCookieOptions(req);
+      const signedToken = signAdmin2FAToken(user.id);
+      res.cookie(ADMIN_2FA_COOKIE, signedToken, {
+        ...cookieOptions,
+        maxAge: ADMIN_2FA_TTL_MS,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[SupabaseAuth] Admin 2FA verify error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // POST /api/auth/admin-2fa/resend — Resend admin verification code
+  app.post("/api/auth/admin-2fa/resend", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const code = await db.createAdminVerificationCode(user.id);
+      await sendAdminVerificationCodeEmail({
+        to: user.email!,
+        name: user.name || user.email!.split("@")[0],
+        code,
+      });
+      res.json({ success: true, message: "A new verification code has been sent to your email." });
+    } catch (err) {
+      console.error("[SupabaseAuth] Admin 2FA resend error:", err);
+      res.status(500).json({ error: "Failed to resend code. Please try again." });
+    }
+  });
+
+  // GET /api/auth/admin-2fa/status — Check if admin has completed 2FA for this session
+  app.get("/api/auth/admin-2fa/status", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const cookies = parseCookies(req.headers.cookie);
+      const tfaCookie = cookies.get(ADMIN_2FA_COOKIE);
+      if (!tfaCookie) {
+        res.json({ verified: false });
+        return;
+      }
+      res.json({ verified: verifyAdmin2FAToken(tfaCookie, user.id) });
+    } catch (err) {
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -1349,14 +1436,30 @@ export function registerSupabaseAuthRoutes(app: Express) {
         }
       );
 
+      const finalRole = dbUser?.role || resolvedRole;
+      if (finalRole === "admin" && dbUser) {
+        try {
+          const code = await db.createAdminVerificationCode(dbUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: data.user.email!,
+            name: dbUser.name || data.user.email!.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code sent to ${data.user.email} (Google OAuth)`);
+        } catch (err) {
+          console.error("[SupabaseAuth] Failed to send admin 2FA code (Google OAuth):", err);
+        }
+      }
+
       res.json({
         success: true,
+        requires2FA: finalRole === "admin",
         user: {
           id: data.user.id,
           email: data.user.email,
-          role: dbUser?.role || resolvedRole,
+          role: finalRole,
         },
-        redirectPath: getPostAuthRedirectPath(dbUser?.role || resolvedRole, safeNext),
+        redirectPath: finalRole === "admin" ? "/admin/verify" : getPostAuthRedirectPath(finalRole, safeNext),
       });
     } catch (err) {
       console.error("[SupabaseAuth] Google finalize error:", err);
@@ -1490,8 +1593,24 @@ export function registerSupabaseAuthRoutes(app: Express) {
         maxAge: data.session.expires_in * 1000,
       });
 
-      const redirectPath = getPostAuthRedirectPath(dbUser?.role || resolvedRole, next);
-      res.redirect(redirectPath);
+      const callbackRole = dbUser?.role || resolvedRole;
+      if (callbackRole === "admin" && dbUser) {
+        try {
+          const code = await db.createAdminVerificationCode(dbUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: user.email!,
+            name: dbUser.name || user.email!.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code sent to ${user.email} (Google callback)`);
+        } catch (err2) {
+          console.error("[SupabaseAuth] Failed to send admin 2FA code (Google callback):", err2);
+        }
+        res.redirect("/admin/verify");
+      } else {
+        const redirectPath = getPostAuthRedirectPath(callbackRole, next);
+        res.redirect(redirectPath);
+      }
     } catch (err) {
       console.error("[SupabaseAuth] Google callback error:", err);
       res.redirect("/login?error=server_error");

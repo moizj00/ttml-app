@@ -78,7 +78,7 @@ scripts/         # Post-merge setup, DB helpers
 ### Technical Implementations
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + postgres-js driver.
-- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails, `supabase.auth.admin.createUser()` to suppress default Supabase emails.
+- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails, `supabase.auth.admin.createUser()` to suppress default Supabase emails. Admin 2FA via 8-digit email code on every login (email/password and Google OAuth), verified via `admin_2fa` cookie (12h TTL). Admin tRPC procedures (`adminProcedure`) enforce 2FA cookie presence.
 - **AI Pipeline**: A 4-stage pipeline for legal letter generation:
     1.  **Perplexity Research**: Web-grounded legal research with citation revalidation.
     2.  **Claude Opus Drafting**: Consolidated validation for JSON parse, grounding, and consistency.
@@ -100,6 +100,8 @@ scripts/         # Post-merge setup, DB helpers
     5.  Outcome (Desired outcome, response deadline, language preference, prior communication, delivery method: Email Only)
     6.  Exhibits (Merged Evidence + Communications, max 10, supports PDF, DOCX, JPG, PNG, TXT up to 10MB each).
 - **Pricing Plans**: Three tiers – Single Letter ($200), Monthly ($200/month for 4 letters), Yearly ($2000/year for 48 letters). All plans include attorney review.
+- **Role-Specific IDs**: Every subscriber (SUB-XXXX), employee (EMP-XXXX), and attorney (ATT-XXXX) receives a sequential human-readable ID on signup/promotion. IDs are never reused. When a role changes, the new ID is added without clearing old ones. Discount codes use TTML-NNN sequential format instead of name-based generation.
+- **Letter Role Tracking**: Each letter tracks submitter (SUB-XXXX) and reviewer (ATT-XXXX) role IDs on creation/claim, visible in admin views. Enables tracking attorney review counts.
 - **Affiliate Program**: Single-use discount codes that rotate upon copy, with a robust commission settlement algorithm.
 - **Anti-Hallucination Pipeline**: Employs deterministic validation at each AI stage, including token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks. It flags unverified research, requiring attorney acknowledgment.
 

@@ -2,6 +2,7 @@ import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
 import ReviewModal from "@/components/shared/ReviewModal";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ function hoursSince(dateStr: string | Date): number {
 }
 
 export default function AttorneyDashboard() {
+  const { user } = useAuth();
   const { data: pendingLetters } = trpc.review.queue.useQuery({ status: "pending_review" }, {
     refetchInterval: 15000,
   });
@@ -56,7 +58,14 @@ export default function AttorneyDashboard() {
       <div className="space-y-6">
         {/* Header */}
         <div className="rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-600 p-5 text-white sm:p-6">
-          <h1 className="text-xl font-bold mb-1">Attorney Review Center</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl font-bold">Attorney Review Center</h1>
+            {user?.attorneyId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-white" data-testid="text-attorney-id">
+                {user.attorneyId}
+              </span>
+            )}
+          </div>
           <p className="text-purple-100 text-sm mb-4">
             Review drafted letters, edit as needed, and approve or request changes.
           </p>

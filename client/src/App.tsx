@@ -86,6 +86,7 @@ const EmployeeAffiliateDashboard = lazyRetry(
   () => import("./pages/employee/AffiliateDashboard")
 );
 
+const AdminVerify2FA = lazyRetry(() => import("./pages/admin/Verify2FA"));
 const AdminDashboard = lazyRetry(() => import("./pages/admin/Dashboard"));
 const AdminUsers = lazyRetry(() => import("./pages/admin/Users"));
 const AdminJobs = lazyRetry(() => import("./pages/admin/Jobs"));
@@ -281,6 +282,13 @@ function Router() {
             <EmployeeAffiliateDashboard />
           </SuspenseFade>
         </ProtectedRoute>
+      </Route>
+
+      {/* ═══ Admin — 2FA verification ═══ */}
+      <Route path="/admin/verify">
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
+          <AdminVerify2FA />
+        </SuspenseFade>
       </Route>
 
       {/* ═══ Admin — role-gated ═══ */}

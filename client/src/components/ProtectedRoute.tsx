@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
@@ -7,27 +7,18 @@ type Role = "subscriber" | "employee" | "admin" | "attorney";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  /** If provided, only users with one of these roles can access this route */
   allowedRoles?: Role[];
 }
 
-/**
- * Returns the default home path for a given role.
- */
 export function getRoleDashboard(role: string): string {
   if (role === "admin") return "/admin";
   if (role === "attorney") return "/attorney";
   if (role === "employee") return "/employee";
-  return "/dashboard"; // subscriber default
+  return "/dashboard";
 }
 
-/**
- * Returns true if the given role is permitted on the given path.
- * Used to validate ?next= redirects after login so a user cannot
- * be bounced into a portal they don't have access to.
- */
 export function isRoleAllowedOnPath(role: string, path: string): boolean {
-  if (role === "admin") return true; // admin can access everything
+  if (role === "admin") return true;
   if (role === "subscriber") {
     return (
       path.startsWith("/dashboard") ||
@@ -45,46 +36,58 @@ export function isRoleAllowedOnPath(role: string, path: string): boolean {
   return false;
 }
 
-/**
- * ProtectedRoute — wraps pages that require authentication.
- *
- * Behaviour:
- * - Unauthenticated → redirect to /login?next=<current-path>
- * - Authenticated but email unverified → redirect to /verify-email
- * - Authenticated but wrong role → redirect to the user's correct dashboard
- * - Authenticated + correct role → render children
- */
 export default function ProtectedRoute({
   children,
   allowedRoles,
 }: ProtectedRouteProps) {
   const { user, loading, isAuthenticated } = useAuth();
   const [location, navigate] = useLocation();
+  const [admin2FAChecked, setAdmin2FAChecked] = useState(false);
+  const [admin2FAVerified, setAdmin2FAVerified] = useState(false);
+
+  const isAdminRoute = allowedRoles?.includes("admin") && allowedRoles.length === 1;
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !user || user.role !== "admin" || !isAdminRoute) {
+      setAdmin2FAChecked(true);
+      return;
+    }
+    fetch("/api/auth/admin-2fa/status")
+      .then(r => r.json())
+      .then(data => {
+        setAdmin2FAVerified(data.verified === true);
+        setAdmin2FAChecked(true);
+      })
+      .catch(() => {
+        setAdmin2FAChecked(true);
+      });
+  }, [loading, user, isAdminRoute]);
+
+  useEffect(() => {
+    if (loading || !admin2FAChecked) return;
 
     if (!isAuthenticated || !user) {
-      // Preserve the intended destination so we can return after login
       const next = encodeURIComponent(location);
       navigate(`/login?next=${next}`);
       return;
     }
 
-    // Gate: email must be verified before accessing the app
-    // Admins are always pre-verified; skip gate for them
     if (user.role !== "admin" && !(user as any).emailVerified) {
       navigate("/verify-email");
       return;
     }
 
+    if (user.role === "admin" && isAdminRoute && !admin2FAVerified) {
+      navigate("/admin/verify");
+      return;
+    }
+
     if (allowedRoles && !allowedRoles.includes(user.role as Role)) {
-      // Redirect to the user's correct dashboard
       navigate(getRoleDashboard(user.role));
     }
-  }, [loading, isAuthenticated, user, allowedRoles, navigate, location]);
+  }, [loading, isAuthenticated, user, allowedRoles, navigate, location, admin2FAChecked, admin2FAVerified, isAdminRoute]);
 
-  if (loading) {
+  if (loading || !admin2FAChecked) {
     return <DashboardLayoutSkeleton />;
   }
 
@@ -92,8 +95,11 @@ export default function ProtectedRoute({
     return null;
   }
 
-  // Block unverified users (non-admin)
   if (user.role !== "admin" && !(user as any).emailVerified) {
+    return null;
+  }
+
+  if (user.role === "admin" && isAdminRoute && !admin2FAVerified) {
     return null;
   }
 

@@ -4,6 +4,7 @@ import postgres from "postgres";
 import { captureServerException } from "./sentry";
 import type { InsertUser } from "../drizzle/schema";
 import {
+  adminVerificationCodes,
   attachments,
   commissionLedger,
   discountCodes,
@@ -181,6 +182,9 @@ export async function getAllUsersWithSubscription(
       lastSignedIn: users.lastSignedIn,
       emailVerified: users.emailVerified,
       freeReviewUsedAt: users.freeReviewUsedAt,
+      subscriberId: users.subscriberId,
+      employeeId: users.employeeId,
+      attorneyId: users.attorneyId,
       subscriptionStatus: subscriptions.status,
       subscriptionPlan: subscriptions.plan,
     })
@@ -270,6 +274,17 @@ export async function createLetterRequest(data: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  let submitterRoleId: string | null = null;
+  try {
+    const submitter = await db.select({ subscriberId: users.subscriberId, role: users.role }).from(users).where(eq(users.id, data.userId)).limit(1);
+    if (submitter.length > 0) {
+      if (submitter[0].subscriberId) {
+        submitterRoleId = submitter[0].subscriberId;
+      } else if (submitter[0].role === "subscriber") {
+        submitterRoleId = await assignRoleId(data.userId, "subscriber");
+      }
+    }
+  } catch { /* non-blocking */ }
   const result = await db
     .insert(letterRequests)
     .values({
@@ -284,6 +299,7 @@ export async function createLetterRequest(data: {
       status: "submitted",
       priority: data.priority ?? "normal",
       lastStatusChangedAt: new Date(),
+      submitterRoleId,
     })
     .returning({ insertId: letterRequests.id });
   return result[0];
@@ -466,10 +482,20 @@ export async function claimLetterForReview(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Atomic claim: only succeeds if the letter is unassigned or already claimed
-  // by the same reviewer, preventing race conditions between concurrent claims
+  let reviewerRoleId: string | null = null;
+  try {
+    const reviewer = await db.select({ attorneyId: users.attorneyId, role: users.role }).from(users).where(eq(users.id, reviewerId)).limit(1);
+    if (reviewer.length > 0) {
+      if (reviewer[0].attorneyId) {
+        reviewerRoleId = reviewer[0].attorneyId;
+      } else if (reviewer[0].role === "attorney") {
+        reviewerRoleId = await assignRoleId(reviewerId, "attorney");
+      }
+    }
+  } catch { /* non-blocking */ }
   const result = await db.update(letterRequests).set({
     assignedReviewerId: reviewerId,
+    reviewerRoleId,
     status: "under_review",
     lastStatusChangedAt: new Date(),
     updatedAt: new Date(),
@@ -1162,64 +1188,176 @@ export async function getSystemStats() {
 }
 
 // ═══════════════════════════════════════════════════════
+// ROLE-SPECIFIC ID HELPERS
+// ═══════════════════════════════════════════════════════
+
+type RoleIdPrefix = "SUB" | "EMP" | "ATT";
+
+const ROLE_ID_COL_MAP: Record<RoleIdPrefix, "subscriberId" | "employeeId" | "attorneyId"> = {
+  SUB: "subscriberId",
+  EMP: "employeeId",
+  ATT: "attorneyId",
+};
+
+const ROLE_ID_DB_COL_MAP: Record<RoleIdPrefix, typeof users.subscriberId | typeof users.employeeId | typeof users.attorneyId> = {
+  SUB: users.subscriberId,
+  EMP: users.employeeId,
+  ATT: users.attorneyId,
+};
+
+async function getMaxRoleIdNum(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, prefix: RoleIdPrefix): Promise<number> {
+  const col = ROLE_ID_DB_COL_MAP[prefix];
+  const result = await db
+    .select({ val: sql<number>`MAX(CAST(SPLIT_PART(${col}, '-', 2) AS INTEGER))` })
+    .from(users)
+    .where(sql`${col} LIKE ${prefix + "-%"}`);
+  if (result.length > 0 && result[0].val != null) {
+    return result[0].val;
+  }
+  return 0;
+}
+
+function buildRoleIdUpdate(prefix: RoleIdPrefix, newId: string, now: Date) {
+  switch (prefix) {
+    case "SUB": return { subscriberId: newId, updatedAt: now };
+    case "EMP": return { employeeId: newId, updatedAt: now };
+    case "ATT": return { attorneyId: newId, updatedAt: now };
+  }
+}
+
+export async function assignRoleId(
+  userId: number,
+  role: "subscriber" | "employee" | "attorney"
+): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const prefixMap: Record<string, RoleIdPrefix> = {
+    subscriber: "SUB",
+    employee: "EMP",
+    attorney: "ATT",
+  };
+  const prefix = prefixMap[role];
+  if (!prefix) return null;
+  const dbCol = ROLE_ID_DB_COL_MAP[prefix];
+
+  const existing = await db.select({ val: dbCol }).from(users).where(eq(users.id, userId)).limit(1);
+  if (existing.length > 0 && existing[0].val) {
+    return existing[0].val;
+  }
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const maxNum = await getMaxRoleIdNum(db, prefix);
+    const newId = `${prefix}-${String(maxNum + 1).padStart(4, "0")}`;
+    try {
+      await db.update(users)
+        .set(buildRoleIdUpdate(prefix, newId, new Date()))
+        .where(and(eq(users.id, userId), sql`${dbCol} IS NULL`));
+      const check = await db.select({ val: dbCol }).from(users).where(eq(users.id, userId)).limit(1);
+      if (check.length > 0 && check[0].val) return check[0].val;
+      return newId;
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr?.code === "23505" && attempt < MAX_RETRIES - 1) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
 // DISCOUNT CODE HELPERS
 // ═══════════════════════════════════════════════════════
 
-function generateDiscountCode(employeeName: string): string {
-  const prefix = (employeeName || "EMP")
-    .toUpperCase()
-    .replace(/[^A-Z]/g, "")
-    .slice(0, 4);
-  const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `${prefix}-${suffix}`;
+async function generateDiscountCode(): Promise<string> {
+  const db = await getDb();
+  if (!db) {
+    return `TTML-${String(Math.floor(Math.random() * 900) + 1).padStart(3, "0")}`;
+  }
+  const result = await db
+    .select({ val: sql<number>`MAX(CAST(SPLIT_PART(${discountCodes.code}, '-', 2) AS INTEGER))` })
+    .from(discountCodes)
+    .where(sql`${discountCodes.code} LIKE 'TTML-%'`);
+
+  let nextNum = 1;
+  if (result.length > 0 && result[0].val != null) {
+    nextNum = result[0].val + 1;
+  }
+  return `TTML-${String(nextNum).padStart(3, "0")}`;
 }
 
 export async function createDiscountCodeForEmployee(
   employeeId: number,
-  employeeName: string
+  _employeeName?: string
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Check if employee already has a code
   const existing = await db
     .select()
     .from(discountCodes)
     .where(eq(discountCodes.employeeId, employeeId))
     .limit(1);
   if (existing.length > 0) return existing[0];
-  const code = generateDiscountCode(employeeName);
-  const result = await db
-    .insert(discountCodes)
-    .values({
-      employeeId,
-      code,
-      discountPercent: 20,
-      isActive: true,
-      usageCount: 0,
-      maxUses: null,
-    })
-    .returning();
-  return result[0];
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const code = await generateDiscountCode();
+    try {
+      const result = await db
+        .insert(discountCodes)
+        .values({
+          employeeId,
+          code,
+          discountPercent: 20,
+          isActive: true,
+          usageCount: 0,
+          maxUses: null,
+        })
+        .returning();
+      return result[0];
+    } catch (err: any) {
+      if (err?.code === "23505" && attempt < MAX_RETRIES - 1) {
+        console.warn(`[DiscountCode] Unique conflict on ${code}, retrying (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to generate unique discount code after retries");
 }
 
 export async function rotateDiscountCode(
   employeeId: number,
-  employeeName: string
+  _employeeName?: string
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const newCode = generateDiscountCode(employeeName);
-  const result = await db
-    .update(discountCodes)
-    .set({
-      code: newCode,
-      usageCount: 0,
-      maxUses: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(discountCodes.employeeId, employeeId))
-    .returning();
-  return result[0];
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const newCode = await generateDiscountCode();
+    try {
+      const result = await db
+        .update(discountCodes)
+        .set({
+          code: newCode,
+          usageCount: 0,
+          maxUses: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(discountCodes.employeeId, employeeId))
+        .returning();
+      return result[0];
+    } catch (err: any) {
+      if (err?.code === "23505" && attempt < MAX_RETRIES - 1) {
+        console.warn(`[DiscountCode] Unique conflict on rotate ${newCode}, retrying (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Failed to rotate discount code after retries");
 }
 
 export async function getDiscountCodeByEmployeeId(employeeId: number) {
@@ -1873,4 +2011,42 @@ export async function getQualityScoreTrend(days: number = 30) {
     GROUP BY DATE_TRUNC('day', lqs.created_at)
     ORDER BY "date" ASC
   `);
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN 2FA VERIFICATION CODES
+// ═══════════════════════════════════════════════════════
+
+export async function createAdminVerificationCode(userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(adminVerificationCodes)
+    .set({ used: true })
+    .where(and(eq(adminVerificationCodes.userId, userId), eq(adminVerificationCodes.used, false)));
+  const code = String(Math.floor(10000000 + Math.random() * 90000000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.insert(adminVerificationCodes).values({ userId, code, expiresAt });
+  return code;
+}
+
+export async function verifyAdminCode(userId: number, code: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db
+    .select({ id: adminVerificationCodes.id })
+    .from(adminVerificationCodes)
+    .where(
+      and(
+        eq(adminVerificationCodes.userId, userId),
+        eq(adminVerificationCodes.code, code),
+        eq(adminVerificationCodes.used, false),
+        sql`${adminVerificationCodes.expiresAt} > NOW()`
+      )
+    )
+    .limit(1);
+  if (result.length === 0) return false;
+  await db.update(adminVerificationCodes)
+    .set({ used: true })
+    .where(eq(adminVerificationCodes.id, result[0].id));
+  return true;
 }

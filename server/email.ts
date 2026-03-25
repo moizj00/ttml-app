@@ -1375,3 +1375,47 @@ export async function sendPaymentFailedEmail(opts: {
     }),
   });
 }
+
+export async function sendAdminVerificationCodeEmail(opts: {
+  to: string;
+  name: string;
+  code: string;
+}) {
+  const codeDisplay = opts.code.split("").join(" ");
+  const html = buildEmailHtml({
+    preheader: `Your admin verification code: ${opts.code}`,
+    title: "Admin Verification Code",
+    body: `
+      <p style="margin:0 0 16px;font-family:Inter,Arial,sans-serif;font-size:15px;color:#374151;">
+        Hello ${opts.name},
+      </p>
+      <p style="margin:0 0 16px;font-family:Inter,Arial,sans-serif;font-size:15px;color:#374151;">
+        A login attempt was made to your admin account. Enter the code below to verify your identity:
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <div style="display:inline-block;padding:16px 32px;background:#F1F5F9;border-radius:12px;border:2px solid #E2E8F0;">
+          <span style="font-family:'Courier New',monospace;font-size:32px;font-weight:700;letter-spacing:6px;color:${BRAND_DARK};">
+            ${codeDisplay}
+          </span>
+        </div>
+      </div>
+      <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#6B7280;">
+        This code expires in <strong>10 minutes</strong>.
+      </p>
+      <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#6B7280;">
+        If you did not attempt to sign in, please secure your account immediately.
+      </p>
+    `,
+    footerNote: "This is an automated security notification. Do not share this code with anyone.",
+    accentColor: "#DC2626",
+  });
+  await sendWithRetry({
+    to: opts.to,
+    subject: `[${APP_NAME}] Admin Verification Code: ${opts.code}`,
+    html,
+    text: buildPlainText({
+      title: "Admin Verification Code",
+      body: `Hello ${opts.name}, your admin verification code is: ${opts.code}. This code expires in 10 minutes. If you did not attempt to sign in, please secure your account immediately.`,
+    }),
+  });
+}

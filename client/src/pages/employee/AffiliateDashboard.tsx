@@ -203,9 +203,16 @@ export default function AffiliateDashboard() {
       <div className="space-y-6">
         {/* Welcome Banner */}
         <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-5 text-white sm:p-6">
-          <h1 className="text-xl font-bold sm:text-2xl">
-            Welcome, {user?.name ?? "Affiliate"}
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold sm:text-2xl">
+              Welcome, {user?.name ?? "Affiliate"}
+            </h1>
+            {user?.employeeId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-white" data-testid="text-employee-id">
+                {user.employeeId}
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-blue-100">
             Earn 5% commission on every sale made with your discount code. Share
             your code and grow your earnings.

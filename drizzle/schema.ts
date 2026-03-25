@@ -144,6 +144,9 @@ export const users = pgTable("users", {
   lastSignedIn: timestamp("last_signed_in", { withTimezone: true }).defaultNow().notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   freeReviewUsedAt: timestamp("free_review_used_at", { withTimezone: true }),
+  subscriberId: varchar("subscriber_id", { length: 16 }).unique(),
+  employeeId: varchar("employee_id", { length: 16 }).unique(),
+  attorneyId: varchar("attorney_id", { length: 16 }).unique(),
 }, (t) => [
   index("idx_users_email").on(t.email),
 ]);
@@ -166,6 +169,8 @@ export const letterRequests = pgTable("letter_requests", {
   intakeJson: jsonb("intake_json"),
   status: letterStatusEnum("status").default("submitted").notNull(),
   assignedReviewerId: integer("assigned_reviewer_id").references(() => users.id, { onDelete: "set null" }),
+  submitterRoleId: varchar("submitter_role_id", { length: 16 }),
+  reviewerRoleId: varchar("reviewer_role_id", { length: 16 }),
   currentAiDraftVersionId: integer("current_ai_draft_version_id"),
   currentFinalVersionId: integer("current_final_version_id"),
   pdfUrl: text("pdf_url"),
@@ -515,3 +520,20 @@ export const processedStripeEvents = pgTable("processed_stripe_events", {
   eventType: varchar("event_type", { length: 100 }).notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ═══════════════════════════════════════════════════════
+// TABLE: admin_verification_codes (admin 2FA via email)
+// ═══════════════════════════════════════════════════════
+export const adminVerificationCodes = pgTable("admin_verification_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  code: varchar("code", { length: 8 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  userIdx: index("idx_admin_verification_codes_user_id").on(t.userId),
+}));
+
+export type AdminVerificationCode = typeof adminVerificationCodes.$inferSelect;
+export type InsertAdminVerificationCode = typeof adminVerificationCodes.$inferInsert;

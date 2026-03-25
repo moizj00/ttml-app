@@ -333,12 +333,22 @@ export default function AdminLetterDetail() {
                 {l.jurisdictionState || "—"}, {l.jurisdictionCountry || "US"}
               </span>
               <span className="text-muted-foreground">Subscriber</span>
-              <span className="font-medium">User #{l.userId}</span>
+              <span className="font-medium">
+                {l.submitterRoleId ? (
+                  <span className="font-mono text-green-700">{l.submitterRoleId}</span>
+                ) : (
+                  `User #${l.userId}`
+                )}
+              </span>
               <span className="text-muted-foreground">Reviewer</span>
               <span className="font-medium">
-                {l.assignedReviewerId
-                  ? `Reviewer #${l.assignedReviewerId}`
-                  : "Unassigned"}
+                {l.reviewerRoleId ? (
+                  <span className="font-mono text-purple-700">{l.reviewerRoleId}</span>
+                ) : l.assignedReviewerId ? (
+                  `Reviewer #${l.assignedReviewerId}`
+                ) : (
+                  "Unassigned"
+                )}
               </span>
               <span className="text-muted-foreground">Created</span>
               <span className="font-medium">

@@ -335,9 +335,16 @@ export default function SubscriberDashboard() {
       <div className="space-y-6">
         {/* Welcome Banner */}
         <div className="rounded-2xl bg-linear-to-r from-primary to-primary/80 p-5 text-primary-foreground sm:p-6">
-          <h1 className="text-xl font-bold mb-1">
-            Welcome to Talk to My Lawyer
-          </h1>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl font-bold">
+              Welcome to Talk to My Lawyer
+            </h1>
+            {user?.subscriberId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-primary-foreground" data-testid="text-subscriber-id">
+                {user.subscriberId}
+              </span>
+            )}
+          </div>
           <p className="text-primary-foreground/80 text-sm mb-4">
             Submit a legal matter and get a professionally drafted,
             attorney-approved letter.

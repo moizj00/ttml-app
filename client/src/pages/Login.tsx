@@ -105,13 +105,20 @@ export default function Login() {
 
         localStorage.setItem("sb_access_token", accessToken);
         localStorage.setItem("sb_refresh_token", refreshToken || "");
-        // Clean the hash from the URL so tokens don't persist in browser history
         window.history.replaceState(
           {},
           document.title,
           `${window.location.pathname}${window.location.search}`
         );
         await utils.auth.me.invalidate();
+
+        if (data.requires2FA) {
+          toast.info("Verification required", {
+            description: "A verification code has been sent to your email.",
+          });
+          navigate("/admin/verify");
+          return;
+        }
 
         toast.success("Signed in successfully", {
           description: "Welcome back. Redirecting to your dashboard.",
@@ -210,18 +217,25 @@ export default function Login() {
         );
       }
 
-      // Invalidate the auth.me query to refresh user state
       await utils.auth.me.invalidate();
+
+      const role =
+        data.user?.role ??
+        data.session?.user?.user_metadata?.role ??
+        "subscriber";
+
+      if (data.requires2FA) {
+        toast.info("Verification required", {
+          description: "A verification code has been sent to your email.",
+        });
+        navigate("/admin/verify");
+        return;
+      }
 
       toast.success("Signed in successfully", {
         description: "Welcome back. Redirecting to your dashboard.",
       });
 
-      // Role-based redirect — honour ?next= if the role is allowed on that path
-      const role =
-        data.user?.role ??
-        data.session?.user?.user_metadata?.role ??
-        "subscriber";
       if (nextPath && isRoleAllowedOnPath(role, nextPath)) {
         navigate(nextPath);
       } else {

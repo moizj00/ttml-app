@@ -72,6 +72,7 @@ import {
   getQualityScoreStats,
   getQualityScoreTrend,
   getQualityScoresByLetterType,
+  assignRoleId,
 } from "./db";
 import {
   sendJobFailedAlertEmail,
@@ -318,17 +319,16 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
-        // Update user role
         await updateUserRole(userId, input.role);
-        // If employee, auto-generate discount code
+        try {
+          await assignRoleId(userId, input.role);
+        } catch (e) {
+          console.error("[Onboarding] Role ID assignment failed:", e);
+        }
         if (input.role === "employee") {
           try {
-            await createDiscountCodeForEmployee(
-              userId,
-              ctx.user.name || "affiliate"
-            );
+            await createDiscountCodeForEmployee(userId);
           } catch (e) {
-            // Discount code may already exist if user re-onboards
             console.log(
               "[Onboarding] Discount code creation skipped (may already exist)",
               e
@@ -1467,6 +1467,11 @@ export const appRouter = router({
           }
         }
         await updateUserRole(input.userId, input.role);
+        try {
+          await assignRoleId(input.userId, input.role);
+        } catch (e) {
+          console.error("[updateRole] Role ID assignment failed:", e);
+        }
 
         // Invalidate the user's auth cache so their next request picks up the new role
         // immediately instead of waiting for the 30-second TTL to expire.
