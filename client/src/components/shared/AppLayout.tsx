@@ -321,8 +321,17 @@ export default function AppLayout({
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map(item => {
-          const isActive =
+          const matches =
             location === item.href || location.startsWith(item.href + "/");
+          const isActive =
+            matches &&
+            !navItems.some(
+              other =>
+                other.href !== item.href &&
+                (location === other.href ||
+                  location.startsWith(other.href + "/")) &&
+                other.href.startsWith(item.href + "/")
+            );
           return (
             <Link
               key={item.href}
