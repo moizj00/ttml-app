@@ -764,9 +764,9 @@ export function registerSupabaseAuthRoutes(app: Express) {
             name: appUser.name || email.split("@")[0],
             code,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code sent to ${email}`);
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${email}`);
         } catch (err) {
-          console.error("[SupabaseAuth] Failed to send admin 2FA code:", err);
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${email}:`, err);
           emailFailed = true;
         }
       }
@@ -864,7 +864,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
         name: user.name || user.email!.split("@")[0],
         code,
       });
-      console.log(`[SupabaseAuth] Admin 2FA resend successful to=${user.email}`);
+      console.log(`[SupabaseAuth] Admin 2FA resend dispatched, to=${user.email}`);
       res.json({ success: true, message: "A new verification code has been sent to your email." });
     } catch (err) {
       console.error("[SupabaseAuth] Admin 2FA resend error:", err);
@@ -1451,9 +1451,9 @@ export function registerSupabaseAuthRoutes(app: Express) {
             name: dbUser.name || data.user.email!.split("@")[0],
             code,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code sent to ${data.user.email} (Google OAuth)`);
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${data.user.email} (Google OAuth)`);
         } catch (err) {
-          console.error("[SupabaseAuth] Failed to send admin 2FA code (Google OAuth):", err);
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth):`, err);
           emailFailed = true;
         }
       }
@@ -1611,9 +1611,9 @@ export function registerSupabaseAuthRoutes(app: Express) {
             name: dbUser.name || user.email!.split("@")[0],
             code,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code sent to ${user.email} (Google callback)`);
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${user.email} (Google callback)`);
         } catch (err2) {
-          console.error("[SupabaseAuth] Failed to send admin 2FA code (Google callback):", err2);
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback):`, err2);
           emailFailed = true;
         }
         res.redirect(emailFailed ? "/admin/verify?emailFailed=1" : "/admin/verify");

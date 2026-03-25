@@ -221,28 +221,29 @@ async function sendWithRetry(opts: {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     try {
-      const { error } = await getResend().emails.send({
+      const result = await getResend().emails.send({
         from: FROM,
         to: opts.to,
         subject: opts.subject,
         html: opts.html,
         text: opts.text,
       });
-      if (error) {
-        console.error(`[Email] Resend error (attempt ${attempt + 1}):`, error);
-        lastErr = error;
+      if (result.error) {
+        console.error(`[Email] Resend API error (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}:`, JSON.stringify(result.error));
+        lastErr = result.error;
       } else {
+        console.log(`[Email] Sent successfully (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}, id=${result.data?.id ?? "unknown"}`);
         return;
       }
     } catch (err) {
       lastErr = err;
-      console.error(`[Email] Send failed (attempt ${attempt + 1}):`, err);
+      console.error(`[Email] Send exception (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}:`, err);
     }
     if (attempt < delays.length) {
       await new Promise(r => setTimeout(r, delays[attempt]));
     }
   }
-  console.error("[Email] All retry attempts exhausted:", lastErr);
+  console.error(`[Email] All retry attempts exhausted, from=${FROM}, to=${opts.to}:`, lastErr);
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
