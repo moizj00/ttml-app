@@ -1458,6 +1458,33 @@ export async function getAllCommissions() {
   return rows;
 }
 
+export async function getAdminReferralDetails(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      commissionId: commissionLedger.id,
+      subscriberId: commissionLedger.subscriberId,
+      subscriberName: users.name,
+      subscriberEmail: users.email,
+      saleAmount: commissionLedger.saleAmount,
+      commissionAmount: commissionLedger.commissionAmount,
+      commissionStatus: commissionLedger.status,
+      commissionCreatedAt: commissionLedger.createdAt,
+      subscriptionPlan: subscriptions.plan,
+      subscriptionStatus: subscriptions.status,
+      subscriptionCreatedAt: subscriptions.createdAt,
+    })
+    .from(commissionLedger)
+    .leftJoin(users, eq(commissionLedger.subscriberId, users.id))
+    .leftJoin(subscriptions, eq(commissionLedger.subscriberId, subscriptions.userId))
+    .where(eq(commissionLedger.employeeId, employeeId))
+    .orderBy(desc(commissionLedger.createdAt));
+
+  return rows;
+}
+
 export async function markCommissionsPaid(commissionIds: number[]) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

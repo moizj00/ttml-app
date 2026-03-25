@@ -57,6 +57,7 @@ import {
   getCommissionsByEmployeeId,
   getEmployeeEarningsSummary,
   getAllCommissions,
+  getAdminReferralDetails,
   markCommissionsPaid,
   createPayoutRequest,
   getPayoutRequestsByEmployeeId,
@@ -2459,6 +2460,60 @@ export const appRouter = router({
         };
       });
     }),
+
+    adminReferralDetails: adminProcedure
+      .input(z.object({ employeeId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const rows = await getAdminReferralDetails(input.employeeId);
+        const now = new Date();
+
+        const referrals = rows.map(row => {
+          const subCreatedAt = row.subscriptionCreatedAt
+            ? new Date(row.subscriptionCreatedAt)
+            : null;
+          const tenureMonths = subCreatedAt
+            ? Math.floor(
+                (now.getTime() - subCreatedAt.getTime()) /
+                  (1000 * 60 * 60 * 24 * 30.44)
+              )
+            : null;
+          return {
+            commissionId: row.commissionId,
+            subscriberId: row.subscriberId,
+            subscriberName: row.subscriberName ?? null,
+            subscriberEmail: row.subscriberEmail ?? null,
+            subscriptionPlan: row.subscriptionPlan ?? null,
+            subscriptionStatus: row.subscriptionStatus ?? null,
+            subscriptionCreatedAt: row.subscriptionCreatedAt ?? null,
+            tenureMonths,
+            commissionAmount: row.commissionAmount,
+            saleAmount: row.saleAmount,
+            commissionStatus: row.commissionStatus,
+            commissionCreatedAt: row.commissionCreatedAt,
+          };
+        });
+
+        // Summary stats
+        const totalReferred = referrals.length;
+        const tenures = referrals
+          .map(r => r.tenureMonths)
+          .filter((t): t is number => t !== null);
+        const avgTenureMonths =
+          tenures.length > 0
+            ? Math.round(
+                tenures.reduce((a, b) => a + b, 0) / tenures.length
+              )
+            : 0;
+        const totalRevenue = referrals.reduce(
+          (sum, r) => sum + r.saleAmount,
+          0
+        );
+
+        return {
+          referrals,
+          summary: { totalReferred, avgTenureMonths, totalRevenue },
+        };
+      }),
   }),
   // ─── Profile ──────────────────────────────────────────────────────────────
   profile: router({
