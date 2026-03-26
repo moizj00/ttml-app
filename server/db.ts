@@ -57,6 +57,16 @@ export async function getDb() {
     } catch (migErr) {
       console.warn("[Database] Migration error (maxUses cleanup):", migErr);
     }
+    // Add pipeline_locked_at column if it doesn't exist (session locking feature)
+    try {
+      await _db.execute(sql`
+        ALTER TABLE letter_requests
+        ADD COLUMN IF NOT EXISTS pipeline_locked_at TIMESTAMPTZ
+      `);
+      console.log("[Database] Migration: ensured pipeline_locked_at column exists");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (pipeline_locked_at):", migErr);
+    }
   }
   return _db;
 }
@@ -130,6 +140,110 @@ export async function setFreeReviewUsed(userId: number): Promise<void> {
     .update(users)
     .set({ freeReviewUsedAt: new Date() })
     .where(eq(users.id, userId));
+}
+
+/**
+ * Atomically claim the free trial slot for a user.
+ * Uses a conditional UPDATE (WHERE freeReviewUsedAt IS NULL) to ensure
+ * only one concurrent submission can claim the slot. Returns true if the
+ * claim succeeded (slot was available), false if already claimed.
+ */
+export async function claimFreeTrialSlot(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db
+    .update(users)
+    .set({ freeReviewUsedAt: new Date() })
+    .where(and(eq(users.id, userId), isNull(users.freeReviewUsedAt)))
+    .returning({ id: users.id });
+  return result.length > 0;
+}
+
+/**
+ * Restore a previously claimed free trial slot (on pipeline failure).
+ * Only clears the freeReviewUsedAt marker if the user still has no
+ * completed/unlocked letters (to avoid refunding legitimate usage).
+ */
+export async function refundFreeTrialSlot(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const earlyStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
+  const completedCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(letterRequests)
+    .where(
+      and(
+        eq(letterRequests.userId, userId),
+        sql`${letterRequests.status} NOT IN (${sql.join(
+          earlyStatuses.map(s => sql`${s}`),
+          sql`, `
+        )})`
+      )
+    );
+  if (Number(completedCount[0]?.count ?? 0) === 0) {
+    await db
+      .update(users)
+      .set({ freeReviewUsedAt: null })
+      .where(eq(users.id, userId));
+  }
+}
+
+/**
+ * Atomically decrement lettersUsed for a paid subscriber (usage refund on pipeline failure).
+ * Only decrements if lettersUsed > 0 to prevent going negative.
+ */
+export async function decrementLettersUsed(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(subscriptions)
+    .set({ lettersUsed: sql`GREATEST(${subscriptions.lettersUsed} - 1, 0)` })
+    .where(
+      and(
+        eq(subscriptions.userId, userId),
+        sql`${subscriptions.lettersUsed} > 0`
+      )
+    );
+}
+
+/**
+ * Attempt to acquire a DB-level pipeline execution lock for a letter.
+ * Uses a conditional UPDATE: sets pipeline_locked_at only when the column
+ * is NULL or the lock is stale (older than LOCK_STALE_MS).
+ * Returns true if the lock was acquired, false if another process holds it.
+ */
+const PIPELINE_LOCK_STALE_MS = 30 * 60 * 1000; // 30 minutes
+
+export async function acquirePipelineLock(letterId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false; // fail closed — no lock without DB
+  const staleThreshold = new Date(Date.now() - PIPELINE_LOCK_STALE_MS);
+  const result = await db
+    .update(letterRequests)
+    .set({ pipelineLockedAt: new Date() })
+    .where(
+      and(
+        eq(letterRequests.id, letterId),
+        or(
+          isNull(letterRequests.pipelineLockedAt),
+          sql`${letterRequests.pipelineLockedAt} < ${staleThreshold}`
+        )
+      )
+    )
+    .returning({ id: letterRequests.id });
+  return result.length > 0;
+}
+
+/**
+ * Release the pipeline execution lock for a letter.
+ */
+export async function releasePipelineLock(letterId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(letterRequests)
+    .set({ pipelineLockedAt: null })
+    .where(eq(letterRequests.id, letterId));
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -555,7 +669,9 @@ export async function countCompletedLetters(
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  const earlyStatuses = ["submitted", "researching", "drafting"];
+  // pipeline_failed is included as an "early" (non-completed) status so that
+  // a failed first pipeline attempt does not block free-trial eligibility.
+  const earlyStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
   const conditions = [
     eq(letterRequests.userId, userId),
     sql`${letterRequests.status} NOT IN (${sql.join(

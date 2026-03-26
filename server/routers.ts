@@ -66,6 +66,11 @@ import {
   getPayoutRequestById,
   getAllEmployeeEarnings,
   markPriorPipelineRunsSuperseded,
+  acquirePipelineLock,
+  releasePipelineLock,
+  decrementLettersUsed,
+  claimFreeTrialSlot,
+  refundFreeTrialSlot,
   getAllLessons,
   createPipelineLesson,
   updatePipelineLesson,
@@ -112,6 +117,7 @@ import {
   createTrialReviewCheckout,
   getUserSubscription,
   checkLetterSubmissionAllowed,
+  incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "./stripe";
 
@@ -183,77 +189,119 @@ async function runPipelineWithRetry(
   intake: any,
   userId: number | undefined,
   appUrl: string,
-  label: string
+  label: string,
+  usageContext?: { shouldRefundOnFailure: true; isFreeTrialSubmission: boolean }
 ): Promise<void> {
+  // ── Acquire DB-level pipeline lock ────────────────────────────────────────
+  const lockAcquired = await acquirePipelineLock(letterId);
+  if (!lockAcquired) {
+    console.warn(`[Pipeline] Letter #${letterId} pipeline lock already held — skipping duplicate run (${label})`);
+    return;
+  }
+
+  // ── All post-acquisition work is wrapped in try/finally to guarantee lock ──
+  // release even if markPriorPipelineRunsSuperseded or any early setup throws.
   let lastErr: unknown;
-  for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
+  try {
+    // ── Deduplication: supersede any pre-existing active pipeline runs ───────
+    await markPriorPipelineRunsSuperseded(letterId);
+
+    for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Pipeline] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        {
+          const current = await getLetterRequestById(letterId);
+          const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
+          if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
+            console.log(`[Pipeline] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
+            // Another process completed the letter — exit normally; finally releases lock
+            return;
+          }
+          if (!current || current.status !== "submitted") {
+            await updateLetterStatus(letterId, "submitted", { force: true });
+          }
+        }
+        await runFullPipeline(letterId, intake, undefined, userId);
+        // Success — return; finally releases lock
+        return;
+      } catch (err) {
+        lastErr = err;
+        console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, err instanceof Error ? err.message : err);
+        captureServerException(err, { tags: { component: "pipeline", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
+      }
+    }
+
+    // ── All retries exhausted — perform terminal failure state writes ─────────
+    console.error(`[Pipeline] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
+
+    // ── Refund usage on total failure (initial submissions only) ─────────────
+    // Re-trigger paths (updateForChanges, retryFromRejected) do NOT pass
+    // usageContext and therefore never trigger a refund — they consume no
+    // new quota when they fail.
+    if (userId && usageContext?.shouldRefundOnFailure) {
+      try {
+        if (usageContext.isFreeTrialSubmission) {
+          await refundFreeTrialSlot(userId);
+          console.log(`[Pipeline] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`);
+        } else {
+          await decrementLettersUsed(userId);
+          console.log(`[Pipeline] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`);
+        }
+      } catch (refundErr) {
+        console.error("[Pipeline] Failed to refund usage after pipeline failure:", refundErr);
+        captureServerException(refundErr, { tags: { component: "pipeline", error_type: "usage_refund_failed" } });
+      }
+    }
+
     try {
-      if (attempt > 0) {
-        const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        console.log(`[Pipeline] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
-        await new Promise(r => setTimeout(r, delay));
-      }
-      {
-        const current = await getLetterRequestById(letterId);
-        const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
-        if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
-          console.log(`[Pipeline] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
-          return;
+      const admins = await getAllUsers("admin");
+      for (const admin of admins) {
+        try {
+          if (admin.email) {
+            await sendJobFailedAlertEmail({
+              to: admin.email,
+              name: admin.name ?? "Admin",
+              letterId,
+              jobType: "generation_pipeline",
+              errorMessage: lastErr instanceof Error ? lastErr.message : String(lastErr),
+              appUrl,
+            });
+          }
+        } catch (emailErr) {
+          console.error("[Pipeline] Failed to email admin:", emailErr);
+          captureServerException(emailErr, { tags: { component: "pipeline", error_type: "admin_email_failed" } });
         }
-        if (!current || current.status !== "submitted") {
-          await updateLetterStatus(letterId, "submitted", { force: true });
-        }
-      }
-      await runFullPipeline(letterId, intake, undefined, userId);
-      return;
-    } catch (err) {
-      lastErr = err;
-      console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, err instanceof Error ? err.message : err);
-      captureServerException(err, { tags: { component: "pipeline", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
-    }
-  }
-  console.error(`[Pipeline] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
-  try {
-    const admins = await getAllUsers("admin");
-    for (const admin of admins) {
-      try {
-        if (admin.email) {
-          await sendJobFailedAlertEmail({
-            to: admin.email,
-            name: admin.name ?? "Admin",
-            letterId,
-            jobType: "generation_pipeline",
-            errorMessage: lastErr instanceof Error ? lastErr.message : String(lastErr),
-            appUrl,
+        try {
+          await createNotification({
+            userId: admin.id,
+            type: "job_failed",
+            category: "letters",
+            title: `Pipeline failed for letter #${letterId}`,
+            body: lastErr instanceof Error ? lastErr.message : String(lastErr),
+            link: `/admin/jobs`,
           });
+        } catch (notifErr) {
+          console.error("[Pipeline] Failed to create notification:", notifErr);
+          captureServerException(notifErr, { tags: { component: "pipeline", error_type: "notification_failed" } });
         }
-      } catch (emailErr) {
-        console.error("[Pipeline] Failed to email admin:", emailErr);
-        captureServerException(emailErr, { tags: { component: "pipeline", error_type: "admin_email_failed" } });
       }
-      try {
-        await createNotification({
-          userId: admin.id,
-          type: "job_failed",
-          category: "letters",
-          title: `Pipeline failed for letter #${letterId}`,
-          body: lastErr instanceof Error ? lastErr.message : String(lastErr),
-          link: `/admin/jobs`,
-        });
-      } catch (notifErr) {
-        console.error("[Pipeline] Failed to create notification:", notifErr);
-        captureServerException(notifErr, { tags: { component: "pipeline", error_type: "notification_failed" } });
-      }
+    } catch (notifyErr) {
+      console.error("[Pipeline] Failed to notify admins:", notifyErr);
+      captureServerException(notifyErr, { tags: { component: "pipeline", error_type: "notify_admins_failed" } });
     }
-  } catch (notifyErr) {
-    console.error("[Pipeline] Failed to notify admins:", notifyErr);
-    captureServerException(notifyErr, { tags: { component: "pipeline", error_type: "notify_admins_failed" } });
-  }
-  try {
-    await updateLetterStatus(letterId, "pipeline_failed", { force: true });
-  } catch (statusErr) {
-    console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
-    captureServerException(statusErr, { tags: { component: "pipeline", error_type: "status_update_failed" } });
+    try {
+      await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+    } catch (statusErr) {
+      console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
+      captureServerException(statusErr, { tags: { component: "pipeline", error_type: "status_update_failed" } });
+    }
+  } finally {
+    // Release lock — always, on all exit paths (success, abort, early throw, exhaustion)
+    await releasePipelineLock(letterId).catch(e => console.error("[Pipeline] Failed to release pipeline lock:", e));
   }
 }
 
@@ -385,6 +433,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
 
+        // ── Step 1: Check entitlement (non-atomic read, fast path) ────────────
         const entitlement = await checkLetterSubmissionAllowed(ctx.user.id);
         if (!entitlement.allowed) {
           throw new TRPCError({
@@ -393,17 +442,59 @@ export const appRouter = router({
           });
         }
 
-        const result = await createLetterRequest({
-          userId: ctx.user.id,
-          letterType: input.letterType,
-          subject: input.subject,
-          issueSummary: input.issueSummary,
-          jurisdictionCountry: input.jurisdictionCountry,
-          jurisdictionState: input.jurisdictionState,
-          jurisdictionCity: input.jurisdictionCity,
-          intakeJson: input.intakeJson,
-          priority: input.priority,
-        });
+        // ── Step 2: Atomically claim usage before creating the letter ─────────
+        // This prevents TOCTOU races where two concurrent requests both see
+        // count=0 (for free trial) or lettersUsed < lettersAllowed (for paid).
+        let isFreeTrialSubmission = false;
+        if (entitlement.firstLetterFree) {
+          // Free-trial path: atomically claim the slot via conditional UPDATE
+          isFreeTrialSubmission = true;
+          const claimed = await claimFreeTrialSlot(ctx.user.id);
+          if (!claimed) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Your free first letter has already been used. Please subscribe to continue.",
+            });
+          }
+        } else if (entitlement.subscription) {
+          // Paid subscriber path: atomically increment, reject if exhausted
+          const incremented = await incrementLettersUsed(ctx.user.id);
+          if (!incremented) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `You have used all letter(s) in your plan. Please upgrade to continue.`,
+            });
+          }
+        }
+
+        // ── Step 3: Create the letter request (compensate usage on failure) ──────
+        let result: any;
+        try {
+          result = await createLetterRequest({
+            userId: ctx.user.id,
+            letterType: input.letterType,
+            subject: input.subject,
+            issueSummary: input.issueSummary,
+            jurisdictionCountry: input.jurisdictionCountry,
+            jurisdictionState: input.jurisdictionState,
+            jurisdictionCity: input.jurisdictionCity,
+            intakeJson: input.intakeJson,
+            priority: input.priority,
+          });
+        } catch (createErr) {
+          // Usage was already claimed — roll it back before re-throwing
+          try {
+            if (isFreeTrialSubmission) {
+              await refundFreeTrialSlot(ctx.user.id);
+            } else if (entitlement.subscription) {
+              await decrementLettersUsed(ctx.user.id);
+            }
+          } catch (refundErr) {
+            console.error("[Submit] Failed to refund usage after letter creation failure:", refundErr);
+            captureServerException(refundErr, { tags: { component: "letters", error_type: "usage_refund_on_create_failed" } });
+          }
+          throw createErr;
+        }
         const letterId = (result as any)?.insertId;
 
         await logReviewAction({
@@ -430,7 +521,7 @@ export const appRouter = router({
             { console.error("[Email] Submission confirmation failed:", err); captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } }); }
           );
 
-        runPipelineWithRetry(letterId, input.intakeJson as any, ctx.user.id, appUrl, "submit");
+        runPipelineWithRetry(letterId, input.intakeJson as any, ctx.user.id, appUrl, "submit", { shouldRefundOnFailure: true, isFreeTrialSubmission });
 
         try {
           await notifyAdmins({
@@ -519,9 +610,6 @@ export const appRouter = router({
           }
         }
 
-        // Mark prior pipeline runs as superseded before starting fresh
-        await markPriorPipelineRunsSuperseded(input.letterId);
-
         // Transition status back to submitted before re-triggering pipeline
         // This allows the pipeline to properly set researching → drafting → generated_locked
         await updateLetterStatus(input.letterId, "submitted");
@@ -592,7 +680,6 @@ export const appRouter = router({
           });
         }
 
-        await markPriorPipelineRunsSuperseded(input.letterId);
         await updateLetterStatus(input.letterId, "submitted");
 
         const appUrl = getAppUrl(ctx.req);
@@ -2150,6 +2237,7 @@ export const appRouter = router({
               "researching",
               "drafting",
               "generated_locked",
+              "pipeline_failed",
             ])
           )
         );
@@ -2176,6 +2264,7 @@ export const appRouter = router({
               "researching",
               "drafting",
               "generated_locked",
+              "pipeline_failed",
             ])
           )
         );

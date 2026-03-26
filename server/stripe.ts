@@ -5,7 +5,7 @@
 
 import Stripe from "stripe";
 import { ENV } from "./_core/env";
-import { getDb, countCompletedLetters, getDiscountCodeByCode } from "./db";
+import { getDb, countCompletedLetters, getDiscountCodeByCode, getUserById } from "./db";
 import { subscriptions } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import {
@@ -356,7 +356,24 @@ export async function checkLetterSubmissionAllowed(
   const sub = await getUserSubscription(userId);
 
   if (!sub || sub.status !== "active") {
-    // ── First-letter-free: allow users with 0 completed letters to submit ──
+    // ── First-letter-free: use freeReviewUsedAt as the authoritative gate ───
+    // This is set atomically by claimFreeTrialSlot() before pipeline starts,
+    // and cleared by refundFreeTrialSlot() if the pipeline fails — making it
+    // the single source of truth for free-trial claim state.
+    //
+    // Backward-compat fallback: for users created before freeReviewUsedAt was
+    // introduced, fall through to countCompletedLetters if the column is null.
+    const user = await getUserById(userId);
+    if (user?.freeReviewUsedAt) {
+      // Slot is explicitly claimed (and not yet refunded) → not eligible
+      return {
+        allowed: false,
+        reason:
+          "You need an active subscription to submit a letter. Please choose a plan.",
+      };
+    }
+    // freeReviewUsedAt is null — check completed letters for backward compat
+    // (covers legacy users who had letters before this column was introduced)
     const completedCount = await countCompletedLetters(userId);
     if (completedCount === 0) {
       return {

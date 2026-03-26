@@ -180,6 +180,7 @@ export const letterRequests = pgTable("letter_requests", {
   lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow(),
   draftReminderSentAt: timestamp("draft_reminder_sent_at", { withTimezone: true }),
   researchUnverified: boolean("research_unverified").default(false).notNull(),
+  pipelineLockedAt: timestamp("pipeline_locked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
