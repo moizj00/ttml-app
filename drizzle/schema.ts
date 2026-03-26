@@ -275,6 +275,8 @@ export const researchRuns = pgTable("research_runs", {
   resultJson: jsonb("result_json"),
   validationResultJson: jsonb("validation_result_json"),
   errorMessage: text("error_message"),
+  cacheHit: boolean("cache_hit").default(false).notNull(),
+  cacheKey: varchar("cache_key", { length: 256 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [

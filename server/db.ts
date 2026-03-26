@@ -1025,6 +1025,8 @@ export async function updateResearchRun(
     resultJson?: unknown;
     validationResultJson?: unknown;
     errorMessage?: string;
+    cacheHit?: boolean;
+    cacheKey?: string;
   }
 ) {
   const db = await getDb();

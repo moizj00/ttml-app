@@ -406,6 +406,42 @@ export default function AdminLetterDetail() {
             {/* end jobs */}
           </CardContent>
         </Card>
+
+        {/* Research Cache Status */}
+        {l.researchRuns && l.researchRuns.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Research Cache</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {l.researchRuns.map((run: { id: number; cacheHit: boolean; cacheKey: string | null; provider: string; status: string }) => (
+                  <div
+                    key={run.id}
+                    data-testid={`row-research-run-${run.id}`}
+                    className="flex items-start justify-between text-sm p-2 rounded border gap-3"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium">{run.provider}</span>
+                      {run.cacheKey && (
+                        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5" title={run.cacheKey}>
+                          key: {run.cacheKey}
+                        </p>
+                      )}
+                    </div>
+                    <Badge
+                      data-testid={run.cacheHit ? "badge-cache-hit" : "badge-cache-miss"}
+                      variant={run.cacheHit ? "default" : "outline"}
+                      className={run.cacheHit ? "bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0" : "shrink-0"}
+                    >
+                      {run.cacheHit ? "cache hit" : "fresh"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Pipeline Cost */}

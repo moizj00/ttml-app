@@ -749,8 +749,18 @@ export default function ReviewDetail() {
                       research.map(run => {
                         const packet = (run.resultJson ??
                           run.validationResultJson) as ResearchPacketSummary | null;
+                        const isCacheHit = run.cacheHit === true;
                         return (
                           <div key={run.id} className="space-y-2">
+                            {isCacheHit && (
+                              <div
+                                data-testid="badge-research-cache-hit"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200"
+                              >
+                                <span className="text-xs text-emerald-700 font-medium">Served from cache</span>
+                                <span className="text-xs text-emerald-600">&mdash; Perplexity API call skipped</span>
+                              </div>
+                            )}
                             {packet?.researchSummary && (
                               <div className="bg-blue-50 rounded-lg p-3">
                                 <p className="text-xs font-semibold text-blue-800 mb-1">

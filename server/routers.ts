@@ -1844,10 +1844,11 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const letter = await getLetterRequestById(input.letterId);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-        const [versions, actions, jobs] = await Promise.all([
+        const [versions, actions, jobs, researchRuns] = await Promise.all([
           getLetterVersionsByRequestId(input.letterId, true), // include internal
           getReviewActions(input.letterId, true), // include internal
           getWorkflowJobsByLetterId(input.letterId),
+          getResearchRunsByLetterId(input.letterId),
         ]);
         const aiDraftVersion = versions.find(v => v.versionType === "ai_draft");
 
@@ -1878,6 +1879,7 @@ export const appRouter = router({
           letterVersions: versions,
           reviewActions: actions,
           workflowJobs: jobs,
+          researchRuns,
           pipelineCostSummary,
         };
       }),

@@ -36,6 +36,7 @@ import {
 import { sendLetterReadyEmail, sendStatusUpdateEmail, sendNewReviewNeededEmail } from "./email";
 import { getUserById, getLetterRequestById as getLetterById, getAllUsers, setLetterResearchUnverified } from "./db";
 import { captureServerException } from "./sentry";
+import { buildCacheKey, getCachedResearch, setCachedResearch } from "./kvCache";
 
 async function buildLessonsPromptBlock(
   letterType: string,
@@ -935,6 +936,67 @@ export async function runResearchStage(
   const researchTokens = createTokenAccumulator();
   const researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-opus-4-5";
 
+  // ── KV Cache: check for a matching research packet before calling Perplexity ──
+  const situationText = [
+    intake.matter?.description ?? "",
+    intake.matter?.subject ?? "",
+    intake.desiredOutcome ?? "",
+  ].join(" ");
+  const kvCacheKey = buildCacheKey(intake.letterType, intake.jurisdiction ?? {}, situationText);
+
+  try {
+    const cachedPacket = await getCachedResearch(kvCacheKey);
+    if (cachedPacket) {
+      // Validate cached packet before trusting it — guards against corrupted or
+      // schema-drifted cache entries. On validation failure, treat as a miss.
+      const cacheValidation = validateResearchPacket(cachedPacket);
+      if (!cacheValidation.valid) {
+        console.warn(
+          `[KVCache] Cached packet for key ${kvCacheKey} failed validation (treating as miss): ${cacheValidation.errors.join("; ")}`
+        );
+        // Fall through to live Perplexity call
+      } else {
+        console.log(`[Pipeline] Stage 1: KV cache hit for letter #${letterId} (key: ${kvCacheKey}) — skipping Perplexity API call`);
+
+        const cacheHitResult: ValidationResult = {
+          stage: "research",
+          check: "research_packet_validation",
+          passed: true,
+          errors: [],
+          warnings: ["Research served from KV cache (Perplexity API call skipped)"],
+          timestamp: new Date().toISOString(),
+        };
+
+        await updateResearchRun(runId, {
+          status: "completed",
+          resultJson: cachedPacket,
+          validationResultJson: { ...cacheHitResult, webGrounded: true, fromCache: true },
+          cacheHit: true,
+          cacheKey: kvCacheKey,
+        });
+        await updateWorkflowJob(jobId, {
+          status: "completed",
+          completedAt: new Date(),
+          promptTokens: 0,
+          completionTokens: 0,
+          estimatedCostUsd: "0",
+          responsePayloadJson: {
+            researchRunId: runId,
+            webGrounded: true,
+            fromCache: true,
+            cacheKey: kvCacheKey,
+            validationResult: cacheHitResult,
+          },
+        });
+
+        return { packet: cachedPacket, provider: "kv-cache" };
+      }
+    }
+  } catch (cacheErr) {
+    console.warn(`[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`, cacheErr);
+  }
+  // ── End KV Cache check ──
+
   try {
     console.log(
       `[Pipeline] Stage 1: ${researchConfig.provider} 8-task deep research for letter #${letterId}`
@@ -1095,6 +1157,8 @@ export async function runResearchStage(
       status: "completed",
       resultJson: researchPacket,
       validationResultJson: { ...successResult, webGrounded: !isClaudeFallback },
+      cacheHit: false,
+      cacheKey: kvCacheKey,
     });
     await updateWorkflowJob(jobId, {
       status: "completed",
@@ -1108,6 +1172,11 @@ export async function runResearchStage(
         validationResult: successResult,
       },
     });
+
+    // Store new result in KV cache (only for web-grounded Perplexity results)
+    if (!isClaudeFallback) {
+      await setCachedResearch(kvCacheKey, researchPacket);
+    }
 
     if (isClaudeFallback) {
       console.warn(

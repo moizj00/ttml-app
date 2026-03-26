@@ -24,6 +24,9 @@ export const ENV = {
   sentryDsn: process.env.SENTRY_DSN ?? "",
   sentryOrg: process.env.SENTRY_ORG ?? "",
   sentryProject: process.env.SENTRY_PROJECT ?? "",
+  // Cloudflare KV cache (optional — caching is skipped when not configured)
+  kvWorkerUrl: process.env.KV_WORKER_URL ?? "",
+  kvWorkerAuthToken: process.env.KV_WORKER_AUTH_TOKEN ?? "",
 };
 
 /**
