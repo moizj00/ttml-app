@@ -197,6 +197,13 @@
       "when": 1774481704507,
       "tag": "0027_lowly_blur",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1774564513540,
+      "tag": "0028_pale_blacklash",
+      "breakpoints": true
     }
   ]
 }
