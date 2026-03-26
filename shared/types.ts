@@ -376,6 +376,13 @@ export interface ContentConsistencyReport {
   warnings: string[];
 }
 
+// ─── Token Usage (captured from AI SDK generateText calls) ───
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 // ─── Pipeline Context (source of truth throughout all stages) ───
 export interface PipelineContext {
   letterId: number;
@@ -389,6 +396,7 @@ export interface PipelineContext {
   groundingReport?: GroundingReport;
   consistencyReport?: ContentConsistencyReport;
   assemblyVettingFeedback?: string;
+  citationRevalidationTokens?: TokenUsage;
 }
 
 // ─── Draft Output Shape ───

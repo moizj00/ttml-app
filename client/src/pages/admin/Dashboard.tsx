@@ -10,6 +10,7 @@ import {
   CheckCircle,
   ArrowRight,
   Activity,
+  Cpu,
   DollarSign,
   UserCheck,
   Scale,
@@ -30,6 +31,7 @@ export default function AdminDashboard() {
     refetch,
   } = trpc.admin.stats.useQuery();
   const { data: failedJobs } = trpc.admin.failedJobs.useQuery();
+  const { data: costData } = trpc.admin.costAnalytics.useQuery();
   const s = stats as any;
   const statCardVisible = useStaggerReveal(4, 80);
 
@@ -300,6 +302,90 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
+            {/* API Cost Analytics */}
+            {costData && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-primary" />
+                    API Cost Analytics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      {
+                        label: "Total API Spend",
+                        value: `$${(costData.totalSpend ?? 0).toFixed(4)}`,
+                        icon: <DollarSign className="w-4 h-4" />,
+                        color: "text-green-600",
+                        bg: "bg-green-50",
+                      },
+                      {
+                        label: "Avg Cost / Letter",
+                        value: `$${(costData.avgCostPerLetter ?? 0).toFixed(4)}`,
+                        icon: <TrendingUp className="w-4 h-4" />,
+                        color: "text-blue-600",
+                        bg: "bg-blue-50",
+                      },
+                      {
+                        label: "Total Prompt Tokens",
+                        value: (costData.totalPromptTokens ?? 0).toLocaleString(),
+                        icon: <Cpu className="w-4 h-4" />,
+                        color: "text-indigo-600",
+                        bg: "bg-indigo-50",
+                      },
+                      {
+                        label: "Total Output Tokens",
+                        value: (costData.totalCompletionTokens ?? 0).toLocaleString(),
+                        icon: <Activity className="w-4 h-4" />,
+                        color: "text-purple-600",
+                        bg: "bg-purple-50",
+                      },
+                    ].map(item => (
+                      <div key={item.label} className={`${item.bg} rounded-lg p-4`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${item.color} ${item.bg}`}>
+                          {item.icon}
+                        </div>
+                        <p className="text-lg font-bold text-foreground">{item.value}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {costData.costByDay && costData.costByDay.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">
+                        Daily spend — last 30 days
+                      </p>
+                      <div className="flex items-end gap-1 h-16 w-full">
+                        {(() => {
+                          const days = costData.costByDay;
+                          const maxCost = Math.max(...days.map(d => d.cost), 0.0001);
+                          return days.map((d) => (
+                            <div
+                              key={d.date}
+                              className="flex-1 min-w-0 group relative"
+                              title={`${d.date}: $${d.cost.toFixed(4)} (${d.letters} letter${d.letters !== 1 ? "s" : ""})`}
+                            >
+                              <div
+                                className="bg-indigo-400 rounded-t hover:bg-indigo-500 transition-colors"
+                                style={{ height: `${Math.max((d.cost / maxCost) * 60, 2)}px` }}
+                              />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-foreground text-background text-xs rounded px-1.5 py-0.5 whitespace-nowrap z-10">
+                                {d.date}: ${d.cost.toFixed(4)}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {costData.lettersWithCost} letter{(costData.lettersWithCost ?? 0) !== 1 ? "s" : ""} with API spend (all statuses)
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : null}
 

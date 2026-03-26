@@ -931,6 +931,9 @@ export async function updateWorkflowJob(
     startedAt?: Date;
     completedAt?: Date;
     attemptCount?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    estimatedCostUsd?: string;
   }
 ) {
   const db = await getDb();
@@ -1301,6 +1304,65 @@ export async function getSystemStats() {
     },
     activeSubscriptions: Number(activeSubscriptions?.count ?? 0),
     recentLetters: Number(recentLetters?.count ?? 0),
+  };
+}
+
+export async function getCostAnalytics() {
+  const db = await getDb();
+  if (!db) return null;
+
+  // Aggregate all jobs where cost was tracked (IS NOT NULL), regardless of status,
+  // so failed jobs that still incurred API charges are reflected in total spend.
+  const hasCost = sql`estimated_cost_usd IS NOT NULL`;
+
+  const [totalCost] = await db
+    .select({ total: sql<number>`COALESCE(SUM(estimated_cost_usd::numeric), 0)` })
+    .from(workflowJobs)
+    .where(hasCost);
+
+  const [letterCount] = await db
+    .select({ count: sql<number>`COUNT(DISTINCT letter_request_id)` })
+    .from(workflowJobs)
+    .where(hasCost);
+
+  const [totalTokens] = await db
+    .select({
+      promptTokens: sql<number>`COALESCE(SUM(prompt_tokens), 0)`,
+      completionTokens: sql<number>`COALESCE(SUM(completion_tokens), 0)`,
+    })
+    .from(workflowJobs)
+    .where(hasCost);
+
+  const costByDay = await db
+    .select({
+      date: sql<string>`DATE(COALESCE(completed_at, created_at))`,
+      cost: sql<number>`COALESCE(SUM(estimated_cost_usd::numeric), 0)`,
+      letters: sql<number>`COUNT(DISTINCT letter_request_id)`,
+    })
+    .from(workflowJobs)
+    .where(
+      and(
+        hasCost,
+        sql`COALESCE(completed_at, created_at) > NOW() - INTERVAL '30 days'`
+      )
+    )
+    .groupBy(sql`DATE(COALESCE(completed_at, created_at))`)
+    .orderBy(sql`DATE(COALESCE(completed_at, created_at))`);
+
+  const totalSpend = Number(totalCost?.total ?? 0);
+  const lettersWithCost = Number(letterCount?.count ?? 0);
+
+  return {
+    totalSpend,
+    avgCostPerLetter: lettersWithCost > 0 ? totalSpend / lettersWithCost : 0,
+    lettersWithCost,
+    totalPromptTokens: Number(totalTokens?.promptTokens ?? 0),
+    totalCompletionTokens: Number(totalTokens?.completionTokens ?? 0),
+    costByDay: costByDay.map(d => ({
+      date: d.date,
+      cost: Number(d.cost),
+      letters: Number(d.letters),
+    })),
   };
 }
 

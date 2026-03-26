@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ClipboardList,
+  Cpu,
   RefreshCw,
   Shield,
   Wrench,
@@ -406,6 +407,98 @@ export default function AdminLetterDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pipeline Cost */}
+      {(() => {
+        interface JobRow {
+          id: number;
+          jobType: string;
+          provider: string;
+          promptTokens: number | null;
+          completionTokens: number | null;
+          estimatedCostUsd: string | null;
+          requestPayloadJson: { stage?: string } | null;
+        }
+        const STAGE_LABELS: Record<string, string> = {
+          initial_draft: "Initial Draft",
+          final_assembly: "Final Assembly",
+        };
+        const JOB_TYPE_LABELS: Record<string, string> = {
+          research: "Research",
+          vetting: "Vetting",
+          generation_pipeline: "Citation Revalidation",
+          retry: "Retry Pipeline",
+        };
+        const getStageLabel = (job: JobRow): string => {
+          const stageKey = job.requestPayloadJson?.stage;
+          if (stageKey && STAGE_LABELS[stageKey]) return STAGE_LABELS[stageKey];
+          return JOB_TYPE_LABELS[job.jobType] ?? job.jobType.replace(/_/g, " ");
+        };
+        const trackedJobs: JobRow[] = l.workflowJobs
+          ? (l.workflowJobs as JobRow[]).filter(j => j.estimatedCostUsd != null)
+          : [];
+        if (trackedJobs.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-primary" />
+                Pipeline Cost
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 font-medium">Stage</th>
+                      <th className="pb-2 font-medium text-right">Prompt Tokens</th>
+                      <th className="pb-2 font-medium text-right">Completion Tokens</th>
+                      <th className="pb-2 font-medium text-right">Total Tokens</th>
+                      <th className="pb-2 font-medium text-right">Est. Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {trackedJobs.map(job => (
+                      <tr key={job.id} data-testid={`row-cost-job-${job.id}`}>
+                        <td className="py-2 font-medium">
+                          {getStageLabel(job)}
+                          <span className="text-muted-foreground text-xs ml-1">
+                            ({job.provider})
+                          </span>
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                          {(job.promptTokens ?? 0).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                          {(job.completionTokens ?? 0).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {((job.promptTokens ?? 0) + (job.completionTokens ?? 0)).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums font-medium text-green-700">
+                          ${parseFloat(job.estimatedCostUsd ?? "0").toFixed(4)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t">
+                    <tr>
+                      <td className="pt-2 font-semibold" colSpan={3}>Total</td>
+                      <td className="pt-2 text-right tabular-nums font-semibold">
+                        {(l.pipelineCostSummary?.totalTokens ?? 0).toLocaleString()}
+                      </td>
+                      <td className="pt-2 text-right tabular-nums font-semibold text-green-700">
+                        ${parseFloat(l.pipelineCostSummary?.totalCostUsd ?? "0").toFixed(4)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Intake Data */}
       {l.intakeJson && (

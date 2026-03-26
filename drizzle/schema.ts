@@ -1,5 +1,6 @@
 import {
   integer,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -246,6 +247,9 @@ export const workflowJobs = pgTable("workflow_jobs", {
   errorMessage: text("error_message"),
   requestPayloadJson: jsonb("request_payload_json"),
   responsePayloadJson: jsonb("response_payload_json"),
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
+  estimatedCostUsd: numeric("estimated_cost_usd", { precision: 10, scale: 6 }),
   startedAt: timestamp("started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

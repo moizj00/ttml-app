@@ -28,7 +28,7 @@ import {
   updateResearchRun,
   updateWorkflowJob,
 } from "./db";
-import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext, ValidationResult, GroundingReport, ContentConsistencyReport } from "../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext, ValidationResult, GroundingReport, ContentConsistencyReport, TokenUsage } from "../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
@@ -115,6 +115,38 @@ function getAssemblyModel() {
 const RESEARCH_TIMEOUT_MS = 90_000; // 90s — Perplexity web search can be slow
 const DRAFT_TIMEOUT_MS = 120_000; // 120s — Claude drafting a full legal letter
 const ASSEMBLY_TIMEOUT_MS = 120_000; // 120s — Claude final assembly
+
+const SONNET_PRICING = { inputPerMillion: 3, outputPerMillion: 15 };
+export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+  "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
+  "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
+  // Support both full and short model IDs to avoid drift when model IDs change
+  "claude-sonnet-4-20250514": SONNET_PRICING,
+  "claude-sonnet-4": SONNET_PRICING,
+};
+
+export function createTokenAccumulator(): TokenUsage {
+  return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+}
+
+export function accumulateTokens(
+  acc: TokenUsage,
+  // AI SDK v6 uses inputTokens/outputTokens; accept both shapes for compatibility
+  usage: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } | undefined
+) {
+  if (!usage) return;
+  acc.promptTokens += usage.inputTokens ?? usage.promptTokens ?? 0;
+  acc.completionTokens += usage.outputTokens ?? usage.completionTokens ?? 0;
+  acc.totalTokens = acc.promptTokens + acc.completionTokens;
+}
+
+export function calculateCost(modelKey: string, usage: TokenUsage): string {
+  const pricing = MODEL_PRICING[modelKey];
+  if (!pricing) return "0";
+  const inputCost = (usage.promptTokens / 1_000_000) * pricing.inputPerMillion;
+  const outputCost = (usage.completionTokens / 1_000_000) * pricing.outputPerMillion;
+  return (inputCost + outputCost).toFixed(6);
+}
 
 // ═══════════════════════════════════════════════════════
 // DETERMINISTIC VALIDATORS
@@ -669,7 +701,8 @@ RULE: Use ONLY [REF-N] identifiers from the list above. Do NOT invent or add any
 export async function revalidateCitationsWithPerplexity(
   registry: CitationRegistryEntry[],
   jurisdiction: string,
-  letterId: number
+  letterId: number,
+  tokenAcc?: TokenUsage
 ): Promise<CitationRegistryEntry[]> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -703,12 +736,13 @@ Respond in this exact format, one per line:
     console.log(
       `[Pipeline] Revalidating ${registry.length} citations with Perplexity for letter #${letterId}`
     );
-    const { text } = await generateText({
+    const { text, usage: citationUsage } = await generateText({
       model: perplexity.chat("sonar-pro"),
       prompt,
       maxOutputTokens: 2000,
       abortSignal: AbortSignal.timeout(60_000),
     });
+    if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
 
     const updatedRegistry = registry.map(entry => ({ ...entry }));
 
@@ -898,17 +932,21 @@ export async function runResearchStage(
   const systemPrompt = buildResearchSystemPrompt();
   const userPrompt = buildResearchUserPrompt(normalizedIntake);
 
+  const researchTokens = createTokenAccumulator();
+  const researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-opus-4-5";
+
   try {
     console.log(
       `[Pipeline] Stage 1: ${researchConfig.provider} 8-task deep research for letter #${letterId}`
     );
-    const { text } = await generateText({
+    const { text, usage: initialUsage } = await generateText({
       model: researchConfig.model,
       system: systemPrompt,
       prompt: userPrompt,
       maxOutputTokens: 6000,
       abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
     });
+    accumulateTokens(researchTokens, initialUsage);
 
     const parseResearchJson = (raw: string): ResearchPacket => {
       const jsonMatch =
@@ -920,13 +958,14 @@ export async function runResearchStage(
 
     const generateResearch = async (errorFeedback?: string): Promise<string> => {
       const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
-      const { text: t } = await generateText({
+      const { text: t, usage: retryUsage } = await generateText({
         model: researchConfig.model,
         system: systemPrompt,
         prompt: promptWithFeedback,
         maxOutputTokens: 6000,
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
+      accumulateTokens(researchTokens, retryUsage);
       return t;
     };
 
@@ -1060,6 +1099,9 @@ export async function runResearchStage(
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
+      promptTokens: researchTokens.promptTokens,
+      completionTokens: researchTokens.completionTokens,
+      estimatedCostUsd: calculateCost(researchModelKey, researchTokens),
       responsePayloadJson: {
         researchRunId: runId,
         webGrounded: !isClaudeFallback,
@@ -1099,6 +1141,9 @@ export async function runResearchStage(
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      promptTokens: researchTokens.promptTokens,
+      completionTokens: researchTokens.completionTokens,
+      estimatedCostUsd: researchTokens.promptTokens > 0 ? calculateCost(researchModelKey, researchTokens) : undefined,
       responsePayloadJson: { validationResult: failedResult },
     });
     throw err;
@@ -1122,6 +1167,7 @@ export async function runDraftingStage(
     requestPayloadJson: {
       letterId,
       userId: pipelineCtx?.userId,
+      stage: "initial_draft",
       letterType: intake.letterType,
       sender: intake.sender,
       recipient: intake.recipient,
@@ -1174,17 +1220,20 @@ export async function runDraftingStage(
     research
   );
 
+  const draftTokens = createTokenAccumulator();
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;
-    return generateText({
+    const result = await generateText({
       model: getDraftModel(),
       system: draftSystemPrompt,
       prompt: promptWithFeedback,
       maxOutputTokens: 8000,
       abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
     });
+    accumulateTokens(draftTokens, result.usage);
+    return result;
   };
 
   const runAllDraftValidations = (draft: DraftOutput) => {
@@ -1362,6 +1411,9 @@ export async function runDraftingStage(
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
+      promptTokens: draftTokens.promptTokens,
+      completionTokens: draftTokens.completionTokens,
+      estimatedCostUsd: calculateCost("claude-opus-4-5", draftTokens),
       responsePayloadJson: {
         versionId,
         groundingReport: pipelineCtx?.groundingReport,
@@ -1391,6 +1443,9 @@ export async function runDraftingStage(
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      promptTokens: draftTokens.promptTokens,
+      completionTokens: draftTokens.completionTokens,
+      estimatedCostUsd: draftTokens.promptTokens > 0 ? calculateCost("claude-opus-4-5", draftTokens) : undefined,
       responsePayloadJson: {
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
       },
@@ -1439,17 +1494,19 @@ export async function runAssemblyStage(
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
 
+  const assemblyTokens = createTokenAccumulator();
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
       ? assemblyUser + errorFeedback
       : assemblyUser;
-    const { text } = await generateText({
+    const { text, usage: assemblyUsage } = await generateText({
       model: getAssemblyModel(),
       system: assemblySystem,
       prompt: promptWithFeedback,
       maxOutputTokens: 10000,
       abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
     });
+    accumulateTokens(assemblyTokens, assemblyUsage);
     return text;
   };
 
@@ -1575,6 +1632,9 @@ export async function runAssemblyStage(
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
+      promptTokens: assemblyTokens.promptTokens,
+      completionTokens: assemblyTokens.completionTokens,
+      estimatedCostUsd: calculateCost("claude-opus-4-5", assemblyTokens),
       responsePayloadJson: {
         consistencyReport: checks.consistency,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
@@ -1606,6 +1666,9 @@ export async function runAssemblyStage(
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      promptTokens: assemblyTokens.promptTokens,
+      completionTokens: assemblyTokens.completionTokens,
+      estimatedCostUsd: assemblyTokens.promptTokens > 0 ? calculateCost("claude-opus-4-5", assemblyTokens) : undefined,
       responsePayloadJson: {
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
       },
@@ -1963,18 +2026,20 @@ export async function runVettingStage(
     : "";
   const userPrompt = baseUserPrompt + preVetBlock;
 
+  const vettingTokens = createTokenAccumulator();
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
     const anthropic = getAnthropicClient();
-    const { text } = await generateText({
+    const { text, usage: vettingUsage } = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
       system: systemPrompt,
       prompt: promptWithFeedback,
       maxOutputTokens: 16000,
       abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
     });
+    accumulateTokens(vettingTokens, vettingUsage);
     return text;
   };
 
@@ -2166,32 +2231,35 @@ export async function runVettingStage(
     });
 
     const jobStatus = checks.validation.valid ? "completed" : (checks.validation.critical ? "failed" : "completed");
-    await updateWorkflowJob(jobId, {
-      status: jobStatus,
-      completedAt: new Date(),
-      errorMessage: checks.validation.valid ? undefined : `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
-      responsePayloadJson: {
-        vettingReport: currentReport,
-        bloatDetected: detectedBloat.length,
-        preVetCitationAudit: {
-          verified: preVetCitationAudit.verifiedCitations.length,
-          unverified: preVetCitationAudit.unverifiedCitations.length,
-          riskScore: preVetCitationAudit.hallucinationRiskScore,
-        },
-        postVetCitationAudit: {
-          verified: checks.postVetCitationAudit.verifiedCitations.length,
-          unverified: checks.postVetCitationAudit.unverifiedCitations.length,
-          riskScore: checks.postVetCitationAudit.hallucinationRiskScore,
-        },
-        postVetConsistency: checks.postVetConsistency,
-        critical: checks.validation.critical,
-      },
-    });
 
     if (checks.validation.critical) {
       console.error(
         `[Pipeline] Stage 4: CRITICAL issues for letter #${letterId} (needs assembly retry): ${checks.validation.errors.join("; ")}`
       );
+      await updateWorkflowJob(jobId, {
+        status: jobStatus,
+        completedAt: new Date(),
+        promptTokens: vettingTokens.promptTokens,
+        completionTokens: vettingTokens.completionTokens,
+        estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
+        errorMessage: `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
+        responsePayloadJson: {
+          vettingReport: currentReport,
+          bloatDetected: detectedBloat.length,
+          preVetCitationAudit: {
+            verified: preVetCitationAudit.verifiedCitations.length,
+            unverified: preVetCitationAudit.unverifiedCitations.length,
+            riskScore: preVetCitationAudit.hallucinationRiskScore,
+          },
+          postVetCitationAudit: {
+            verified: checks.postVetCitationAudit.verifiedCitations.length,
+            unverified: checks.postVetCitationAudit.unverifiedCitations.length,
+            riskScore: checks.postVetCitationAudit.hallucinationRiskScore,
+          },
+          postVetConsistency: checks.postVetConsistency,
+          critical: true,
+        },
+      });
       return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: true };
     }
 
@@ -2213,6 +2281,31 @@ export async function runVettingStage(
       `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${currentReport.riskLevel}, changes=${currentReport.changesApplied.length}, bloat_removed=${currentReport.bloatPhrasesRemoved.length}`
     );
 
+    await updateWorkflowJob(jobId, {
+      status: "completed",
+      completedAt: new Date(),
+      promptTokens: vettingTokens.promptTokens,
+      completionTokens: vettingTokens.completionTokens,
+      estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
+      errorMessage: checks.validation.valid ? undefined : `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
+      responsePayloadJson: {
+        vettingReport: currentReport,
+        bloatDetected: detectedBloat.length,
+        preVetCitationAudit: {
+          verified: preVetCitationAudit.verifiedCitations.length,
+          unverified: preVetCitationAudit.unverifiedCitations.length,
+          riskScore: preVetCitationAudit.hallucinationRiskScore,
+        },
+        postVetCitationAudit: {
+          verified: checks.postVetCitationAudit.verifiedCitations.length,
+          unverified: checks.postVetCitationAudit.unverifiedCitations.length,
+          riskScore: checks.postVetCitationAudit.hallucinationRiskScore,
+        },
+        postVetConsistency: checks.postVetConsistency,
+        critical: false,
+      },
+    });
+
     return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -2233,6 +2326,9 @@ export async function runVettingStage(
       status: "failed",
       errorMessage: msg,
       completedAt: new Date(),
+      promptTokens: vettingTokens.promptTokens,
+      completionTokens: vettingTokens.completionTokens,
+      estimatedCostUsd: vettingTokens.promptTokens > 0 ? calculateCost("claude-sonnet-4-20250514", vettingTokens) : undefined,
     });
     throw new Error(`Stage 4 vetting failed for letter #${letterId}: ${msg}`);
   }
@@ -2580,13 +2676,17 @@ export async function runFullPipeline(
       `[Pipeline] Built citation registry for letter #${letterId}: ${citationRegistry.length} citations extracted`
     );
 
+    const citationTokens = createTokenAccumulator();
     if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
       const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
       citationRegistry = await revalidateCitationsWithPerplexity(
-        citationRegistry, jurisdiction, letterId
+        citationRegistry, jurisdiction, letterId, citationTokens
       );
     }
     pipelineCtx.citationRegistry = citationRegistry;
+    if (pipelineCtx) {
+      pipelineCtx.citationRevalidationTokens = citationTokens;
+    }
 
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
 
@@ -2602,9 +2702,15 @@ export async function runFullPipeline(
 
     await finalizeLetterAfterVetting(letterId, vettingResult.vettedLetter, vettingResult.vettingReport, pipelineCtx);
 
+    const citationRevalidationTokens = pipelineCtx.citationRevalidationTokens;
     await updateWorkflowJob(pipelineJobId, {
       status: "completed",
       completedAt: new Date(),
+      promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
+      completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
+      estimatedCostUsd: citationRevalidationTokens
+        ? calculateCost("sonar-pro", citationRevalidationTokens)
+        : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
         webGrounded: pipelineCtx.webGrounded,
@@ -2786,11 +2892,13 @@ export async function retryPipelineFromStage(
       pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
+      const citationTokensResearch = createTokenAccumulator();
       if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
         const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
+        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensResearch);
       }
       pipelineCtx.citationRegistry = citationRegistry;
+      pipelineCtx.citationRevalidationTokens = citationTokensResearch;
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
     } else {
@@ -2803,18 +2911,26 @@ export async function retryPipelineFromStage(
       pipelineCtx.webGrounded = !pipelineCtx.researchUnverified;
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
+      const citationTokensDrafting = createTokenAccumulator();
       if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
         const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId);
+        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensDrafting);
       }
       pipelineCtx.citationRegistry = citationRegistry;
+      pipelineCtx.citationRevalidationTokens = citationTokensDrafting;
       await updateLetterStatus(letterId, "drafting", { force: true });
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
     }
+    const retryCitationTokens = pipelineCtx.citationRevalidationTokens;
     await updateWorkflowJob(retryJobId, {
       status: "completed",
       completedAt: new Date(),
+      promptTokens: retryCitationTokens?.promptTokens ?? 0,
+      completionTokens: retryCitationTokens?.completionTokens ?? 0,
+      estimatedCostUsd: retryCitationTokens
+        ? calculateCost("sonar-pro", retryCitationTokens)
+        : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
         webGrounded: pipelineCtx.webGrounded,

@@ -32,6 +32,7 @@ import {
   getNotificationsByUserId,
   getResearchRunsByLetterId,
   getReviewActions,
+  getCostAnalytics,
   getSystemStats,
   getWorkflowJobsByLetterId,
   logReviewAction,
@@ -1509,6 +1510,8 @@ export const appRouter = router({
   admin: router({
     stats: adminProcedure.query(async () => getSystemStats()),
 
+    costAnalytics: adminProcedure.query(async () => getCostAnalytics()),
+
     users: adminProcedure
       .input(
         z
@@ -1847,12 +1850,35 @@ export const appRouter = router({
           getWorkflowJobsByLetterId(input.letterId),
         ]);
         const aiDraftVersion = versions.find(v => v.versionType === "ai_draft");
+
+        // Aggregate token/cost across all jobs with tracked cost (includes failed jobs
+        // that still incurred API charges), so pipelineCostSummary reflects true spend.
+        const trackedJobs = jobs.filter(j => j.estimatedCostUsd != null);
+        const pipelineCostSummary = {
+          totalPromptTokens: trackedJobs.reduce((s, j) => s + (j.promptTokens ?? 0), 0),
+          totalCompletionTokens: trackedJobs.reduce((s, j) => s + (j.completionTokens ?? 0), 0),
+          totalTokens: trackedJobs.reduce((s, j) => s + (j.promptTokens ?? 0) + (j.completionTokens ?? 0), 0),
+          totalCostUsd: trackedJobs
+            .reduce((s, j) => s + parseFloat(j.estimatedCostUsd as string ?? "0"), 0)
+            .toFixed(6),
+          byStage: trackedJobs.map(j => ({
+            jobId: j.id,
+            jobType: j.jobType,
+            provider: j.provider,
+            promptTokens: j.promptTokens ?? 0,
+            completionTokens: j.completionTokens ?? 0,
+            totalTokens: (j.promptTokens ?? 0) + (j.completionTokens ?? 0),
+            estimatedCostUsd: j.estimatedCostUsd,
+          })),
+        };
+
         return {
           ...letter,
           aiDraftContent: aiDraftVersion?.content ?? null,
           letterVersions: versions,
           reviewActions: actions,
           workflowJobs: jobs,
+          pipelineCostSummary,
         };
       }),
 
