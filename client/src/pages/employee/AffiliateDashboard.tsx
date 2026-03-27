@@ -234,7 +234,7 @@ export default function AffiliateDashboard() {
               Welcome, {user?.name ?? "Affiliate"}
             </h1>
             {user?.employeeId && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-white" data-testid="text-employee-id">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-white" data-testid="text-affiliate-id">
                 {user.employeeId}
               </span>
             )}
@@ -246,7 +246,7 @@ export default function AffiliateDashboard() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 rounded-lg bg-muted p-1" data-testid="tabs-employee">
+        <div className="flex gap-1 rounded-lg bg-muted p-1" data-testid="tabs-affiliate">
           <Button
             variant={activeTab === "overview" ? "default" : "ghost"}
             size="sm"

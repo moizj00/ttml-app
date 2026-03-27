@@ -44,7 +44,7 @@ import {
   AttorneyDashboardSkeleton,
   ReviewQueueSkeleton,
   ReviewDetailSkeleton,
-  EmployeeDashboardSkeleton,
+  AffiliateDashboardSkeleton,
   AdminDashboardSkeleton,
   AdminUsersSkeleton,
   AdminJobsSkeleton,
@@ -284,21 +284,21 @@ function Router() {
       </Route>
       <Route path="/employee">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <SuspenseFade fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/employee/referrals">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <SuspenseFade fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/employee/earnings">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <SuspenseFade fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
           </SuspenseFade>
         </ProtectedRoute>

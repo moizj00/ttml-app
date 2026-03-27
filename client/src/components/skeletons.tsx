@@ -566,11 +566,11 @@ export function ReviewDetailSkeleton() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EMPLOYEE PAGE SKELETONS
+// AFFILIATE PAGE SKELETONS
 // ═══════════════════════════════════════════════════════════════
 
-/** Employee Affiliate Dashboard — sidebar + stat cards + code + referral link + tables */
-export function EmployeeDashboardSkeleton() {
+/** Affiliate Dashboard — sidebar + stat cards + code + referral link + tables */
+export function AffiliateDashboardSkeleton() {
   return (
     <AppLayoutSkeleton>
       <div className="space-y-6">

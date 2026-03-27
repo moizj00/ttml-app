@@ -488,7 +488,7 @@ export default function AppLayout({
                                 : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                             }`}
                           >
-                            {n.category === "users" ? "Users" : n.category === "letters" ? "Letters" : n.category === "employee" ? "Employee" : n.category}
+                            {n.category === "users" ? "Users" : n.category === "letters" ? "Letters" : n.category === "employee" ? "Affiliate" : n.category}
                           </span>
                         )}
                       </div>

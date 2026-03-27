@@ -304,7 +304,7 @@ export default function AdminAffiliate() {
             Affiliate Program Management
           </h1>
           <p className="text-indigo-200 text-sm">
-            Manage discount codes, commissions, payouts, and employee
+            Manage discount codes, commissions, payouts, and affiliate
             performance.
           </p>
         </div>
@@ -403,7 +403,7 @@ export default function AdminAffiliate() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Employee Performance Tab */}
+          {/* Affiliate Performance Tab */}
           <TabsContent value="performance">
             <Card>
               <CardHeader>
@@ -445,7 +445,7 @@ export default function AdminAffiliate() {
                             <TableRow
                               className="cursor-pointer hover:bg-muted/50"
                               onClick={() => toggleEmployee(emp.employeeId)}
-                              data-testid={`employee-row-${emp.employeeId}`}
+                              data-testid={`affiliate-row-${emp.employeeId}`}
                             >
                               <TableCell className="pr-0">
                                 <Button
@@ -456,7 +456,7 @@ export default function AdminAffiliate() {
                                     e.stopPropagation();
                                     toggleEmployee(emp.employeeId);
                                   }}
-                                  data-testid={`expand-employee-${emp.employeeId}`}
+                                  data-testid={`expand-affiliate-${emp.employeeId}`}
                                   aria-label={
                                     expandedEmployeeId === emp.employeeId
                                       ? "Collapse referrals"
@@ -873,7 +873,7 @@ export default function AdminAffiliate() {
               </DialogTitle>
               <DialogDescription>
                 {processingPayout?.action === "completed"
-                  ? "Confirm that this payout has been sent to the employee. Oldest pending commissions up to the payout amount will be marked as paid."
+                  ? "Confirm that this payout has been sent to the affiliate. Oldest pending commissions up to the payout amount will be marked as paid."
                   : "Provide a reason for rejecting this payout request."}
               </DialogDescription>
             </DialogHeader>
