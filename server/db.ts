@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { captureServerException } from "./sentry";
@@ -226,7 +226,7 @@ export async function acquirePipelineLock(letterId: number): Promise<boolean> {
         eq(letterRequests.id, letterId),
         or(
           isNull(letterRequests.pipelineLockedAt),
-          sql`${letterRequests.pipelineLockedAt} < ${staleThreshold}`
+          lt(letterRequests.pipelineLockedAt, staleThreshold)
         )
       )
     )

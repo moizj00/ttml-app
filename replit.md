@@ -49,9 +49,10 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
     3.  **Claude Opus Assembly**: Validation for structure, word count, and consistency.
     4.  **Claude Sonnet Vetting**: Jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness.
     5.  **Recursive Learning System**: Captures structured lessons from attorney feedback (approvals/rejections/changes) and computes quality scores, injecting lessons into future AI stages for continuous improvement.
-- **Pipeline Resilience**: Automatic retry mechanism (up to 3 attempts with exponential backoff) before marking as `pipeline_failed`.
+- **Pipeline Resilience**: Automatic retry mechanism (up to 3 attempts with exponential backoff) before marking as `pipeline_failed`. DB-level lock uses `lt()` Drizzle operator for `pipeline_locked_at` comparison (fixed from broken `sql` template tag).
 - **Rate Limiting**: Upstash Redis for fine-grained, per-user limits on sensitive endpoints, with a fail-closed mode for pipeline-triggering endpoints.
 - **Database Indexes**: Comprehensive btree indexes on frequently queried columns in `letter_requests`, `workflow_jobs`, `review_actions`, `letter_versions`, `notifications`, `attachments`, `research_runs`.
+- **research_runs schema**: Includes `cache_hit` (boolean, default false) and `cache_key` (varchar 256) columns for KV cache integration.
 - **Error Tracking**: Sentry.
 - **Deployment**: Railway.
 
