@@ -1,5 +1,10 @@
 /**
- * Server-side PDF generation for legal letters using Puppeteer (headless Chrome).
+ * Server-side PDF generation for legal letters.
+ *
+ * Primary path:  Cloudflare Worker (Browser Rendering API) — offloads CPU from Express.
+ * Fallback path: Local Puppeteer (headless Chrome) — used when Worker is not configured
+ *                or unreachable, preserving full functionality without any code changes.
+ *
  * Template 1 = Approved (blue stamp, uploaded to S3).
  * Template 2 = Draft (DRAFT watermark, returned as Buffer).
  */
@@ -16,6 +21,7 @@ import {
   buildDraftHeaderHtml,
   type LetterTemplateData,
 } from "./letterTemplates";
+import { generatePdfViaWorker } from "./workerPdfClient";
 
 interface IntakeData {
   sender?: {
@@ -42,6 +48,10 @@ interface PdfGenerationOptions {
   jurisdictionCountry?: string | null;
   intakeJson?: IntakeData | null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Local Puppeteer (legacy / fallback)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Resolve the Chrome/Chromium executable path.
@@ -76,7 +86,7 @@ function resolveChromiumPath(): string {
  */
 async function launchBrowser() {
   const executablePath = resolveChromiumPath();
-  console.log(`[PDF] Launching Chromium: ${executablePath}`);
+  console.log(`[PDF] Launching local Chromium: ${executablePath}`);
   return puppeteer.launch({
     headless: true,
     executablePath,
@@ -89,11 +99,7 @@ async function launchBrowser() {
   });
 }
 
-// Margin values must match the @page CSS in letterTemplates.ts PAGE_CSS.
-// top: "72px" reserves space for the Puppeteer header template on pages 2+.
-// @page :first { margin-top: 0 } in the HTML CSS suppresses the header on page 1
-// (the letterhead lives in the body and fills from the top on page 1 only).
-async function htmlToPdfBuffer(
+async function htmlToPdfBufferLocal(
   html: string,
   headerTemplate: string,
   footerTemplate: string
@@ -116,11 +122,10 @@ async function htmlToPdfBuffer(
   }
 }
 
-// Map PdfGenerationOptions → LetterTemplateData.
-// Sender/recipient fields come directly from intakeJson so they always match
-// what the user entered during letter submission.
-// Date uses approvedAt when available so the letter shows the actual approval
-// date even if the PDF is regenerated later; draft letters always show today.
+// ─────────────────────────────────────────────────────────────────────────────
+// Template data mapping
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildTemplateData(opts: PdfGenerationOptions): LetterTemplateData {
   const intake = opts.intakeJson ?? {};
   const dateSource = opts.approvedAt ? new Date(opts.approvedAt) : new Date();
@@ -148,6 +153,10 @@ function buildTemplateData(opts: PdfGenerationOptions): LetterTemplateData {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API — Approved PDFs
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Generate a professional PDF from the approved letter content,
  * upload it to S3, and return the public URL.
@@ -172,20 +181,36 @@ export async function generateAndUploadApprovedPdf(
 }
 
 /**
- * Generate the approved PDF buffer in memory using Puppeteer + Template 1.
- * Footer has confidentiality notice + dynamic page numbers.
- * Header has minimal continuation bar visible on pages 2+ only.
+ * Generate the approved PDF buffer.
+ * Tries the Cloudflare Worker first, falls back to local Puppeteer.
  */
 async function generatePdfBuffer(opts: PdfGenerationOptions): Promise<Buffer> {
   const data = buildTemplateData(opts);
   const html = buildApprovedLetterHtml(data);
   const headerTemplate = buildApprovedHeaderHtml(data);
   const footerTemplate = buildApprovedFooterHtml(data);
-  return htmlToPdfBuffer(html, headerTemplate, footerTemplate);
+
+  const { buffer } = await generatePdfViaWorker(
+    {
+      html,
+      headerTemplate,
+      footerTemplate,
+      watermark: false,
+      letterId: opts.letterId,
+    },
+    () => htmlToPdfBufferLocal(html, headerTemplate, footerTemplate)
+  );
+  return buffer;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API — Draft PDFs
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Generate an Unreviewed (draft) PDF buffer in memory using Puppeteer + Template 2.
+ * Generate an Unreviewed (draft) PDF buffer.
+ * Tries the Cloudflare Worker first, falls back to local Puppeteer.
+ *
  * Used for the free draft download feature — letter must be in generated_locked status.
  * The PDF is returned as a Buffer so the server can stream it directly to the client.
  *
@@ -205,5 +230,16 @@ export async function generateDraftPdfBuffer(opts: {
   const html = buildDraftLetterHtml(data);
   const headerTemplate = buildDraftHeaderHtml(data);
   const footerTemplate = buildDraftFooterHtml(data);
-  return htmlToPdfBuffer(html, headerTemplate, footerTemplate);
+
+  const { buffer } = await generatePdfViaWorker(
+    {
+      html,
+      headerTemplate,
+      footerTemplate,
+      watermark: true,
+      letterId: opts.letterId,
+    },
+    () => htmlToPdfBufferLocal(html, headerTemplate, footerTemplate)
+  );
+  return buffer;
 }

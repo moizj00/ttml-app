@@ -42,6 +42,9 @@ export const ENV = {
   r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
   r2BucketName: process.env.R2_BUCKET_NAME ?? "",
   r2PublicUrl: process.env.R2_PUBLIC_URL ?? "",
+  // Cloudflare Worker — PDF generation (optional — falls back to local Puppeteer if not set)
+  pdfWorkerUrl: process.env.PDF_WORKER_URL ?? "",
+  pdfWorkerSecret: process.env.PDF_WORKER_SECRET ?? "",
 };
 
 /**
