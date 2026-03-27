@@ -14,6 +14,7 @@ import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
+import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
 import { appRouter } from "../routers";
@@ -225,6 +226,7 @@ async function startServer() {
   registerEmailPreviewRoute(app);
   registerDraftRemindersRoute(app);
   registerDraftPdfRoute(app);
+  registerBlogInternalRoutes(app);
 
   app.use(
     "/api/trpc",

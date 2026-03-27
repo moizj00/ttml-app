@@ -2289,6 +2289,17 @@ export async function getBlogPostBySlugAnyStatus(slug: string) {
   return result[0] ?? null;
 }
 
+export async function getBlogPostSlugById(id: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select({ slug: blogPosts.slug })
+    .from(blogPosts)
+    .where(eq(blogPosts.id, id))
+    .limit(1);
+  return result[0]?.slug ?? null;
+}
+
 export async function getAllBlogPosts() {
   const db = await getDb();
   if (!db) return [];

@@ -85,7 +85,10 @@ import {
   createBlogPost,
   updateBlogPost,
   deleteBlogPost,
+  getBlogPostSlugById,
 } from "./db";
+import { invalidateBlogPostCache } from "./blogCacheInvalidation";
+import { getCachedBlogPosts, getCachedBlogPost } from "./blogCache";
 import {
   sendJobFailedAlertEmail,
   sendLetterApprovedEmail,
@@ -3317,7 +3320,7 @@ ${truncatedText}
         offset: z.number().int().min(0).default(0),
       }).optional())
       .query(async ({ input }) => {
-        return getPublishedBlogPosts({
+        return getCachedBlogPosts({
           category: input?.category,
           limit: input?.limit ?? 12,
           offset: input?.offset ?? 0,
@@ -3327,7 +3330,7 @@ ${truncatedText}
     getBySlug: publicProcedure
       .input(z.object({ slug: z.string().min(1) }))
       .query(async ({ input }) => {
-        const post = await getBlogPostBySlug(input.slug);
+        const post = await getCachedBlogPost(input.slug);
         if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "Blog post not found" });
         return post;
       }),
@@ -3349,7 +3352,11 @@ ${truncatedText}
         status: z.enum(["draft", "published"]).default("draft"),
       }))
       .mutation(async ({ input }) => {
-        return createBlogPost(input);
+        const result = await createBlogPost(input);
+        if (input.status === "published") {
+          void invalidateBlogPostCache(input.slug);
+        }
+        return result;
       }),
 
     adminUpdate: adminProcedure
@@ -3367,14 +3374,26 @@ ${truncatedText}
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
+        const existingSlug = await getBlogPostSlugById(id);
         await updateBlogPost(id, data);
+        const slugChanged = data.slug && data.slug !== existingSlug;
+        if (slugChanged && existingSlug) {
+          await Promise.all([
+            invalidateBlogPostCache(existingSlug),
+            invalidateBlogPostCache(data.slug),
+          ]);
+        } else {
+          void invalidateBlogPostCache(data.slug ?? existingSlug ?? undefined);
+        }
         return { success: true };
       }),
 
     adminDelete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
+        const existingSlug = await getBlogPostSlugById(input.id);
         await deleteBlogPost(input.id);
+        void invalidateBlogPostCache(existingSlug ?? undefined);
         return { success: true };
       }),
   }),

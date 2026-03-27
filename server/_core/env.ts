@@ -33,6 +33,9 @@ export const ENV = {
   // Cloudflare Worker — Affiliate referral link tracking
   affiliateWorkerUrl: process.env.AFFILIATE_WORKER_URL ?? "https://refer.talktomylawyer.com",
   affiliateWorkerSecret: process.env.AFFILIATE_WORKER_SECRET ?? "",
+  // Cloudflare KV Blog Cache Worker
+  cfBlogCacheWorkerUrl: process.env.CF_BLOG_CACHE_WORKER_URL ?? "",
+  cfBlogCacheInvalidationSecret: process.env.CF_BLOG_CACHE_INVALIDATION_SECRET ?? "",
 };
 
 /**
