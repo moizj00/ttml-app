@@ -41,6 +41,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  CalendarClock,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import React, { useState } from "react";
@@ -260,12 +262,26 @@ export default function AdminAffiliate() {
   const updateCode = trpc.affiliate.adminUpdateCode.useMutation({
     onSuccess: () => {
       toast.success("Discount code updated", {
-        description: "The new code is now active for this affiliate.",
+        description: "The code settings have been saved.",
       });
       utils.affiliate.adminAllCodes.invalidate();
     },
     onError: err => toast.error("Update failed", { description: err.message }),
   });
+
+  const forceExpireCode = trpc.affiliate.adminForceExpireCode.useMutation({
+    onSuccess: () => {
+      toast.success("Code force-expired", {
+        description: "The discount code has been deactivated and expired.",
+      });
+      utils.affiliate.adminAllCodes.invalidate();
+      utils.affiliate.adminEmployeePerformance.invalidate();
+      setForceExpireCodeId(null);
+    },
+    onError: err => toast.error("Force expire failed", { description: err.message }),
+  });
+
+  const [forceExpireCodeId, setForceExpireCodeId] = useState<number | null>(null);
 
   // ─── Summary Stats ──────────────────────────────────────────
   const totalCommissions =
@@ -554,47 +570,107 @@ export default function AdminAffiliate() {
                         <TableHead className="text-center">Discount</TableHead>
                         <TableHead className="text-center">Uses</TableHead>
                         <TableHead className="text-center">Max Uses</TableHead>
+                        <TableHead>Expires</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead className="text-center">Active</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {codes.map(code => (
-                        <TableRow key={code.id}>
-                          <TableCell className="font-mono font-medium">
-                            {code.code}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium text-sm">{code.employeeName ?? "Unknown"}</p>
-                              <p className="text-xs text-muted-foreground">{code.employeeEmail ?? `#${code.employeeId}`}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.discountPercent}%
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.usageCount}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.maxUses ?? "∞"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {formatDate(code.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Switch
-                              checked={code.isActive}
-                              onCheckedChange={checked =>
-                                updateCode.mutate({
-                                  id: code.id,
-                                  isActive: checked,
-                                })
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {codes.map(code => {
+                        const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+                        return (
+                          <TableRow key={code.id} data-testid={`code-row-${code.id}`}>
+                            <TableCell className="font-mono font-medium">
+                              {code.code}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-sm">{code.employeeName ?? "Unknown"}</p>
+                                <p className="text-xs text-muted-foreground">{code.employeeEmail ?? `#${code.employeeId}`}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.discountPercent}%
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.usageCount}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.maxUses ?? "∞"}
+                            </TableCell>
+                            <TableCell>
+                              {isExpired ? (
+                                <Badge variant="destructive" className="text-xs" data-testid={`badge-expired-${code.id}`}>
+                                  Expired
+                                </Badge>
+                              ) : code.expiresAt ? (
+                                <span className="text-sm" data-testid={`text-expires-${code.id}`}>
+                                  {formatDate(code.expiresAt)}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground" data-testid={`text-expires-${code.id}`}>
+                                  Never
+                                </span>
+                              )}
+                              <div className="mt-1">
+                                <input
+                                  type="date"
+                                  className="text-xs border rounded px-1.5 py-0.5 w-32 bg-background"
+                                  data-testid={`input-expiry-date-${code.id}`}
+                                  value={code.expiresAt ? new Date(code.expiresAt).toISOString().split("T")[0] : ""}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    updateCode.mutate({
+                                      id: code.id,
+                                      expiresAt: val ? new Date(val + "T23:59:59Z").toISOString() : null,
+                                    });
+                                  }}
+                                />
+                                {code.expiresAt && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-6 px-1.5 ml-1 text-muted-foreground"
+                                    data-testid={`button-clear-expiry-${code.id}`}
+                                    onClick={() => updateCode.mutate({ id: code.id, expiresAt: null })}
+                                  >
+                                    Clear
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {formatDate(code.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Switch
+                                checked={code.isActive}
+                                data-testid={`switch-active-${code.id}`}
+                                onCheckedChange={checked =>
+                                  updateCode.mutate({
+                                    id: code.id,
+                                    isActive: checked,
+                                  })
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="text-xs h-7"
+                                data-testid={`button-force-expire-${code.id}`}
+                                disabled={!!isExpired && !code.isActive}
+                                onClick={() => setForceExpireCodeId(code.id)}
+                              >
+                                <Ban className="w-3 h-3 mr-1" />
+                                Force Expire
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -839,6 +915,53 @@ export default function AdminAffiliate() {
                 {processingPayout?.action === "completed"
                   ? "Confirm Approval"
                   : "Confirm Rejection"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Force Expire Confirmation Dialog */}
+        <Dialog
+          open={forceExpireCodeId !== null}
+          onOpenChange={open => {
+            if (!open) setForceExpireCodeId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Ban className="w-5 h-5 text-destructive" />
+                Force Expire Discount Code
+              </DialogTitle>
+              <DialogDescription>
+                This will immediately deactivate the code and set it as expired.
+                The affiliate will no longer earn commissions from this code. This
+                action cannot be undone automatically — you would need to manually
+                re-activate and clear the expiration.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setForceExpireCodeId(null)}
+                data-testid="button-cancel-force-expire"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (forceExpireCodeId !== null) {
+                    forceExpireCode.mutate({ id: forceExpireCodeId });
+                  }
+                }}
+                disabled={forceExpireCode.isPending}
+                data-testid="button-confirm-force-expire"
+              >
+                {forceExpireCode.isPending && (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                )}
+                Force Expire
               </Button>
             </DialogFooter>
           </DialogContent>

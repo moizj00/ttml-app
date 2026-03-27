@@ -1605,6 +1605,7 @@ export async function updateDiscountCode(
     isActive?: boolean;
     discountPercent?: number;
     maxUses?: number | null;
+    expiresAt?: Date | null;
   }
 ) {
   const db = await getDb();

@@ -2712,11 +2712,31 @@ export const appRouter = router({
           isActive: z.boolean().optional(),
           discountPercent: z.number().min(1).max(100).optional(),
           maxUses: z.number().nullable().optional(),
+          expiresAt: z.string().datetime().nullable().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const { id, ...data } = input;
+        const { id, expiresAt, ...rest } = input;
+        const data: Parameters<typeof updateDiscountCode>[1] = { ...rest };
+        if (expiresAt !== undefined) {
+          data.expiresAt = expiresAt ? new Date(expiresAt) : null;
+        }
         await updateDiscountCode(id, data);
+        return { success: true };
+      }),
+
+    adminForceExpireCode: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const allCodes = await getAllDiscountCodes();
+        const target = allCodes.find(c => c.id === input.id);
+        await updateDiscountCode(input.id, {
+          isActive: false,
+          expiresAt: new Date(),
+        });
+        if (target?.code) {
+          syncCodeToWorkerAllowlist(target.code, "remove").catch(() => {});
+        }
         return { success: true };
       }),
 

@@ -48,6 +48,8 @@ import {
   MousePointerClick,
   BarChart3,
   ExternalLink,
+  CalendarClock,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -476,11 +478,30 @@ export default function AffiliateDashboard() {
                   </div>
                   <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between pt-2 border-t">
                     <span>Total Conversions: <strong>{discountCode.usageCount}</strong></span>
-                    <Badge
-                      variant={discountCode.isActive ? "default" : "secondary"}
-                    >
-                      {discountCode.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {discountCode.expiresAt ? (
+                        new Date(discountCode.expiresAt) < new Date() ? (
+                          <Badge variant="destructive" className="flex items-center gap-1" data-testid="badge-code-expired">
+                            <AlertTriangle className="w-3 h-3" />
+                            Expired
+                          </Badge>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="text-code-expires">
+                            <CalendarClock className="w-3 h-3" />
+                            Expires {formatDate(discountCode.expiresAt)}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground" data-testid="text-code-no-expiry">
+                          No expiration
+                        </span>
+                      )}
+                      <Badge
+                        variant={discountCode.isActive ? "default" : "secondary"}
+                      >
+                        {discountCode.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               ) : (
