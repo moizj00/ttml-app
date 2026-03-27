@@ -13,6 +13,9 @@ export const ENV = {
   // Email
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "noreply@talk-to-my-lawyer.com",
+  // Cloudflare Email Worker (optional — falls back to direct Resend if not set)
+  emailWorkerUrl: process.env.EMAIL_WORKER_URL ?? "",
+  emailWorkerSecret: process.env.EMAIL_WORKER_SECRET ?? "",
   // Stripe
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",

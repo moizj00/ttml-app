@@ -1,12 +1,22 @@
 /**
- * Email notification service using Resend.
- * Follows the email-marketing-template-skill: single-column, 600px, table-based layout,
- * bulletproof CTAs, plain-text fallback, and brand-consistent design.
+ * Email notification service.
+ *
+ * When EMAIL_WORKER_URL and EMAIL_WORKER_SECRET are configured, all email
+ * sending is delegated to the Cloudflare Worker (fire-and-forget). The Worker
+ * renders templates and sends via Resend, handling retries and logging.
+ *
+ * If the Worker is not configured, email is sent directly via Resend (legacy
+ * fallback path with local template rendering).
+ *
+ * All public `send*Email` function signatures are unchanged so callers need no updates.
  */
 
 import { Resend } from "resend";
+import { ENV } from "./_core/env";
 
-// Lazy-init: do NOT construct at module load time — undefined key throws and crashes test imports
+type EmailPayload = { type: string; [key: string]: unknown };
+
+// Lazy-init Resend client for fallback path
 let _resend: Resend | null = null;
 function getResend(): Resend {
   if (!_resend) {
@@ -14,14 +24,57 @@ function getResend(): Resend {
   }
   return _resend;
 }
-const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@resend.dev";
+const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@talk-to-my-lawyer.com";
 const APP_NAME = "Talk to My Lawyer";
-const BRAND_COLOR = "#2563EB"; // blue-600
-const BRAND_DARK = "#0F2744"; // deep navy
-const BRAND_ACCENT = "#1D4ED8"; // blue-700 for gradient
+const BRAND_COLOR = "#2563EB";
+const BRAND_DARK = "#0F2744";
+const BRAND_ACCENT = "#1D4ED8";
 const LOGO_URL = "https://www.talk-to-my-lawyer.com/images/logo.png";
 
-// ─── HTML Template Builder ───────────────────────────────────────────────────
+// ─── Worker Dispatch ──────────────────────────────────────────────────────────
+
+/**
+ * Fire-and-forget dispatch to the Cloudflare Email Worker.
+ * Returns true if the request was accepted (2xx), false on error.
+ * Never throws — failures are logged and the caller can decide to fallback.
+ */
+const WORKER_DISPATCH_TIMEOUT_MS = 5_000;
+
+async function dispatchToWorker(payload: EmailPayload): Promise<boolean> {
+  const workerUrl = ENV.emailWorkerUrl;
+  const workerSecret = ENV.emailWorkerSecret;
+  if (!workerUrl || !workerSecret) return false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), WORKER_DISPATCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(workerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${workerSecret}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[Email] Worker returned ${res.status} for type=${payload.type}: ${body}`);
+      return false;
+    }
+    console.log(`[Email] Dispatched to Worker, type=${payload.type}`);
+    return true;
+  } catch (err) {
+    clearTimeout(timer);
+    const label = (err as { name?: string }).name === "AbortError" ? "timed out" : "failed";
+    console.error(`[Email] Worker dispatch ${label} for type=${payload.type}:`, err);
+    return false;
+  }
+}
+
+// ─── HTML Template Builder (fallback path) ────────────────────────────────────
 
 function buildEmailHtml(opts: {
   preheader: string;
@@ -189,7 +242,7 @@ function buildPlainText(opts: {
   return text;
 }
 
-// ─── Email Sending Helpers ────────────────────────────────────────────────────
+// ─── Fallback Email Sending Helpers ──────────────────────────────────────────
 
 async function sendEmail(opts: {
   to: string;
@@ -258,6 +311,9 @@ export async function sendLetterApprovedEmail(opts: {
   appUrl: string;
   pdfUrl?: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "letter_approved", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const pdfLine = opts.pdfUrl
     ? `<p style="margin-top:12px;">📄 <a href="${opts.pdfUrl}" style="color:${BRAND_DARK};font-weight:bold;">Download your Reviewed PDF</a></p>`
@@ -275,7 +331,7 @@ export async function sendLetterApprovedEmail(opts: {
     body,
     ctaText: "View Your Approved Letter",
     ctaUrl,
-    accentColor: "#059669", // green — approval
+    accentColor: "#059669",
   });
   await sendWithRetry({
     to: opts.to,
@@ -299,6 +355,9 @@ export async function sendNeedsChangesEmail(opts: {
   attorneyNote?: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "needs_changes", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const noteBlock = opts.attorneyNote
     ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#FEF3C7;border-left:4px solid #F59E0B;border-radius:4px;font-style:italic;color:#92400E;">${opts.attorneyNote}</blockquote>`
@@ -316,7 +375,7 @@ export async function sendNeedsChangesEmail(opts: {
     body,
     ctaText: "View Feedback & Update",
     ctaUrl,
-    accentColor: "#D97706", // amber — needs changes
+    accentColor: "#D97706",
   });
   await sendEmail({
     to: opts.to,
@@ -340,6 +399,9 @@ export async function sendLetterRejectedEmail(opts: {
   reason?: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "letter_rejected", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const reasonBlock = opts.reason
     ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#FEE2E2;border-left:4px solid #EF4444;border-radius:4px;color:#991B1B;">${opts.reason}</blockquote>`
@@ -357,7 +419,7 @@ export async function sendLetterRejectedEmail(opts: {
     body,
     ctaText: "View Details",
     ctaUrl,
-    accentColor: "#DC2626", // red — rejection
+    accentColor: "#DC2626",
   });
   await sendEmail({
     to: opts.to,
@@ -382,6 +444,9 @@ export async function sendNewReviewNeededEmail(opts: {
   jurisdiction: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "new_review_needed", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/review/${opts.letterId}`;
   const body = `
     <p>Hello ${opts.name},</p>
@@ -401,7 +466,7 @@ export async function sendNewReviewNeededEmail(opts: {
     body,
     ctaText: "Review Letter",
     ctaUrl,
-    accentColor: "#7C3AED", // purple — attorney action
+    accentColor: "#7C3AED",
   });
   await sendWithRetry({
     to: opts.to,
@@ -425,6 +490,9 @@ export async function sendJobFailedAlertEmail(opts: {
   errorMessage: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "job_failed_alert", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/admin/jobs`;
   const body = `
     <p>Hello ${opts.name},</p>
@@ -444,7 +512,7 @@ export async function sendJobFailedAlertEmail(opts: {
     body,
     ctaText: "View Failed Jobs",
     ctaUrl,
-    accentColor: "#DC2626", // red — alert
+    accentColor: "#DC2626",
   });
   await sendEmail({
     to: opts.to,
@@ -468,6 +536,9 @@ export async function sendAdminAlertEmail(opts: {
   ctaText?: string;
   ctaUrl?: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "admin_alert", ...opts });
+  if (dispatched) return;
+
   const html = buildEmailHtml({
     preheader: opts.preheader,
     title: opts.subject,
@@ -498,6 +569,9 @@ export async function sendStatusUpdateEmail(opts: {
   newStatus: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "status_update", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const statusMessages: Record<string, string> = {
     researching:
@@ -548,6 +622,9 @@ export async function sendLetterToRecipient(opts: {
   pdfUrl?: string;
   htmlContent?: string;
 }): Promise<void> {
+  const dispatched = await dispatchToWorker({ type: "letter_to_recipient", ...opts });
+  if (dispatched) return;
+
   const emailSubject = opts.subjectOverride || opts.letterSubject;
   const escapeHtml = (str: string) =>
     str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -658,6 +735,9 @@ export async function sendLetterSubmissionEmail(opts: {
   jurisdictionState: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "letter_submission", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const letterTypeLabel = opts.letterType
     .replace(/-/g, " ")
@@ -714,6 +794,9 @@ export async function sendLetterReadyEmail(opts: {
   letterType?: string;
   jurisdictionState?: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "letter_ready", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const letterTypeLabel = opts.letterType
     ? opts.letterType.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
@@ -784,7 +867,7 @@ export async function sendLetterReadyEmail(opts: {
     body,
     ctaText: "View Draft & Submit for Review — $200",
     ctaUrl,
-    accentColor: "#D97706", // amber — action required / payment prompt
+    accentColor: "#D97706",
   });
 
   await sendEmail({
@@ -808,6 +891,9 @@ export async function sendLetterUnlockedEmail(opts: {
   letterId: number;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "letter_unlocked", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const body = `
     <p>Hello ${opts.name},</p>
@@ -833,7 +919,7 @@ export async function sendLetterUnlockedEmail(opts: {
     body,
     ctaText: "Track Review Status",
     ctaUrl,
-    accentColor: "#7C3AED", // purple — attorney review stage
+    accentColor: "#7C3AED",
   });
   await sendWithRetry({
     to: opts.to,
@@ -854,6 +940,9 @@ export async function sendVerificationEmail(opts: {
   name: string;
   verifyUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "verification", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Thank you for creating an account with <strong>${APP_NAME}</strong>. To complete your registration and start using our service, please verify your email address.</p>
@@ -866,7 +955,7 @@ export async function sendVerificationEmail(opts: {
     body,
     ctaText: "Verify My Email Address",
     ctaUrl: opts.verifyUrl,
-    accentColor: "#2563EB", // brand blue — account action
+    accentColor: "#2563EB",
     footerNote: `You received this email because you signed up for ${APP_NAME}. If this wasn't you, please ignore this email.`,
   });
   await sendEmail({
@@ -888,6 +977,9 @@ export async function sendWelcomeEmail(opts: {
   name: string;
   dashboardUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "welcome", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Your email has been verified and your account is now fully active. Welcome to <strong>${APP_NAME}</strong>!</p>
@@ -905,7 +997,7 @@ export async function sendWelcomeEmail(opts: {
     body,
     ctaText: "Go to My Dashboard",
     ctaUrl: opts.dashboardUrl,
-    accentColor: "#059669", // green — success / welcome
+    accentColor: "#059669",
   });
   await sendEmail({
     to: opts.to,
@@ -934,6 +1026,9 @@ export async function sendDraftReminderEmail(opts: {
   jurisdictionState?: string;
   hoursWaiting?: number;
 }) {
+  const dispatched = await dispatchToWorker({ type: "draft_reminder", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const letterTypeLabel = opts.letterType
     ? opts.letterType.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
@@ -1001,7 +1096,7 @@ export async function sendDraftReminderEmail(opts: {
     body,
     ctaText: "Submit for Attorney Review — $200",
     ctaUrl,
-    accentColor: "#EA580C", // orange — urgency reminder
+    accentColor: "#EA580C",
   });
 
   await sendEmail({
@@ -1030,6 +1125,9 @@ export async function sendEmployeeWelcomeEmail(opts: {
   discountCode?: string;
   dashboardUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "employee_welcome", ...opts });
+  if (dispatched) return;
+
   const codeBlock = opts.discountCode
     ? `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#EFF6FF;border-radius:8px;margin:16px 0;border:1px solid #BFDBFE;">
         <tr><td style="padding:16px;">
@@ -1081,6 +1179,9 @@ export async function sendAttorneyWelcomeEmail(opts: {
   name: string;
   dashboardUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "attorney_welcome", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Welcome to <strong>${APP_NAME}</strong>. Your attorney account has been verified and you now have access to the <strong>Letter Review Center</strong>.</p>
@@ -1135,6 +1236,9 @@ export async function sendReviewAssignedEmail(opts: {
   subscriberName: string;
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "review_assigned", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/review/${opts.letterId}`;
   const body = `
     <p>Hello ${opts.name},</p>
@@ -1182,6 +1286,9 @@ export async function sendReviewCompletedEmail(opts: {
   action: "approved" | "rejected" | "needs_changes";
   appUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "review_completed", ...opts });
+  if (dispatched) return;
+
   const ctaUrl = `${opts.appUrl}/review/${opts.letterId}`;
   const actionLabels: Record<string, { label: string; color: string }> = {
     approved: { label: "Approved", color: "#059669" },
@@ -1233,6 +1340,9 @@ export async function sendEmployeeCommissionEmail(opts: {
   discountCode: string;
   dashboardUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "employee_commission", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Great news — a client you referred just made a payment using your discount code!</p>
@@ -1274,6 +1384,9 @@ export async function sendPayoutCompletedEmail(opts: {
   amount: string;
   paymentMethod: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "payout_completed", ...opts });
+  if (dispatched) return;
+
   const methodLabel = opts.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const body = `
     <p>Hello ${opts.name},</p>
@@ -1310,6 +1423,9 @@ export async function sendPayoutRejectedEmail(opts: {
   amount: string;
   reason: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "payout_rejected", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Unfortunately, your payout request has been <strong style="color:#DC2626;">rejected</strong>.</p>
@@ -1345,6 +1461,9 @@ export async function sendPaymentFailedEmail(opts: {
   letterSubject?: string;
   billingUrl: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "payment_failed", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>We were unable to process your most recent payment${opts.letterSubject ? ` for "<strong>${opts.letterSubject}</strong>"` : ""}.</p>
@@ -1383,6 +1502,13 @@ export async function sendAdminVerificationCodeEmail(opts: {
   code: string;
 }) {
   console.log(`[Email] Sending admin 2FA code to=${opts.to}, from=${FROM}`);
+
+  const dispatched = await dispatchToWorker({ type: "admin_verification_code", ...opts });
+  if (dispatched) {
+    console.log(`[Email] Admin 2FA code dispatched to Worker for to=${opts.to}`);
+    return;
+  }
+
   const codeDisplay = opts.code.split("").join(" ");
   const html = buildEmailHtml({
     preheader: `Your admin verification code: ${opts.code}`,
@@ -1434,6 +1560,9 @@ export async function sendAttorneyInvitationEmail(opts: {
   setPasswordUrl: string;
   invitedByName?: string;
 }) {
+  const dispatched = await dispatchToWorker({ type: "attorney_invitation", ...opts });
+  if (dispatched) return;
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>You have been invited to join <strong>${APP_NAME}</strong> as a <strong>Reviewing Attorney</strong>${opts.invitedByName ? ` by ${opts.invitedByName}` : ""}.</p>

@@ -1,0 +1,12 @@
+name = "ttml-email-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_NAME = "Talk to My Lawyer"
+
+# Secrets (set via `wrangler secret put`):
+#   RESEND_API_KEY
+#   RESEND_FROM_EMAIL
+#   EMAIL_WORKER_SECRET

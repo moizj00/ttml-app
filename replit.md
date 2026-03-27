@@ -25,7 +25,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20
 - **Database**: PostgreSQL via Supabase (accessed via Drizzle ORM + postgres-js driver)
 - **Auth**: Supabase Auth — cookie-first (`sb_session`), Google OAuth PKCE, custom Resend verification emails
-- **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed)
+- **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed). When `EMAIL_WORKER_URL` + `EMAIL_WORKER_SECRET` are set, all email rendering and delivery is offloaded to a Cloudflare Worker (`workers/email-worker/`) — fire-and-forget with exponential-backoff retry and Cloudflare dashboard logging. Falls back to direct Resend sending when Worker is not configured.
 - **Payments**: Stripe (3 subscription plans: Single Letter $200, Monthly $200/month, Yearly $2000/year)
 - **Rate Limiting**: Two-layer system — Cloudflare Worker edge layer (IP-based, coarse, blocks DDoS/bots before Railway) + Upstash Redis app layer (fine-grained per-user limits on sensitive endpoints). Edge Worker lives in `cloudflare-worker/`.
 - **AI Pipeline**: 4-stage pipeline — Perplexity (research + citation revalidation) → Claude Opus (drafting) → Claude Opus (assembly) → Claude Sonnet (vetting: jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness). Includes intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, deterministic bloat phrase detection, enriched audit trail, and **recursive learning system** (prompt memory + quality scoring)
