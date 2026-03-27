@@ -4,7 +4,7 @@
  * The server returns only a truncated preview (first ~20% of content).
  * Full content is never exposed before payment.
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
   FileText, Gift, Loader2,
@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DiscountCodeInput, type DiscountCodeResult } from "@/components/DiscountCodeInput";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useSearch } from "wouter";
 
 interface LetterPaywallProps {
   letterId: number;
@@ -26,6 +27,13 @@ interface LetterPaywallProps {
 export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountCodeResult | null>(null);
+
+  // Read referral/coupon code from URL params (e.g. ?coupon=TTML-001 from Worker redirect)
+  const searchString = useSearch();
+  const urlCouponCode = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("coupon") ?? params.get("code") ?? params.get("ref") ?? undefined;
+  }, [searchString]);
 
   const paywallStatus = trpc.billing.checkPaywallStatus.useQuery(undefined, {
     staleTime: 30_000,
@@ -206,6 +214,7 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
           <DiscountCodeInput
             variant="dark"
             className="mb-4"
+            initialCode={urlCouponCode}
             onCodeChange={(result) => setAppliedDiscount(result)}
           />
 

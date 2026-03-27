@@ -30,6 +30,9 @@ export const ENV = {
   // Cloudflare KV cache (optional — caching is skipped when not configured)
   kvWorkerUrl: process.env.KV_WORKER_URL ?? "",
   kvWorkerAuthToken: process.env.KV_WORKER_AUTH_TOKEN ?? "",
+  // Cloudflare Worker — Affiliate referral link tracking
+  affiliateWorkerUrl: process.env.AFFILIATE_WORKER_URL ?? "https://refer.talktomylawyer.com",
+  affiliateWorkerSecret: process.env.AFFILIATE_WORKER_SECRET ?? "",
 };
 
 /**

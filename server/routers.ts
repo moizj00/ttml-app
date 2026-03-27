@@ -122,6 +122,27 @@ import {
   hasActiveRecurringSubscription,
 } from "./stripe";
 
+/**
+ * Sync a discount code to/from the Cloudflare Worker KV allowlist.
+ * Called fire-and-forget (errors are swallowed) — the Worker degrades gracefully
+ * to not redirecting unknown codes; any temporary sync failure is non-critical.
+ */
+async function syncCodeToWorkerAllowlist(code: string, action: "add" | "remove"): Promise<void> {
+  const workerUrl = process.env.AFFILIATE_WORKER_URL ?? "";
+  const secret = process.env.AFFILIATE_WORKER_SECRET ?? "";
+  if (!workerUrl || !secret) return;
+
+  await fetch(`${workerUrl.replace(/\/$/, "")}/admin/codes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ code, action }),
+    signal: AbortSignal.timeout(5000),
+  });
+}
+
 const intakeJsonSchema = z.object({
   schemaVersion: z.string().default("1.0"),
   letterType: z.string(),
@@ -2521,6 +2542,10 @@ export const appRouter = router({
           ctx.user.id,
           ctx.user.name ?? "EMP"
         );
+        if (code) {
+          // Register new code in Worker allowlist (fire-and-forget, non-blocking)
+          syncCodeToWorkerAllowlist(code.code, "add").catch(() => {});
+        }
         try {
           await notifyAdmins({
             category: "employee",
@@ -2539,11 +2564,16 @@ export const appRouter = router({
 
     // Employee: rotate (regenerate) my discount code — called after copying
     rotateCode: employeeProcedure.mutation(async ({ ctx }) => {
+      // Get old code before rotation so we can remove it from allowlist
+      const oldCode = await getDiscountCodeByEmployeeId(ctx.user.id);
       const code = await rotateDiscountCode(
         ctx.user.id,
         ctx.user.name ?? "EMP"
       );
       if (!code) throw new TRPCError({ code: "NOT_FOUND", message: "No discount code found to rotate." });
+      // Swap allowlist entries: remove old, add new (fire-and-forget)
+      if (oldCode) syncCodeToWorkerAllowlist(oldCode.code, "remove").catch(() => {});
+      syncCodeToWorkerAllowlist(code.code, "add").catch(() => {});
       return code;
     }),
 
@@ -2629,6 +2659,40 @@ export const appRouter = router({
         if (code.expiresAt && new Date(code.expiresAt) < new Date())
           return { valid: false, discountPercent: 0 };
         return { valid: true, discountPercent: code.discountPercent };
+      }),
+
+    // Employee: get click analytics for my referral code from the Cloudflare Worker
+    clickAnalytics: employeeProcedure
+      .input(z.object({ days: z.number().int().min(1).max(90).default(30) }))
+      .query(async ({ ctx, input }) => {
+        const code = await getDiscountCodeByEmployeeId(ctx.user.id);
+        if (!code) return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
+
+        const workerUrl = process.env.AFFILIATE_WORKER_URL ?? "https://refer.talktomylawyer.com";
+        const secret = process.env.AFFILIATE_WORKER_SECRET ?? "";
+
+        if (!secret) {
+          // Worker not yet configured — return zeros gracefully
+          return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
+        }
+
+        try {
+          const res = await fetch(
+            `${workerUrl}/${encodeURIComponent(code.code)}/analytics?days=${input.days}`,
+            {
+              headers: { Authorization: `Bearer ${secret}` },
+              signal: AbortSignal.timeout(5000),
+            }
+          );
+          if (!res.ok) return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
+          return res.json() as Promise<{
+            totalClicks: number;
+            uniqueVisitors: number;
+            daily: { date: string; clicks: number; uniqueVisitors: number }[];
+          }>;
+        } catch {
+          return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
+        }
       }),
 
     // ─── Admin: Affiliate Oversight ──────────────────────────────────────────
