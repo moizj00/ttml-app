@@ -1,0 +1,63 @@
+VERDICT: APPROVED_WITH_COMMENTS
+The diff implements the requested expiration/force-expire functionality end-to-end, with only minor non-blocking concerns.
+
+Critical findings / analysis:
+- ✅ `server/db.ts`: `updateDiscountCode` now accepts `expireVERDICT: APPROVED_WITH_COMMENTS
+sAt?: Date | null`, enabling both set and clear paths as required.
+- The diff implements the requested expiration/force-expire functionality end-to-end, with only minor non-blocking concerns.
+✅ `server/routers.ts`:
+  - `adminUpdateCode`
+ input now includes `expiresAt: z.string().Critical findings / analysis:
+datetime().nullable().optional()`.
+  - ISO strin- ✅ `server/db.ts`: `updateDiscountCode` now accepts `expiresAt?: Date | null`, enabling both set and clear paths as required.
+g is correctly parsed to `Date` (or `null`) b- ✅ `server/routers.ts`:
+efore calling `updateDiscountCode`.
+  - New `adminForceExpireCode` mut  - `adminUpdateCode` input now includes `expiresAt: z.string().datetime().nullable().optional()`.
+ation exists and correctly applies both `isActive: false` and   - ISO string is correctly parsed to `Date` (or `null`) before calling `updateDiscountCode`.
+`expiresAt: new Date()`.
+- ✅ Admin UI (`client/src/pages/admin/Affiliate.tsx`):
+  - Added Expires column.
+  - Displays expiration date / “Never” / red “Expired” badge when past.
+  - Supports editing expiration via date input and clearing to null.
+  - Added Force Expire action with destructive button + confirmation dialog wired to `adminForceExpireCode`.
+- ✅ Employee UI (`client/src/pages/employee/AffiliateDashboard.tsx`):
+  - Shows “No expiration” when null.
+  - Shows date when future.
+  - Shows destructive “Expired” badge when past.
+
+Non-blocking comments:
+1) Admin page imports `CalendarClock` but does not use it (cleanup only).
+2) Date handling uses UTC (`T23:59:59Z` + `toISOString()`), which is functional but may produce day-boundary quirks for non-UTC expectations; not a blocker for task completion.
+3) `replit.md` has large unrelated edits; not functionally harmful but should usually be avoided in feature-scoped commits.
+
+Security:
+- None observed (serious issues).
+- Admin-only mutations remain behind `adminProcedure`; no new dangerous sink introduced.
+
+Next actions:
+1) Remove unused `CalendarClock` import in admin page.
+2) Optionally align date semantics to explicit product timezone rules (if needed).
+3) Keep future feature commits scoped to requested files/changes only.  - New `adminForceExpireCode` mutation exists and correctly applies both `isActive: false` and `expiresAt: new Date()`.
+- ✅ Admin UI (`client/src/pages/admin/Affiliate.tsx`):
+  - Added Expires column.
+  - Displays expiration date / “Never” / red “Expired” badge when past.
+  - Supports editing expiration via date input and clearing to null.
+  - Added Force Expire action with destructive button + confirmation dialog wired to `adminForceExpireCode`.
+- ✅ Employee UI (`client/src/pages/employee/AffiliateDashboard.tsx`):
+  - Shows “No expiration” when null.
+  - Shows date when future.
+  - Shows destructive “Expired” badge when past.
+
+Non-blocking comments:
+1) Admin page imports `CalendarClock` but does not use it (cleanup only).
+2) Date handling uses UTC (`T23:59:59Z` + `toISOString()`), which is functional but may produce day-boundary quirks for non-UTC expectations; not a blocker for task completion.
+3) `replit.md` has large unrelated edits; not functionally harmful but should usually be avoided in feature-scoped commits.
+
+Security:
+- None observed (serious issues).
+- Admin-only mutations remain behind `adminProcedure`; no new dangerous sink introduced.
+
+Next actions:
+1) Remove unused `CalendarClock` import in admin page.
+2) Optionally align date semantics to explicit product timezone rules (if needed).
+3) Keep future feature commits scoped to requested files/changes only.
