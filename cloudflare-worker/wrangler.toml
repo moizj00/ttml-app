@@ -1,0 +1,102 @@
+name = "ttml-edge-rate-limiter"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Environments ──────────────────────────────────────────────────────────────
+# Default (production) config below.
+# Override with: wrangler deploy --env staging
+
+[vars]
+# Railway origin — update to your actual Railway deployment URL.
+# Do NOT include a trailing slash.
+RAILWAY_ORIGIN = "https://ttml-production.up.railway.app"
+
+# ── KV Namespace for blocked-request analytics counters ───────────────────────
+# Create with: wrangler kv:namespace create BLOCKED_COUNTER
+# Then replace the placeholder id below with the real one.
+[[kv_namespaces]]
+binding = "BLOCKED_COUNTER"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# ── Workers Rate Limiting API bindings ────────────────────────────────────────
+# Docs: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+#
+# Each binding uses the simple rate-limit primitive built into the Workers platform
+# (no external storage needed — Cloudflare handles the counters at the edge).
+
+# Auth endpoints: /api/auth/*  — 20 requests per 900 seconds (15 minutes) per IP
+[[unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_AUTH"
+namespace_id = "1001"
+simple = { limit = 20, period = 900 }
+
+# tRPC endpoints: /api/trpc/* — 200 requests per 60 seconds per IP
+[[unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_TRPC"
+namespace_id = "1002"
+simple = { limit = 200, period = 60 }
+
+# Other API endpoints: /api/* — 100 requests per 60 seconds per IP
+[[unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_API"
+namespace_id = "1003"
+simple = { limit = 100, period = 60 }
+
+# Static assets & pages: everything else — 500 requests per 60 seconds per IP
+[[unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_STATIC"
+namespace_id = "1004"
+simple = { limit = 500, period = 60 }
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+# Configure DNS routing so traffic to your domain passes through this Worker.
+# Replace talk-to-my-lawyer.com with your actual domain and ensure it is
+# proxied (orange cloud) in the Cloudflare DNS dashboard.
+routes = [
+  { pattern = "talk-to-my-lawyer.com/*", zone_name = "talk-to-my-lawyer.com" },
+  { pattern = "www.talk-to-my-lawyer.com/*", zone_name = "talk-to-my-lawyer.com" },
+]
+
+# ── Observability ─────────────────────────────────────────────────────────────
+[observability]
+enabled = true
+
+# ── Staging environment override ──────────────────────────────────────────────
+[env.staging]
+name = "ttml-edge-rate-limiter-staging"
+
+[env.staging.vars]
+RAILWAY_ORIGIN = "https://ttml-staging.up.railway.app"
+
+[[env.staging.kv_namespaces]]
+binding = "BLOCKED_COUNTER"
+id = "REPLACE_WITH_YOUR_STAGING_KV_NAMESPACE_ID"
+
+[[env.staging.unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_AUTH"
+namespace_id = "2001"
+simple = { limit = 20, period = 900 }
+
+[[env.staging.unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_TRPC"
+namespace_id = "2002"
+simple = { limit = 200, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_API"
+namespace_id = "2003"
+simple = { limit = 100, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+type = "ratelimit"
+name = "RATE_LIMIT_STATIC"
+namespace_id = "2004"
+simple = { limit = 500, period = 60 }
