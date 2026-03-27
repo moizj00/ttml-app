@@ -27,6 +27,7 @@ import {
   getRedis,
 } from "../rateLimiter";
 import { validateRequiredEnv } from "./env";
+import { checkR2Connectivity, getR2HealthStatus } from "../storage";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -198,9 +199,11 @@ async function startServer() {
       }
     }
 
+    const r2Ok = getR2HealthStatus();
+
     const ok = dbOk && (redisOk === null || redisOk);
     const status = ok ? 200 : 503;
-    res.status(status).json({ ok, db: dbOk, redis: redisOk, timestamp: Date.now() });
+    res.status(status).json({ ok, db: dbOk, redis: redisOk, r2: r2Ok, timestamp: Date.now() });
   });
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -257,6 +260,8 @@ async function startServer() {
       .catch(() => {});
     // Start in-process cron scheduler (draft reminders, etc.)
     startCronScheduler();
+    // Check Cloudflare R2 connectivity
+    checkR2Connectivity().catch(() => {});
   });
 }
 

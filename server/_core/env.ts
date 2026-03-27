@@ -36,6 +36,12 @@ export const ENV = {
   // Cloudflare KV Blog Cache Worker
   cfBlogCacheWorkerUrl: process.env.CF_BLOG_CACHE_WORKER_URL ?? "",
   cfBlogCacheInvalidationSecret: process.env.CF_BLOG_CACHE_INVALIDATION_SECRET ?? "",
+  // Cloudflare R2
+  r2AccountId: process.env.R2_ACCOUNT_ID ?? "",
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  r2BucketName: process.env.R2_BUCKET_NAME ?? "",
+  r2PublicUrl: process.env.R2_PUBLIC_URL ?? "",
 };
 
 /**
@@ -52,6 +58,10 @@ export function validateRequiredEnv(): void {
   if (!ENV.stripeSecretKey) missing.push("STRIPE_SECRET_KEY");
   if (!ENV.stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
   if (!ENV.resendApiKey) missing.push("RESEND_API_KEY");
+  if (!ENV.r2AccountId) missing.push("R2_ACCOUNT_ID");
+  if (!ENV.r2AccessKeyId) missing.push("R2_ACCESS_KEY_ID");
+  if (!ENV.r2SecretAccessKey) missing.push("R2_SECRET_ACCESS_KEY");
+  if (!ENV.r2BucketName) missing.push("R2_BUCKET_NAME");
   if (missing.length > 0) {
     throw new Error(
       `[Startup] Missing required environment variables: ${missing.join(", ")}\n` +

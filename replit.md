@@ -78,7 +78,7 @@ server/          # Express backend
   draftReminders.ts # 48-hour draft reminder logic
   draftPdfRoute.ts # GET /api/letters/:letterId/draft-pdf route
   staleReviewReleaser.ts # Releases stale under_review letters
-  storage.ts      # Forge proxy S3-compatible storage helpers
+  storage.ts      # Cloudflare R2 S3-compatible storage (storagePut/storageGet)
   sentry.ts       # Sentry initialization
   n8nCallback.ts  # n8n webhook callback handler (dormant)
   intake-normalizer.ts # buildNormalizedPromptInput helper
@@ -131,4 +131,5 @@ scripts/         # Post-merge setup, DB helpers
 - **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting of legal letters.
 - **Upstash Redis**: Rate limiting.
 - **Sentry**: Error tracking and monitoring.
+- **Cloudflare R2**: S3-compatible object storage for approved letter PDFs and user-uploaded attachments (zero egress fees). Uses `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`.
 - **Railway**: Hosting and deployment platform.
