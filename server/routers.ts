@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit, getClientIp } from "./rateLimiter";
-import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult, PipelineError } from "../shared/types";
+import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../shared/types";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -66,9 +66,6 @@ import {
   processPayoutRequest,
   getPayoutRequestById,
   getAllEmployeeEarnings,
-  markPriorPipelineRunsSuperseded,
-  acquirePipelineLock,
-  releasePipelineLock,
   decrementLettersUsed,
   claimFreeTrialSlot,
   refundFreeTrialSlot,
@@ -92,7 +89,6 @@ import {
 import { invalidateBlogPostCache } from "./blogCacheInvalidation";
 import { getCachedBlogPosts, getCachedBlogPost } from "./blogCache";
 import {
-  sendJobFailedAlertEmail,
   sendLetterApprovedEmail,
   sendLetterRejectedEmail,
   sendNeedsChangesEmail,
@@ -109,7 +105,7 @@ import {
   sendAttorneyWelcomeEmail,
 } from "./email";
 import { captureServerException } from "./sentry";
-import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
+import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "./queue";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore, consolidateLessonsForScope } from "./learning";
 import type { InsertPipelineLesson } from "../drizzle/schema";
 import { BLOG_CATEGORIES } from "../drizzle/schema";
@@ -208,135 +204,6 @@ const intakeJsonSchema = z.object({
     .optional(),
 });
 
-const PIPELINE_MAX_RETRIES = 2;
-const PIPELINE_BASE_DELAY_MS = 10_000;
-
-async function runPipelineWithRetry(
-  letterId: number,
-  intake: any,
-  userId: number | undefined,
-  appUrl: string,
-  label: string,
-  usageContext?: { shouldRefundOnFailure: true; isFreeTrialSubmission: boolean }
-): Promise<void> {
-  // ── Acquire DB-level pipeline lock ────────────────────────────────────────
-  const lockAcquired = await acquirePipelineLock(letterId);
-  if (!lockAcquired) {
-    console.warn(`[Pipeline] Letter #${letterId} pipeline lock already held — skipping duplicate run (${label})`);
-    return;
-  }
-
-  // ── All post-acquisition work is wrapped in try/finally to guarantee lock ──
-  // release even if markPriorPipelineRunsSuperseded or any early setup throws.
-  let lastErr: unknown;
-  try {
-    // ── Deduplication: supersede any pre-existing active pipeline runs ───────
-    await markPriorPipelineRunsSuperseded(letterId);
-
-    for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
-      try {
-        if (attempt > 0) {
-          const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-          console.log(`[Pipeline] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
-          await new Promise(r => setTimeout(r, delay));
-        }
-        {
-          const current = await getLetterRequestById(letterId);
-          const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
-          if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
-            console.log(`[Pipeline] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
-            // Another process completed the letter — exit normally; finally releases lock
-            return;
-          }
-          if (!current || current.status !== "submitted") {
-            await updateLetterStatus(letterId, "submitted", { force: true });
-          }
-        }
-        await runFullPipeline(letterId, intake, undefined, userId);
-        // Success — return; finally releases lock
-        return;
-      } catch (err) {
-        lastErr = err;
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, errMsg);
-        captureServerException(err, { tags: { component: "pipeline", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
-
-        if (err instanceof PipelineError && err.category === "permanent") {
-          console.error(`[Pipeline] Permanent error (${err.code}) for letter #${letterId} — skipping remaining retries`);
-          break;
-        }
-      }
-    }
-
-    // ── All retries exhausted — perform terminal failure state writes ─────────
-    console.error(`[Pipeline] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
-
-    // ── Refund usage on total failure (initial submissions only) ─────────────
-    // Re-trigger paths (updateForChanges, retryFromRejected) do NOT pass
-    // usageContext and therefore never trigger a refund — they consume no
-    // new quota when they fail.
-    if (userId && usageContext?.shouldRefundOnFailure) {
-      try {
-        if (usageContext.isFreeTrialSubmission) {
-          await refundFreeTrialSlot(userId);
-          console.log(`[Pipeline] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`);
-        } else {
-          await decrementLettersUsed(userId);
-          console.log(`[Pipeline] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`);
-        }
-      } catch (refundErr) {
-        console.error("[Pipeline] Failed to refund usage after pipeline failure:", refundErr);
-        captureServerException(refundErr, { tags: { component: "pipeline", error_type: "usage_refund_failed" } });
-      }
-    }
-
-    try {
-      const admins = await getAllUsers("admin");
-      for (const admin of admins) {
-        try {
-          if (admin.email) {
-            await sendJobFailedAlertEmail({
-              to: admin.email,
-              name: admin.name ?? "Admin",
-              letterId,
-              jobType: "generation_pipeline",
-              errorMessage: lastErr instanceof Error ? lastErr.message : String(lastErr),
-              appUrl,
-            });
-          }
-        } catch (emailErr) {
-          console.error("[Pipeline] Failed to email admin:", emailErr);
-          captureServerException(emailErr, { tags: { component: "pipeline", error_type: "admin_email_failed" } });
-        }
-        try {
-          await createNotification({
-            userId: admin.id,
-            type: "job_failed",
-            category: "letters",
-            title: `Pipeline failed for letter #${letterId}`,
-            body: lastErr instanceof Error ? lastErr.message : String(lastErr),
-            link: `/admin/jobs`,
-          });
-        } catch (notifErr) {
-          console.error("[Pipeline] Failed to create notification:", notifErr);
-          captureServerException(notifErr, { tags: { component: "pipeline", error_type: "notification_failed" } });
-        }
-      }
-    } catch (notifyErr) {
-      console.error("[Pipeline] Failed to notify admins:", notifyErr);
-      captureServerException(notifyErr, { tags: { component: "pipeline", error_type: "notify_admins_failed" } });
-    }
-    try {
-      await updateLetterStatus(letterId, "pipeline_failed", { force: true });
-    } catch (statusErr) {
-      console.error("[Pipeline] Failed to set pipeline_failed status:", statusErr);
-      captureServerException(statusErr, { tags: { component: "pipeline", error_type: "status_update_failed" } });
-    }
-  } finally {
-    // Release lock — always, on all exit paths (success, abort, early throw, exhaustion)
-    await releasePipelineLock(letterId).catch(e => console.error("[Pipeline] Failed to release pipeline lock:", e));
-  }
-}
 
 // ─── Role Guards ──────────────────────────────────────────────────────────────
 
@@ -554,7 +421,34 @@ export const appRouter = router({
             { console.error("[Email] Submission confirmation failed:", err); captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } }); }
           );
 
-        runPipelineWithRetry(letterId, input.intakeJson as any, ctx.user.id, appUrl, "submit", { shouldRefundOnFailure: true, isFreeTrialSubmission });
+        try {
+          await enqueuePipelineJob({
+            type: "runPipeline",
+            letterId,
+            intake: input.intakeJson,
+            userId: ctx.user.id,
+            appUrl,
+            label: "submit",
+            usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+          });
+        } catch (enqueueErr) {
+          console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+          try {
+            if (isFreeTrialSubmission) {
+              await refundFreeTrialSlot(ctx.user.id);
+            } else if (entitlement.subscription) {
+              await decrementLettersUsed(ctx.user.id);
+            }
+          } catch (refundErr) {
+            console.error("[Queue] Failed to refund usage after enqueue failure:", refundErr);
+            captureServerException(refundErr, { tags: { component: "queue", error_type: "enqueue_refund_failed" } });
+          }
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
+          });
+        }
 
         try {
           await notifyAdmins({
@@ -650,7 +544,23 @@ export const appRouter = router({
         const intake = input.updatedIntakeJson ?? letter.intakeJson;
         if (intake) {
           const appUrl = getAppUrl(ctx.req);
-          runPipelineWithRetry(input.letterId, intake as any, letter.userId, appUrl, "updateForChanges");
+          try {
+            await enqueuePipelineJob({
+              type: "runPipeline",
+              letterId: input.letterId,
+              intake,
+              userId: letter.userId,
+              appUrl,
+              label: "updateForChanges",
+            });
+          } catch (enqueueErr) {
+            console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+            captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to start letter reprocessing. Please try again.",
+            });
+          }
         }
 
         return { success: true };
@@ -716,7 +626,23 @@ export const appRouter = router({
         await updateLetterStatus(input.letterId, "submitted");
 
         const appUrl = getAppUrl(ctx.req);
-        runPipelineWithRetry(input.letterId, intake as any, letter.userId, appUrl, "retryFromRejected");
+        try {
+          await enqueuePipelineJob({
+            type: "runPipeline",
+            letterId: input.letterId,
+            intake,
+            userId: letter.userId,
+            appUrl,
+            label: "retryFromRejected",
+          });
+        } catch (enqueueErr) {
+          console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to start letter reprocessing. Please try again.",
+          });
+        }
 
         return { success: true };
       }),
@@ -1483,12 +1409,13 @@ export const appRouter = router({
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_changes_requested" } });
         }
         if (input.retriggerPipeline && letter.intakeJson) {
-          retryPipelineFromStage(
-            input.letterId,
-            letter.intakeJson as any,
-            "drafting",
-            letter.userId ?? undefined
-          ).catch(console.error);
+          enqueueRetryFromStageJob({
+            type: "retryPipelineFromStage",
+            letterId: input.letterId,
+            intake: letter.intakeJson,
+            stage: "drafting",
+            userId: letter.userId ?? undefined,
+          }).catch(console.error);
         }
         return { success: true };
       }),
@@ -1848,12 +1775,13 @@ export const appRouter = router({
             code: "BAD_REQUEST",
             message: "No intake data found",
           });
-        retryPipelineFromStage(
-          input.letterId,
-          letter.intakeJson as any,
-          input.stage,
-          letter.userId ?? undefined
-        ).catch(console.error);
+        enqueueRetryFromStageJob({
+          type: "retryPipelineFromStage",
+          letterId: input.letterId,
+          intake: letter.intakeJson,
+          stage: input.stage,
+          userId: letter.userId ?? undefined,
+        }).catch(console.error);
         return {
           success: true,
           message: `Retry started for stage: ${input.stage}`,
@@ -1863,6 +1791,58 @@ export const appRouter = router({
     purgeFailedJobs: adminProcedure.mutation(async () => {
       const result = await purgeFailedJobs();
       return { success: true, deletedCount: result.deletedCount };
+    }),
+
+    queueHealth: adminProcedure.query(async () => {
+      try {
+        const queue = getPipelineQueue();
+        const [waiting, active, completed, failed, delayed] = await Promise.all([
+          queue.getWaitingCount(),
+          queue.getActiveCount(),
+          queue.getCompletedCount(),
+          queue.getFailedCount(),
+          queue.getDelayedCount(),
+        ]);
+
+        const recentFailed = await queue.getFailed(0, 9);
+        const failedJobs = recentFailed.map(j => ({
+          id: j.id,
+          name: j.name,
+          failedReason: j.failedReason,
+          finishedOn: j.finishedOn,
+          data: { type: j.data.type, letterId: j.data.letterId },
+        }));
+
+        const recentCompleted = await queue.getCompleted(0, 9);
+        const avgProcessingTimeMs = recentCompleted.length > 0
+          ? recentCompleted.reduce((sum, j) => {
+              const processing = (j.finishedOn ?? 0) - (j.processedOn ?? 0);
+              return sum + (processing > 0 ? processing : 0);
+            }, 0) / recentCompleted.length
+          : 0;
+
+        return {
+          pending: waiting,
+          active,
+          completed,
+          failed,
+          delayed,
+          avgProcessingTimeMs: Math.round(avgProcessingTimeMs),
+          recentFailedJobs: failedJobs,
+        };
+      } catch (err) {
+        console.error("[Queue] Health check failed:", err);
+        return {
+          pending: 0,
+          active: 0,
+          completed: 0,
+          failed: 0,
+          delayed: 0,
+          avgProcessingTimeMs: 0,
+          recentFailedJobs: [],
+          error: err instanceof Error ? err.message : "Queue health check failed",
+        };
+      }
     }),
 
     letterJobs: adminProcedure

@@ -57,6 +57,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
         - **Smart weight decay**: Lessons are ranked by `weight * recencyMultiplier * effectivenessBoost` where recency decays 10% per 30 days (floor 0.3) and effectiveness adjusts based on before/after quality score comparison.
         - **Grouped prompt injection**: Lessons in the prompt block are grouped by category for clearer AI consumption.
         - **Admin dashboard**: Shows effectiveness badges (trending up/down/neutral), hit counts, injection stats, age, consolidation controls, and a "Lesson Impact" table on the Quality tab.
+- **Pipeline Worker (BullMQ)**: Pipeline processing runs in a dedicated worker process (`server/worker.ts`), separate from the Express API server. Jobs are enqueued via BullMQ (`server/queue.ts`) using Upstash Redis (ioredis TCP connection). The API server only enqueues jobs and returns immediately. Job types: `runPipeline` (submit/updateForChanges/retryFromRejected) and `retryPipelineFromStage`. Queue health monitoring available via `admin.queueHealth` tRPC endpoint. Worker started via the "Pipeline Worker" Replit workflow.
 - **Pipeline Error Codes**: Structured error codes (`shared/types.ts`) with `{ code, message, stage, details, category }` JSON stored in `workflow_jobs.error_message`. Categories: transient (retryable) vs permanent. Codes: `JSON_PARSE_FAILED`, `CITATION_VALIDATION_FAILED`, `API_TIMEOUT`, `RATE_LIMITED`, `RESEARCH_VALIDATION_FAILED`, `DRAFT_VALIDATION_FAILED`, `JURISDICTION_MISMATCH`, `ASSEMBLY_STRUCTURE_INVALID`, `VETTING_REJECTED`, `CONTENT_POLICY_VIOLATION`, `N8N_ERROR`, `SUPERSEDED`, `UNKNOWN_ERROR`, etc. Admin UI (Jobs, Dashboard) parses and displays error code, category badge, and details. Backwards-compatible with legacy string errors.
 - **Pipeline Resilience**: Automatic retry mechanism (up to 3 attempts with exponential backoff) before marking as `pipeline_failed`. DB-level lock uses `lt()` Drizzle operator for `pipeline_locked_at` comparison (fixed from broken `sql` template tag).
 - **Rate Limiting**: Upstash Redis for fine-grained, per-user limits on sensitive endpoints, with a fail-closed mode for pipeline-triggering endpoints.
@@ -84,7 +85,8 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Stripe**: Payment processing.
 - **Perplexity API**: Legal research for AI pipeline.
 - **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting.
-- **Upstash Redis**: Rate limiting.
+- **Upstash Redis**: Rate limiting and BullMQ job queue (pipeline worker).
+- **BullMQ + ioredis**: Job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
 - **Cloudflare R2**: S3-compatible object storage for PDFs and attachments.
 - **Railway**: Hosting and deployment.
