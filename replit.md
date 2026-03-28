@@ -37,6 +37,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **How It Works**: Scroll-paced animations, SVG gradients, and accessibility considerations.
 - **Platform Animation Foundation**: Reusable CSS keyframes for page transitions, card hovers, sidebar interactions, mobile drawers, notifications, badges, and tab content. All animations respect `prefers-reduced-motion`.
 - **Dashboard Animations**: Reusable hooks for stagger-reveal, fade-up entrances, drag-glow, and multi-step form transitions, all respecting `prefers-reduced-motion` and using compositor-friendly transforms/opacity.
+- **Pipeline Analytics Dashboard** (`/admin/pipeline`): Admin-only observability dashboard showing pipeline success rates, avg processing time per stage, citation validation stats, attorney review turnaround, quality score distribution/trends, retry stats, and categorized failure reasons. Supports date range filtering (7d/30d/90d/all). Uses parallelized server-side aggregation queries across `workflow_jobs`, `research_runs`, `review_actions`, and `letter_quality_scores`.
 
 ### Technical Implementations
 - **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.

@@ -24,6 +24,7 @@ import {
   CreditCard,
   Brain,
   BookOpen,
+  BarChart3,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
@@ -142,6 +143,11 @@ function getNavItems(role: string): NavItem[] {
         label: "Affiliate Program",
         href: "/admin/affiliate",
         icon: <Briefcase className="w-4 h-4" />,
+      },
+      {
+        label: "Pipeline Analytics",
+        href: "/admin/pipeline",
+        icon: <BarChart3 className="w-4 h-4" />,
       },
       {
         label: "Failed Jobs",

@@ -96,6 +96,7 @@ const AdminLetterDetail = lazyRetry(() => import("./pages/admin/LetterDetail"));
 const AdminAffiliate = lazyRetry(() => import("./pages/admin/Affiliate"));
 const AdminLearning = lazyRetry(() => import("./pages/admin/Learning"));
 const AdminBlogEditor = lazyRetry(() => import("./pages/admin/BlogEditor"));
+const AdminPipelineAnalytics = lazyRetry(() => import("./pages/admin/PipelineAnalytics"));
 
 const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
@@ -365,6 +366,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <SuspenseFade fallback={<AdminDashboardSkeleton />}>
             <AdminBlogEditor />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/pipeline">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminPipelineAnalytics />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

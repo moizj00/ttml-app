@@ -87,6 +87,7 @@ import {
   updateBlogPost,
   deleteBlogPost,
   getBlogPostSlugById,
+  getPipelineAnalytics,
 } from "./db";
 import { invalidateBlogPostCache } from "./blogCacheInvalidation";
 import { getCachedBlogPosts, getCachedBlogPost } from "./blogCache";
@@ -2179,6 +2180,10 @@ export const appRouter = router({
       }),
 
     lessonImpact: adminProcedure.query(async () => getLessonImpactSummary()),
+
+    pipelineAnalytics: adminProcedure
+      .input(z.object({ dateRange: z.enum(["7d", "30d", "90d", "all"]).default("30d") }).optional())
+      .query(async ({ input }) => getPipelineAnalytics(input?.dateRange ?? "30d")),
   }),
 
   // ─── Notifications ─────────────────────────────────────────────────────────
