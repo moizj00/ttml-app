@@ -742,7 +742,7 @@ export async function markPriorPipelineRunsSuperseded(
   if (!db) return;
   await db
     .update(workflowJobs)
-    .set({ status: "failed", errorMessage: "Superseded by new pipeline run", updatedAt: new Date() } as any)
+    .set({ status: "failed", errorMessage: JSON.stringify({ code: "SUPERSEDED", message: "Superseded by new pipeline run", stage: "pipeline", category: "permanent" }), updatedAt: new Date() } as any)
     .where(
       and(
         eq(workflowJobs.letterRequestId, letterId),
@@ -751,7 +751,7 @@ export async function markPriorPipelineRunsSuperseded(
     );
   await db
     .update(researchRuns)
-    .set({ status: "failed", errorMessage: "Superseded by new pipeline run", updatedAt: new Date() } as any)
+    .set({ status: "failed", errorMessage: JSON.stringify({ code: "SUPERSEDED", message: "Superseded by new pipeline run", stage: "pipeline", category: "permanent" }), updatedAt: new Date() } as any)
     .where(
       and(
         eq(researchRuns.letterRequestId, letterId),

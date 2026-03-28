@@ -1,6 +1,7 @@
 import AppLayout from "@/components/shared/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency } from "@/lib/utils";
+import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -483,11 +484,32 @@ export default function AdminDashboard() {
                         <p className="text-sm font-medium text-foreground">
                           Letter #{job.letterRequestId} — {job.jobType}
                         </p>
-                        {job.errorMessage && (
-                          <p className="mt-0.5 text-xs text-red-600 wrap-break-word sm:truncate sm:max-w-xs">
-                            {job.errorMessage}
-                          </p>
-                        )}
+                        {job.errorMessage && (() => {
+                          const structured = parsePipelineError(job.errorMessage);
+                          if (structured) {
+                            return (
+                              <div className="mt-0.5 space-y-0.5" data-testid={`dashboard-error-structured-${job.id}`}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${structured.category === "transient" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                                    {structured.category}
+                                  </span>
+                                  <span className="text-xs font-medium text-foreground">
+                                    {PIPELINE_ERROR_LABELS[structured.code] ?? structured.code}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-red-600 wrap-break-word sm:truncate sm:max-w-xs">{structured.message}</p>
+                                {structured.details && (
+                                  <p className="text-[11px] text-muted-foreground wrap-break-word sm:truncate sm:max-w-xs">{structured.details}</p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return (
+                            <p className="mt-0.5 text-xs text-red-600 wrap-break-word sm:truncate sm:max-w-xs">
+                              {job.errorMessage}
+                            </p>
+                          );
+                        })()}
                       </div>
                       <Button
                         asChild

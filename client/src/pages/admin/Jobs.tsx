@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { useState } from "react";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
+import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
 
 export default function AdminJobs() {
   const { data: failedJobs, isLoading, refetch } = trpc.admin.failedJobs.useQuery();
@@ -124,9 +125,28 @@ export default function AdminJobs() {
                         <p className="text-sm font-semibold text-foreground">
                           Letter #{job.letterRequestId} — {job.jobType.replace(/_/g, " ")}
                         </p>
-                        {job.errorMessage && (
-                          <p className="text-xs text-red-600 mt-1 max-w-md">{job.errorMessage}</p>
-                        )}
+                        {job.errorMessage && (() => {
+                          const structured = parsePipelineError(job.errorMessage);
+                          if (structured) {
+                            return (
+                              <div className="mt-1 space-y-0.5" data-testid={`error-structured-${job.id}`}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${structured.category === "transient" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`} data-testid={`error-category-${job.id}`}>
+                                    {structured.category}
+                                  </span>
+                                  <span className="text-xs font-medium text-foreground" data-testid={`error-code-${job.id}`}>
+                                    {PIPELINE_ERROR_LABELS[structured.code] ?? structured.code}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-red-600 max-w-md" data-testid={`error-message-${job.id}`}>{structured.message}</p>
+                                {structured.details && (
+                                  <p className="text-[11px] text-muted-foreground max-w-md" data-testid={`error-details-${job.id}`}>{structured.details}</p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return <p className="text-xs text-red-600 mt-1 max-w-md" data-testid={`error-message-${job.id}`}>{job.errorMessage}</p>;
+                        })()}
                         <p className="text-xs text-muted-foreground mt-1">
                           Failed at {new Date(job.updatedAt).toLocaleString()}
                         </p>

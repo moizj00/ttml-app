@@ -28,7 +28,8 @@ import {
   updateResearchRun,
   updateWorkflowJob,
 } from "./db";
-import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext, ValidationResult, GroundingReport, ContentConsistencyReport, TokenUsage } from "../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, PipelineContext, ValidationResult, GroundingReport, ContentConsistencyReport, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../shared/types";
+import { createPipelineError, PIPELINE_ERROR_CODES, PipelineError } from "../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
@@ -37,6 +38,35 @@ import { sendLetterReadyEmail, sendStatusUpdateEmail, sendNewReviewNeededEmail }
 import { getUserById, getLetterRequestById as getLetterById, getAllUsers, setLetterResearchUnverified } from "./db";
 import { captureServerException } from "./sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "./kvCache";
+
+function formatStructuredError(
+  code: PipelineErrorCode,
+  message: string,
+  stage: string,
+  details?: string,
+): string {
+  return JSON.stringify(createPipelineError(code, message, stage, details));
+}
+
+function classifyErrorCode(err: unknown): PipelineErrorCode {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("abortcontroller") || lower.includes("econnreset")) return PIPELINE_ERROR_CODES.API_TIMEOUT;
+  if (lower.includes("rate limit") || lower.includes("429") || lower.includes("too many requests")) return PIPELINE_ERROR_CODES.RATE_LIMITED;
+  if (lower.includes("content policy") || lower.includes("safety") || lower.includes("content filter") || lower.includes("refused")) return PIPELINE_ERROR_CODES.CONTENT_POLICY_VIOLATION;
+  if (lower.includes("api key") || lower.includes("apikey") || lower.includes("unauthorized") || lower.includes("authentication") || lower.includes("api_key")) return PIPELINE_ERROR_CODES.API_KEY_MISSING;
+  if (lower.includes("intake validation") || lower.includes("intake pre-flight")) return PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE;
+  if (lower.includes("grounding") || lower.includes("ungrounded citation")) return PIPELINE_ERROR_CODES.GROUNDING_CHECK_FAILED;
+  if (lower.includes("word count") || lower.includes("too short") || lower.includes("too long")) return PIPELINE_ERROR_CODES.WORD_COUNT_EXCEEDED;
+  if (lower.includes("citation") && (lower.includes("validation") || lower.includes("audit"))) return PIPELINE_ERROR_CODES.CITATION_VALIDATION_FAILED;
+  if (lower.includes("jurisdiction mismatch")) return PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH;
+  if (lower.includes("json") || lower.includes("parse")) return PIPELINE_ERROR_CODES.JSON_PARSE_FAILED;
+  if (lower.includes("vetting") || lower.includes("vetted")) return PIPELINE_ERROR_CODES.VETTING_REJECTED;
+  if (lower.includes("assembly") || lower.includes("final letter")) return PIPELINE_ERROR_CODES.ASSEMBLY_STRUCTURE_INVALID;
+  if (lower.includes("draft validation") || lower.includes("draft output")) return PIPELINE_ERROR_CODES.DRAFT_VALIDATION_FAILED;
+  if (lower.includes("research validation") || lower.includes("research packet")) return PIPELINE_ERROR_CODES.RESEARCH_VALIDATION_FAILED;
+  return PIPELINE_ERROR_CODES.UNKNOWN_ERROR;
+}
 
 async function buildLessonsPromptBlock(
   letterType: string,
@@ -1058,19 +1088,27 @@ export async function runResearchStage(
           timestamp: new Date().toISOString(),
         };
         addValidationResult(pipelineCtx, failedResult);
+        const structuredErr = formatStructuredError(
+          PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+          "Research response could not be parsed as valid JSON after 2 attempts",
+          "research",
+          "AI returned non-JSON response despite retry"
+        );
         await updateResearchRun(runId, {
           status: "failed",
-          errorMessage: "Research response could not be parsed as valid JSON after 2 attempts",
+          errorMessage: structuredErr,
           validationResultJson: failedResult,
         });
         await updateWorkflowJob(jobId, {
           status: "failed",
-          errorMessage: "Research response could not be parsed as valid JSON after 2 attempts",
+          errorMessage: structuredErr,
           completedAt: new Date(),
           responsePayloadJson: { validationResult: failedResult },
         });
-        throw new Error(
-          "Research stage failed: AI response was not valid JSON after 2 attempts. Please try again."
+        throw new PipelineError(
+          PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+          "Research stage failed: AI response was not valid JSON after 2 attempts. Please try again.",
+          "research"
         );
       }
     }
@@ -1096,19 +1134,25 @@ export async function runResearchStage(
           timestamp: new Date().toISOString(),
         };
         addValidationResult(pipelineCtx, failedResult);
+        const structuredRetryErr = formatStructuredError(
+          PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+          "Research retry response could not be parsed as JSON",
+          "research",
+          "Retry also returned non-JSON response"
+        );
         await updateResearchRun(runId, {
           status: "failed",
           resultJson: null,
           validationResultJson: failedResult,
-          errorMessage: "Research retry response could not be parsed as JSON",
+          errorMessage: structuredRetryErr,
         });
         await updateWorkflowJob(jobId, {
           status: "failed",
-          errorMessage: "Research retry response could not be parsed as JSON",
+          errorMessage: structuredRetryErr,
           completedAt: new Date(),
           responsePayloadJson: { validationResult: failedResult },
         });
-        throw new Error("Research retry response could not be parsed as JSON");
+        throw new PipelineError(PIPELINE_ERROR_CODES.JSON_PARSE_FAILED, "Research retry response could not be parsed as JSON", "research");
       }
       validation = validateResearchPacket(researchPacket);
     }
@@ -1123,20 +1167,29 @@ export async function runResearchStage(
         timestamp: new Date().toISOString(),
       };
       addValidationResult(pipelineCtx, failedResult);
+      const researchValErr = formatStructuredError(
+        PIPELINE_ERROR_CODES.RESEARCH_VALIDATION_FAILED,
+        `Research validation failed${stage1RetryUsed ? " after retry" : ""}`,
+        "research",
+        validation.errors.join("; ")
+      );
       await updateResearchRun(runId, {
         status: "invalid",
         resultJson: researchPacket,
         validationResultJson: failedResult,
-        errorMessage: `Validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`,
+        errorMessage: researchValErr,
       });
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Research validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`,
+        errorMessage: researchValErr,
         completedAt: new Date(),
         responsePayloadJson: { validationResult: failedResult },
       });
-      throw new Error(
-        `Research packet validation failed${stage1RetryUsed ? " after retry" : ""}: ${validation.errors.join("; ")}`
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.RESEARCH_VALIDATION_FAILED,
+        `Research packet validation failed${stage1RetryUsed ? " after retry" : ""}`,
+        "research",
+        validation.errors.join("; ")
       );
     }
 
@@ -1201,21 +1254,23 @@ export async function runResearchStage(
       warnings: [],
       timestamp: new Date().toISOString(),
     };
+    const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
+    const structuredCatchErr = formatStructuredError(stageErrCode, msg, "research");
     await updateResearchRun(runId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: structuredCatchErr,
       validationResultJson: failedResult,
     });
     await updateWorkflowJob(jobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: structuredCatchErr,
       completedAt: new Date(),
       promptTokens: researchTokens.promptTokens,
       completionTokens: researchTokens.completionTokens,
       estimatedCostUsd: researchTokens.promptTokens > 0 ? calculateCost(researchModelKey, researchTokens) : undefined,
       responsePayloadJson: { validationResult: failedResult },
     });
-    throw err;
+    throw err instanceof PipelineError ? err : new PipelineError(stageErrCode, msg, "research");
   }
 }
 
@@ -1380,12 +1435,20 @@ export async function runDraftingStage(
       });
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Draft validation failed${needsRetry ? " after retry" : ""}: ${validation.errors.join("; ")}`,
+        errorMessage: formatStructuredError(
+          PIPELINE_ERROR_CODES.DRAFT_VALIDATION_FAILED,
+          `Draft validation failed${needsRetry ? " after retry" : ""}`,
+          "drafting",
+          validation.errors.join("; ")
+        ),
         completedAt: new Date(),
         responsePayloadJson: { validationErrors: validation.errors, retried: needsRetry },
       });
-      throw new Error(
-        `Draft output validation failed${needsRetry ? " after retry" : ""}: ${validation.errors.join("; ")}`
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.DRAFT_VALIDATION_FAILED,
+        `Draft output validation failed${needsRetry ? " after retry" : ""}`,
+        "drafting",
+        validation.errors.join("; ")
       );
     }
 
@@ -1427,15 +1490,23 @@ export async function runDraftingStage(
     if (finalConsistency.jurisdictionMismatch) {
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}: letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`,
+        errorMessage: formatStructuredError(
+          PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH,
+          `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}`,
+          "drafting",
+          `Letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
+        ),
         completedAt: new Date(),
         responsePayloadJson: {
           validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
           consistencyReport: finalConsistency,
         },
       });
-      throw new Error(
-        `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}: letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH,
+        `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}`,
+        "drafting",
+        `Letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
       );
     }
 
@@ -1508,9 +1579,10 @@ export async function runDraftingStage(
       warnings: [],
       timestamp: new Date().toISOString(),
     });
+    const draftErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
     await updateWorkflowJob(jobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: formatStructuredError(draftErrCode, msg, "drafting"),
       completedAt: new Date(),
       promptTokens: draftTokens.promptTokens,
       completionTokens: draftTokens.completionTokens,
@@ -1519,7 +1591,7 @@ export async function runDraftingStage(
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
       },
     });
-    throw err;
+    throw err instanceof PipelineError ? err : new PipelineError(draftErrCode, msg, "drafting");
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -1684,7 +1756,12 @@ export async function runAssemblyStage(
     if (checks.allErrors.length > 0) {
       await updateWorkflowJob(jobId, {
         status: "failed",
-        errorMessage: `Final letter validation failed${didRetry ? " after retry" : ""}: ${checks.allErrors.join("; ")}`,
+        errorMessage: formatStructuredError(
+          PIPELINE_ERROR_CODES.ASSEMBLY_STRUCTURE_INVALID,
+          `Final letter validation failed${didRetry ? " after retry" : ""}`,
+          "assembly",
+          checks.allErrors.join("; ")
+        ),
         completedAt: new Date(),
         responsePayloadJson: {
           validationErrors: checks.allErrors,
@@ -1693,8 +1770,11 @@ export async function runAssemblyStage(
           consistencyReport: checks.consistency,
         },
       });
-      throw new Error(
-        `Final letter validation failed${didRetry ? " after retry" : ""}: ${checks.allErrors.join("; ")}`
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.ASSEMBLY_STRUCTURE_INVALID,
+        `Final letter validation failed${didRetry ? " after retry" : ""}`,
+        "assembly",
+        checks.allErrors.join("; ")
       );
     }
 
@@ -1731,9 +1811,10 @@ export async function runAssemblyStage(
       warnings: [],
       timestamp: new Date().toISOString(),
     });
+    const assemblyErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
     await updateWorkflowJob(jobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: formatStructuredError(assemblyErrCode, msg, "assembly"),
       completedAt: new Date(),
       promptTokens: assemblyTokens.promptTokens,
       completionTokens: assemblyTokens.completionTokens,
@@ -1742,7 +1823,7 @@ export async function runAssemblyStage(
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
       },
     });
-    throw err;
+    throw err instanceof PipelineError ? err : new PipelineError(assemblyErrCode, msg, "assembly");
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -2167,10 +2248,15 @@ export async function runVettingStage(
         });
         await updateWorkflowJob(jobId, {
           status: "failed",
-          errorMessage: failMsg,
+          errorMessage: formatStructuredError(
+            PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+            failMsg,
+            "vetting",
+            "Could not parse vetting response as valid JSON after retry"
+          ),
           completedAt: new Date(),
         });
-        throw new Error(failMsg);
+        throw new PipelineError(PIPELINE_ERROR_CODES.JSON_PARSE_FAILED, failMsg, "vetting");
       }
     }
 
@@ -2311,7 +2397,12 @@ export async function runVettingStage(
         promptTokens: vettingTokens.promptTokens,
         completionTokens: vettingTokens.completionTokens,
         estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
-        errorMessage: `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
+        errorMessage: formatStructuredError(
+          PIPELINE_ERROR_CODES.VETTING_REJECTED,
+          "Vetting validation issues",
+          "vetting",
+          checks.validation.errors.join("; ")
+        ),
         responsePayloadJson: {
           vettingReport: currentReport,
           bloatDetected: detectedBloat.length,
@@ -2356,7 +2447,12 @@ export async function runVettingStage(
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
       estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
-      errorMessage: checks.validation.valid ? undefined : `Vetting validation issues: ${checks.validation.errors.join("; ")}`,
+      errorMessage: checks.validation.valid ? undefined : formatStructuredError(
+        PIPELINE_ERROR_CODES.VETTING_REJECTED,
+        "Vetting validation issues",
+        "vetting",
+        checks.validation.errors.join("; ")
+      ),
       responsePayloadJson: {
         vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
@@ -2391,15 +2487,16 @@ export async function runVettingStage(
       warnings: [],
       timestamp: new Date().toISOString(),
     });
+    const vettingErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
     await updateWorkflowJob(jobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: formatStructuredError(vettingErrCode, msg, "vetting"),
       completedAt: new Date(),
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
       estimatedCostUsd: vettingTokens.promptTokens > 0 ? calculateCost("claude-sonnet-4-20250514", vettingTokens) : undefined,
     });
-    throw new Error(`Stage 4 vetting failed for letter #${letterId}: ${msg}`);
+    throw err instanceof PipelineError ? err : new PipelineError(vettingErrCode, `Stage 4 vetting failed for letter #${letterId}: ${msg}`, "vetting");
   }
 }
 
@@ -2566,8 +2663,11 @@ export async function runFullPipeline(
     console.error(
       `[Pipeline] Intake pre-flight failed for letter #${letterId}: ${intakeCheck.errors.join("; ")}`
     );
-    throw new Error(
-      `Intake validation failed: ${intakeCheck.errors.join("; ")}`
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
+      `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
+      "pipeline",
+      intakeCheck.errors.join("; ")
     );
   }
 
@@ -2675,7 +2775,12 @@ export async function runFullPipeline(
         );
         await updateWorkflowJob(pipelineJobId, {
           status: "failed",
-          errorMessage: `n8n returned ${response.status}: ${errText}`,
+          errorMessage: formatStructuredError(
+            PIPELINE_ERROR_CODES.N8N_ERROR,
+            `n8n returned ${response.status}`,
+            "pipeline",
+            errText
+          ),
           completedAt: new Date(),
         });
       }
@@ -2814,13 +2919,14 @@ export async function runFullPipeline(
       tags: { pipeline_stage: "full_pipeline", letter_id: String(letterId) },
       extra: { pipelineJobId, errorMessage: msg },
     });
+    const pipelineErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
     await updateWorkflowJob(pipelineJobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: formatStructuredError(pipelineErrCode, msg, "pipeline"),
       completedAt: new Date(),
     });
     await updateLetterStatus(letterId, "submitted"); // revert to allow retry
-    throw err;
+    throw err instanceof PipelineError ? err : new PipelineError(pipelineErrCode, msg, "pipeline");
   }
 }
 
@@ -2910,8 +3016,11 @@ export async function retryPipelineFromStage(
 ): Promise<void> {
   const intakeCheck = validateIntakeCompleteness(intake);
   if (!intakeCheck.valid) {
-    throw new Error(
-      `Intake validation failed: ${intakeCheck.errors.join("; ")}`
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
+      `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
+      "pipeline",
+      intakeCheck.errors.join("; ")
     );
   }
 
@@ -3009,9 +3118,10 @@ export async function retryPipelineFromStage(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    const retryErrCode = classifyErrorCode(err);
     await updateWorkflowJob(retryJobId, {
       status: "failed",
-      errorMessage: msg,
+      errorMessage: formatStructuredError(retryErrCode, msg, "citation_revalidation"),
       completedAt: new Date(),
     });
     throw err;

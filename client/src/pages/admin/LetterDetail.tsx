@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -371,32 +372,57 @@ export default function AdminLetterDetail() {
           <CardContent>
             {l.workflowJobs && l.workflowJobs.length > 0 ? (
               <div className="space-y-2">
-                {l.workflowJobs.map((job: any) => (
-                  <div
-                    key={job.id}
-                    className="flex items-center justify-between text-sm p-2 rounded border"
-                  >
-                    <div>
-                      <span className="font-medium">{job.jobType}</span>
-                      <span className="text-muted-foreground ml-2">
-                        ({job.provider})
-                      </span>
-                    </div>
-                    <Badge
-                      variant={
-                        job.status === "completed"
-                          ? "default"
-                          : job.status === "failed"
-                            ? "destructive"
-                            : job.status === "running"
-                              ? "secondary"
-                              : "outline"
-                      }
+                {l.workflowJobs.map((job: any) => {
+                  const structured = job.errorMessage ? parsePipelineError(job.errorMessage) : null;
+                  return (
+                    <div
+                      key={job.id}
+                      className="text-sm p-2 rounded border space-y-1"
                     >
-                      {job.status}
-                    </Badge>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-medium">{job.jobType}</span>
+                          <span className="text-muted-foreground ml-2">
+                            ({job.provider})
+                          </span>
+                        </div>
+                        <Badge
+                          variant={
+                            job.status === "completed"
+                              ? "default"
+                              : job.status === "failed"
+                                ? "destructive"
+                                : job.status === "running"
+                                  ? "secondary"
+                                  : "outline"
+                          }
+                        >
+                          {job.status}
+                        </Badge>
+                      </div>
+                      {job.status === "failed" && job.errorMessage && (
+                        structured ? (
+                          <div className="space-y-0.5 pl-0.5" data-testid={`letter-error-structured-${job.id}`}>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${structured.category === "transient" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`} data-testid={`letter-error-category-${job.id}`}>
+                                {structured.category}
+                              </span>
+                              <span className="text-xs font-medium text-foreground" data-testid={`letter-error-code-${job.id}`}>
+                                {PIPELINE_ERROR_LABELS[structured.code] ?? structured.code}
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-600" data-testid={`letter-error-message-${job.id}`}>{structured.message}</p>
+                            {structured.details && (
+                              <p className="text-[11px] text-muted-foreground" data-testid={`letter-error-details-${job.id}`}>{structured.details}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-red-600 pl-0.5" data-testid={`letter-error-message-${job.id}`}>{job.errorMessage}</p>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">

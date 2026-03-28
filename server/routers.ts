@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit, getClientIp } from "./rateLimiter";
-import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../shared/types";
+import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult, PipelineError } from "../shared/types";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -255,8 +255,14 @@ async function runPipelineWithRetry(
         return;
       } catch (err) {
         lastErr = err;
-        console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, err instanceof Error ? err.message : err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[Pipeline] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, errMsg);
         captureServerException(err, { tags: { component: "pipeline", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
+
+        if (err instanceof PipelineError && err.category === "permanent") {
+          console.error(`[Pipeline] Permanent error (${err.code}) for letter #${letterId} — skipping remaining retries`);
+          break;
+        }
       }
     }
 
