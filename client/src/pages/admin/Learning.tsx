@@ -25,6 +25,8 @@ import {
   ToggleLeft,
   ToggleRight,
   TrendingUp,
+  TrendingDown,
+  Minus,
   BookOpen,
   Target,
   BarChart3,
@@ -33,6 +35,9 @@ import {
   X,
   Check,
   Filter,
+  Layers,
+  Clock,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -75,8 +80,43 @@ function sourceLabel(src: string): string {
     attorney_changes: "Changes Req.",
     attorney_edit: "Edit",
     manual: "Manual",
+    consolidation: "Consolidated",
   };
   return map[src] ?? src;
+}
+
+function daysSince(dateStr: string): number {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function EffectivenessBadge({ before, after }: { before: number | null; after: number | null }) {
+  if (before == null || after == null) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="badge-effectiveness-neutral">
+        <Minus className="w-3 h-3" /> No data
+      </span>
+    );
+  }
+  const delta = after - before;
+  if (delta > 2) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium" data-testid="badge-effectiveness-positive">
+        <TrendingUp className="w-3 h-3" /> +{delta} pts
+      </span>
+    );
+  }
+  if (delta < -2) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium" data-testid="badge-effectiveness-negative">
+        <TrendingDown className="w-3 h-3" /> {delta} pts
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="badge-effectiveness-neutral">
+      <Minus className="w-3 h-3" /> Neutral
+    </span>
+  );
 }
 
 export default function AdminLearning() {
@@ -186,8 +226,24 @@ function LessonsTab({
     onError: (e) => toast.error("Creation failed", { description: e.message }),
   });
 
+  const consolidateMutation = trpc.admin.consolidateLessons.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Consolidated ${data.consolidated} groups, deactivated ${data.deactivated} lessons`);
+      refetch();
+    },
+    onError: (e) => toast.error("Consolidation failed", { description: e.message }),
+  });
+
   const activeCount = lessons?.filter((l) => l.isActive).length ?? 0;
   const totalCount = lessons?.length ?? 0;
+
+  const scopeGroups = lessons ? Array.from(
+    new Map(
+      lessons
+        .filter((l) => l.isActive && l.letterType)
+        .map((l) => [`${l.letterType}|${l.jurisdiction ?? ""}`, { letterType: l.letterType!, jurisdiction: l.jurisdiction }])
+    ).values()
+  ) : [];
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ lessonText: "", category: "", weight: 50 });
@@ -273,7 +329,7 @@ function LessonsTab({
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 pb-4 flex items-center justify-center">
+          <CardContent className="pt-4 pb-4 flex items-center justify-between gap-2">
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2" data-testid="button-create-lesson">
@@ -415,6 +471,50 @@ function LessonsTab({
                 </div>
               </DialogContent>
             </Dialog>
+            {scopeGroups.length > 0 && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-consolidate-open">
+                    <Layers className="w-4 h-4" />
+                    Consolidate
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Consolidate Lessons</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    Select a letter type / jurisdiction group to merge similar lessons using AI.
+                  </p>
+                  <div className="space-y-2 pt-2 max-h-64 overflow-y-auto">
+                    {scopeGroups.map((g) => (
+                      <Button
+                        key={`${g.letterType}-${g.jurisdiction}`}
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-xs"
+                        disabled={consolidateMutation.isPending}
+                        onClick={() =>
+                          consolidateMutation.mutate({
+                            letterType: g.letterType,
+                            jurisdiction: g.jurisdiction,
+                          })
+                        }
+                        data-testid={`button-consolidate-${g.letterType}-${g.jurisdiction ?? "all"}`}
+                      >
+                        {consolidateMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Layers className="w-3 h-3" />
+                        )}
+                        {g.letterType?.replace(/-/g, " ")}
+                        {g.jurisdiction ? ` — ${g.jurisdiction}` : ""}
+                      </Button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -607,14 +707,38 @@ function LessonsTab({
                         <span className="text-xs text-muted-foreground">
                           Weight: {lesson.weight}
                         </span>
+                        <EffectivenessBadge
+                          before={lesson.lettersBeforeAvgScore}
+                          after={lesson.lettersAfterAvgScore}
+                        />
                       </div>
                       <p className="text-sm leading-relaxed">{lesson.lessonText}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {lesson.sourceLetterRequestId
-                          ? `From letter #${lesson.sourceLetterRequestId} · `
-                          : ""}
-                        {new Date(lesson.createdAt).toLocaleDateString()}
-                      </p>
+                      <div className="flex items-center gap-3 flex-wrap mt-2 text-xs text-muted-foreground">
+                        {lesson.sourceLetterRequestId ? (
+                          <span>From letter #{lesson.sourceLetterRequestId}</span>
+                        ) : null}
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {daysSince(lesson.createdAt)}d ago
+                        </span>
+                        {(lesson.hitCount ?? 1) > 1 && (
+                          <span className="flex items-center gap-1" data-testid={`text-hit-count-${lesson.id}`}>
+                            <Layers className="w-3 h-3" />
+                            {lesson.hitCount} hits
+                          </span>
+                        )}
+                        {(lesson.timesInjected ?? 0) > 0 && (
+                          <span className="flex items-center gap-1" data-testid={`text-times-injected-${lesson.id}`}>
+                            <Zap className="w-3 h-3" />
+                            {lesson.timesInjected} injections
+                          </span>
+                        )}
+                        {lesson.lastInjectedAt && (
+                          <span>
+                            Last injected: {new Date(lesson.lastInjectedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
@@ -662,8 +786,10 @@ function QualityTab() {
     trpc.admin.qualityTrend.useQuery({ days: 30 });
   const { data: byLetterType, isLoading: byTypeLoading } =
     trpc.admin.qualityByLetterType.useQuery();
+  const { data: impactData, isLoading: impactLoading } =
+    trpc.admin.lessonImpact.useQuery();
 
-  const isLoading = statsLoading || trendLoading || byTypeLoading;
+  const isLoading = statsLoading || trendLoading || byTypeLoading || impactLoading;
 
   return (
     <div className="space-y-6">
@@ -684,7 +810,7 @@ function QualityTab() {
                     <p className="text-2xl font-bold" data-testid="text-avg-score">
                       {stats?.avgScore != null
                         ? Math.round(Number(stats.avgScore))
-                        : "—"}
+                        : "\u2014"}
                     </p>
                     <p className="text-xs text-muted-foreground">Avg Quality Score</p>
                   </div>
@@ -701,7 +827,7 @@ function QualityTab() {
                     <p className="text-2xl font-bold" data-testid="text-first-pass-rate">
                       {stats?.firstPassRate != null
                         ? `${Math.round(Number(stats.firstPassRate))}%`
-                        : "—"}
+                        : "\u2014"}
                     </p>
                     <p className="text-xs text-muted-foreground">First-Pass Approval</p>
                   </div>
@@ -718,7 +844,7 @@ function QualityTab() {
                     <p className="text-2xl font-bold" data-testid="text-avg-edit-dist">
                       {stats?.avgEditDistance != null
                         ? `${Math.round(Number(stats.avgEditDistance))}%`
-                        : "—"}
+                        : "\u2014"}
                     </p>
                     <p className="text-xs text-muted-foreground">Avg Edit Distance</p>
                   </div>
@@ -733,7 +859,7 @@ function QualityTab() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold" data-testid="text-total-scored">
-                      {String(stats?.totalScored ?? "—")}
+                      {String(stats?.totalScored ?? "\u2014")}
                     </p>
                     <p className="text-xs text-muted-foreground">Letters Scored</p>
                   </div>
@@ -741,6 +867,69 @@ function QualityTab() {
               </CardContent>
             </Card>
           </div>
+
+          {impactData && (impactData as any[]).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  Lesson Impact
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="table-lesson-impact">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium text-muted-foreground">Lesson</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-center">Category</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Before</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">After</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Delta</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-right">Injections</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(impactData as any[]).map((row: any, i: number) => {
+                        const delta = row.scoreDelta != null ? Number(row.scoreDelta) : null;
+                        return (
+                          <tr key={i} className="border-b last:border-0" data-testid={`row-impact-${i}`}>
+                            <td className="py-2.5 max-w-[300px] truncate" title={row.lessonText}>
+                              {String(row.lessonText).substring(0, 80)}
+                              {String(row.lessonText).length > 80 ? "..." : ""}
+                            </td>
+                            <td className="py-2.5 text-center">
+                              <Badge className={categoryColor(row.category)} variant="secondary">
+                                {String(row.category ?? "general").replace(/_/g, " ")}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 text-right font-mono text-xs">
+                              {row.lettersBeforeAvgScore ?? "\u2014"}
+                            </td>
+                            <td className="py-2.5 text-right font-mono text-xs">
+                              {row.lettersAfterAvgScore ?? "\u2014"}
+                            </td>
+                            <td className="py-2.5 text-right">
+                              {delta != null ? (
+                                <span className={`font-semibold ${
+                                  delta > 2 ? "text-green-600" : delta < -2 ? "text-red-600" : "text-muted-foreground"
+                                }`}>
+                                  {delta > 0 ? "+" : ""}{delta}
+                                </span>
+                              ) : "\u2014"}
+                            </td>
+                            <td className="py-2.5 text-right text-muted-foreground">
+                              {String(row.timesInjected ?? 0)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {byLetterType && byLetterType.length > 0 && (
             <Card>
@@ -781,12 +970,12 @@ function QualityTab() {
                           <td className="py-2.5 text-right">
                             {row.firstPassRate != null
                               ? `${Math.round(Number(row.firstPassRate))}%`
-                              : "—"}
+                              : "\u2014"}
                           </td>
                           <td className="py-2.5 text-right">
                             {row.avgRevisions != null
                               ? Number(row.avgRevisions).toFixed(1)
-                              : "—"}
+                              : "\u2014"}
                           </td>
                           <td className="py-2.5 text-right text-muted-foreground">
                             {String(row.total ?? 0)}

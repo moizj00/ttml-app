@@ -19,6 +19,7 @@ import {
   createResearchRun,
   createWorkflowJob,
   getActiveLessons,
+  incrementLessonInjectionStats,
   getLatestResearchRun,
   hasLetterBeenPreviouslyUnlocked,
   logReviewAction,
@@ -81,11 +82,28 @@ async function buildLessonsPromptBlock(
       limit: 10,
     });
     if (!lessons || lessons.length === 0) return "";
-    const lines = lessons.map(
-      (l: any, i: number) =>
-        `${i + 1}. [${l.category}] ${l.lessonText}`,
-    );
-    return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n${lines.join("\n")}\n`;
+
+    const lessonIds = lessons.map((l: any) => l.id).filter(Boolean);
+    if (lessonIds.length > 0) {
+      incrementLessonInjectionStats(lessonIds).catch((err) =>
+        console.warn("[Pipeline] Failed to increment injection stats:", err)
+      );
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const l of lessons as any[]) {
+      const cat = l.category ?? "general";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(l.lesson_text ?? l.lessonText);
+    }
+
+    const sections = Object.entries(grouped).map(([cat, texts]) => {
+      const catLabel = cat.replace(/_/g, " ").toUpperCase();
+      const items = texts.map((t, i) => `  ${i + 1}. ${t}`).join("\n");
+      return `### ${catLabel}\n${items}`;
+    });
+
+    return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n\n${sections.join("\n\n")}\n`;
   } catch (err) {
     console.error("[Pipeline] Failed to load lessons for prompt injection:", err);
     captureServerException(err, { tags: { component: "pipeline", error_type: "lessons_load_failed" } });

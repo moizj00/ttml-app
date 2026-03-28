@@ -126,7 +126,7 @@ export const lessonCategoryEnum = pgEnum("lesson_category", [
 ]);
 export const lessonSourceEnum = pgEnum("lesson_source", [
   "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
-  "subscriber_update", "subscriber_retry",
+  "subscriber_update", "subscriber_retry", "consolidation",
 ]);
 
 // ═══════════════════════════════════════════════════════
@@ -468,6 +468,13 @@ export const pipelineLessons = pgTable("pipeline_lessons", {
   isActive: boolean("is_active").default(true).notNull(),
   weight: integer("weight").default(50).notNull(),
   createdByUserId: integer("created_by_user_id"),
+  hitCount: integer("hit_count").default(1).notNull(),
+  timesInjected: integer("times_injected").default(0).notNull(),
+  consolidatedFromIds: integer("consolidated_from_ids").array(),
+  lettersBeforeAvgScore: integer("letters_before_avg_score"),
+  lettersAfterAvgScore: integer("letters_after_avg_score"),
+  effectivenessSamples: integer("effectiveness_samples").default(0).notNull(),
+  lastInjectedAt: timestamp("last_injected_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({
@@ -475,6 +482,7 @@ export const pipelineLessons = pgTable("pipeline_lessons", {
   letterTypeIdx: index("idx_pipeline_lessons_letter_type").on(t.letterType),
   jurisdictionIdx: index("idx_pipeline_lessons_jurisdiction").on(t.jurisdiction),
   stageIdx: index("idx_pipeline_lessons_stage").on(t.pipelineStage),
+  compositeIdx: index("idx_pipeline_lessons_type_jurisdiction_active").on(t.letterType, t.jurisdiction, t.isActive),
 }));
 
 export type PipelineLesson = typeof pipelineLessons.$inferSelect;

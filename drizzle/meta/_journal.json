@@ -211,6 +211,13 @@
       "when": 1774661338312,
       "tag": "0029_gorgeous_puppet_master",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1774662602504,
+      "tag": "0030_volatile_sandman",
+      "breakpoints": true
     }
   ]
 }

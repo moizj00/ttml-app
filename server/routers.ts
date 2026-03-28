@@ -78,6 +78,7 @@ import {
   getQualityScoreStats,
   getQualityScoreTrend,
   getQualityScoresByLetterType,
+  getLessonImpactSummary,
   assignRoleId,
   getPublishedBlogPosts,
   getBlogPostBySlug,
@@ -108,7 +109,7 @@ import {
 } from "./email";
 import { captureServerException } from "./sentry";
 import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
-import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore } from "./learning";
+import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore, consolidateLessonsForScope } from "./learning";
 import type { InsertPipelineLesson } from "../drizzle/schema";
 import { BLOG_CATEGORIES } from "../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
@@ -2166,6 +2167,18 @@ export const appRouter = router({
       .query(async ({ input }) => getQualityScoreTrend(input?.days ?? 30)),
 
     qualityByLetterType: adminProcedure.query(async () => getQualityScoresByLetterType()),
+
+    consolidateLessons: adminProcedure
+      .input(z.object({
+        letterType: z.string(),
+        jurisdiction: z.string().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await consolidateLessonsForScope(input.letterType, input.jurisdiction);
+        return { success: true, ...result };
+      }),
+
+    lessonImpact: adminProcedure.query(async () => getLessonImpactSummary()),
   }),
 
   // ─── Notifications ─────────────────────────────────────────────────────────

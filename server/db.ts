@@ -67,6 +67,39 @@ export async function getDb() {
     } catch (migErr) {
       console.warn("[Database] Migration error (pipeline_locked_at):", migErr);
     }
+    // Add recursive learning hardening columns to pipeline_lessons
+    try {
+      await _db.execute(sql`
+        ALTER TABLE pipeline_lessons
+        ADD COLUMN IF NOT EXISTS hit_count INTEGER NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS times_injected INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS consolidated_from_ids INTEGER[],
+        ADD COLUMN IF NOT EXISTS letters_before_avg_score INTEGER,
+        ADD COLUMN IF NOT EXISTS letters_after_avg_score INTEGER,
+        ADD COLUMN IF NOT EXISTS effectiveness_samples INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS last_injected_at TIMESTAMPTZ
+      `);
+      await _db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_pipeline_lessons_type_jurisdiction_active
+        ON pipeline_lessons (letter_type, jurisdiction, is_active)
+      `);
+      console.log("[Database] Migration: ensured pipeline_lessons hardening columns exist");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (pipeline_lessons hardening):", migErr);
+    }
+    // Add 'consolidation' to lesson_source enum if it doesn't exist
+    try {
+      await _db.execute(sql`
+        DO $$ BEGIN
+          ALTER TYPE lesson_source ADD VALUE IF NOT EXISTS 'consolidation';
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$
+      `);
+      console.log("[Database] Migration: ensured 'consolidation' enum value exists");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (consolidation enum):", migErr);
+    }
   }
   return _db;
 }
@@ -2026,15 +2059,51 @@ export async function getActiveLessons(filters: {
 }) {
   const db = await getDb();
   if (!db) return [];
+
+  const results = await db.execute(sql`
+    SELECT *,
+      GREATEST(0.3, POWER(0.9, EXTRACT(EPOCH FROM (NOW() - created_at)) / (30 * 86400))) AS recency_multiplier,
+      CASE
+        WHEN letters_before_avg_score IS NOT NULL AND letters_after_avg_score IS NOT NULL
+          AND letters_after_avg_score > letters_before_avg_score THEN 1.2
+        WHEN letters_before_avg_score IS NOT NULL AND letters_after_avg_score IS NOT NULL
+          AND letters_after_avg_score < letters_before_avg_score THEN 0.8
+        ELSE 1.0
+      END AS effectiveness_boost,
+      weight * GREATEST(0.3, POWER(0.9, EXTRACT(EPOCH FROM (NOW() - created_at)) / (30 * 86400)))
+        * CASE
+            WHEN letters_before_avg_score IS NOT NULL AND letters_after_avg_score IS NOT NULL
+              AND letters_after_avg_score > letters_before_avg_score THEN 1.2
+            WHEN letters_before_avg_score IS NOT NULL AND letters_after_avg_score IS NOT NULL
+              AND letters_after_avg_score < letters_before_avg_score THEN 0.8
+            ELSE 1.0
+          END AS effective_score
+    FROM pipeline_lessons
+    WHERE is_active = true
+      ${filters.letterType ? sql`AND (letter_type = ${filters.letterType} OR letter_type IS NULL)` : sql``}
+      ${filters.jurisdiction ? sql`AND (jurisdiction = ${filters.jurisdiction} OR jurisdiction IS NULL)` : sql``}
+      ${filters.pipelineStage ? sql`AND (pipeline_stage = ${filters.pipelineStage} OR pipeline_stage IS NULL)` : sql``}
+    ORDER BY effective_score DESC
+    LIMIT ${filters.limit ?? 10}
+  `);
+
+  return results as any[];
+}
+
+export async function getActiveLessonsForScope(filters: {
+  letterType: string;
+  jurisdiction?: string;
+  pipelineStage?: string;
+}) {
+  const db = await getDb();
+  if (!db) return [];
   const conditions = [eq(pipelineLessons.isActive, true)];
-  if (filters.letterType) {
-    conditions.push(
-      or(
-        eq(pipelineLessons.letterType, filters.letterType as NonNullable<InsertPipelineLesson["letterType"]>),
-        isNull(pipelineLessons.letterType),
-      )!
-    );
-  }
+  conditions.push(
+    or(
+      eq(pipelineLessons.letterType, filters.letterType as NonNullable<InsertPipelineLesson["letterType"]>),
+      isNull(pipelineLessons.letterType),
+    )!
+  );
   if (filters.jurisdiction) {
     conditions.push(
       or(
@@ -2055,8 +2124,119 @@ export async function getActiveLessons(filters: {
     .select()
     .from(pipelineLessons)
     .where(and(...conditions))
-    .orderBy(desc(pipelineLessons.weight))
-    .limit(filters.limit ?? 10);
+    .orderBy(desc(pipelineLessons.weight));
+}
+
+export async function boostExistingLesson(id: number, newWeight: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.execute(sql`
+    UPDATE pipeline_lessons
+    SET hit_count = hit_count + 1,
+        weight = ${Math.min(newWeight, 100)},
+        updated_at = NOW()
+    WHERE id = ${id}
+  `);
+}
+
+export async function incrementLessonInjectionStats(lessonIds: number[]) {
+  if (lessonIds.length === 0) return;
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql`
+    UPDATE pipeline_lessons
+    SET times_injected = times_injected + 1,
+        last_injected_at = NOW()
+    WHERE id = ANY(${lessonIds})
+  `);
+}
+
+export async function getAverageQualityScoreForScope(
+  letterType?: string,
+  jurisdiction?: string,
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  let result;
+  if (letterType && jurisdiction) {
+    result = await db.execute(sql`
+      SELECT ROUND(AVG(lqs.computed_score))::int as avg_score
+      FROM letter_quality_scores lqs
+      JOIN letter_requests lr ON lqs.letter_request_id = lr.id
+      WHERE lr.letter_type = ${letterType} AND lr.jurisdiction_state = ${jurisdiction}
+    `);
+  } else if (letterType) {
+    result = await db.execute(sql`
+      SELECT ROUND(AVG(lqs.computed_score))::int as avg_score
+      FROM letter_quality_scores lqs
+      JOIN letter_requests lr ON lqs.letter_request_id = lr.id
+      WHERE lr.letter_type = ${letterType}
+    `);
+  } else {
+    result = await db.execute(sql`
+      SELECT ROUND(AVG(computed_score))::int as avg_score
+      FROM letter_quality_scores
+    `);
+  }
+
+  const row = result[0] as any;
+  return row?.avg_score ?? null;
+}
+
+export async function updateLessonEffectivenessScores(
+  lessonIds: number[],
+  newScore: number,
+) {
+  if (lessonIds.length === 0) return;
+  const db = await getDb();
+  if (!db) return;
+
+  await db.execute(sql`
+    UPDATE pipeline_lessons
+    SET letters_after_avg_score = CASE
+        WHEN letters_after_avg_score IS NULL THEN ${newScore}
+        ELSE ROUND((letters_after_avg_score * effectiveness_samples + ${newScore}) / (effectiveness_samples + 1))
+      END,
+      effectiveness_samples = effectiveness_samples + 1,
+      updated_at = NOW()
+    WHERE id = ANY(${lessonIds})
+  `);
+}
+
+export async function getLessonImpactSummary() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.execute(sql`
+    SELECT
+      id,
+      lesson_text as "lessonText",
+      category,
+      letter_type as "letterType",
+      jurisdiction,
+      weight,
+      hit_count as "hitCount",
+      times_injected as "timesInjected",
+      letters_before_avg_score as "lettersBeforeAvgScore",
+      letters_after_avg_score as "lettersAfterAvgScore",
+      CASE
+        WHEN letters_before_avg_score IS NOT NULL AND letters_after_avg_score IS NOT NULL
+        THEN letters_after_avg_score - letters_before_avg_score
+        ELSE NULL
+      END as "scoreDelta",
+      created_at as "createdAt"
+    FROM pipeline_lessons
+    WHERE is_active = true
+      AND times_injected > 0
+      AND letters_before_avg_score IS NOT NULL
+    ORDER BY
+      CASE
+        WHEN letters_after_avg_score IS NOT NULL
+        THEN ABS(letters_after_avg_score - letters_before_avg_score)
+        ELSE 0
+      END DESC
+    LIMIT 20
+  `);
 }
 
 export async function getAllLessons(filters?: {
