@@ -229,6 +229,7 @@ export const reviewActions = pgTable("review_actions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_review_actions_letter_request_id").on(t.letterRequestId),
+  index("idx_review_actions_reviewer_id").on(t.reviewerId),
 ]);
 
 export type ReviewAction = typeof reviewActions.$inferSelect;
@@ -577,7 +578,6 @@ export const blogPosts = pgTable("blog_posts", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({
-  slugIdx: uniqueIndex("idx_blog_posts_slug").on(t.slug),
   statusIdx: index("idx_blog_posts_status").on(t.status),
   publishedAtIdx: index("idx_blog_posts_published_at").on(t.publishedAt),
 }));
