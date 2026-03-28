@@ -51,6 +51,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
     5.  **Recursive Learning System**: Captures structured lessons from attorney feedback (approvals/rejections/changes) and computes quality scores, injecting lessons into future AI stages for continuous improvement.
 - **Pipeline Resilience**: Automatic retry mechanism (up to 3 attempts with exponential backoff) before marking as `pipeline_failed`. DB-level lock uses `lt()` Drizzle operator for `pipeline_locked_at` comparison (fixed from broken `sql` template tag).
 - **Rate Limiting**: Upstash Redis for fine-grained, per-user limits on sensitive endpoints, with a fail-closed mode for pipeline-triggering endpoints.
+- **Database Security Hardening** (Migration 0015): All public helper functions have `search_path = ''` to prevent search_path injection. RLS enabled on all tables including `admin_verification_codes`, `blog_posts`, `document_analyses`, `letter_quality_scores`, `pipeline_lessons`, `processed_stripe_events`, `commission_ledger`, `email_verification_tokens`, `discount_codes`, `payout_requests`. Overly-permissive INSERT policies (WITH CHECK (true)) replaced with role-scoped conditions.
 - **Database Indexes**: Comprehensive btree indexes on frequently queried columns in `letter_requests`, `workflow_jobs`, `review_actions`, `letter_versions`, `notifications`, `attachments`, `research_runs`.
 - **research_runs schema**: Includes `cache_hit` (boolean, default false) and `cache_key` (varchar 256) columns for KV cache integration.
 - **Error Tracking**: Sentry.
