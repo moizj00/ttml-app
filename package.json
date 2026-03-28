@@ -10,7 +10,9 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "db:check-migrations": "node scripts/check-migrations.mjs",
+    "db:backfill-migrations": "node scripts/backfill-migrations.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.47",
