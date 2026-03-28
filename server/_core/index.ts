@@ -8,8 +8,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
-import { sql } from "drizzle-orm";
-import { registerSupabaseAuthRoutes } from "../supabaseAuth";
+import { registerSupabaseAuthRoutes, authenticateRequest } from "../supabaseAuth";
 import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
@@ -24,10 +23,10 @@ import { getDb } from "../db";
 import {
   authRateLimitMiddleware,
   generalRateLimitMiddleware,
-  getRedis,
 } from "../rateLimiter";
 import { validateRequiredEnv } from "./env";
-import { checkR2Connectivity, getR2HealthStatus } from "../storage";
+import { checkR2Connectivity } from "../storage";
+import { startHealthProbe, getPublicHealth, getDetailedHealth } from "../healthCheck";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -173,38 +172,39 @@ async function startServer() {
   });
   // ──────────────────────────────────────────────────────────────────────────
 
-  // ─── Standalone health check (plain HTTP GET, no tRPC overhead) ───────────
-  // Used by Railway health checks and load balancers.
-  // Checks DB connectivity; returns 503 if DB is unreachable.
-  app.get("/api/health", async (_req, res) => {
-    let dbOk = false;
+  // ─── Health check endpoints (plain HTTP GET, no tRPC overhead) ────────────
+  // GET /health — public, used by Railway health checks and load balancers.
+  // Returns overall status derived from all dependencies (DB, Redis, Stripe,
+  // Resend, Anthropic, Perplexity, R2) via a background probe that runs
+  // every 30s. Synchronous — no external API calls on each request.
+  const healthHandler: express.RequestHandler = (_req, res) => {
+    const result = getPublicHealth();
+    const httpStatus = result.status === "unhealthy" ? 503 : 200;
+    res.status(httpStatus).json(result);
+  };
+  app.get("/health", healthHandler);
+  app.get("/api/health", healthHandler);
+
+  // GET /health/details — admin-only, returns per-service breakdown
+  // with response times. Background probe refreshes every 30s.
+  const healthDetailsHandler: express.RequestHandler = async (req, res) => {
     try {
-      const db = await getDb();
-      if (db) {
-        await db.execute(sql`SELECT 1`);
-        dbOk = true;
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(user ? 403 : 401).json({ error: "Admin authentication required" });
+        return;
       }
     } catch {
-      dbOk = false;
+      res.status(401).json({ error: "Admin authentication required" });
+      return;
     }
 
-    let redisOk: boolean | null = null;
-    const redis = getRedis();
-    if (redis) {
-      try {
-        await redis.ping();
-        redisOk = true;
-      } catch {
-        redisOk = false;
-      }
-    }
-
-    const r2Ok = getR2HealthStatus();
-
-    const ok = dbOk && (redisOk === null || redisOk);
-    const status = ok ? 200 : 503;
-    res.status(status).json({ ok, db: dbOk, redis: redisOk, r2: r2Ok, timestamp: Date.now() });
-  });
+    const result = await getDetailedHealth();
+    const httpStatus = result.status === "unhealthy" ? 503 : 200;
+    res.status(httpStatus).json(result);
+  };
+  app.get("/health/details", healthDetailsHandler);
+  app.get("/api/health/details", healthDetailsHandler);
   // ──────────────────────────────────────────────────────────────────────────
 
   // ⚠️ Stripe webhook MUST be registered BEFORE express.json() to get raw body
@@ -262,6 +262,8 @@ async function startServer() {
     startCronScheduler();
     // Check Cloudflare R2 connectivity
     checkR2Connectivity().catch(() => {});
+    // Start background health probe (checks all dependencies every 30s)
+    startHealthProbe();
   });
 }
 

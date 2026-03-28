@@ -14,13 +14,14 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
 [deploy.healthCheck]
-# Plain Express GET /api/health — added in server/_core/index.ts.
-# No tRPC overhead or query params required.
-httpPath = "/api/health"
+# GET /health — checks all critical dependencies (DB, Redis, Stripe,
+# Resend, Anthropic, Perplexity, R2) via a background probe that runs
+# every 30s. Returns 503 when unhealthy. No tRPC overhead.
+httpPath = "/health"
 intervalSeconds = 30
 timeoutSeconds = 10
-# Allow extra time for DB connection warm-up on cold start.
-startPeriodSeconds = 30
+# Allow extra time for DB connection warm-up and first probe on cold start.
+startPeriodSeconds = 45
 
 [deploy.environmentVariables]
 # Tell the server it is in production mode so it serves dist/public

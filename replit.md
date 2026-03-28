@@ -54,6 +54,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database Security Hardening** (Migration 0015): All public helper functions have `search_path = ''` to prevent search_path injection. RLS enabled on all tables including `admin_verification_codes`, `blog_posts`, `document_analyses`, `letter_quality_scores`, `pipeline_lessons`, `processed_stripe_events`, `commission_ledger`, `email_verification_tokens`, `discount_codes`, `payout_requests`. Overly-permissive INSERT policies (WITH CHECK (true)) replaced with role-scoped conditions.
 - **Database Indexes**: Comprehensive btree indexes on frequently queried columns in `letter_requests`, `workflow_jobs`, `review_actions`, `letter_versions`, `notifications`, `attachments`, `research_runs`.
 - **research_runs schema**: Includes `cache_hit` (boolean, default false) and `cache_key` (varchar 256) columns for KV cache integration.
+- **Health Check & Monitoring**: `GET /health` (public, overall status for Railway health checks) and `GET /health/details` (admin-only, per-service breakdown with response times). Also available at `/api/health` and `/api/health/details`. Checks: database, Redis, Stripe, Resend, Anthropic, Perplexity, Cloudflare R2. Each check has a 3-second timeout. Full results cached 30s.
 - **Error Tracking**: Sentry.
 - **Deployment**: Railway.
 
