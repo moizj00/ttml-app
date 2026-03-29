@@ -3145,6 +3145,8 @@ export const appRouter = router({
             documentText = fileBuffer.toString("utf-8");
           }
         } catch (err) {
+          console.error("[DocumentAnalyzer] Text extraction failed:", err);
+          captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Could not extract text from the document. Please ensure it is a valid file.",
@@ -3265,6 +3267,8 @@ ${truncatedText}
           // Validate via lenient schema (applies safe defaults for partial/malformed AI output)
           analysisResult = documentAnalysisResultLenientSchema.parse(parsed);
         } catch (err) {
+          console.error("[DocumentAnalyzer] AI analysis failed:", err);
+          captureServerException(err, { tags: { component: "document_analyzer", error_type: "ai_analysis_failed" } });
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "AI analysis failed. Please try again.",
