@@ -1,0 +1,111 @@
+2026-03-29T13:07:49.264497773Z [inf]  Starting Container
+2026-03-29T13:07:50.066843343Z [inf]  
+2026-03-29T13:07:50.066848012Z [inf]  > talk-to-my-lawyer@1.0.0 start /app
+2026-03-29T13:07:50.066852694Z [inf]  > NODE_ENV=production node --import ./dist/sentry-init.js dist/index.js
+2026-03-29T13:07:50.066859698Z [inf]  
+2026-03-29T13:07:50.066864277Z [inf]  [Sentry] ESM initialization complete — monitoring enabled
+2026-03-29T13:07:51.477153074Z [inf]  [Sentry] Server-side monitoring initialized
+2026-03-29T13:07:51.484498784Z [inf]  [DraftReminders] Route registered: POST /api/cron/draft-reminders
+2026-03-29T13:07:51.484504232Z [inf]  Server running on http://localhost:3000/
+2026-03-29T13:07:51.484796958Z [inf]  [Database] Connected to Supabase (PostgreSQL)
+2026-03-29T13:07:51.489196642Z [inf]  [Cron] Starting scheduler...
+2026-03-29T13:07:51.533599554Z [inf]  [Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30)
+2026-03-29T13:07:51.708983211Z [inf]  [R2] Cloudflare R2 connectivity check passed.
+2026-03-29T13:07:51.708994809Z [inf]  [R2] Cloudflare R2 connectivity check passed.
+2026-03-29T13:07:52.138703295Z [inf]  [Database] Migration: cleared maxUses:1 from discount codes
+2026-03-29T13:07:52.199510554Z [inf]  {
+2026-03-29T13:07:52.199521501Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.199526617Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.199531214Z [inf]    code: '42701',
+2026-03-29T13:07:52.199535391Z [inf]    message: 'column "pipeline_locked_at" of relation "letter_requests" already exists, skipping',
+2026-03-29T13:07:52.199539808Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.199544122Z [inf]    line: '7471',
+2026-03-29T13:07:52.199548824Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.199553889Z [inf]  }
+2026-03-29T13:07:52.199558207Z [inf]  [Database] Migration: ensured pipeline_locked_at column exists
+2026-03-29T13:07:52.251670643Z [inf]  {
+2026-03-29T13:07:52.251671899Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.251676466Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.251679618Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.251682580Z [inf]    code: '42701',
+2026-03-29T13:07:52.251685460Z [inf]    message: 'column "hit_count" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.251688313Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.251691182Z [inf]    line: '7471',
+2026-03-29T13:07:52.251694077Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.251700155Z [inf]  }
+2026-03-29T13:07:52.251702775Z [inf]  {
+2026-03-29T13:07:52.251705481Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.251708530Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.251711400Z [inf]    code: '42701',
+2026-03-29T13:07:52.251714320Z [inf]    message: 'column "times_injected" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.251718247Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.251721190Z [inf]    line: '7471',
+2026-03-29T13:07:52.251723853Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.251726638Z [inf]  }
+2026-03-29T13:07:52.251729491Z [inf]  {
+2026-03-29T13:07:52.251732999Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.251736134Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.251738986Z [inf]    code: '42701',
+2026-03-29T13:07:52.251741615Z [inf]    message: 'column "consolidated_from_ids" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.251744337Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.251747206Z [inf]    line: '7471',
+2026-03-29T13:07:52.251750780Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.251757549Z [inf]  }
+2026-03-29T13:07:52.251760258Z [inf]  {
+2026-03-29T13:07:52.252355152Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.252361538Z [inf]    code: '42701',
+2026-03-29T13:07:52.252368469Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.252378333Z [inf]    code: '42701',
+2026-03-29T13:07:52.252382910Z [inf]    message: 'column "letters_before_avg_score" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.252388298Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.252392241Z [inf]    line: '7471',
+2026-03-29T13:07:52.252396462Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.252400031Z [inf]  }
+2026-03-29T13:07:52.252403737Z [inf]  {
+2026-03-29T13:07:52.252407771Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.252411406Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.252415065Z [inf]    code: '42701',
+2026-03-29T13:07:52.252421120Z [inf]    message: 'column "letters_after_avg_score" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.252424526Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.252427840Z [inf]    line: '7471',
+2026-03-29T13:07:52.252431155Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.252434875Z [inf]  }
+2026-03-29T13:07:52.252439594Z [inf]  {
+2026-03-29T13:07:52.252444315Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.252447641Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.252450953Z [inf]    code: '42701',
+2026-03-29T13:07:52.252454353Z [inf]    message: 'column "effectiveness_samples" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.252457665Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.252460893Z [inf]    line: '7471',
+2026-03-29T13:07:52.252465381Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.252468793Z [inf]  }
+2026-03-29T13:07:52.252472333Z [inf]  {
+2026-03-29T13:07:52.252478642Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.252776496Z [inf]    message: 'column "last_injected_at" of relation "pipeline_lessons" already exists, skipping',
+2026-03-29T13:07:52.252781358Z [inf]    file: 'tablecmds.c',
+2026-03-29T13:07:52.252785110Z [inf]    line: '7471',
+2026-03-29T13:07:52.252788588Z [inf]    routine: 'check_for_column_name_collision'
+2026-03-29T13:07:52.252791472Z [inf]  }
+2026-03-29T13:07:52.301312295Z [inf]  {
+2026-03-29T13:07:52.301317998Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.301321157Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.301324186Z [inf]    code: '42P07',
+2026-03-29T13:07:52.301327079Z [inf]    message: 'relation "idx_pipeline_lessons_type_jurisdiction_active" already exists, skipping',
+2026-03-29T13:07:52.301329785Z [inf]    file: 'index.c',
+2026-03-29T13:07:52.301332388Z [inf]    line: '889',
+2026-03-29T13:07:52.301335124Z [inf]    routine: 'index_create'
+2026-03-29T13:07:52.301337925Z [inf]  }
+2026-03-29T13:07:52.301341919Z [inf]  [Database] Migration: ensured pipeline_lessons hardening columns exist
+2026-03-29T13:07:52.348075129Z [inf]  {
+2026-03-29T13:07:52.348077938Z [inf]    severity_local: 'NOTICE',
+2026-03-29T13:07:52.348080977Z [inf]    severity: 'NOTICE',
+2026-03-29T13:07:52.348083848Z [inf]    code: '42710',
+2026-03-29T13:07:52.348086965Z [inf]    message: 'enum label "consolidation" already exists, skipping',
+2026-03-29T13:07:52.348089786Z [inf]    where: `SQL statement "ALTER TYPE lesson_source ADD VALUE IF NOT EXISTS 'consolidation'"\n` +
+2026-03-29T13:07:52.348092555Z [inf]      'PL/pgSQL function inline_code_block line 2 at SQL statement',
+2026-03-29T13:07:52.348095456Z [inf]    file: 'pg_enum.c',
+2026-03-29T13:07:52.348098436Z [inf]    line: '341',
+2026-03-29T13:07:52.348101805Z [inf]    routine: 'AddEnumLabel'
+2026-03-29T13:07:52.348104669Z [inf]  }
+2026-03-29T13:07:52.348109883Z [inf]  [Database] Migration: ensured 'consolidation' enum value exists
+2026-03-29T13:07:52.348112543Z [inf]  [Startup] Database connection warmed up
