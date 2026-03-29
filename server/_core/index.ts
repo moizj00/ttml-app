@@ -1,7 +1,29 @@
 import "dotenv/config";
 // Sentry must be initialized before other imports
-import { initServerSentry, Sentry } from "../sentry";
+import { initServerSentry, Sentry, captureServerException } from "../sentry";
 initServerSentry();
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled promise rejection:", reason);
+  captureServerException(reason instanceof Error ? reason : new Error(String(reason)), {
+    tags: { component: "process", error_type: "unhandled_rejection" },
+  });
+  // Flush Sentry and exit — unhandled rejections are programmer errors
+  Sentry.close(2000).finally(() => {
+    process.exit(1);
+  });
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught exception:", err);
+  captureServerException(err, {
+    tags: { component: "process", error_type: "uncaught_exception" },
+  });
+  // Flush Sentry before exiting so the exception is captured
+  Sentry.close(2000).finally(() => {
+    process.exit(1);
+  });
+});
 
 import express from "express";
 import { createServer } from "http";
@@ -260,11 +282,17 @@ async function startServer() {
     // Warm up DB connection on startup so first request doesn't timeout
     getDb()
       .then(() => console.log("[Startup] Database connection warmed up"))
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[Startup] Database warmup failed:", err);
+        captureServerException(err, { tags: { component: "startup", error_type: "db_warmup_failed" } });
+      });
     // Start in-process cron scheduler (draft reminders, etc.)
     startCronScheduler();
     // Check Cloudflare R2 connectivity
-    checkR2Connectivity().catch(() => {});
+    checkR2Connectivity().catch((err) => {
+      console.error("[Startup] R2 connectivity check failed:", err);
+      captureServerException(err, { tags: { component: "startup", error_type: "r2_connectivity_failed" } });
+    });
     // Start background health probe (checks all dependencies every 30s)
     startHealthProbe();
   });

@@ -19,7 +19,7 @@ interface Props {
 
 export default function UpgradeBanner({ plan }: Props) {
   const [dismissed, setDismissed] = useState(() => {
-    try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch { return false; }
+    try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch (err) { console.warn("[UpgradeBanner] Failed to read dismiss state from sessionStorage:", err); return false; }
   });
 
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
@@ -33,7 +33,7 @@ export default function UpgradeBanner({ plan }: Props) {
   });
 
   const handleDismiss = () => {
-    try { sessionStorage.setItem(SESSION_KEY, "1"); } catch { }
+    try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (err) { console.warn("[UpgradeBanner] Failed to persist dismiss to sessionStorage:", err); }
     setDismissed(true);
   };
 

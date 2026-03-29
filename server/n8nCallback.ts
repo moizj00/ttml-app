@@ -37,6 +37,7 @@ import {
 import { runAssemblyStage, autoAdvanceIfPreviouslyUnlocked } from "./pipeline";
 import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
 import { sendLetterReadyEmail } from "./email";
+import { captureServerException } from "./sentry";
 
 interface N8nVettingReport {
   citationsVerified: number;
@@ -410,6 +411,10 @@ export function registerN8nCallbackRoute(app: Express): void {
           `[n8n Callback] Error processing callback for letter #${letterId}:`,
           msg
         );
+        captureServerException(err instanceof Error ? err : new Error(msg), {
+          tags: { component: "n8n_callback", error_type: "post_response_processing_failed" },
+          extra: { letterId },
+        });
       }
     }
   );

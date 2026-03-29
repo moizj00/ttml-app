@@ -26,7 +26,8 @@ async function getUserIdFromStripeCustomer(customerId: string): Promise<number |
     const meta = (customer as Stripe.Customer).metadata;
     if (meta?.userId) return parseInt(meta.userId, 10);
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`[StripeWebhook] Failed to retrieve Stripe customer ${customerId}:`, err);
     return null;
   }
 }
@@ -80,6 +81,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     }
   }
 
+  let responded = false;
   try {
     switch (event.type) {
       // ─── One-time payment completed ────────────────────────────────────────
@@ -575,13 +577,16 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     }
 
     res.json({ received: true });
+    responded = true;
   } catch (err: any) {
     console.error("[StripeWebhook] Error processing event:", err);
     captureServerException(err, {
       tags: { component: "stripe_webhook", event_type: event.type },
       extra: { eventId: event.id, eventType: event.type },
     });
-    res.status(500).json({ error: "Webhook processing failed" });
+    if (!responded) {
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
   }
 }
 

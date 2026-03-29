@@ -3,6 +3,7 @@ import { getDb } from "./db";
 import { getRedis } from "./rateLimiter";
 import { getR2HealthStatus, checkR2Connectivity } from "./storage";
 import { ENV } from "./_core/env";
+import { captureServerException } from "./sentry";
 
 export type ServiceStatus = "ok" | "error" | "unconfigured";
 
@@ -209,9 +210,15 @@ async function runBackgroundProbe(): Promise<void> {
 }
 
 export function startHealthProbe(): void {
-  runBackgroundProbe().catch(() => {});
+  runBackgroundProbe().catch((err) => {
+    console.error("[HealthProbe] Initial probe failed:", err);
+    captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
+  });
   setInterval(() => {
-    runBackgroundProbe().catch(() => {});
+    runBackgroundProbe().catch((err) => {
+      console.error("[HealthProbe] Background probe failed:", err);
+      captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
+    });
   }, PROBE_INTERVAL_MS);
 }
 

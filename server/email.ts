@@ -720,7 +720,8 @@ export async function validateResendCredentials(): Promise<boolean> {
     const r = getResend();
     const { error } = await r.domains.list();
     return !error;
-  } catch {
+  } catch (err) {
+    console.warn("[Email] Resend credential validation failed:", err);
     return false;
   }
 }

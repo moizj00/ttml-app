@@ -14,6 +14,7 @@ import type { User } from "../drizzle/schema";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ADMIN_2FA_COOKIE, ADMIN_2FA_TTL_MS, signAdmin2FAToken, verifyAdmin2FAToken } from "./_core/admin2fa";
 import { sendVerificationEmail, sendWelcomeEmail, sendEmployeeWelcomeEmail, sendAttorneyWelcomeEmail, sendAdminVerificationCodeEmail } from "./email";
+import { captureServerException } from "./sentry";
 
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
@@ -199,7 +200,10 @@ async function sendRoleBasedWelcomeEmail(user: User, origin: string): Promise<vo
   const userName = user.name || user.email.split("@")[0];
 
   if (user.role === "employee") {
-    const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch(() => null);
+    const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch((err) => {
+      console.warn(`[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`, err);
+      return null;
+    });
     await sendEmployeeWelcomeEmail({
       to: user.email,
       name: userName,
@@ -332,6 +336,7 @@ function extractAccessToken(req: Request): string | null {
       const parsed = JSON.parse(sbSession);
       return parsed.access_token || null;
     } catch {
+      console.warn("[SupabaseAuth] sb-session cookie is not JSON, treating as raw token");
       return sbSession; // Might be the raw token
     }
   }
@@ -370,6 +375,7 @@ function extractCookieToken(req: Request): string | null {
     const parsed = JSON.parse(sbSession);
     return parsed.access_token || null;
   } catch {
+    console.warn("[SupabaseAuth] Stored session value is not JSON, treating as raw token");
     return sbSession; // Might be the raw token
   }
 }
@@ -429,7 +435,12 @@ async function verifyToken(token: string): Promise<User | null> {
             // Update the cache entry's lastSignedInWrittenAt timestamp in-place
             const entry = _userCache.get(supabaseUid);
             if (entry) entry.lastSignedInWrittenAt = now;
-          }).catch(() => { /* non-blocking, ignore */ });
+          }).catch((err) => {
+            console.warn("[SupabaseAuth] Failed to update lastSignedIn (non-blocking):", err);
+            captureServerException(err instanceof Error ? err : new Error(String(err)), {
+              tags: { component: "supabase_auth", error_type: "last_signed_in_update_failed" },
+            });
+          });
         }
         return cachedUser;
       }
@@ -499,7 +510,11 @@ async function verifyToken(token: string): Promise<User | null> {
       _cacheSet(supabaseUid, appUser, lastSignedInWrittenAt);
     }
     return appUser || null;
-  } catch {
+  } catch (err) {
+    console.warn("[SupabaseAuth] authenticateRequest failed, returning null:", err);
+    captureServerException(err instanceof Error ? err : new Error(String(err)), {
+      tags: { component: "supabase_auth", error_type: "authenticate_request_failed" },
+    });
     return null;
   }
 }
@@ -718,13 +733,18 @@ export function registerSupabaseAuthRoutes(app: Express) {
                    data.user.user_metadata?.full_name || 
                    email.split("@")[0];
       const supabaseEmailVerified = isSupabaseEmailConfirmed(data.user);
-      const appUserCheck = await db.getUserByEmail(email).catch(() => null);
+      const appUserCheck = await db.getUserByEmail(email).catch((err) => {
+        console.warn(`[SupabaseAuth] Failed to fetch app user by email during login (${email}):`, err);
+        return null;
+      });
 
       if (appUserCheck && appUserCheck.emailVerified === false && !supabaseEmailVerified) {
         try {
           const admin = getAdminClient();
           await admin.auth.admin.signOut(data.user.id);
-        } catch {}
+        } catch (signOutErr) {
+          console.warn("[SupabaseAuth] Failed to sign out unverified user from Supabase:", signOutErr);
+        }
         res.status(401).json({ error: "Email not verified", code: "EMAIL_NOT_VERIFIED" });
         return;
       }
@@ -1227,7 +1247,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
           } catch (emailErr) {
             console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
           }
-        }).catch(() => {});
+        }).catch((err) => {
+          console.error("[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):", err);
+          captureServerException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { component: "supabase_auth", error_type: "welcome_email_fetch_failed" },
+          });
+        });
       }
 
       const freshUser = await db.getUserByOpenId(supabaseUser.id);
@@ -1331,7 +1356,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
               console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
             }
           }
-        })().catch(() => {});
+        })().catch((err) => {
+          console.error("[SupabaseAuth] Background welcome email task failed:", err);
+          captureServerException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { component: "supabase_auth", error_type: "welcome_email_background_failed" },
+          });
+        });
       }
 
       res.json({ success: true, message: "Email verified successfully! You can now sign in." });

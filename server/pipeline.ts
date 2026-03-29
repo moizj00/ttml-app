@@ -2230,7 +2230,11 @@ export async function runVettingStage(
           riskLevel: parsed.vettingReport?.riskLevel ?? "medium",
         },
       };
-    } catch {
+    } catch (parseErr) {
+      console.warn("[Pipeline] Failed to parse vetting response JSON, skipping vetting stage:", parseErr);
+      captureServerException(parseErr instanceof Error ? parseErr : new Error(String(parseErr)), {
+        tags: { component: "pipeline", error_type: "vetting_parse_failed" },
+      });
       return null;
     }
   };

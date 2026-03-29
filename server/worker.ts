@@ -174,7 +174,10 @@ async function processJob(job: Job<PipelineJobData>): Promise<void> {
 
 async function startWorker() {
   console.log("[Worker] Warming up database connection...");
-  await getDb().catch(() => {});
+  await getDb().catch((err) => {
+    console.error("[Worker] Database warmup failed:", err);
+    captureServerException(err, { tags: { component: "worker", error_type: "db_warmup_failed" } });
+  });
 
   const connection = buildRedisConnection();
 

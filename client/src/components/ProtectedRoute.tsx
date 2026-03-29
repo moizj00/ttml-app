@@ -58,7 +58,8 @@ export default function ProtectedRoute({
         setAdmin2FAVerified(data.verified === true);
         setAdmin2FAChecked(true);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[ProtectedRoute] Failed to check admin 2FA status:", err);
         setAdmin2FAChecked(true);
       });
   }, [loading, user, isAdminRoute]);

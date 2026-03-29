@@ -2551,7 +2551,10 @@ export const appRouter = router({
         );
         if (code) {
           // Register new code in Worker allowlist (fire-and-forget, non-blocking)
-          syncCodeToWorkerAllowlist(code.code, "add").catch(() => {});
+          syncCodeToWorkerAllowlist(code.code, "add").catch((err) => {
+            console.error("[DiscountCode] Failed to sync new code to worker allowlist:", err);
+            captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_sync_failed" } });
+          });
         }
         try {
           await notifyAdmins({
@@ -2579,8 +2582,14 @@ export const appRouter = router({
       );
       if (!code) throw new TRPCError({ code: "NOT_FOUND", message: "No discount code found to rotate." });
       // Swap allowlist entries: remove old, add new (fire-and-forget)
-      if (oldCode) syncCodeToWorkerAllowlist(oldCode.code, "remove").catch(() => {});
-      syncCodeToWorkerAllowlist(code.code, "add").catch(() => {});
+      if (oldCode) syncCodeToWorkerAllowlist(oldCode.code, "remove").catch((err) => {
+        console.error("[DiscountCode] Failed to remove old code from worker allowlist:", err);
+        captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_remove_failed" } });
+      });
+      syncCodeToWorkerAllowlist(code.code, "add").catch((err) => {
+        console.error("[DiscountCode] Failed to add rotated code to worker allowlist:", err);
+        captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_sync_failed" } });
+      });
       return code;
     }),
 
@@ -2697,7 +2706,8 @@ export const appRouter = router({
             uniqueVisitors: number;
             daily: { date: string; clicks: number; uniqueVisitors: number }[];
           }>;
-        } catch {
+        } catch (analyticsErr) {
+          console.warn("[Analytics] Failed to fetch click analytics, returning empty defaults:", analyticsErr);
           return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
         }
       }),
@@ -2739,7 +2749,10 @@ export const appRouter = router({
           expiresAt: new Date(),
         });
         if (target?.code) {
-          syncCodeToWorkerAllowlist(target.code, "remove").catch(() => {});
+          syncCodeToWorkerAllowlist(target.code, "remove").catch((err) => {
+            console.error("[DiscountCode] Failed to remove disabled code from worker allowlist:", err);
+            captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_remove_failed" } });
+          });
         }
         return { success: true };
       }),

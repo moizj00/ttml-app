@@ -310,7 +310,8 @@ export async function pingRedis(): Promise<boolean> {
   try {
     const result = await r.ping();
     return result === "PONG";
-  } catch {
+  } catch (err) {
+    console.warn("[RateLimiter] Redis ping failed:", err);
     return false;
   }
 }

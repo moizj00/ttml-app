@@ -23,7 +23,8 @@ export function verifyAdmin2FAToken(cookieValue: string, userId: number): boolea
     if (payload.userId !== userId) return false;
     if (Date.now() - payload.ts > ADMIN_2FA_TTL_MS) return false;
     return true;
-  } catch {
+  } catch (err) {
+    console.warn("[Admin2FA] Token verification failed (malformed token):", err);
     return false;
   }
 }
