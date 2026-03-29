@@ -1,24 +1,34 @@
 # Dependencies
 **/node_modules
 .pnpm-store/
+jspm_packages/
 
 # Build outputs
 dist/
 build/
+out/
+output/
 *.dist
+*.tgz
+*.tar.gz
+*.zip
+*.rar
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+*.env
+*.env.*
+!.env.example
 
 # IDE and editor files
 .vscode/
 .idea/
+*.iml
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 *~
 
 # OS generated files
@@ -31,82 +41,65 @@ ehthumbs.db
 Thumbs.db
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+debug/
+.manus-logs/
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
+
+# Temporary files
+*.tmp
+*.temp
 *.bak
+tmp/
+temp/
+temp-uploads/
 
-# Coverage directory used by tools like istanbul
+# Coverage and test output
 coverage/
+.nyc_output/
+.coverage/
 *.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-jspm_packages/
 
 # TypeScript cache
 *.tsbuildinfo
 
-# Optional npm cache directory
+# Misc caches
 .npm
-
-# Optional eslint cache
 .eslintcache
-
-# Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
-
-# Optional REPL history
+.cache/
+.parcel-cache
 .node_repl_history
 
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-
-# Gatsby files
-.cache/
-
-# Storybook build outputs
+# Framework build outputs
+.next/
+.nuxt/
 .out
 .storybook-out
-
-# Temporary folders
-tmp/
-temp/
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
+*.sql.bak
+*.sql.backup
+database/backups/
 
-# Sensitive files
+# Sensitive credential files
 *.key
 *.pem
 *.p12
@@ -117,103 +110,51 @@ temp/
 secrets/
 .secrets/
 private/
-
-# Environment and configuration
-.env*
+*credentials*
+*secret*
+*token*
 !.env.example
-config.local.*
-local.config.*
 
-# Output and build artifacts
-out/
-output/
-dist/
-build/
-*.tar.gz
-*.zip
-*.rar
-
-# Logs and debug
-*.log
-logs/
-debug/
-.manus-logs/
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.swp
-*.swo
-*~
-.DS_Store
-
-# IDE and editor
-.vscode/
-.idea/
-*.iml
-*.sublime-project
-*.sublime-workspace
-
-# Testing
-coverage/
-.nyc_output/
-.coverage/
-
-# Node and package managers
-node_modules/
-.pnpm-store/
+# Lock files — not committed in this repo
 package-lock.json
 yarn.lock
 
-# Database backups
-*.sql.bak
-*.sql.backup
-database/backups/
-
-# Cache files
-.cache/
-.eslintcache
-.tsbuildinfo
-
-# OS files
-Thumbs.db
-ehthumbs.db
-.Spotlight-V100
-.Trashes
-._*
-
-# Local development
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.*.local
-
-# Credentials and tokens
-*credentials*
-*token*
-*secret*
-!.env.example
+# Local development overrides
+config.local.*
+local.config.*
+revert.md
 
 # Uploads and media (if stored locally)
 uploads/
 media/
-temp-uploads/
 
-# Local checkpoint/revert notes
-revert.md
+# ── Test files & artifacts ──────────────────────────────────────────────────
+*_test.py
+*.test.ts
+test-*.mjs
+test-output-*
+test_reports/
+test-pipeline-results.md
 
-# Build outputs
-.next/
-.nuxt/
-dist/
-build/
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
+# ── Agent / AI tooling ──────────────────────────────────────────────────────
+.agents/
+.claude/
+memory/
+session-*.md
+attached_assets/*.md
+
+# ── Infrastructure / deployment config ─────────────────────────────────────
+# These files often contain environment-specific secrets or tokens
+railway.toml
+wrangler.toml
+cloudflare-worker/wrangler.toml
+worker/wrangler.toml
+workers/wrangler.toml
+
+# ── Local agent state & generated modules ───────────────────────────────────
+.local/
+worker/
+workers/
+
+# ── Generated lock files in subdirectories ──────────────────────────────────
+artifacts/mockup-sandbox/package-lock.json
