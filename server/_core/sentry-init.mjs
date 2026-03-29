@@ -14,6 +14,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
+    sendDefaultPii: true,
     environment: IS_PRODUCTION ? "production" : "development",
     release: `ttml-server@${process.env.npm_package_version ?? "1.0.0"}`,
 

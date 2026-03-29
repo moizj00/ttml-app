@@ -14,6 +14,7 @@ import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
+import { registerSentryDebugRoute } from "../sentryDebugRoute";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
 import { appRouter } from "../routers";
@@ -238,6 +239,8 @@ async function startServer() {
       createContext,
     })
   );
+
+  registerSentryDebugRoute(app);
 
   // ─── Sentry Express error handler (must be before other error handlers) ───
   Sentry.setupExpressErrorHandler(app);

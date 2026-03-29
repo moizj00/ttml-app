@@ -16,6 +16,7 @@ export function initServerSentry() {
 
   Sentry.init({
     dsn: ENV.sentryDsn,
+    sendDefaultPii: true,
     environment: ENV.isProduction ? "production" : "development",
     release: `ttml-server@${process.env.npm_package_version ?? "1.0.0"}`,
 
