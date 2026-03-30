@@ -1,0 +1,1 @@
+ALTER TABLE "letter_requests" ADD COLUMN "quality_degraded" boolean DEFAULT false NOT NULL;
