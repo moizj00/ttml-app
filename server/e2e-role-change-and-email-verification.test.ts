@@ -277,11 +277,14 @@ describe("Resend verification — custom token fallback for edge-case users", ()
 // ─── 9. Notification routing — pipeline failures to admins only ───────────────
 
 describe("Notification routing — pipeline failures go to admins only", () => {
-  const filePath = join(SERVER_DIR, "routers.ts");
+  // Pipeline failure notifications are handled in worker.ts (the Bull queue worker),
+  // not in routers.ts. The worker iterates over admin users and creates a
+  // job_failed notification for each of them.
+  const filePath = join(SERVER_DIR, "worker.ts");
 
   it("job_failed notification is sent to admin users", () => {
     const content = readFileSync(filePath, "utf-8");
-    // The job_failed notification must use getAllUsers or similar to target admins
+    // The job_failed notification must target admins
     const pipelineSection = content.match(/job_failed[\s\S]{0,500}/)?.[0] || "";
     expect(pipelineSection).toContain("admin");
   });
@@ -289,14 +292,14 @@ describe("Notification routing — pipeline failures go to admins only", () => {
   it("job_failed notification is NOT sent to subscribers", () => {
     const content = readFileSync(filePath, "utf-8");
     // The job_failed notification block itself must not reference subscriber
-    // (it targets admins via getAllUsers("admin") or similar)
-    const pipelineSection = content.match(/job_failed"[\s\S]{0,300}/)?.[0] || "";
+    // (it targets admins via getEmployeesAndAdmins or similar)
+    const pipelineSection = content.match(/job_failed[\s\S]{0,300}/)?.[0] || "";
     expect(pipelineSection).not.toContain("subscriber");
   });
 
   it("job_failed notification is NOT sent to attorneys", () => {
     const content = readFileSync(filePath, "utf-8");
-    const pipelineSection = content.match(/job_failed"[\s\S]{0,300}/)?.[0] || "";
+    const pipelineSection = content.match(/job_failed[\s\S]{0,300}/)?.[0] || "";
     expect(pipelineSection).not.toContain("attorney");
   });
 });

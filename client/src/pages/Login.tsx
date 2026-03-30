@@ -40,6 +40,14 @@ export default function Login() {
     }
   })();
 
+  // Parse ?role= from query string — forwarded by the server callback handler
+  // when the implicit/hash flow redirects back to /login with a role param.
+  const requestedRoleFromSearch = (() => {
+    const params = new URLSearchParams(search);
+    const raw = params.get("role");
+    return raw === "subscriber" || raw === "employee" ? raw : null;
+  })();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -94,6 +102,7 @@ export default function Login() {
             refresh_token: refreshToken,
             expires_in: expiresIn,
             next: nextPath,
+            ...(requestedRoleFromSearch ? { role: requestedRoleFromSearch } : {}),
           }),
         });
         const data = await response.json();
@@ -151,7 +160,7 @@ export default function Login() {
     };
 
     void finalizeGoogleLogin();
-  }, [navigate, nextPath, utils]);
+  }, [navigate, nextPath, requestedRoleFromSearch, utils]);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
