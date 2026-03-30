@@ -94,7 +94,7 @@ Production admin accounts (not test):
 
 ## External Dependencies
 - **Supabase**: PostgreSQL database, authentication services.
-- **Drizzle ORM**: Object-relational mapping.
+- **Drizzle ORM**: Object-relational mapping. Migrations tracked in `public.__drizzle_migrations` (not the default `drizzle` schema) to avoid Supabase PgBouncer `CREATE SCHEMA` errors. `drizzle.config.ts` uses session-mode pooler (port 5432) with SSL for migrations. CLI `drizzle-kit migrate` may exit 1 due to a known issue; use the ORM-level `migrate()` API for programmatic migrations.
 - **postgres-js**: PostgreSQL client.
 - **Resend**: Transactional email sending.
 - **Stripe**: Payment processing.
