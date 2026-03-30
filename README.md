@@ -29,7 +29,7 @@ AI-powered legal letter drafting with mandatory attorney review.
 - **Auth:** Supabase Auth (JWT)
 - **Payments:** Stripe (subscriptions + per-letter checkout)
 - **Email:** Resend (transactional, 17 templates)
-- **AI Pipeline:** Perplexity API (research) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting)
+- **AI Pipeline:** Perplexity `sonar-pro` (primary research; Claude fallback if key missing) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting); local 4-stage pipeline is primary, n8n is dormant alternative
 
 ## Development
 

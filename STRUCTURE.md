@@ -16,10 +16,12 @@
 - Backend: Express, tRPC, Drizzle ORM
 - Database: Supabase PostgreSQL + Supabase Auth
 - Payments: Stripe (subscriptions + one-time per-letter unlock)
-- AI Pipeline: Perplexity (sonar-pro) for research → Anthropic Claude Opus for drafting + assembly → Anthropic Claude Sonnet for vetting (4-stage)
+- AI Pipeline: Perplexity sonar-pro (primary research; falls back to Claude claude-opus-4-5 if `PERPLEXITY_API_KEY` missing, losing web-grounding) → Anthropic Claude Opus for drafting + assembly → Anthropic Claude Sonnet for vetting (4-stage local pipeline is primary; n8n external workflow is dormant alternative, activated only by `N8N_PRIMARY=true`)
 - Email: Resend
-- Orchestration: n8n webhooks (dormant unless N8N_PRIMARY=true)
-- Monitoring: Sentry (frontend + backend)
+- Orchestration: n8n webhooks (dormant alternative to local pipeline; requires `N8N_PRIMARY=true`)
+- Background jobs: BullMQ + Upstash Redis (job queue; submission fails hard if Redis unavailable — no inline fallback)
+- Rate limiting: Upstash Redis via @upstash/ratelimit (fail-open for general endpoints; fail-closed for auth endpoints when Redis unavailable)
+- Monitoring: Sentry primary (frontend + backend); falls back to console.error/warn when DSN not configured
 - Anti-spam: hCaptcha (CSP configured; not currently enforced in signup flow)
 - Deployment: Railway (Docker multi-stage build)
 
