@@ -11,4 +11,5 @@ export * from "./affiliates";
 export * from "./lessons";
 export * from "./quality";
 export * from "./auth-tokens";
+export * from "./blog";
 export * from "./analytics";
