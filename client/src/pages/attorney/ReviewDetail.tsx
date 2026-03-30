@@ -245,6 +245,7 @@ export default function ReviewDetail() {
   const assemblyMeta = assemblyVersion?.metadataJson as AssemblyVersionMeta | null;
   const citationAuditReport: CitationAuditReport | null = assemblyMeta?.citationAuditReport ?? null;
   const isResearchUnverified = letter.researchUnverified === true || assemblyMeta?.researchUnverified === true;
+  const isQualityDegraded = letter.qualityDegraded === true;
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const enterEditMode = () => {
@@ -363,6 +364,24 @@ export default function ReviewDetail() {
                 This letter's legal research was not web-verified (Perplexity was
                 unavailable). Citations require manual attorney validation before
                 approval.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isQualityDegraded && (
+          <div
+            data-testid="banner-quality-degraded"
+            className="flex items-center gap-3 px-4 py-3 mb-3 rounded-xl bg-amber-50 border border-amber-300"
+          >
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">
+                QUALITY FLAGS — EXTRA SCRUTINY REQUIRED
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                This draft was produced with quality warnings (e.g. jurisdiction mismatch, vetting issues, or pipeline fallback). 
+                Please review carefully before approving. Check the version metadata and review history for details.
               </p>
             </div>
           </div>

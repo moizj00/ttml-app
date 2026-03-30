@@ -10,11 +10,14 @@ import {
   getLetterRequestById as getLetterById,
   hasLetterBeenPreviouslyUnlocked,
   getUserById,
+  getAllUsers,
+  createNotification,
+  setLetterQualityDegraded,
 } from "../db";
 import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, PipelineContext, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
-import { sendLetterReadyEmail, sendNewReviewNeededEmail } from "../email";
+import { sendLetterReadyEmail, sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock } from "./shared";
 import { getAnthropicClient, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
@@ -710,6 +713,12 @@ export async function finalizeLetterAfterVetting(
   vettingReport: VettingReport,
   pipelineCtx?: PipelineContext,
 ): Promise<void> {
+  const qualityWarnings = pipelineCtx?.qualityWarnings ?? [];
+  const isDegraded = qualityWarnings.length > 0;
+
+  // Always explicitly set qualityDegraded so a clean re-run resets a previously-degraded letter
+  await setLetterQualityDegraded(letterId, isDegraded);
+
   const version = await createLetterVersion({
     letterRequestId: letterId,
     versionType: "ai_draft",
@@ -724,6 +733,8 @@ export async function finalizeLetterAfterVetting(
       citationRegistry: pipelineCtx?.citationRegistry ?? [],
       validationResults: pipelineCtx?.validationResults,
       wordCount: vettedLetter.split(/\s+/).filter(w => w.length > 0).length,
+      qualityDegraded: isDegraded,
+      qualityWarnings,
     },
   });
   const versionId = (version as any)?.insertId ?? 0;
@@ -734,15 +745,53 @@ export async function finalizeLetterAfterVetting(
 
   const finalStatus = "generated_locked" as const;
   await updateLetterStatus(letterId, finalStatus);
+
+  const noteText = isDegraded
+    ? `Draft ready with quality warnings. Our AI completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
+    : `Draft ready. Our legal team has completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`;
+
   await logReviewAction({
     letterRequestId: letterId,
     actorType: "system",
     action: "ai_pipeline_completed",
-    noteText: `Draft ready. Our legal team has completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`,
-    noteVisibility: "user_visible",
+    noteText,
+    noteVisibility: isDegraded ? "internal" : "user_visible",
     fromStatus: "drafting",
     toStatus: finalStatus,
   });
+
+  // ── Admin alert for degraded drafts (normal completion path) ────────────────
+  if (isDegraded) {
+    (async () => {
+      try {
+        const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+        const admins = await getAllUsers("admin");
+        for (const admin of admins) {
+          if (admin.email) {
+            sendAdminAlertEmail({
+              to: admin.email,
+              name: admin.name ?? "Admin",
+              subject: `Quality-flagged draft produced for letter #${letterId}`,
+              preheader: `Vetting raised quality warnings — attorney scrutiny required`,
+              bodyHtml: `<p>Letter #${letterId} completed the pipeline with quality warnings attached.</p><p>Warnings:</p><ul>${qualityWarnings.map(w => `<li>${w}</li>`).join("")}</ul><p>The draft is in <strong>generated_locked</strong> status and requires heightened attorney scrutiny upon review.</p>`,
+              ctaText: "View Letter",
+              ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
+            }).catch(e => console.error(`[Pipeline] Failed admin alert email for degraded draft #${letterId}:`, e));
+          }
+          createNotification({
+            userId: admin.id,
+            type: "quality_alert",
+            category: "letters",
+            title: `Quality-flagged draft: letter #${letterId}`,
+            body: `Vetting quality warnings attached (${qualityWarnings.length}). Extra attorney scrutiny needed.`,
+            link: `/admin/letters/${letterId}`,
+          }).catch(e => console.error(`[Pipeline] Failed notification for degraded draft #${letterId}:`, e));
+        }
+      } catch (alertErr) {
+        console.error(`[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`, alertErr);
+      }
+    })();
+  }
 
   const letterRecord = await getLetterById(letterId);
   const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);

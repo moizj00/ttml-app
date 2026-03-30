@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
-  FileText, Gift, Loader2,
+  FileText, Gift, Loader2, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,9 +22,11 @@ interface LetterPaywallProps {
   subject: string;
   /** The truncated draft content from the server (ai_draft, first ~20%) */
   draftContent?: string;
+  /** When true, shows a subtle note that attorney review will address any quality flags */
+  qualityDegraded?: boolean;
 }
 
-export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
+export function LetterPaywall({ letterId, draftContent, qualityDegraded }: LetterPaywallProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountCodeResult | null>(null);
 
@@ -122,6 +124,19 @@ export function LetterPaywall({ letterId, draftContent }: LetterPaywallProps) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Quality Degraded notice (subscriber-friendly) ── */}
+      {qualityDegraded && (
+        <div
+          data-testid="banner-quality-degraded-paywall"
+          className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200"
+        >
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            <span className="font-semibold">Note:</span> Our attorney review team will give this letter additional attention to ensure it meets all quality standards before delivering it to you.
+          </p>
+        </div>
       )}
 
       {/* ── FREE FIRST LETTER CTA ── */}

@@ -761,6 +761,7 @@ export default function LetterDetail() {
             letterType={letter.letterType}
             subject={letter.subject}
             draftContent={aiDraftVersion?.content ?? undefined}
+            qualityDegraded={letter.qualityDegraded === true}
           />
         )}
 

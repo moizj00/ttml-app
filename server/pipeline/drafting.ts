@@ -232,26 +232,17 @@ export async function runDraftingStage(
     });
 
     if (finalConsistency.jurisdictionMismatch) {
-      await updateWorkflowJob(jobId, {
-        status: "failed",
-        errorMessage: formatStructuredError(
-          PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH,
-          `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}`,
-          "drafting",
-          `Letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
-        ),
-        completedAt: new Date(),
-        responsePayloadJson: {
-          validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
-          consistencyReport: finalConsistency,
-        },
-      });
-      throw new PipelineError(
-        PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH,
-        `Draft jurisdiction mismatch${needsRetry ? " persists after retry" : ""}`,
-        "drafting",
-        `Letter references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}"`
+      console.warn(
+        `[Pipeline] Stage 2: Jurisdiction mismatch for letter #${letterId}${needsRetry ? " persists after retry" : ""} — ` +
+        `found "${finalConsistency.foundJurisdiction}", expected "${finalConsistency.expectedJurisdiction}". ` +
+        `Attaching as quality warning and continuing to assembly/vetting.`
       );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `JURISDICTION_WARNING: Draft references "${finalConsistency.foundJurisdiction}" but intake specifies "${finalConsistency.expectedJurisdiction}". Attorney review required.`
+        );
+      }
     }
 
     if (!finalGrounding.passed) {

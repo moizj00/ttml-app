@@ -590,6 +590,14 @@ export interface PipelineContext {
   consistencyReport?: ContentConsistencyReport;
   assemblyVettingFeedback?: string;
   citationRevalidationTokens?: TokenUsage;
+  qualityWarnings?: string[];
+  /**
+   * Best intermediate draft content captured progressively as stages complete.
+   * Used by the best-effort fallback to deliver a draft even when pipeline fails
+   * mid-run before finalizeLetterAfterVetting persists the final version.
+   * Ladder (latest wins): draft → assembled → vetted
+   */
+  _intermediateDraftContent?: string;
 }
 
 // ─── Draft Output Shape ───

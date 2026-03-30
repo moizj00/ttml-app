@@ -10,7 +10,7 @@ import {
   type RunPipelineJobData,
   type RetryFromStageJobData,
 } from "./queue";
-import { runFullPipeline, retryPipelineFromStage } from "./pipeline";
+import { runFullPipeline, retryPipelineFromStage, bestEffortFallback, consumeIntermediateContent } from "./pipeline";
 import { PipelineError } from "../shared/types";
 import {
   acquirePipelineLock,
@@ -27,7 +27,7 @@ import { sendJobFailedAlertEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { getDb } from "./db";
 
-const PIPELINE_MAX_RETRIES = 2;
+const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
 
 async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
@@ -61,6 +61,23 @@ async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
             await updateLetterStatus(letterId, "submitted", { force: true });
           }
         }
+
+        if (attempt > 0) {
+          // Stage-aware retry: if research already succeeded, retry from drafting stage
+          // to avoid re-running successful (expensive) research
+          try {
+            const { getLatestResearchRun } = await import("./db");
+            const latestResearch = await getLatestResearchRun(letterId);
+            if (latestResearch?.resultJson) {
+              console.log(`[Worker] Retry ${attempt}: research already succeeded for letter #${letterId} — retrying from drafting stage`);
+              await retryPipelineFromStage(letterId, intake as any, "drafting", userId);
+              return;
+            }
+          } catch (stageCheckErr) {
+            console.warn(`[Worker] Stage-aware check failed for letter #${letterId}, falling back to full pipeline:`, stageCheckErr);
+          }
+        }
+
         await runFullPipeline(letterId, intake as any, undefined, userId);
         return;
       } catch (err) {
@@ -77,6 +94,26 @@ async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
     }
 
     console.error(`[Worker] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
+
+    // ── Best-effort fallback: attempt to deliver a degraded draft before failing ──
+    // Only runs after retry exhaustion, never on the first attempt.
+    {
+      const lastErrCode = lastErr instanceof PipelineError ? lastErr.code : "UNKNOWN_ERROR";
+      const lastErrMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      const intermediate = consumeIntermediateContent(letterId);
+      const fallbackDelivered = await bestEffortFallback({
+        letterId,
+        intake: intake as any,
+        intermediateDraftContent: intermediate.content,
+        qualityWarnings: intermediate.qualityWarnings,
+        pipelineErrorCode: lastErrCode,
+        errorMessage: lastErrMsg,
+      });
+      if (fallbackDelivered) {
+        console.log(`[Worker] Degraded draft delivered for letter #${letterId} — skipping pipeline_failed`);
+        return; // successfully delivered (degraded) — don't refund or notify failure
+      }
+    }
 
     if (userId && usageContext?.shouldRefundOnFailure) {
       try {

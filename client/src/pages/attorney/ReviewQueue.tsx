@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Search, ArrowRight, Sparkles } from "lucide-react";
+import { FileText, Search, ArrowRight, Sparkles, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useReviewQueueRealtime } from "@/hooks/useLetterRealtime";
@@ -134,6 +134,12 @@ export default function ReviewQueue() {
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
                               <Sparkles className="w-2.5 h-2.5" />
                               New
+                            </Badge>
+                          )}
+                          {letter.qualityDegraded && (
+                            <Badge data-testid={`badge-quality-degraded-${letter.id}`} className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Degraded
                             </Badge>
                           )}
                         </div>

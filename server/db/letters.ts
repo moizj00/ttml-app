@@ -115,6 +115,7 @@ export async function getLetterRequestSafeForSubscriber(
       priority: letterRequests.priority,
       currentFinalVersionId: letterRequests.currentFinalVersionId,
       pdfUrl: letterRequests.pdfUrl,
+      qualityDegraded: letterRequests.qualityDegraded,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,
       createdAt: letterRequests.createdAt,
       updatedAt: letterRequests.updatedAt,
@@ -239,6 +240,18 @@ export async function setLetterResearchUnverified(
   await db
     .update(letterRequests)
     .set({ researchUnverified: unverified, updatedAt: new Date() })
+    .where(eq(letterRequests.id, id));
+}
+
+export async function setLetterQualityDegraded(
+  id: number,
+  degraded: boolean
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(letterRequests)
+    .set({ qualityDegraded: degraded, updatedAt: new Date() })
     .where(eq(letterRequests.id, id));
 }
 

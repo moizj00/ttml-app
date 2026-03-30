@@ -210,6 +210,25 @@ export default function AdminLetterDetail() {
         </Button>
       </div>
 
+      {/* Quality Degraded Banner */}
+      {l.qualityDegraded && (
+        <div
+          data-testid="banner-quality-degraded-admin"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-300"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              QUALITY DEGRADED DRAFT
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This draft was produced via best-effort fallback or has quality warnings attached (jurisdiction mismatch, vetting flags, or pipeline fallback). 
+              Attorney review should give this letter extra scrutiny. Check version metadata for degradation reasons.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Status Timeline */}
       <StatusTimeline currentStatus={letterStatus} />
 
