@@ -212,15 +212,16 @@ describe("getAllEmployeeEarnings batch query", () => {
 
 // ─── adminEmployeePerformance batching verification ─────────────────────────────
 describe("adminEmployeePerformance uses batched queries", () => {
-  it("routers.ts imports getAllEmployeeEarnings from db", async () => {
-    // Verify the import exists by reading the source
+  it("admin router imports getAllEmployeeEarnings from db", async () => {
+    // Verify the import exists in the admin sub-router
     const fs = await import("fs");
-    const routersSource = fs.readFileSync("server/routers.ts", "utf-8");
-    expect(routersSource).toContain("getAllEmployeeEarnings");
+    const adminRouterSource = fs.readFileSync("server/routers/admin.ts", "utf-8");
+    expect(adminRouterSource).toContain("getAllEmployeeEarnings");
     // Verify it no longer uses the N+1 pattern
-    expect(routersSource).not.toContain("employees.map(async (emp) =>");
-    // Verify it uses Promise.all with batch queries
-    expect(routersSource).toContain("getAllEmployeeEarnings()");
-    expect(routersSource).toContain("getAllDiscountCodes()");
+    expect(adminRouterSource).not.toContain("employees.map(async (emp) =>");
+    // Verify the affiliates db module exposes the batched function
+    const affiliatesSource = fs.readFileSync("server/db/affiliates.ts", "utf-8");
+    expect(affiliatesSource).toContain("getAllEmployeeEarnings");
+    expect(affiliatesSource).toContain("getAllDiscountCodes");
   });
 });

@@ -11,6 +11,10 @@ import { join } from "path";
 const SERVER_DIR = join(__dirname);
 const readServer = (name: string) =>
   readFileSync(join(SERVER_DIR, name), "utf-8");
+const readAllRouters = () => {
+  const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+};
 
 describe("User Cache Layer — supabaseAuth.ts", () => {
   const authFile = readServer("supabaseAuth.ts");
@@ -102,9 +106,10 @@ describe("User Cache Layer — supabaseAuth.ts", () => {
   // ── Cache invalidation in updateRole mutation ──────────────────────────
 
   it("updateRole mutation invalidates cache after role change", () => {
-    const routersFile = readServer("routers.ts");
+    const routersFile = readAllRouters();
     // The updateRole mutation must import and call invalidateUserCache
-    expect(routersFile).toContain('import { invalidateUserCache } from "./supabaseAuth"');
+    // Sub-routers use "../supabaseAuth" since they live in server/routers/
+    expect(routersFile).toContain("invalidateUserCache");
     // It must call invalidateUserCache after updateUserRole
     const updateRoleStart = routersFile.indexOf("updateRole: adminProcedure");
     const updateRoleEnd = routersFile.indexOf("allLetters: adminProcedure", updateRoleStart);

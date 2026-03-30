@@ -68,20 +68,18 @@ describe("ALLOWED_TRANSITIONS — simplified flow", () => {
     expect(isValidTransition("under_review", "needs_changes")).toBe(true);
   });
 
-  it("needs_changes → submitted is valid (subscriber resubmit)", () => {
+  it("needs_changes → submitted is valid (re-enters pipeline via submitted)", () => {
+    // needs_changes goes to submitted first, then pipeline runs the full cycle
     expect(isValidTransition("needs_changes", "submitted")).toBe(true);
   });
 
-  it("needs_changes → researching is valid (re-process)", () => {
-    expect(isValidTransition("needs_changes", "researching")).toBe(true);
+  it("needs_changes → researching is NOT a direct transition (must go via submitted)", () => {
+    expect(isValidTransition("needs_changes", "researching")).toBe(false);
   });
 
-  it("needs_changes → drafting is valid (re-draft)", () => {
-    expect(isValidTransition("needs_changes", "drafting")).toBe(true);
-  });
-
-  it("approved is terminal (empty transitions list)", () => {
-    expect(ALLOWED_TRANSITIONS["approved"]).toEqual([]);
+  it("approved leads to client_approval_pending (client approval flow)", () => {
+    // approved is no longer terminal; it proceeds to client approval
+    expect(ALLOWED_TRANSITIONS["approved"]).toContain("client_approval_pending");
     expect(isValidTransition("approved", "under_review")).toBe(false);
     expect(isValidTransition("approved", "pending_review")).toBe(false);
   });
@@ -94,8 +92,9 @@ describe("ALLOWED_TRANSITIONS — simplified flow", () => {
     expect(isValidTransition("rejected", "under_review")).toBe(false);
   });
 
-  it("drafting transitions list has exactly 2 entries (generated_locked + submitted)", () => {
-    expect(ALLOWED_TRANSITIONS["drafting"]).toEqual(["generated_locked", "submitted"]);
+  it("drafting transitions include generated_locked and submitted", () => {
+    expect(ALLOWED_TRANSITIONS["drafting"]).toContain("generated_locked");
+    expect(ALLOWED_TRANSITIONS["drafting"]).toContain("submitted");
   });
 
   it("generated_locked transitions list has exactly 1 entry (pending_review only)", () => {

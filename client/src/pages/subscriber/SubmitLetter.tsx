@@ -2,16 +2,6 @@ import AppLayout from "@/components/shared/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
@@ -27,13 +17,18 @@ import {
   Target,
   Paperclip,
   X,
-  File as FileIcon,
 } from "lucide-react";
-import { LETTER_TYPE_CONFIG, US_STATES, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
 import type { AnalysisPrefill } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
 import { Link } from "wouter";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
+import { Step1LetterType } from "./intake-steps/Step1LetterType";
+import { Step2Jurisdiction } from "./intake-steps/Step2Jurisdiction";
+import { Step3Parties } from "./intake-steps/Step3Parties";
+import { Step4Details } from "./intake-steps/Step4Details";
+import { Step5Outcome } from "./intake-steps/Step5Outcome";
+import { Step6Exhibits } from "./intake-steps/Step6Exhibits";
+import type { FormData, ExhibitRow, PendingFile } from "./intake-steps/types";
 
 const STEPS = [
   { id: 1, label: "Letter Type", icon: <FileText className="w-4 h-4" /> },
@@ -45,69 +40,6 @@ const STEPS = [
 ];
 
 const EXHIBIT_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-const MAX_EXHIBITS = 10;
-
-const MAX_FILE_MB = 10;
-const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
-const ALLOWED_EXTS = [
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".webp",
-  ".txt",
-];
-
-interface PendingFile {
-  id: string;
-  name: string;
-  size: number;
-  mimeType: string;
-  base64: string;
-  status: "ready" | "error";
-  error?: string;
-}
-
-interface ExhibitRow {
-  id: string;
-  description: string;
-  file: PendingFile | null;
-}
-
-function fmtBytes(b: number) {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-interface FormData {
-  letterType: string;
-  subject: string;
-  jurisdictionState: string;
-  jurisdictionCity: string;
-  tonePreference: "firm" | "moderate" | "aggressive";
-  senderName: string;
-  senderAddress: string;
-  senderEmail: string;
-  senderPhone: string;
-  recipientName: string;
-  recipientAddress: string;
-  recipientEmail: string;
-  incidentDate: string;
-  description: string;
-  additionalContext: string;
-  amountOwed: string;
-  desiredOutcome: string;
-  deadlineDate: string;
-  language: string;
-  priorCommunication: string;
-  deliveryMethod: string;
-  communicationsSummary: string;
-  communicationsLastContactDate: string;
-  communicationsMethod: string;
-}
 
 const INITIAL: FormData = {
   letterType: "",
@@ -334,16 +266,6 @@ export default function SubmitLetter() {
     return Object.keys(errors).length === 0;
   };
 
-  const canProceed = () => Object.keys(getStepErrors(step)).length === 0;
-
-  const readBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
   // ── Submit with attachments ───────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.jurisdictionState || form.jurisdictionState.length < 2) {
@@ -466,7 +388,7 @@ export default function SubmitLetter() {
         .map(e => e.file!);
       if (exhibitFiles.length > 0) {
         const uploadResults = await Promise.allSettled(
-          exhibitFiles.map(f =>
+          exhibitFiles.map((f: PendingFile) =>
             uploadAttachment.mutateAsync({
               letterId,
               fileName: f.name,
@@ -478,7 +400,7 @@ export default function SubmitLetter() {
         const failedUploads = exhibitFiles.filter((_, i) => uploadResults[i].status === "rejected");
         if (failedUploads.length > 0) {
           toast.warning(`${failedUploads.length} attachment(s) failed to upload`, {
-            description: `${failedUploads.map(f => f.name).join(", ")} — you can re-upload from the letter detail page.`,
+            description: `${failedUploads.map((f: PendingFile) => f.name).join(", ")} — you can re-upload from the letter detail page.`,
             duration: 8000,
           });
         }
@@ -625,739 +547,55 @@ export default function SubmitLetter() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
-            {/* Step 1: Letter Type */}
             {step === 1 && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">
-                    Letter Type *
-                  </Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {Object.entries(LETTER_TYPE_CONFIG).map(([key, val]) => (
-                      <button
-                        key={key}
-                        onClick={() => update("letterType", key)}
-                        className={`text-left p-3 rounded-xl border-2 transition-all ${
-                          form.letterType === key
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/40"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-foreground">
-                          {val.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {val.description}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                  {stepErrors.letterType && (
-                    <p className="text-xs text-red-600 mt-1">{stepErrors.letterType}</p>
-                  )}
-                </div>
-                <div>
-                  <Label
-                    htmlFor="subject"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Brief Subject Line *
-                  </Label>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      id="subject"
-                      value={form.subject}
-                      onChange={e => update("subject", e.target.value)}
-                      placeholder="e.g., Demand for unpaid rent — 123 Main St"
-                      maxLength={500}
-                      className="flex-1"
-                    />
-                    <VoiceInputButton
-                      fieldId="subject"
-                      onTranscript={appendVoice("subject")}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {form.subject.length}/500 characters
-                  </p>
-                  {stepErrors.subject && (
-                    <p className="text-xs text-red-600 mt-1">{stepErrors.subject}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">
-                    Tone Preference (Optional)
-                  </Label>
-                  <Select
-                    value={form.tonePreference}
-                    onValueChange={v => update("tonePreference", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="firm">
-                        Firm (Professional & Direct)
-                      </SelectItem>
-                      <SelectItem value="moderate">
-                        Moderate (Balanced)
-                      </SelectItem>
-                      <SelectItem value="aggressive">
-                        Aggressive (Strong Legal Language)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <Step1LetterType
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+                appendVoice={appendVoice}
+              />
             )}
-
-            {/* Step 2: Jurisdiction */}
             {step === 2 && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">
-                    State / Jurisdiction *
-                  </Label>
-                  <Select
-                    value={form.jurisdictionState}
-                    onValueChange={v => update("jurisdictionState", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select state..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CA">California</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    This determines which laws and statutes apply to your
-                    letter.
-                  </p>
-                  {stepErrors.jurisdictionState && (
-                    <p className="text-xs text-red-600 mt-1">{stepErrors.jurisdictionState}</p>
-                  )}
-                </div>
-                <div>
-                  <Label
-                    htmlFor="city"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    City (Optional)
-                  </Label>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      id="city"
-                      value={form.jurisdictionCity}
-                      onChange={e => update("jurisdictionCity", e.target.value)}
-                      placeholder="e.g., Los Angeles"
-                      className="flex-1"
-                    />
-                    <VoiceInputButton
-                      fieldId="jurisdictionCity"
-                      onTranscript={appendVoice("jurisdictionCity")}
-                    />
-                  </div>
-                </div>
-              </>
+              <Step2Jurisdiction
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+                appendVoice={appendVoice}
+              />
             )}
-
-            {/* Step 3: Parties */}
             {step === 3 && (
-              <>
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Your Information (Sender)
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label
-                        htmlFor="senderName"
-                        className="text-xs mb-1 block"
-                      >
-                        Full Name *
-                      </Label>
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          id="senderName"
-                          value={form.senderName}
-                          onChange={e => update("senderName", e.target.value)}
-                          placeholder="John Smith"
-                          className="flex-1"
-                        />
-                        <VoiceInputButton fieldId="senderName" onTranscript={appendVoice("senderName")} />
-                      </div>
-                      {stepErrors.senderName && (
-                        <p className="text-xs text-red-600 mt-1">{stepErrors.senderName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor="senderEmail"
-                        className="text-xs mb-1 block"
-                      >
-                        Email (Optional)
-                      </Label>
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          id="senderEmail"
-                          type="email"
-                          value={form.senderEmail}
-                          onChange={e => update("senderEmail", e.target.value)}
-                          placeholder="john@example.com"
-                          className="flex-1"
-                        />
-                        <VoiceInputButton fieldId="senderEmail" onTranscript={appendVoice("senderEmail")} />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="senderAddress"
-                      className="text-xs mb-1 block"
-                    >
-                      Address *
-                    </Label>
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        id="senderAddress"
-                        value={form.senderAddress}
-                        onChange={e => update("senderAddress", e.target.value)}
-                        placeholder="123 Main St, City, State 12345"
-                        className="flex-1"
-                      />
-                      <VoiceInputButton fieldId="senderAddress" onTranscript={appendVoice("senderAddress")} />
-                    </div>
-                    {stepErrors.senderAddress && (
-                      <p className="text-xs text-red-600 mt-1">{stepErrors.senderAddress}</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="senderPhone" className="text-xs mb-1 block">
-                      Phone (Optional)
-                    </Label>
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        id="senderPhone"
-                        value={form.senderPhone}
-                        onChange={e => update("senderPhone", e.target.value)}
-                        placeholder="(555) 000-0000"
-                        className="flex-1"
-                      />
-                      <VoiceInputButton fieldId="senderPhone" onTranscript={appendVoice("senderPhone")} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-border pt-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Recipient Information
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label
-                        htmlFor="recipientName"
-                        className="text-xs mb-1 block"
-                      >
-                        Full Name / Company *
-                      </Label>
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          id="recipientName"
-                          value={form.recipientName}
-                          onChange={e => update("recipientName", e.target.value)}
-                          placeholder="Jane Doe / Acme Corp"
-                          className="flex-1"
-                        />
-                        <VoiceInputButton fieldId="recipientName" onTranscript={appendVoice("recipientName")} />
-                      </div>
-                      {stepErrors.recipientName && (
-                        <p className="text-xs text-red-600 mt-1">{stepErrors.recipientName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor="recipientEmail"
-                        className="text-xs mb-1 block"
-                      >
-                        Email (Optional)
-                      </Label>
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          id="recipientEmail"
-                          type="email"
-                          value={form.recipientEmail}
-                          onChange={e => update("recipientEmail", e.target.value)}
-                          placeholder="recipient@example.com"
-                          className="flex-1"
-                        />
-                        <VoiceInputButton fieldId="recipientEmail" onTranscript={appendVoice("recipientEmail")} />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="recipientAddress"
-                      className="text-xs mb-1 block"
-                    >
-                      Address *
-                    </Label>
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        id="recipientAddress"
-                        value={form.recipientAddress}
-                        onChange={e => update("recipientAddress", e.target.value)}
-                        placeholder="456 Other St, City, State 67890"
-                        className="flex-1"
-                      />
-                      <VoiceInputButton fieldId="recipientAddress" onTranscript={appendVoice("recipientAddress")} />
-                    </div>
-                    {stepErrors.recipientAddress && (
-                      <p className="text-xs text-red-600 mt-1">{stepErrors.recipientAddress}</p>
-                    )}
-                  </div>
-                </div>
-              </>
+              <Step3Parties
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+                appendVoice={appendVoice}
+              />
             )}
-
-            {/* Step 4: Details */}
             {step === 4 && (
-              <>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label
-                      htmlFor="description"
-                      className="text-sm font-medium"
-                    >
-                      Describe Your Situation *
-                    </Label>
-                    <VoiceInputButton
-                      fieldId="description"
-                      onTranscript={appendVoice("description")}
-                    />
-                  </div>
-                  <Textarea
-                    id="description"
-                    value={form.description}
-                    onChange={e => update("description", e.target.value)}
-                    placeholder="Provide a detailed description of the issue, what happened, when it happened, and any relevant background information..."
-                    rows={5}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {form.description.length} characters (minimum 20)
-                  </p>
-                  {stepErrors.description && (
-                    <p className="text-xs text-red-600 mt-1">{stepErrors.description}</p>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label
-                      htmlFor="incidentDate"
-                      className="text-sm font-medium mb-1.5 block"
-                    >
-                      Incident Date (Optional)
-                    </Label>
-                    <Input
-                      id="incidentDate"
-                      type="date"
-                      value={form.incidentDate}
-                      onChange={e => update("incidentDate", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="amountOwed"
-                      className="text-sm font-medium mb-1.5 block"
-                    >
-                      Amount Owed (USD) (Optional)
-                    </Label>
-                    <Input
-                      id="amountOwed"
-                      type="number"
-                      value={form.amountOwed}
-                      onChange={e => update("amountOwed", e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label
-                      htmlFor="additionalContext"
-                      className="text-sm font-medium"
-                    >
-                      Additional Context (Optional)
-                    </Label>
-                    <VoiceInputButton
-                      fieldId="additionalContext"
-                      onTranscript={appendVoice("additionalContext")}
-                    />
-                  </div>
-                  <Textarea
-                    id="additionalContext"
-                    value={form.additionalContext}
-                    onChange={e => update("additionalContext", e.target.value)}
-                    placeholder="Any other relevant information, prior communications, agreements, etc."
-                    rows={3}
-                    className="resize-none"
-                  />
-                </div>
-              </>
+              <Step4Details
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+                appendVoice={appendVoice}
+              />
             )}
-
-            {/* Step 5: Outcome */}
             {step === 5 && (
-              <>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label
-                      htmlFor="desiredOutcome"
-                      className="text-sm font-medium"
-                    >
-                      What outcome do you want? *
-                    </Label>
-                    <VoiceInputButton
-                      fieldId="desiredOutcome"
-                      onTranscript={appendVoice("desiredOutcome")}
-                    />
-                  </div>
-                  <Textarea
-                    id="desiredOutcome"
-                    value={form.desiredOutcome}
-                    onChange={e => update("desiredOutcome", e.target.value)}
-                    placeholder="e.g., I want the recipient to pay the outstanding balance of $2,500 within 14 days, or I will pursue legal action..."
-                    rows={4}
-                    className="resize-none"
-                  />
-                  {stepErrors.desiredOutcome && (
-                    <p className="text-xs text-red-600 mt-1">{stepErrors.desiredOutcome}</p>
-                  )}
-                </div>
-                <div>
-                  <Label
-                    htmlFor="deadlineDate"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Response Deadline (Optional)
-                  </Label>
-                  <Input
-                    id="deadlineDate"
-                    type="date"
-                    value={form.deadlineDate}
-                    onChange={e => update("deadlineDate", e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Date by which you expect a response or action.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Language Preference (Optional)
-                    </Label>
-                    <Select
-                      value={form.language}
-                      onValueChange={v => update("language", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="english">English</SelectItem>
-                        <SelectItem value="spanish">Spanish</SelectItem>
-                        <SelectItem value="french">French</SelectItem>
-                        <SelectItem value="portuguese">Portuguese</SelectItem>
-                        <SelectItem value="chinese">Chinese</SelectItem>
-                        <SelectItem value="arabic">Arabic</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Prior Communication? (Optional)
-                    </Label>
-                    <Select
-                      value={form.priorCommunication}
-                      onValueChange={v => update("priorCommunication", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No prior contact</SelectItem>
-                        <SelectItem value="verbal">Verbal only</SelectItem>
-                        <SelectItem value="written">
-                          Written (email/letter)
-                        </SelectItem>
-                        <SelectItem value="both">
-                          Both verbal and written
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Delivery Method (Optional)
-                    </Label>
-                    <Select
-                      value={form.deliveryMethod}
-                      onValueChange={v => update("deliveryMethod", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email Only</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div className="bg-muted/50 rounded-xl p-4 space-y-2">
-                  <h4 className="text-sm font-semibold text-foreground">
-                    Submission Summary
-                  </h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    <span className="text-muted-foreground">Type:</span>
-                    <span className="text-foreground font-medium">
-                      {LETTER_TYPE_CONFIG[form.letterType]?.label}
-                    </span>
-                    <span className="text-muted-foreground">Jurisdiction:</span>
-                    <span className="text-foreground font-medium">
-                      {form.jurisdictionState}
-                      {form.jurisdictionCity
-                        ? `, ${form.jurisdictionCity}`
-                        : ""}
-                    </span>
-                    <span className="text-muted-foreground">Sender:</span>
-                    <span className="text-foreground font-medium">
-                      {form.senderName}
-                    </span>
-                    <span className="text-muted-foreground">Recipient:</span>
-                    <span className="text-foreground font-medium">
-                      {form.recipientName}
-                    </span>
-                    <span className="text-muted-foreground">Tone:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.tonePreference}
-                    </span>
-                    <span className="text-muted-foreground">Language:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.language}
-                    </span>
-                    <span className="text-muted-foreground">Delivery:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.deliveryMethod.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                </div>
-              </>
+              <Step5Outcome
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+                appendVoice={appendVoice}
+              />
             )}
-            {/* ── Step 6: Exhibits (merged Communications + Evidence) ──── */}
             {step === 6 && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Add supporting exhibits — prior communications, contracts,
-                  photos, or other documents that strengthen your case. Each
-                  exhibit can include a description and/or a file attachment.{" "}
-                  <span className="font-medium">Optional.</span>
-                </p>
-
-                <div className="space-y-3">
-                  {exhibits.map((exhibit, idx) => (
-                    <div
-                      key={exhibit.id}
-                      className="rounded-xl border border-border p-4 space-y-3"
-                      data-testid={`exhibit-row-${idx}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-foreground">
-                          Exhibit {EXHIBIT_LETTERS[idx]}
-                        </span>
-                        {exhibits.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExhibits(prev =>
-                                prev.filter(e => e.id !== exhibit.id)
-                              )
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                            aria-label={`Remove Exhibit ${EXHIBIT_LETTERS[idx]}`}
-                            data-testid={`exhibit-remove-${idx}`}
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Description</span>
-                          <VoiceInputButton
-                            fieldId={`exhibit-${idx}`}
-                            onTranscript={t => {
-                              setExhibits(prev =>
-                                prev.map(ex =>
-                                  ex.id === exhibit.id
-                                    ? { ...ex, description: ex.description + (ex.description ? " " : "") + t }
-                                    : ex
-                                )
-                              );
-                            }}
-                          />
-                        </div>
-                        <Textarea
-                          value={exhibit.description}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setExhibits(prev =>
-                              prev.map(ex =>
-                                ex.id === exhibit.id
-                                  ? { ...ex, description: val }
-                                  : ex
-                              )
-                            );
-                          }}
-                          placeholder="Describe this exhibit (e.g., Email sent on Jan 5 requesting payment...)"
-                          rows={2}
-                          className="resize-none"
-                          data-testid={`exhibit-description-${idx}`}
-                        />
-                      </div>
-                      {exhibit.file ? (
-                        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
-                          <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
-                            <FileIcon className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {exhibit.file.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {fmtBytes(exhibit.file.size)} &nbsp;·&nbsp;{" "}
-                              <span className="text-green-600 dark:text-green-400">
-                                Ready
-                              </span>
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExhibits(prev =>
-                                prev.map(ex =>
-                                  ex.id === exhibit.id
-                                    ? { ...ex, file: null }
-                                    : ex
-                                )
-                              )
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                            aria-label="Remove file"
-                            data-testid={`exhibit-file-remove-${idx}`}
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <label
-                          className="flex items-center gap-2 text-sm text-primary cursor-pointer hover:underline"
-                          data-testid={`exhibit-file-attach-${idx}`}
-                        >
-                          <Paperclip className="w-4 h-4" />
-                          Attach file
-                          <input
-                            type="file"
-                            accept={ALLOWED_EXTS.join(",")}
-                            className="hidden"
-                            onChange={async e => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const ext =
-                                "." +
-                                (file.name.split(".").pop() ?? "").toLowerCase();
-                              if (file.size > MAX_FILE_BYTES) {
-                                toast.error("File too large", {
-                                  description: `${file.name} exceeds the ${MAX_FILE_MB} MB limit.`,
-                                });
-                                return;
-                              }
-                              if (!ALLOWED_EXTS.includes(ext)) {
-                                toast.error("Unsupported file type", {
-                                  description: `${file.name} is not an accepted format.`,
-                                });
-                                return;
-                              }
-                              try {
-                                const base64 = await readBase64(file);
-                                const pf: PendingFile = {
-                                  id: `${file.name}-${Date.now()}`,
-                                  name: file.name,
-                                  size: file.size,
-                                  mimeType:
-                                    file.type || "application/octet-stream",
-                                  base64,
-                                  status: "ready",
-                                };
-                                setExhibits(prev =>
-                                  prev.map(ex =>
-                                    ex.id === exhibit.id
-                                      ? { ...ex, file: pf }
-                                      : ex
-                                  )
-                                );
-                              } catch {
-                                toast.error("Upload failed", {
-                                  description: `Could not read ${file.name}.`,
-                                });
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {exhibits.length < MAX_EXHIBITS && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setExhibits(prev => [
-                        ...prev,
-                        {
-                          id: `exhibit-${Date.now()}`,
-                          description: "",
-                          file: null,
-                        },
-                      ])
-                    }
-                    data-testid="exhibit-add"
-                  >
-                    + Add Exhibit
-                  </Button>
-                )}
-
-                {exhibits.every(e => !e.description && !e.file) && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                    <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      No exhibits added yet. You can still submit — exhibits
-                      help the attorney build a stronger letter.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <Step6Exhibits
+                exhibits={exhibits}
+                setExhibits={setExhibits}
+              />
             )}
           </CardContent>
         </Card>
+
         {/* Navigation */}
         <div className="flex items-center justify-between">
           <Button

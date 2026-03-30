@@ -24,6 +24,11 @@ function readServer(file: string) {
   return readFileSync(join(SERVER_DIR, file), "utf-8");
 }
 
+function readAllRouters() {
+  const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+}
+
 function readClient(...segments: string[]) {
   return readFileSync(join(CLIENT_SRC, ...segments), "utf-8");
 }
@@ -156,7 +161,7 @@ describe("Attorney Dashboard Mutation — Attorney Routes in App.tsx", () => {
 // ─── 5. Queue Visibility — Review Queue Returns pending_review Letters ────────
 
 describe("Attorney Dashboard Mutation — Queue Visibility After Promotion", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("review.queue procedure exists for attorneys", () => {
     expect(routersFile).toContain("queue");
@@ -207,7 +212,7 @@ describe("Attorney Dashboard Mutation — Queue Visibility After Promotion", () 
 // ─── 6. In-App Notification — Attorney Receives Role Upgrade Notice ──────────
 
 describe("Attorney Dashboard Mutation — In-App Notification on Promotion", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("updateRole sends createNotification when promoting to attorney", () => {
     expect(routersFile).toContain('"role_updated"');

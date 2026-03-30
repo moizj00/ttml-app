@@ -13,17 +13,25 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { signAdmin2FAToken, ADMIN_2FA_COOKIE } from "./_core/admin2fa";
 
 const SERVER_DIR = join(__dirname);
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
+
+function readAllRouters(): string {
+  const dir = join(SERVER_DIR, "routers");
+  const files = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return files.map(f => readFileSync(join(dir, `${f}.ts`), "utf-8")).join("\n");
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
 function makeAdminCtx(overrides?: Partial<AuthenticatedUser>): TrpcContext {
+  const userId = overrides?.id ?? 1;
   const user: AuthenticatedUser = {
-    id: 1,
+    id: userId,
     openId: "admin-open-id",
     email: "ravivo@homes.land",
     name: "Super Admin",
@@ -34,9 +42,10 @@ function makeAdminCtx(overrides?: Partial<AuthenticatedUser>): TrpcContext {
     lastSignedIn: new Date(),
     ...overrides,
   };
+  const cookieHeader = `${ADMIN_2FA_COOKIE}=${encodeURIComponent(signAdmin2FAToken(userId))}`;
   return {
     user,
-    req: { protocol: "https", headers: {} } as TrpcContext["req"],
+    req: { protocol: "https", headers: { cookie: cookieHeader } } as TrpcContext["req"],
     res: { clearCookie: vi.fn() } as unknown as TrpcContext["res"],
   };
 }
@@ -99,7 +108,7 @@ describe("Super Admin Whitelist — Source Code Enforcement", () => {
 // ─── 2. updateRole Mutation — Admin Role Blocked ─────────────────────────────
 
 describe("admin.updateRole — Admin Role Cannot Be Assigned via API", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const routersFile = readAllRouters();
 
   it("updateRole z.enum does NOT include admin", () => {
     // The enum must only allow subscriber, employee, attorney
@@ -226,7 +235,7 @@ describe("Self-Signup — Attorney and Admin Roles Cannot Be Self-Assigned", () 
   const signupFile = readFileSync(join(CLIENT_SRC, "pages", "Signup.tsx"), "utf-8");
   const onboardingFile = readFileSync(join(CLIENT_SRC, "pages", "Onboarding.tsx"), "utf-8");
   const authFile = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const routersFile = readAllRouters();
 
   it("Signup.tsx does not include attorney as a selectable role", () => {
     // The ROLE_OPTIONS array must not contain attorney

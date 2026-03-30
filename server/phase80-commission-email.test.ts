@@ -33,7 +33,20 @@ vi.mock("./stripe", () => ({
 }));
 
 vi.mock("./db", () => ({
-  getDb: vi.fn().mockResolvedValue({}),
+  getDb: vi.fn().mockResolvedValue({
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    }),
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    }),
+  }),
   updateLetterStatus: vi.fn().mockResolvedValue(undefined),
   logReviewAction: vi.fn().mockResolvedValue(undefined),
   getLetterRequestById: vi.fn().mockResolvedValue({

@@ -27,6 +27,11 @@ function readServer(file: string) {
   return readFileSync(join(SERVER_DIR, file), "utf-8");
 }
 
+function readAllRouters() {
+  const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+}
+
 function readClient(...segments: string[]) {
   return readFileSync(join(CLIENT_SRC, ...segments), "utf-8");
 }
@@ -91,7 +96,7 @@ describe("Super Admin Whitelist — Four Independent Enforcement Points", () => 
 // ─── 2. updateRole Mutation — Server-Side Guards ─────────────────────────────
 
 describe("updateRole Mutation — Server-Side Guards and Schema", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("updateRole is an adminProcedure (requires admin role)", () => {
     expect(routersFile).toMatch(/updateRole\s*:\s*adminProcedure/);
@@ -247,7 +252,7 @@ describe("Admin Users Page — Stale Closure Fix (Role Label Never Undefined)", 
 
 describe("Role Enum Lockdown — Admin Role Cannot Be Assigned via Any Surface", () => {
   it("server updateRole enum excludes admin", () => {
-    const routersFile = readServer("routers.ts");
+    const routersFile = readAllRouters();
     const enumMatch = routersFile.match(
       /updateRole[\s\S]{0,300}z\.enum\(\[([^\]]+)\]\)/
     );
@@ -255,7 +260,7 @@ describe("Role Enum Lockdown — Admin Role Cannot Be Assigned via Any Surface",
   });
 
   it("server completeOnboarding enum excludes attorney and admin", () => {
-    const routersFile = readServer("routers.ts");
+    const routersFile = readAllRouters();
     const onboardingMatch = routersFile.match(
       /completeOnboarding[\s\S]{0,500}z\.enum\(\[([^\]]+)\]\)/
     );

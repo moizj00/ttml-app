@@ -228,30 +228,34 @@ describe("useAuth Sentry user context sync", () => {
 // ─── 8. Pipeline Sentry instrumentation ───
 
 describe("Pipeline Sentry instrumentation", () => {
-  const pipelinePath = path.join(__dirname, "pipeline.ts");
+  function readAllPipeline() {
+    const dir = path.join(__dirname, "pipeline");
+    const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
+    return files.map(f => fs.readFileSync(path.join(dir, `${f}.ts`), "utf-8")).join("\n");
+  }
 
   it("pipeline.ts imports captureServerException", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('import { captureServerException');
   });
 
   it("Stage 1 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "research"');
   });
 
   it("Stage 2 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "drafting"');
   });
 
   it("Stage 3 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "assembly"');
   });
 
   it("Full pipeline catch block captures to Sentry", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "full_pipeline"');
   });
 });

@@ -92,6 +92,25 @@ Production admin accounts (not test):
 - moizj00@gmail.com (admin, IDs 1 & 83)
 - ravivo@homes.land (admin, ID 105)
 
+## Code Organization
+
+### Backend Module Splits (Scalability Refactoring)
+The three large backend "God Files" have been split into a subdirectory pattern for maintainability. The original filenames are preserved as thin barrel re-exports so all existing imports continue to work without change:
+- `server/db.ts` → barrel re-export of `server/db/index.ts` (2,774 lines — all DB/storage logic)
+- `server/pipeline.ts` → barrel re-export of `server/pipeline/index.ts` (4,002 lines — AI pipeline)
+- `server/routers.ts` → barrel re-export of `server/routers/index.ts` (3,589 lines — tRPC routers)
+
+### Frontend Module Splits
+Large page files have been decomposed into focused sub-components:
+- `client/src/pages/subscriber/SubmitLetter.tsx` (639 lines) uses step components from `intake-steps/`:
+  - `Step1LetterType.tsx`, `Step2Jurisdiction.tsx`, `Step3Parties.tsx`
+  - `Step4Details.tsx`, `Step5Outcome.tsx`, `Step6Exhibits.tsx`, `types.ts`
+- `client/src/pages/attorney/ReviewDetail.tsx` (791 lines) uses panel components from `review/`:
+  - `IntakePanel.tsx`, `ResearchPanel.tsx`, `CitationAuditPanel.tsx`, `HistoryPanel.tsx`
+
+### DB Connection Pool
+DB connection pool max is configurable via `DB_POOL_MAX` environment variable (default: 25, was previously hardcoded to 10). Configured in `server/db/index.ts` line 36.
+
 ## External Dependencies
 - **Supabase**: PostgreSQL database, authentication services.
 - **Drizzle ORM**: Object-relational mapping. Migrations tracked in `public.__drizzle_migrations` (not the default `drizzle` schema) to avoid Supabase PgBouncer `CREATE SCHEMA` errors. `drizzle.config.ts` uses session-mode pooler (port 5432) with SSL for migrations. CLI `drizzle-kit migrate` may exit 1 due to a known issue; use the ORM-level `migrate()` API for programmatic migrations.

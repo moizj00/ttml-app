@@ -5,11 +5,10 @@ import { ALLOWED_TRANSITIONS, isValidTransition } from "../shared/types";
 // Phase 23: updateForChanges status transition logic
 // ============================================================================
 describe("updateForChanges: needs_changes → submitted → full pipeline", () => {
-  it("needs_changes allows transition to researching (via submitted)", () => {
+  it("needs_changes allows transition to submitted (first step before pipeline re-runs)", () => {
     // The updateForChanges mutation transitions needs_changes → submitted first,
     // then the pipeline runs submitted → researching → drafting → generated_locked
-    expect(isValidTransition("needs_changes", "researching")).toBe(true);
-    expect(isValidTransition("needs_changes", "drafting")).toBe(true);
+    expect(isValidTransition("needs_changes", "submitted")).toBe(true);
   });
 
   it("submitted allows transition to researching (pipeline start)", () => {
@@ -165,8 +164,9 @@ describe("ALLOWED_TRANSITIONS: completeness for all statuses", () => {
     }
   });
 
-  it("terminal statuses (approved) have no outgoing transitions", () => {
-    expect(ALLOWED_TRANSITIONS["approved"]).toEqual([]);
+  it("approved leads to client_approval_pending (client approval flow)", () => {
+    // After attorney approval, letter goes to client approval pending
+    expect(ALLOWED_TRANSITIONS["approved"]).toContain("client_approval_pending");
   });
 
   it("rejected can transition back to submitted (subscriber retry)", () => {
@@ -177,9 +177,8 @@ describe("ALLOWED_TRANSITIONS: completeness for all statuses", () => {
     expect(ALLOWED_TRANSITIONS["generated_locked"]).toEqual(["pending_review"]);
   });
 
-  it("needs_changes can transition to submitted, researching, or drafting", () => {
+  it("needs_changes can transition to submitted (re-enters pipeline via submitted)", () => {
+    // needs_changes transitions to submitted, which then re-enters the pipeline
     expect(ALLOWED_TRANSITIONS["needs_changes"]).toContain("submitted");
-    expect(ALLOWED_TRANSITIONS["needs_changes"]).toContain("researching");
-    expect(ALLOWED_TRANSITIONS["needs_changes"]).toContain("drafting");
   });
 });
