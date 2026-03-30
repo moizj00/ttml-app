@@ -1,29 +1,21 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
 import type { FormData } from "./types";
 
 interface Props {
   form: FormData;
   stepErrors: Record<string, string>;
   update: (field: keyof FormData, value: string) => void;
-  appendVoice: (field: keyof FormData) => (transcript: string) => void;
 }
 
-export function Step4Details({ form, stepErrors, update, appendVoice }: Props) {
+export function Step4Details({ form, stepErrors, update }: Props) {
   return (
     <>
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <Label htmlFor="description" className="text-sm font-medium">
-            Describe Your Situation *
-          </Label>
-          <VoiceInputButton
-            fieldId="description"
-            onTranscript={appendVoice("description")}
-          />
-        </div>
+        <Label htmlFor="description" className="text-sm font-medium mb-1.5 block">
+          Describe Your Situation *
+        </Label>
         <Textarea
           id="description"
           value={form.description}
@@ -73,15 +65,9 @@ export function Step4Details({ form, stepErrors, update, appendVoice }: Props) {
         </div>
       </div>
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <Label htmlFor="additionalContext" className="text-sm font-medium">
-            Additional Context (Optional)
-          </Label>
-          <VoiceInputButton
-            fieldId="additionalContext"
-            onTranscript={appendVoice("additionalContext")}
-          />
-        </div>
+        <Label htmlFor="additionalContext" className="text-sm font-medium mb-1.5 block">
+          Additional Context (Optional)
+        </Label>
         <Textarea
           id="additionalContext"
           value={form.additionalContext}

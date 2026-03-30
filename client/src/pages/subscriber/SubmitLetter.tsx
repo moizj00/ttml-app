@@ -233,13 +233,6 @@ export default function SubmitLetter() {
     }
   };
 
-  const appendVoice = (field: keyof FormData) => (transcript: string) => {
-    setForm(prev => ({
-      ...prev,
-      [field]: prev[field] ? `${prev[field]} ${transcript}` : transcript,
-    }));
-  };
-
   const getStepErrors = (s: number): Record<string, string> => {
     const errors: Record<string, string> = {};
     if (s === 1) {
@@ -552,7 +545,6 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
-                appendVoice={appendVoice}
               />
             )}
             {step === 2 && (
@@ -560,7 +552,6 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
-                appendVoice={appendVoice}
               />
             )}
             {step === 3 && (
@@ -568,7 +559,6 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
-                appendVoice={appendVoice}
               />
             )}
             {step === 4 && (
@@ -576,7 +566,6 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
-                appendVoice={appendVoice}
               />
             )}
             {step === 5 && (
@@ -584,7 +573,6 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
-                appendVoice={appendVoice}
               />
             )}
             {step === 6 && (

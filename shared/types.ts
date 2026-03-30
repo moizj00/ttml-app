@@ -110,48 +110,229 @@ export const STATUS_CONFIG: Record<
   },
 };
 
+// ─── Universal Legal Subject Taxonomy ───
+// Single source of truth for all legal subject categories across the platform.
+// References: letter types, blog categories, pipeline lessons, analytics.
+export const LEGAL_SUBJECTS = [
+  "demand-letter",
+  "cease-and-desist",
+  "contract-breach",
+  "eviction-notice",
+  "employment-dispute",
+  "consumer-complaint",
+  "pre-litigation-settlement",
+  "debt-collection",
+  "estate-probate",
+  "landlord-tenant",
+  "insurance-dispute",
+  "personal-injury-demand",
+  "intellectual-property",
+  "family-law",
+  "neighbor-hoa",
+  "general-legal",
+] as const;
+export type LegalSubject = (typeof LEGAL_SUBJECTS)[number];
+
 // ─── Letter Type display config ───
 // targetWordCount: target word count for the AI drafting stage.
 // These are calibrated to produce professional, appropriately-scoped letters
 // for each category. The pipeline prompt instructs Claude to aim for this count.
+// intakeHints: contextual field hints shown in the submission form for each type.
 export const LETTER_TYPE_CONFIG: Record<
   string,
-  { label: string; description: string; targetWordCount: number }
+  {
+    label: string;
+    description: string;
+    targetWordCount: number;
+    tip: string;
+    intakeHints?: {
+      subjectPlaceholder?: string;
+      descriptionPlaceholder?: string;
+      desiredOutcomePlaceholder?: string;
+      amountOwedLabel?: string;
+    };
+  }
 > = {
   "demand-letter": {
     label: "Demand Letter",
     description: "Formal demand for payment, action, or resolution",
     targetWordCount: 450,
+    tip: "Best for unpaid debts, invoices, or property damage claims.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for unpaid invoice #1042 — $3,500 owed",
+      descriptionPlaceholder: "Describe what is owed, when it was due, and what efforts you have already made to collect...",
+      desiredOutcomePlaceholder: "e.g., Full payment of $3,500 within 14 days or I will pursue legal action.",
+      amountOwedLabel: "Amount Owed (USD)",
+    },
   },
   "cease-and-desist": {
     label: "Cease and Desist",
     description: "Order to stop specific activities or face legal action",
     targetWordCount: 500,
+    tip: "Used to stop harassment, defamation, or IP infringement.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Cease and Desist — Unauthorized use of trademark",
+      descriptionPlaceholder: "Describe the specific conduct or activity that must stop, when it began, and how it has harmed you...",
+      desiredOutcomePlaceholder: "e.g., Immediate cessation of all infringing activity and written confirmation within 7 days.",
+    },
   },
   "contract-breach": {
     label: "Contract Breach",
     description: "Notice of breach of contract terms",
     targetWordCount: 550,
+    tip: "For when a party has failed to uphold agreed-upon terms.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Notice of Breach — Service Agreement dated Jan 15, 2025",
+      descriptionPlaceholder: "Describe the contract terms that were violated, when the breach occurred, and the resulting damages...",
+      desiredOutcomePlaceholder: "e.g., Cure the breach within 10 days or compensate for damages of $X.",
+    },
   },
   "eviction-notice": {
     label: "Eviction Notice",
-    description: "Formal notice to vacate a property",
+    description: "Formal notice to vacate a rental property",
     targetWordCount: 350,
+    tip: "Formally notifies a tenant to vacate a rental property.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Notice to Vacate — 123 Main St, Unit 4B",
+      descriptionPlaceholder: "Include the property address, lease start date, reason for eviction (e.g., nonpayment, lease violation), and amount owed if applicable...",
+      desiredOutcomePlaceholder: "e.g., Vacate the premises within 30 days or legal proceedings will commence.",
+    },
   },
   "employment-dispute": {
     label: "Employment Dispute",
     description: "Workplace-related legal matter",
     targetWordCount: 600,
+    tip: "Covers wrongful termination, discrimination, or wage issues.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Wrongful Termination — Notice of Legal Action",
+      descriptionPlaceholder: "Describe your employment history, the incident or dispute, any witnesses, and HR communications that occurred...",
+      desiredOutcomePlaceholder: "e.g., Reinstatement and back pay, or a settlement of $X within 21 days.",
+    },
   },
   "consumer-complaint": {
     label: "Consumer Complaint",
     description: "Complaint against a business or service provider",
     targetWordCount: 500,
+    tip: "File formal complaints against businesses or service providers.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Formal Complaint — Defective Product / Failure to Refund",
+      descriptionPlaceholder: "Describe the product or service, what was promised vs. what was delivered, order numbers, and prior attempts to resolve...",
+      desiredOutcomePlaceholder: "e.g., Full refund of $X within 14 days or I will file a complaint with the BBB and pursue legal remedies.",
+    },
+  },
+  "pre-litigation-settlement": {
+    label: "Pre-Litigation Settlement",
+    description: "Formal settlement offer before filing a lawsuit",
+    targetWordCount: 550,
+    tip: "Resolve disputes cost-effectively before proceeding to court.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Pre-Litigation Settlement Offer — Slip and Fall at 456 Oak Ave",
+      descriptionPlaceholder: "Describe the dispute, the damages or harm suffered, and the basis for your claim. Include relevant dates, incidents, and any prior communications...",
+      desiredOutcomePlaceholder: "e.g., Settlement payment of $X within 30 days to avoid civil litigation.",
+      amountOwedLabel: "Settlement Amount Sought (USD)",
+    },
+  },
+  "debt-collection": {
+    label: "Debt Collection",
+    description: "Formal notice demanding repayment of a debt",
+    targetWordCount: 450,
+    tip: "For collecting overdue balances from individuals or businesses.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Final Notice — $2,400 Outstanding Balance Due",
+      descriptionPlaceholder: "Include the original amount owed, original due date, any partial payments made, and the total balance remaining...",
+      desiredOutcomePlaceholder: "e.g., Full payment of $2,400 by [date] or account will be referred to collections.",
+      amountOwedLabel: "Total Balance Owed (USD)",
+    },
+  },
+  "estate-probate": {
+    label: "Estate / Probate",
+    description: "Legal correspondence related to estates, wills, and probate",
+    targetWordCount: 550,
+    tip: "Covers executor duties, inheritance disputes, and probate proceedings.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Estate of [Name] — Notice to Creditors / Heir Dispute",
+      descriptionPlaceholder: "Include the decedent's name, date of death, probate case number if applicable, nature of the dispute, and your role (executor, heir, creditor)...",
+      desiredOutcomePlaceholder: "e.g., Distribution of estate assets per the will within 60 days.",
+    },
+  },
+  "landlord-tenant": {
+    label: "Landlord–Tenant",
+    description: "Disputes between landlords and tenants beyond eviction",
+    targetWordCount: 500,
+    tip: "For security deposit disputes, habitability issues, or lease violations.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for Security Deposit Return — 789 Elm St, Unit 2",
+      descriptionPlaceholder: "Include the property address, lease dates, the specific issue (security deposit, repairs, harassment, lease terms), and any relevant communications...",
+      desiredOutcomePlaceholder: "e.g., Return of full $1,800 security deposit within 21 days as required by state law.",
+    },
+  },
+  "insurance-dispute": {
+    label: "Insurance Dispute",
+    description: "Dispute a denied or underpaid insurance claim",
+    targetWordCount: 550,
+    tip: "Challenge unfair claim denials or bad faith insurance practices.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Appeal of Denied Claim — Policy #ABC12345",
+      descriptionPlaceholder: "Include your policy number, the claim details, the denial reason given by the insurer, and why you believe the denial is incorrect...",
+      desiredOutcomePlaceholder: "e.g., Approval and payment of claim totaling $X within 30 days.",
+      amountOwedLabel: "Claim Amount (USD)",
+    },
+  },
+  "personal-injury-demand": {
+    label: "Personal Injury Demand",
+    description: "Demand letter for compensation after personal injury",
+    targetWordCount: 600,
+    tip: "Document injuries, medical costs, and lost wages for compensation.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Personal Injury Demand — Car Accident on [Date]",
+      descriptionPlaceholder: "Describe the incident, your injuries, medical treatment received, medical costs, lost income, and how the recipient is liable...",
+      desiredOutcomePlaceholder: "e.g., Settlement payment of $X covering medical expenses, lost wages, and pain and suffering within 30 days.",
+      amountOwedLabel: "Total Damages Sought (USD)",
+    },
+  },
+  "intellectual-property": {
+    label: "Intellectual Property",
+    description: "Protect trademarks, copyrights, patents, or trade secrets",
+    targetWordCount: 550,
+    tip: "Enforce IP rights and demand infringement stops immediately.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Copyright Infringement Notice — [Work Title]",
+      descriptionPlaceholder: "Identify your IP (trademark name/registration, copyright work, patent number), describe how it is being infringed, and when you discovered the infringement...",
+      desiredOutcomePlaceholder: "e.g., Immediately remove all infringing content and provide written confirmation within 7 days.",
+    },
+  },
+  "family-law": {
+    label: "Family Law",
+    description: "Legal matters involving divorce, custody, or support",
+    targetWordCount: 550,
+    tip: "Address custody, child support, alimony, or asset division disputes.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for Child Support — Case No. 2025-DR-0042",
+      descriptionPlaceholder: "Describe the family law matter, relevant court orders or agreements, the issue at hand, and any non-compliance by the other party...",
+      desiredOutcomePlaceholder: "e.g., Compliance with existing support order or payment of arrears of $X within 14 days.",
+    },
+  },
+  "neighbor-hoa": {
+    label: "Neighbor / HOA Dispute",
+    description: "Resolve conflicts with neighbors or homeowners associations",
+    targetWordCount: 500,
+    tip: "Address noise, property damage, HOA rule violations, or boundary disputes.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Formal Complaint — Persistent Noise Violation at [Address]",
+      descriptionPlaceholder: "Describe the dispute, specific incidents with dates, prior verbal or written attempts to resolve, and how it has affected you...",
+      desiredOutcomePlaceholder: "e.g., Immediate cessation of the nuisance activity within 10 days or I will file a complaint with local authorities.",
+    },
   },
   "general-legal": {
     label: "General Legal Letter",
-    description: "Other legal correspondence",
+    description: "Other legal correspondence not covered by specific categories",
     targetWordCount: 450,
+    tip: "Any other legal correspondence that doesn't fit the above.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Legal Notice — [Brief description of issue]",
+      descriptionPlaceholder: "Describe your legal matter in detail, including relevant dates, parties involved, and the basis for your claim or concern...",
+      desiredOutcomePlaceholder: "e.g., Describe the specific action or resolution you are seeking.",
+    },
   },
 };
 

@@ -8,17 +8,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LETTER_TYPE_CONFIG } from "../../../../../shared/types";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
 import type { FormData } from "./types";
 
 interface Props {
   form: FormData;
   stepErrors: Record<string, string>;
   update: (field: keyof FormData, value: string) => void;
-  appendVoice: (field: keyof FormData) => (transcript: string) => void;
 }
 
-export function Step1LetterType({ form, stepErrors, update, appendVoice }: Props) {
+export function Step1LetterType({ form, stepErrors, update }: Props) {
   return (
     <>
       <div>
@@ -56,20 +54,13 @@ export function Step1LetterType({ form, stepErrors, update, appendVoice }: Props
         >
           Brief Subject Line *
         </Label>
-        <div className="flex gap-2 items-center">
-          <Input
-            id="subject"
-            value={form.subject}
-            onChange={e => update("subject", e.target.value)}
-            placeholder="e.g., Demand for unpaid rent — 123 Main St"
-            maxLength={500}
-            className="flex-1"
-          />
-          <VoiceInputButton
-            fieldId="subject"
-            onTranscript={appendVoice("subject")}
-          />
-        </div>
+        <Input
+          id="subject"
+          value={form.subject}
+          onChange={e => update("subject", e.target.value)}
+          placeholder="e.g., Demand for unpaid rent — 123 Main St"
+          maxLength={500}
+        />
         <p className="text-xs text-muted-foreground mt-1">
           {form.subject.length}/500 characters
         </p>

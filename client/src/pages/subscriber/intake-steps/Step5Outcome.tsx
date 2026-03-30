@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
 import { LETTER_TYPE_CONFIG } from "../../../../../shared/types";
 import type { FormData } from "./types";
 
@@ -16,22 +15,15 @@ interface Props {
   form: FormData;
   stepErrors: Record<string, string>;
   update: (field: keyof FormData, value: string) => void;
-  appendVoice: (field: keyof FormData) => (transcript: string) => void;
 }
 
-export function Step5Outcome({ form, stepErrors, update, appendVoice }: Props) {
+export function Step5Outcome({ form, stepErrors, update }: Props) {
   return (
     <>
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <Label htmlFor="desiredOutcome" className="text-sm font-medium">
-            What outcome do you want? *
-          </Label>
-          <VoiceInputButton
-            fieldId="desiredOutcome"
-            onTranscript={appendVoice("desiredOutcome")}
-          />
-        </div>
+        <Label htmlFor="desiredOutcome" className="text-sm font-medium mb-1.5 block">
+          What outcome do you want? *
+        </Label>
         <Textarea
           id="desiredOutcome"
           value={form.desiredOutcome}

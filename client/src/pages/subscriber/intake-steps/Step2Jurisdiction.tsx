@@ -7,17 +7,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
 import type { FormData } from "./types";
 
 interface Props {
   form: FormData;
   stepErrors: Record<string, string>;
   update: (field: keyof FormData, value: string) => void;
-  appendVoice: (field: keyof FormData) => (transcript: string) => void;
 }
 
-export function Step2Jurisdiction({ form, stepErrors, update, appendVoice }: Props) {
+export function Step2Jurisdiction({ form, stepErrors, update }: Props) {
   return (
     <>
       <div>
@@ -49,19 +47,12 @@ export function Step2Jurisdiction({ form, stepErrors, update, appendVoice }: Pro
         >
           City (Optional)
         </Label>
-        <div className="flex gap-2 items-center">
-          <Input
-            id="city"
-            value={form.jurisdictionCity}
-            onChange={e => update("jurisdictionCity", e.target.value)}
-            placeholder="e.g., Los Angeles"
-            className="flex-1"
-          />
-          <VoiceInputButton
-            fieldId="jurisdictionCity"
-            onTranscript={appendVoice("jurisdictionCity")}
-          />
-        </div>
+        <Input
+          id="city"
+          value={form.jurisdictionCity}
+          onChange={e => update("jurisdictionCity", e.target.value)}
+          placeholder="e.g., Los Angeles"
+        />
       </div>
     </>
   );

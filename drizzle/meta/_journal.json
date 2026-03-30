@@ -225,6 +225,13 @@
       "when": 1774837696882,
       "tag": "0031_black_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774880469320,
+      "tag": "0032_safe_wolfpack",
+      "breakpoints": true
     }
   ]
 }

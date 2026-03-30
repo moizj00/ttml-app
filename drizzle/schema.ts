@@ -43,7 +43,10 @@ export const LETTER_STATUSES = [
 export type LetterStatus = (typeof LETTER_STATUSES)[number];
 
 // ─── Letter Types ───
+// Universal subject taxonomy — single source of truth for all letter types.
+// Blog categories, pipeline lessons, and analytics all reference this list.
 export const LETTER_TYPES = [
+  // Original 7 (backward-compatible)
   "demand-letter",
   "cease-and-desist",
   "contract-breach",
@@ -51,6 +54,16 @@ export const LETTER_TYPES = [
   "employment-dispute",
   "consumer-complaint",
   "general-legal",
+  // Extended taxonomy (new types)
+  "pre-litigation-settlement",
+  "debt-collection",
+  "estate-probate",
+  "landlord-tenant",
+  "insurance-dispute",
+  "personal-injury-demand",
+  "intellectual-property",
+  "family-law",
+  "neighbor-hoa",
 ] as const;
 export type LetterType = (typeof LETTER_TYPES)[number];
 
@@ -90,6 +103,9 @@ export const letterStatusEnum = pgEnum("letter_status", [
 export const letterTypeEnum = pgEnum("letter_type", [
   "demand-letter", "cease-and-desist", "contract-breach", "eviction-notice",
   "employment-dispute", "consumer-complaint", "general-legal",
+  "pre-litigation-settlement", "debt-collection", "estate-probate",
+  "landlord-tenant", "insurance-dispute", "personal-injury-demand",
+  "intellectual-property", "family-law", "neighbor-hoa",
 ]);
 export const versionTypeEnum = pgEnum("version_type", ["ai_draft", "attorney_edit", "final_approved"]);
 export const actorTypeEnum = pgEnum("actor_type", ["system", "subscriber", "employee", "admin", "attorney"]);
@@ -559,15 +575,39 @@ export type InsertAdminVerificationCode = typeof adminVerificationCodes.$inferIn
 // ═══════════════════════════════════════════════════════
 // TABLE: blog_posts (CMS for public blog)
 // ═══════════════════════════════════════════════════════
+// Blog categories map to universal subject taxonomy.
+// Legacy values are kept for backward compatibility.
 export const BLOG_CATEGORIES = [
   "demand-letters",
   "cease-and-desist",
   "contract-disputes",
+  "eviction-notices",
+  "employment-disputes",
+  "consumer-complaints",
+  "pre-litigation-settlement",
+  "debt-collection",
+  "estate-probate",
+  "landlord-tenant",
+  "insurance-disputes",
+  "personal-injury",
+  "intellectual-property",
+  "family-law",
+  "neighbor-hoa",
   "document-analysis",
   "pricing-and-roi",
   "general",
 ] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
+
+// Mapping from old blog categories to new taxonomy (backward compatibility)
+export const BLOG_CATEGORY_MIGRATION: Record<string, BlogCategory> = {
+  "demand-letters": "demand-letters",
+  "cease-and-desist": "cease-and-desist",
+  "contract-disputes": "contract-disputes",
+  "document-analysis": "document-analysis",
+  "pricing-and-roi": "pricing-and-roi",
+  "general": "general",
+};
 
 export const BLOG_STATUSES = ["draft", "published"] as const;
 export type BlogStatus = (typeof BLOG_STATUSES)[number];

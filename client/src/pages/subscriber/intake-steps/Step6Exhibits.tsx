@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Paperclip, X, File as FileIcon } from "lucide-react";
 import { toast } from "sonner";
-import { VoiceInputButton } from "@/components/VoiceInputButton";
 import type { ExhibitRow, PendingFile } from "./types";
 
 const EXHIBIT_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
@@ -69,24 +68,8 @@ export function Step6Exhibits({ exhibits, setExhibits }: Props) {
               )}
             </div>
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center mb-1">
                 <span className="text-xs text-muted-foreground">Description</span>
-                <VoiceInputButton
-                  fieldId={`exhibit-${idx}`}
-                  onTranscript={t => {
-                    setExhibits(prev =>
-                      prev.map(ex =>
-                        ex.id === exhibit.id
-                          ? {
-                              ...ex,
-                              description:
-                                ex.description + (ex.description ? " " : "") + t,
-                            }
-                          : ex
-                      )
-                    );
-                  }}
-                />
               </div>
               <Textarea
                 value={exhibit.description}
