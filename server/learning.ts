@@ -65,7 +65,7 @@ async function categorizeFromNote(note: string): Promise<NonNullable<LessonCateg
 
     const result = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
-      maxTokens: 50,
+      maxOutputTokens: 50,
       system: "You are a classifier. Respond with ONLY the category name, nothing else.",
       prompt: `Classify this attorney feedback into exactly one category:\n\nFeedback: "${note}"\n\nCategories:\n${categoryList}\n\nCategory:`,
       abortSignal: AbortSignal.timeout(10_000),
@@ -108,7 +108,7 @@ async function checkForDuplicateAndMerge(
 
     const result = await generateText({
       model: anthropic("claude-sonnet-4-20250514"),
-      maxTokens: 30,
+      maxOutputTokens: 30,
       system: "You compare lesson texts for semantic similarity. Respond with ONLY the ID number of the matching lesson, or 'NONE' if no match. Nothing else.",
       prompt: `New lesson: "${data.lessonText}"\n\nExisting lessons:\n${existingList}\n\nDoes any existing lesson cover the same core feedback? Reply with the ID number or NONE:`,
       abortSignal: AbortSignal.timeout(10_000),
@@ -471,7 +471,7 @@ export async function consolidateLessonsForScope(
 
   const result = await generateText({
     model: anthropic("claude-sonnet-4-20250514"),
-    maxTokens: 4000,
+    maxOutputTokens: 4000,
     system: `You are a legal operations AI. You consolidate overlapping lessons into cleaner, non-redundant combined lessons. Output ONLY valid JSON.`,
     prompt: `Given these lessons for "${letterType}" letters${jurisdiction ? ` in ${jurisdiction}` : ""}:\n\n${lessonList}\n\nGroup semantically similar lessons and write one improved, combined lesson per group. Lessons that are unique should remain as-is.\n\nReturn JSON array:\n[\n  {\n    "combinedText": "the merged lesson text",\n    "category": "one of: citation_error, jurisdiction_error, tone_issue, structure_issue, factual_error, bloat_detected, missing_section, style_preference, legal_accuracy, general",\n    "sourceIds": [1, 2, 3],\n    "weight": 60\n  }\n]\n\nOnly group lessons that truly overlap. Keep unique lessons separate (sourceIds will have one ID).`,
     abortSignal: AbortSignal.timeout(30_000),

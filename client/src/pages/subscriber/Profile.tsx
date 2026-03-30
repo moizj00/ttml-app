@@ -100,7 +100,7 @@ export default function Profile() {
   const [changingEmail, setChangingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
-  const [showEmailPassword] = useState(false);
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
 
   // Password change state
   const [changingPassword, setChangingPassword] = useState(false);
@@ -447,14 +447,14 @@ export default function Profile() {
                       variant="ghost"
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      onClick={() => setShowEmailPassword(!showEmailPassword)}
                       aria-label={
-                        showNewPassword
-                          ? "Hide new password"
-                          : "Show new password"
+                        showEmailPassword
+                          ? "Hide password"
+                          : "Show password"
                       }
                     >
-                      {showNewPassword ? (
+                      {showEmailPassword ? (
                         <EyeOff className="h-4 w-4" />
                       ) : (
                         <Eye className="h-4 w-4" />
@@ -576,15 +576,15 @@ export default function Profile() {
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                       onClick={() =>
-                        setShowCurrentPassword(!showCurrentPassword)
+                        setShowNewPassword(!showNewPassword)
                       }
                       aria-label={
-                        showCurrentPassword
-                          ? "Hide current password"
-                          : "Show current password"
+                        showNewPassword
+                          ? "Hide new password"
+                          : "Show new password"
                       }
                     >
-                      {showCurrentPassword ? (
+                      {showNewPassword ? (
                         <EyeOff className="h-4 w-4" />
                       ) : (
                         <Eye className="h-4 w-4" />

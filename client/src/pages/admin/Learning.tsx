@@ -85,8 +85,8 @@ function sourceLabel(src: string): string {
   return map[src] ?? src;
 }
 
-function daysSince(dateStr: string): number {
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+function daysSince(date: string | Date): number {
+  return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function EffectivenessBadge({ before, after }: { before: number | null; after: number | null }) {

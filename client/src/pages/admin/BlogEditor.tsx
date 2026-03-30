@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import type { BlogPost } from "../../../drizzle/schema";
 import AppLayout from "@/components/shared/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +26,25 @@ import {
   ExternalLink,
   FileText,
 } from "lucide-react";
+
+type BlogPostCategory = "cease-and-desist" | "general" | "demand-letters" | "contract-disputes" | "document-analysis" | "pricing-and-roi";
+
+interface BlogPost {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  metaDescription: string | null;
+  ogImageUrl: string | null;
+  authorName: string;
+  readingTimeMinutes: number;
+  status: string;
+  publishedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
 
 const CATEGORIES = [
   { value: "demand-letters", label: "Demand Letters" },
@@ -136,10 +154,11 @@ export default function BlogEditor() {
       toast.error("Title, slug, excerpt, and content are required");
       return;
     }
+    const category = form.category as BlogPostCategory;
     if (editingId) {
-      updateMutation.mutate({ id: editingId, ...form, metaDescription: form.metaDescription || null, ogImageUrl: form.ogImageUrl || null });
+      updateMutation.mutate({ id: editingId, ...form, category, metaDescription: form.metaDescription || null, ogImageUrl: form.ogImageUrl || null });
     } else {
-      createMutation.mutate({ ...form, metaDescription: form.metaDescription || undefined, ogImageUrl: form.ogImageUrl || undefined });
+      createMutation.mutate({ ...form, category, metaDescription: form.metaDescription || undefined, ogImageUrl: form.ogImageUrl || undefined });
     }
   };
 

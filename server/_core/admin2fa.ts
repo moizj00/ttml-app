@@ -1,9 +1,10 @@
 import * as crypto from "crypto";
 
-const ADMIN_2FA_SECRET = process.env.ADMIN_2FA_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!ADMIN_2FA_SECRET) {
+const _secret = process.env.ADMIN_2FA_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!_secret) {
   throw new Error("ADMIN_2FA_SECRET or SUPABASE_SERVICE_ROLE_KEY must be set for admin 2FA");
 }
+const ADMIN_2FA_SECRET: string = _secret;
 export const ADMIN_2FA_COOKIE = "admin_2fa";
 export const ADMIN_2FA_TTL_MS = 12 * 60 * 60 * 1000;
 

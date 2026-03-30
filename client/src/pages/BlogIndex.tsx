@@ -214,7 +214,7 @@ export default function BlogIndex() {
 
         <footer className="bg-[#0c2340] text-slate-300 py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
-            <BrandLogo href="/" variant="footer" size="sm" loading="lazy" />
+            <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <div className="flex flex-wrap gap-6 text-sm">
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
               <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
