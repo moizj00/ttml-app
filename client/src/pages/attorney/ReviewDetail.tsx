@@ -88,7 +88,7 @@ export default function ReviewDetail() {
         const status = query.state.data?.letter?.status;
         if (
           status &&
-          ["pending_review", "under_review", "researching", "drafting"].includes(
+          ["pending_review", "under_review", "researching", "drafting", "client_revision_requested"].includes(
             status
           )
         )
@@ -378,7 +378,7 @@ export default function ReviewDetail() {
 
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2 flex-shrink-0">
-            {letter.status === "pending_review" && (
+            {(letter.status === "pending_review" || letter.status === "client_revision_requested") && (
               <Button
                 data-testid="button-claim"
                 onClick={() => claimMutation.mutate({ letterId })}
@@ -386,7 +386,7 @@ export default function ReviewDetail() {
                 size="sm"
               >
                 <ClipboardList className="w-4 h-4 mr-1.5" />
-                {claimMutation.isPending ? "Claiming..." : "Claim for Review"}
+                {claimMutation.isPending ? "Claiming..." : letter.status === "client_revision_requested" ? "Claim for Revision" : "Claim for Review"}
               </Button>
             )}
 
@@ -541,14 +541,17 @@ export default function ReviewDetail() {
             {/* Editor body */}
             <div className="flex-1 overflow-auto">
               {letter.status === "pending_review" ||
+              letter.status === "client_revision_requested" ||
               letter.status === "researching" ||
               letter.status === "drafting" ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-                  {letter.status === "pending_review" ? (
+                  {letter.status === "pending_review" || letter.status === "client_revision_requested" ? (
                     <>
                       <ClipboardList className="w-10 h-10 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">
-                        Claim this letter to load the AI draft into the editor.
+                        {letter.status === "client_revision_requested"
+                          ? "Client requested revisions. Claim to review their notes and make changes."
+                          : "Claim this letter to load the AI draft into the editor."}
                       </p>
                     </>
                   ) : (

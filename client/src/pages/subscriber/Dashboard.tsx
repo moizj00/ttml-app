@@ -42,6 +42,8 @@ const ACTIVE_STATUSES = [
   "drafting",
   "pending_review",
   "under_review",
+  "client_approval_pending",
+  "client_revision_requested",
 ];
 
 // Pipeline stages in order for the progress stepper
@@ -58,8 +60,11 @@ const PIPELINE_STAGES = [
 // Map status to pipeline stage index
 function getStageIndex(status: string): number {
   const idx = PIPELINE_STAGES.findIndex(s => s.key === status);
-  if (status === "needs_changes") return 5; // same level as under_review
-  if (status === "rejected") return 6; // terminal
+  if (status === "needs_changes") return 5;
+  if (status === "rejected" || status === "client_declined") return 6;
+  if (status === "client_approval_pending") return 6;
+  if (status === "client_revision_requested") return 5;
+  if (status === "client_approved" || status === "sent") return 6;
   return idx >= 0 ? idx : 0;
 }
 
@@ -116,6 +121,39 @@ function getStatusCTA(status: string, letterId: number) {
         href: `/letters/${letterId}`,
         animate: false,
       };
+    case "client_approval_pending":
+      return {
+        label: "Review & Approve",
+        icon: CheckCircle,
+        variant: "default" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
+    case "client_revision_requested":
+      return {
+        label: "Revision in Progress",
+        icon: Clock,
+        variant: "outline" as const,
+        href: `/letters/${letterId}`,
+        animate: true,
+      };
+    case "client_approved":
+    case "sent":
+      return {
+        label: "Download Letter",
+        icon: Download,
+        variant: "default" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
+    case "client_declined":
+      return {
+        label: "Declined",
+        icon: XCircle,
+        variant: "outline" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
     case "rejected":
       return {
         label: "View Details",
@@ -154,7 +192,7 @@ function timeAgo(dateStr: string | number): string {
 // Progress stepper component
 function PipelineStepper({ status }: { status: string }) {
   const currentIdx = getStageIndex(status);
-  const isTerminalBad = status === "rejected";
+  const isTerminalBad = status === "rejected" || status === "client_declined";
   const isNeedsChanges = status === "needs_changes";
 
   return (
@@ -313,12 +351,12 @@ export default function SubscriberDashboard() {
   const stats = {
     total: letters?.length ?? 0,
     active:
-      letters?.filter(l => !["approved", "rejected"].includes(l.status))
+      letters?.filter(l => !["approved", "rejected", "client_approved", "client_declined", "sent"].includes(l.status))
         .length ?? 0,
-    approved: letters?.filter(l => l.status === "approved").length ?? 0,
+    approved: letters?.filter(l => ["approved", "client_approved", "sent"].includes(l.status)).length ?? 0,
     needsAttention:
       letters?.filter(l =>
-        ["needs_changes", "generated_locked"].includes(
+        ["needs_changes", "generated_locked", "client_approval_pending"].includes(
           l.status
         )
       ).length ?? 0,

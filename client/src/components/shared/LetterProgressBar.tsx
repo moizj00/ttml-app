@@ -29,13 +29,13 @@ const STEPS = [
     key: "review",
     label: "Attorney Review",
     icon: Gavel,
-    statuses: ["pending_review", "under_review", "client_approval_pending", "needs_changes"],
+    statuses: ["pending_review", "under_review", "client_approval_pending", "client_revision_requested", "needs_changes"],
   },
   {
     key: "approved",
     label: "Approved",
     icon: CheckCircle2,
-    statuses: ["approved", "client_approved"],
+    statuses: ["approved", "client_approved", "sent"],
   },
 ] as const;
 
@@ -52,9 +52,10 @@ interface LetterProgressBarProps {
 
 export default function LetterProgressBar({ status }: LetterProgressBarProps) {
   const currentIdx = getStepIndex(status);
-  const isRejected = status === "rejected";
-  const isApproved = status === "approved" || status === "client_approved";
+  const isRejected = status === "rejected" || status === "client_declined";
+  const isApproved = status === "approved" || status === "client_approved" || status === "sent";
   const isNeedsChanges = status === "needs_changes";
+  const isRevisionRequested = status === "client_revision_requested";
 
   return (
     <div className="w-full">
@@ -75,6 +76,8 @@ export default function LetterProgressBar({ status }: LetterProgressBarProps) {
             : isCurrent
             ? isNeedsChanges && idx === 2
               ? "bg-amber-50 border-amber-400 text-amber-600"
+              : isRevisionRequested && idx === 2
+              ? "bg-violet-50 border-violet-400 text-violet-600"
               : "bg-primary/10 border-primary text-primary"
             : isRejected && idx === STEPS.length - 1
             ? "bg-red-50 border-red-400 text-red-500"
@@ -85,6 +88,8 @@ export default function LetterProgressBar({ status }: LetterProgressBarProps) {
             : isCurrent
             ? isNeedsChanges && idx === 2
               ? "text-amber-700 font-semibold"
+              : isRevisionRequested && idx === 2
+              ? "text-violet-700 font-semibold"
               : "text-primary font-semibold"
             : isRejected && idx === STEPS.length - 1
             ? "text-red-500 font-semibold"
@@ -116,9 +121,11 @@ export default function LetterProgressBar({ status }: LetterProgressBarProps) {
                 </div>
                 <span className={`text-xs text-center leading-tight px-0.5 ${labelClass}`}>
                   {isRejected && idx === STEPS.length - 1
-                    ? "Rejected"
+                    ? status === "client_declined" ? "Declined" : "Rejected"
                     : isNeedsChanges && idx === 2
                     ? "Changes Requested"
+                    : isRevisionRequested && idx === 2
+                    ? "Revision Requested"
                     : step.label}
                 </span>
               </div>

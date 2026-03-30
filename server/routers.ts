@@ -103,6 +103,7 @@ import {
   sendLetterToRecipient,
   sendAttorneyInvitationEmail,
   sendAttorneyWelcomeEmail,
+  sendClientRevisionRequestEmail,
 } from "./email";
 import { captureServerException } from "./sentry";
 import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "./queue";
@@ -644,6 +645,37 @@ export const appRouter = router({
           });
         }
 
+        try {
+          const subscriber = await getUserById(ctx.user.id);
+          if (subscriber?.email) {
+            await sendStatusUpdateEmail({
+              to: subscriber.email,
+              name: subscriber.name ?? "Subscriber",
+              letterSubject: letter.subject,
+              newStatus: "submitted",
+              appUrl,
+              letterId: input.letterId,
+            });
+          }
+          await createNotification({
+            userId: ctx.user.id,
+            type: "retry_from_rejected",
+            title: "Letter resubmitted for processing",
+            body: `Your letter "${letter.subject}" has been resubmitted and is being reprocessed.`,
+            link: `/letters/${input.letterId}`,
+          });
+          await notifyAdmins({
+            category: "letters",
+            type: "retry_from_rejected",
+            title: `Subscriber retried rejected letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "A subscriber"} retried "${letter.subject}" after rejection.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[retryFromRejected] Notification error:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
+        }
+
         return { success: true };
       }),
 
@@ -653,7 +685,7 @@ export const appRouter = router({
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
-        if (!["approved", "client_approved", "rejected"].includes(letter.status))
+        if (!["approved", "client_approved", "rejected", "client_declined", "sent"].includes(letter.status))
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Only completed letters can be archived",
@@ -881,6 +913,119 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+
+    clientRequestRevision: subscriberProcedure
+      .input(z.object({
+        letterId: z.number(),
+        revisionNotes: z.string().min(10, "Please provide at least 10 characters of feedback").max(5000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter || letter.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        if (letter.status !== "client_approval_pending") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not awaiting client approval",
+          });
+        }
+        await updateLetterStatus(input.letterId, "client_revision_requested");
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "client_revision_requested",
+          noteText: input.revisionNotes,
+          noteVisibility: "user_visible",
+          fromStatus: "client_approval_pending",
+          toStatus: "client_revision_requested",
+        });
+
+        try {
+          const appUrl = getAppUrl(ctx.req);
+          if (letter.assignedReviewerId) {
+            const attorney = await getUserById(letter.assignedReviewerId);
+            if (attorney?.email) {
+              await sendClientRevisionRequestEmail({
+                to: attorney.email,
+                name: attorney.name ?? "Attorney",
+                letterSubject: letter.subject,
+                letterId: input.letterId,
+                subscriberNotes: input.revisionNotes,
+                appUrl,
+              });
+            }
+            await createNotification({
+              userId: letter.assignedReviewerId,
+              type: "client_revision_requested",
+              title: "Client requested revisions",
+              body: `A subscriber requested revisions on "${letter.subject}". Please review their notes and update the letter.`,
+              link: `/review/${input.letterId}`,
+            });
+          }
+          await notifyAdmins({
+            category: "letters",
+            type: "client_revision_requested",
+            title: `Client requested revisions on letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "A subscriber"} requested revisions on "${letter.subject}".`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[clientRequestRevision] Notification error:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "client_revision_notification_failed" } });
+        }
+        return { success: true };
+      }),
+
+    clientDecline: subscriberProcedure
+      .input(z.object({
+        letterId: z.number(),
+        reason: z.string().max(2000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterRequestById(input.letterId);
+        if (!letter || letter.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        if (letter.status !== "client_approval_pending") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not awaiting client approval",
+          });
+        }
+        await updateLetterStatus(input.letterId, "client_declined");
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "client_declined",
+          noteText: input.reason || "Subscriber declined the letter",
+          noteVisibility: "user_visible",
+          fromStatus: "client_approval_pending",
+          toStatus: "client_declined",
+        });
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "client_declined",
+            title: `Client declined letter #${input.letterId}`,
+            body: `${ctx.user.name ?? "A subscriber"} declined "${letter.subject}".${input.reason ? ` Reason: ${input.reason}` : ""}`,
+            link: `/admin/letters/${input.letterId}`,
+            emailOpts: {
+              subject: `Client Declined Letter #${input.letterId}`,
+              preheader: `Client declined letter "${letter.subject}"`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has declined letter <strong>#${input.letterId}</strong> — "${letter.subject}".</p>${input.reason ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#FEE2E2;border-left:4px solid #EF4444;border-radius:4px;color:#991B1B;">${input.reason}</blockquote>` : ""}`,
+              ctaText: "View Letter",
+              ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
+            },
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] client_declined:", err);
+          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
+        }
+        return { success: true };
+      }),
   }),
 
   // ─── Employee/Attorney: Review Center ─────────────────────────────────────
@@ -942,7 +1087,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const letter = await getLetterRequestById(input.letterId);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-        if (!["pending_review", "under_review"].includes(letter.status))
+        if (!["pending_review", "under_review", "client_revision_requested"].includes(letter.status))
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Letter is not in a reviewable state",
@@ -1910,6 +2055,8 @@ export const appRouter = router({
             "needs_changes",
             "approved",
             "client_approval_pending",
+            "client_revision_requested",
+            "client_declined",
             "client_approved",
             "sent",
             "rejected",
@@ -2012,10 +2159,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const letter = await getLetterRequestById(input.letterId);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-        if (letter.status !== "pending_review") {
+        if (!["pending_review", "client_revision_requested"].includes(letter.status)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Letter must be in pending_review status to claim",
+            message: "Letter must be in pending_review or client_revision_requested status to claim",
           });
         }
         if (letter.assignedReviewerId !== null && letter.assignedReviewerId !== undefined) {
@@ -2032,7 +2179,7 @@ export const appRouter = router({
           action: "admin_claimed_as_attorney",
           noteText: `Admin claimed letter for review as attorney`,
           noteVisibility: "internal",
-          fromStatus: "pending_review",
+          fromStatus: letter.status,
           toStatus: "under_review",
         });
         return { success: true };

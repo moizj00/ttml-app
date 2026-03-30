@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Send, Clock, Copy, Trash2, Mail } from "lucide-react";
+import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Send, Clock, Copy, Trash2, Mail, XCircle, RotateCcw, RefreshCw } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
@@ -27,12 +27,37 @@ import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending"];
 
 function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onApprove: () => void }) {
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+
   const clientApprove = trpc.letters.clientApprove.useMutation({
     onSuccess: () => {
       toast.success("Letter approved!", { description: "Your approval has been recorded. The letter will proceed to final delivery." });
       onApprove();
     },
     onError: (err) => toast.error("Approval failed", { description: err.message }),
+  });
+
+  const clientRequestRevision = trpc.letters.clientRequestRevision.useMutation({
+    onSuccess: () => {
+      toast.success("Revision requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
+      setShowRevisionForm(false);
+      setRevisionNotes("");
+      onApprove();
+    },
+    onError: (err) => toast.error("Request failed", { description: err.message }),
+  });
+
+  const clientDecline = trpc.letters.clientDecline.useMutation({
+    onSuccess: () => {
+      toast.info("Letter declined", { description: "The letter has been declined. Our team has been notified." });
+      setShowDeclineConfirm(false);
+      setDeclineReason("");
+      onApprove();
+    },
+    onError: (err) => toast.error("Decline failed", { description: err.message }),
   });
 
   return (
@@ -42,21 +67,179 @@ function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onAppr
           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
             <CheckCircle className="w-4 h-4 text-blue-600" />
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-blue-800">Your Letter is Ready — Final Approval Required</p>
-            <p className="text-sm text-blue-700 mt-1">
-              Your attorney has reviewed and approved your letter. Please review it below, then click <strong>Approve &amp; Proceed</strong> to confirm delivery.
-            </p>
-            <Button
-              data-testid="button-client-approve"
-              className="mt-3 bg-blue-600 hover:bg-blue-700 text-white"
-              size="sm"
-              onClick={() => clientApprove.mutate({ letterId })}
-              disabled={clientApprove.isPending}
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              {clientApprove.isPending ? "Processing..." : "Approve & Proceed"}
-            </Button>
+          <div className="flex-1 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-blue-800">Your Letter is Ready — Final Approval Required</p>
+              <p className="text-sm text-blue-700 mt-1">
+                Your attorney has reviewed and approved your letter. Please review the final version below, then choose one of the options.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                data-testid="button-client-approve"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                size="sm"
+                onClick={() => clientApprove.mutate({ letterId })}
+                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                {clientApprove.isPending ? "Processing..." : "Approve & Send"}
+              </Button>
+              <Button
+                data-testid="button-client-request-revision"
+                variant="outline"
+                className="border-violet-300 text-violet-700 hover:bg-violet-50"
+                size="sm"
+                onClick={() => { setShowRevisionForm(!showRevisionForm); setShowDeclineConfirm(false); }}
+                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Request Revisions
+              </Button>
+              <Button
+                data-testid="button-client-decline"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-50"
+                size="sm"
+                onClick={() => { setShowDeclineConfirm(!showDeclineConfirm); setShowRevisionForm(false); }}
+                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Decline
+              </Button>
+            </div>
+
+            <div className="text-xs text-blue-600/70 space-y-0.5">
+              <p><strong>Approve & Send</strong> — Confirms the letter is ready for delivery to the recipient.</p>
+              <p><strong>Request Revisions</strong> — Sends your feedback to the attorney for further edits. The letter will return to you once revised.</p>
+              <p><strong>Decline</strong> — Permanently declines this letter. This cannot be undone.</p>
+            </div>
+
+            {showRevisionForm && (
+              <div className="bg-white border border-violet-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-violet-800">What changes would you like?</p>
+                <Textarea
+                  data-testid="input-revision-notes"
+                  value={revisionNotes}
+                  onChange={(e) => setRevisionNotes(e.target.value)}
+                  placeholder="Describe the changes you'd like the attorney to make (at least 10 characters)..."
+                  rows={3}
+                  className="border-violet-200"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    data-testid="button-submit-revision-request"
+                    size="sm"
+                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                    onClick={() => clientRequestRevision.mutate({ letterId, revisionNotes })}
+                    disabled={clientRequestRevision.isPending || revisionNotes.trim().length < 10}
+                  >
+                    {clientRequestRevision.isPending ? "Submitting..." : "Submit Revision Request"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowRevisionForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {showDeclineConfirm && (
+              <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-red-800">Are you sure you want to decline this letter?</p>
+                <p className="text-xs text-red-600">This action is permanent and cannot be undone. The letter will not be sent.</p>
+                <Textarea
+                  data-testid="input-decline-reason"
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="Reason for declining (optional)..."
+                  rows={2}
+                  className="border-red-200"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    data-testid="button-confirm-decline"
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => clientDecline.mutate({ letterId, reason: declineReason.trim() || undefined })}
+                    disabled={clientDecline.isPending}
+                  >
+                    {clientDecline.isPending ? "Declining..." : "Confirm Decline"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowDeclineConfirm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RejectionRetryBlock({ letterId, onRetry }: { letterId: number; onRetry: () => void }) {
+  const [showRetryForm, setShowRetryForm] = useState(false);
+  const [retryContext, setRetryContext] = useState("");
+
+  const retryFromRejected = trpc.letters.retryFromRejected.useMutation({
+    onSuccess: () => {
+      toast.success("Letter resubmitted", { description: "Your letter is being re-processed with the updated information. You'll be notified when it's ready." });
+      setShowRetryForm(false);
+      setRetryContext("");
+      onRetry();
+    },
+    onError: (err) => toast.error("Retry failed", { description: err.message }),
+  });
+
+  return (
+    <Card className="border-red-200 bg-red-50/30">
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-red-800">Letter Request Rejected</p>
+              <p className="text-sm text-red-700 mt-1">
+                The reviewing attorney has rejected this letter request. Please review the attorney notes above for details on why the request could not be processed.
+              </p>
+            </div>
+
+            {!showRetryForm ? (
+              <Button
+                data-testid="button-retry-from-rejected"
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-100"
+                onClick={() => setShowRetryForm(true)}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry with Updated Information
+              </Button>
+            ) : (
+              <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-red-800">Provide additional context or corrections</p>
+                <p className="text-xs text-red-600">Address the attorney's feedback in your response. Your letter will be re-processed through the entire pipeline with this new information.</p>
+                <Textarea
+                  data-testid="input-retry-context"
+                  value={retryContext}
+                  onChange={(e) => setRetryContext(e.target.value)}
+                  placeholder="Explain what has changed, provide missing details, or clarify any misunderstandings (at least 10 characters)..."
+                  rows={4}
+                  className="border-red-200"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    data-testid="button-submit-retry"
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => retryFromRejected.mutate({ letterId, additionalContext: retryContext.trim() || undefined })}
+                    disabled={retryFromRejected.isPending || retryContext.trim().length < 10}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    {retryFromRejected.isPending ? "Resubmitting..." : "Resubmit Letter"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowRetryForm(false)}>Cancel</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -114,13 +297,18 @@ export default function LetterDetail() {
         pending_review: "Sent to attorney review queue.",
         under_review: "An attorney is reviewing your letter.",
         approved: "Your letter has been approved!",
+        client_approval_pending: "Your letter is ready for your final approval.",
+        client_revision_requested: "Your revision request has been submitted.",
+        client_approved: "You approved the letter for delivery.",
+        client_declined: "You declined the letter.",
         rejected: "Your letter request was rejected.",
         needs_changes: "The attorney has requested changes.",
+        sent: "Your letter has been sent to the recipient.",
       };
       const label = statusLabels[newStatus];
       if (label) {
-        if (newStatus === "approved") toast.success(label);
-        else if (newStatus === "rejected" || newStatus === "needs_changes") toast.warning(label);
+        if (newStatus === "approved" || newStatus === "client_approved") toast.success(label);
+        else if (newStatus === "rejected" || newStatus === "needs_changes" || newStatus === "client_declined") toast.warning(label);
         else toast.info(label);
       }
     },
@@ -529,7 +717,7 @@ export default function LetterDetail() {
                   </Button>
                 </>
               )}
-              {["approved", "client_approved", "rejected"].includes(letter.status) && (
+              {["approved", "client_approved", "rejected", "client_declined"].includes(letter.status) && (
                 <Button onClick={handleArchive} size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={archiveMutation.isPending}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -679,8 +867,8 @@ export default function LetterDetail() {
           </Card>
         )}
 
-        {/* Final Approved Letter */}
-        {(letter.status === "approved" || letter.status === "client_approved") && finalVersion && (
+        {/* Final Approved Letter — shown when approved, client pending, or client approved */}
+        {(letter.status === "approved" || letter.status === "client_approved" || letter.status === "client_approval_pending" || letter.status === "sent") && finalVersion && (
           <>
           <Dialog open={sendDialogOpen} onOpenChange={(open) => { setSendDialogOpen(open); if (!open) { setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); } }}>
             <DialogContent>
@@ -781,10 +969,12 @@ export default function LetterDetail() {
                     <Download className="w-3.5 h-3.5 mr-1.5" />
                     {(data?.letter as any)?.pdfUrl ? "Download Reviewed PDF" : "Download"}
                   </Button>
+                  {(letter.status === "approved" || letter.status === "client_approved") && (
                   <Button onClick={() => setSendDialogOpen(true)} size="sm" className="bg-green-700 hover:bg-green-800 text-white" data-testid="button-send-via-lawyer-email">
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     Send Via Lawyer's Email
                   </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -810,21 +1000,43 @@ export default function LetterDetail() {
           </>
         )}
 
-        {/* Rejected Notice */}
-        {letter.status === "rejected" && (
+        {/* Client Declined Notice */}
+        {letter.status === "client_declined" && (
           <Card className="border-red-200 bg-red-50/30">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-red-800">Letter Request Rejected</p>
+                  <p className="text-sm font-semibold text-red-800">You Declined This Letter</p>
                   <p className="text-sm text-red-700 mt-1">
-                    Unfortunately, the reviewing attorney has rejected this letter request. Please review the attorney notes above for details.
+                    You chose not to proceed with this letter. If you need assistance with a similar matter, you can submit a new letter request.
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Client Revision Requested Notice */}
+        {letter.status === "client_revision_requested" && (
+          <Card className="border-violet-200 bg-violet-50/30">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <RotateCcw className="w-5 h-5 text-violet-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-violet-800">Revision Requested</p>
+                  <p className="text-sm text-violet-700 mt-1">
+                    Your revision request has been sent to the attorney. The letter will be revised and returned for your approval.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Rejected Notice with Retry */}
+        {letter.status === "rejected" && (
+          <RejectionRetryBlock letterId={letterId} onRetry={() => utils.letters.detail.invalidate({ id: letterId })} />
         )}
 
         {/* Attachments */}

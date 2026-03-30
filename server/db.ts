@@ -100,6 +100,26 @@ export async function getDb() {
     } catch (migErr) {
       console.warn("[Database] Migration error (consolidation enum):", migErr);
     }
+    // Add 'client_revision_requested' and 'client_declined' to letter_status enum
+    try {
+      await _db.execute(sql`
+        DO $$ BEGIN
+          ALTER TYPE letter_status ADD VALUE IF NOT EXISTS 'client_revision_requested';
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$
+      `);
+      await _db.execute(sql`
+        DO $$ BEGIN
+          ALTER TYPE letter_status ADD VALUE IF NOT EXISTS 'client_declined';
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$
+      `);
+      console.log("[Database] Migration: ensured client_revision_requested and client_declined enum values exist");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (client approval statuses):", migErr);
+    }
   }
   return _db;
 }
@@ -650,7 +670,7 @@ export async function claimLetterForReview(
   }).where(
     and(
       eq(letterRequests.id, letterId),
-      inArray(letterRequests.status, ["pending_review", "under_review"] as any),
+      inArray(letterRequests.status, ["pending_review", "under_review", "client_revision_requested"] as any),
       or(
         isNull(letterRequests.assignedReviewerId),
         eq(letterRequests.assignedReviewerId, reviewerId),

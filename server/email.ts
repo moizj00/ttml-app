@@ -481,6 +481,47 @@ export async function sendNewReviewNeededEmail(opts: {
   });
 }
 
+/** Notify attorney when subscriber requests revisions on an approved letter */
+export async function sendClientRevisionRequestEmail(opts: {
+  to: string;
+  name: string;
+  letterSubject: string;
+  letterId: number;
+  subscriberNotes: string;
+  appUrl: string;
+}) {
+  const dispatched = await dispatchToWorker({ type: "client_revision_request", ...opts });
+  if (dispatched) return;
+
+  const ctaUrl = `${opts.appUrl}/review/${opts.letterId}`;
+  const body = `
+    <p>Hello ${opts.name},</p>
+    <p>A subscriber has reviewed your approved letter and is <strong>requesting revisions</strong> before they will approve delivery.</p>
+    <p><strong>Letter:</strong> ${opts.letterSubject}</p>
+    <blockquote style="margin:16px 0;padding:12px 16px;background:#F3E8FF;border-left:4px solid #8B5CF6;border-radius:4px;color:#5B21B6;">${opts.subscriberNotes}</blockquote>
+    <p>The letter has been returned to the review queue. Please review the subscriber's feedback and make the requested changes.</p>
+  `;
+  const html = buildEmailHtml({
+    preheader: `A subscriber has requested revisions on letter "${opts.letterSubject}".`,
+    title: "Client Revision Requested",
+    body,
+    ctaText: "Review Letter",
+    ctaUrl,
+    accentColor: "#7C3AED",
+  });
+  await sendWithRetry({
+    to: opts.to,
+    subject: `[${APP_NAME}] Client revision requested: ${opts.letterSubject}`,
+    html,
+    text: buildPlainText({
+      title: "Client Revision Requested",
+      body: `Hello ${opts.name}, a subscriber has requested revisions on "${opts.letterSubject}". Notes: ${opts.subscriberNotes}. Review at: ${ctaUrl}`,
+      ctaText: "Review Letter",
+      ctaUrl,
+    }),
+  });
+}
+
 /** Notify admin when an AI pipeline job fails */
 export async function sendJobFailedAlertEmail(opts: {
   to: string;

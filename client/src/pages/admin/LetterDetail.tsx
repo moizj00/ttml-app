@@ -48,6 +48,12 @@ const ALL_STATUSES = [
   "approved",
   "rejected",
   "needs_changes",
+  "client_approval_pending",
+  "client_revision_requested",
+  "client_declined",
+  "client_approved",
+  "sent",
+  "pipeline_failed",
 ] as const;
 
 export default function AdminLetterDetail() {

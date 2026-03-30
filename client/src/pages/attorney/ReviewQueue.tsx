@@ -15,7 +15,7 @@ import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 // Only statuses that belong in the attorney review workflow
-const REVIEW_STATUSES = ["pending_review", "under_review", "needs_changes", "approved", "rejected"];
+const REVIEW_STATUSES = ["pending_review", "under_review", "needs_changes", "approved", "rejected", "client_approval_pending", "client_revision_requested", "client_declined", "client_approved"];
 
 export default function ReviewQueue() {
   const utils = trpc.useUtils();
@@ -42,12 +42,12 @@ export default function ReviewQueue() {
         statusFilter === "all"
           ? true
           : statusFilter === "active"
-          ? ["pending_review", "under_review", "needs_changes"].includes(l.status)
+          ? ["pending_review", "under_review", "needs_changes", "client_revision_requested"].includes(l.status)
           : l.status === statusFilter;
       return matchSearch && matchStatus;
     });
 
-  const pendingCount = (letters ?? []).filter((l) => l.status === "pending_review").length;
+  const pendingCount = (letters ?? []).filter((l) => l.status === "pending_review" || l.status === "client_revision_requested").length;
   const letterVisible = useStaggerReveal(filtered.length, 50);
 
   return (
