@@ -77,6 +77,21 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Affiliate Program**: Single-use rotating discount codes with a commission settlement algorithm.
 - **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks. Flags unverified research for attorney acknowledgment.
 
+## Test Users
+
+Seeded via `npx tsx scripts/seed-test-users.ts` — password for all: `TestPass123!`
+
+| Role       | Email                        | App DB | Supabase Auth |
+|------------|------------------------------|--------|---------------|
+| subscriber | test-subscriber@ttml.dev     | yes    | yes           |
+| employee   | test-employee@ttml.dev       | yes    | yes           |
+| attorney   | test-attorney@ttml.dev       | yes    | yes           |
+| admin      | test-admin@ttml.dev          | yes    | yes           |
+
+Production admin accounts (not test):
+- moizj00@gmail.com (admin, IDs 1 & 83)
+- ravivo@homes.land (admin, ID 105)
+
 ## External Dependencies
 - **Supabase**: PostgreSQL database, authentication services.
 - **Drizzle ORM**: Object-relational mapping.
