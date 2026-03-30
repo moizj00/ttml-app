@@ -25,6 +25,7 @@ import {
   Brain,
   BookOpen,
   BarChart3,
+  Library,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
@@ -46,6 +47,11 @@ function getNavItems(role: string): NavItem[] {
         label: "Dashboard",
         href: "/dashboard",
         icon: <LayoutDashboard className="w-4 h-4" />,
+      },
+      {
+        label: "Template Gallery",
+        href: "/templates",
+        icon: <Library className="w-4 h-4" />,
       },
       {
         label: "Submit Letter",

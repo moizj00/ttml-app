@@ -53,6 +53,7 @@ import {
   AdminAffiliateSkeleton,
   AdminLearningSkeleton,
   DocumentAnalyzerSkeleton,
+  TemplateGallerySkeleton,
 } from "./components/skeletons";
 
 import Home from "./pages/Home";
@@ -73,6 +74,7 @@ const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
 
 const SubscriberDashboard = lazyRetry(() => import("./pages/subscriber/Dashboard"));
 const SubmitLetter = lazyRetry(() => import("./pages/subscriber/SubmitLetter"));
+const TemplateGallery = lazyRetry(() => import("./pages/subscriber/TemplateGallery"));
 const MyLetters = lazyRetry(() => import("./pages/subscriber/MyLetters"));
 const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
 const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
@@ -185,6 +187,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["subscriber"]}>
           <SuspenseFade fallback={<SubmitLetterSkeleton />}>
             <SubmitLetter />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/templates">
+        <ProtectedRoute allowedRoles={["subscriber"]}>
+          <SuspenseFade fallback={<TemplateGallerySkeleton />}>
+            <TemplateGallery />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

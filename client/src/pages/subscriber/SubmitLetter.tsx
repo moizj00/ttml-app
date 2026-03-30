@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -33,6 +33,7 @@ import { LETTER_TYPE_CONFIG, US_STATES, ANALYZE_PREFILL_KEY } from "../../../../
 import type { AnalysisPrefill } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
 import { Link } from "wouter";
+import { VoiceInputButton } from "@/components/VoiceInputButton";
 
 const STEPS = [
   { id: 1, label: "Letter Type", icon: <FileText className="w-4 h-4" /> },
@@ -174,6 +175,7 @@ function buildInitialFormFromPrefill(prefill: AnalysisPrefill): FormData {
 
 export default function SubmitLetter() {
   const { user } = useAuth();
+  const search = useSearch();
   const DRAFT_KEY = useMemo(() => {
     const userId = user?.id ?? "anon";
     const tabId = getTabSessionId();
@@ -182,11 +184,20 @@ export default function SubmitLetter() {
   const [step, setStep] = useState(1);
 
   const prefillApplied = useRef(false);
+  const prefillFromAnalyzer = useRef(false);
   const [form, setForm] = useState<FormData>(() => {
     const { prefill, found } = readAndClearPrefill();
     if (found && prefill) {
       prefillApplied.current = true;
+      prefillFromAnalyzer.current = true;
       return buildInitialFormFromPrefill(prefill);
+    }
+    // Check for ?type= URL param from template gallery
+    const params = new URLSearchParams(search);
+    const typeParam = params.get("type");
+    if (typeParam && LETTER_TYPE_CONFIG[typeParam]) {
+      prefillApplied.current = true;
+      return { ...INITIAL, letterType: typeParam };
     }
     return INITIAL;
   });
@@ -200,9 +211,9 @@ export default function SubmitLetter() {
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
-  // ── Show prefill banner on mount if prefill was applied ─────────────────
+  // ── Show prefill banner on mount only when prefill came from document analyzer ──
   useEffect(() => {
-    if (prefillApplied.current) {
+    if (prefillFromAnalyzer.current) {
       setShowPrefillBanner(true);
     }
   }, []);
@@ -288,6 +299,13 @@ export default function SubmitLetter() {
         return next;
       });
     }
+  };
+
+  const appendVoice = (field: keyof FormData) => (transcript: string) => {
+    setForm(prev => ({
+      ...prev,
+      [field]: prev[field] ? `${prev[field]} ${transcript}` : transcript,
+    }));
   };
 
   const getStepErrors = (s: number): Record<string, string> => {
@@ -645,13 +663,20 @@ export default function SubmitLetter() {
                   >
                     Brief Subject Line *
                   </Label>
-                  <Input
-                    id="subject"
-                    value={form.subject}
-                    onChange={e => update("subject", e.target.value)}
-                    placeholder="e.g., Demand for unpaid rent — 123 Main St"
-                    maxLength={500}
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="subject"
+                      value={form.subject}
+                      onChange={e => update("subject", e.target.value)}
+                      placeholder="e.g., Demand for unpaid rent — 123 Main St"
+                      maxLength={500}
+                      className="flex-1"
+                    />
+                    <VoiceInputButton
+                      fieldId="subject"
+                      onTranscript={appendVoice("subject")}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {form.subject.length}/500 characters
                   </p>
@@ -719,12 +744,19 @@ export default function SubmitLetter() {
                   >
                     City (Optional)
                   </Label>
-                  <Input
-                    id="city"
-                    value={form.jurisdictionCity}
-                    onChange={e => update("jurisdictionCity", e.target.value)}
-                    placeholder="e.g., Los Angeles"
-                  />
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="city"
+                      value={form.jurisdictionCity}
+                      onChange={e => update("jurisdictionCity", e.target.value)}
+                      placeholder="e.g., Los Angeles"
+                      className="flex-1"
+                    />
+                    <VoiceInputButton
+                      fieldId="jurisdictionCity"
+                      onTranscript={appendVoice("jurisdictionCity")}
+                    />
+                  </div>
                 </div>
               </>
             )}
@@ -744,12 +776,16 @@ export default function SubmitLetter() {
                       >
                         Full Name *
                       </Label>
-                      <Input
-                        id="senderName"
-                        value={form.senderName}
-                        onChange={e => update("senderName", e.target.value)}
-                        placeholder="John Smith"
-                      />
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="senderName"
+                          value={form.senderName}
+                          onChange={e => update("senderName", e.target.value)}
+                          placeholder="John Smith"
+                          className="flex-1"
+                        />
+                        <VoiceInputButton fieldId="senderName" onTranscript={appendVoice("senderName")} />
+                      </div>
                       {stepErrors.senderName && (
                         <p className="text-xs text-red-600 mt-1">{stepErrors.senderName}</p>
                       )}
@@ -761,13 +797,17 @@ export default function SubmitLetter() {
                       >
                         Email (Optional)
                       </Label>
-                      <Input
-                        id="senderEmail"
-                        type="email"
-                        value={form.senderEmail}
-                        onChange={e => update("senderEmail", e.target.value)}
-                        placeholder="john@example.com"
-                      />
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="senderEmail"
+                          type="email"
+                          value={form.senderEmail}
+                          onChange={e => update("senderEmail", e.target.value)}
+                          placeholder="john@example.com"
+                          className="flex-1"
+                        />
+                        <VoiceInputButton fieldId="senderEmail" onTranscript={appendVoice("senderEmail")} />
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -777,12 +817,16 @@ export default function SubmitLetter() {
                     >
                       Address *
                     </Label>
-                    <Input
-                      id="senderAddress"
-                      value={form.senderAddress}
-                      onChange={e => update("senderAddress", e.target.value)}
-                      placeholder="123 Main St, City, State 12345"
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        id="senderAddress"
+                        value={form.senderAddress}
+                        onChange={e => update("senderAddress", e.target.value)}
+                        placeholder="123 Main St, City, State 12345"
+                        className="flex-1"
+                      />
+                      <VoiceInputButton fieldId="senderAddress" onTranscript={appendVoice("senderAddress")} />
+                    </div>
                     {stepErrors.senderAddress && (
                       <p className="text-xs text-red-600 mt-1">{stepErrors.senderAddress}</p>
                     )}
@@ -791,12 +835,16 @@ export default function SubmitLetter() {
                     <Label htmlFor="senderPhone" className="text-xs mb-1 block">
                       Phone (Optional)
                     </Label>
-                    <Input
-                      id="senderPhone"
-                      value={form.senderPhone}
-                      onChange={e => update("senderPhone", e.target.value)}
-                      placeholder="(555) 000-0000"
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        id="senderPhone"
+                        value={form.senderPhone}
+                        onChange={e => update("senderPhone", e.target.value)}
+                        placeholder="(555) 000-0000"
+                        className="flex-1"
+                      />
+                      <VoiceInputButton fieldId="senderPhone" onTranscript={appendVoice("senderPhone")} />
+                    </div>
                   </div>
                 </div>
 
@@ -812,12 +860,16 @@ export default function SubmitLetter() {
                       >
                         Full Name / Company *
                       </Label>
-                      <Input
-                        id="recipientName"
-                        value={form.recipientName}
-                        onChange={e => update("recipientName", e.target.value)}
-                        placeholder="Jane Doe / Acme Corp"
-                      />
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="recipientName"
+                          value={form.recipientName}
+                          onChange={e => update("recipientName", e.target.value)}
+                          placeholder="Jane Doe / Acme Corp"
+                          className="flex-1"
+                        />
+                        <VoiceInputButton fieldId="recipientName" onTranscript={appendVoice("recipientName")} />
+                      </div>
                       {stepErrors.recipientName && (
                         <p className="text-xs text-red-600 mt-1">{stepErrors.recipientName}</p>
                       )}
@@ -829,13 +881,17 @@ export default function SubmitLetter() {
                       >
                         Email (Optional)
                       </Label>
-                      <Input
-                        id="recipientEmail"
-                        type="email"
-                        value={form.recipientEmail}
-                        onChange={e => update("recipientEmail", e.target.value)}
-                        placeholder="recipient@example.com"
-                      />
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="recipientEmail"
+                          type="email"
+                          value={form.recipientEmail}
+                          onChange={e => update("recipientEmail", e.target.value)}
+                          placeholder="recipient@example.com"
+                          className="flex-1"
+                        />
+                        <VoiceInputButton fieldId="recipientEmail" onTranscript={appendVoice("recipientEmail")} />
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -845,12 +901,16 @@ export default function SubmitLetter() {
                     >
                       Address *
                     </Label>
-                    <Input
-                      id="recipientAddress"
-                      value={form.recipientAddress}
-                      onChange={e => update("recipientAddress", e.target.value)}
-                      placeholder="456 Other St, City, State 67890"
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        id="recipientAddress"
+                        value={form.recipientAddress}
+                        onChange={e => update("recipientAddress", e.target.value)}
+                        placeholder="456 Other St, City, State 67890"
+                        className="flex-1"
+                      />
+                      <VoiceInputButton fieldId="recipientAddress" onTranscript={appendVoice("recipientAddress")} />
+                    </div>
                     {stepErrors.recipientAddress && (
                       <p className="text-xs text-red-600 mt-1">{stepErrors.recipientAddress}</p>
                     )}
@@ -863,12 +923,18 @@ export default function SubmitLetter() {
             {step === 4 && (
               <>
                 <div>
-                  <Label
-                    htmlFor="description"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Describe Your Situation *
-                  </Label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label
+                      htmlFor="description"
+                      className="text-sm font-medium"
+                    >
+                      Describe Your Situation *
+                    </Label>
+                    <VoiceInputButton
+                      fieldId="description"
+                      onTranscript={appendVoice("description")}
+                    />
+                  </div>
                   <Textarea
                     id="description"
                     value={form.description}
@@ -918,12 +984,18 @@ export default function SubmitLetter() {
                   </div>
                 </div>
                 <div>
-                  <Label
-                    htmlFor="additionalContext"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Additional Context (Optional)
-                  </Label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label
+                      htmlFor="additionalContext"
+                      className="text-sm font-medium"
+                    >
+                      Additional Context (Optional)
+                    </Label>
+                    <VoiceInputButton
+                      fieldId="additionalContext"
+                      onTranscript={appendVoice("additionalContext")}
+                    />
+                  </div>
                   <Textarea
                     id="additionalContext"
                     value={form.additionalContext}
@@ -940,12 +1012,18 @@ export default function SubmitLetter() {
             {step === 5 && (
               <>
                 <div>
-                  <Label
-                    htmlFor="desiredOutcome"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    What outcome do you want? *
-                  </Label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label
+                      htmlFor="desiredOutcome"
+                      className="text-sm font-medium"
+                    >
+                      What outcome do you want? *
+                    </Label>
+                    <VoiceInputButton
+                      fieldId="desiredOutcome"
+                      onTranscript={appendVoice("desiredOutcome")}
+                    />
+                  </div>
                   <Textarea
                     id="desiredOutcome"
                     value={form.desiredOutcome}
@@ -1117,23 +1195,40 @@ export default function SubmitLetter() {
                           </button>
                         )}
                       </div>
-                      <Textarea
-                        value={exhibit.description}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setExhibits(prev =>
-                            prev.map(ex =>
-                              ex.id === exhibit.id
-                                ? { ...ex, description: val }
-                                : ex
-                            )
-                          );
-                        }}
-                        placeholder="Describe this exhibit (e.g., Email sent on Jan 5 requesting payment...)"
-                        rows={2}
-                        className="resize-none"
-                        data-testid={`exhibit-description-${idx}`}
-                      />
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Description</span>
+                          <VoiceInputButton
+                            fieldId={`exhibit-${idx}`}
+                            onTranscript={t => {
+                              setExhibits(prev =>
+                                prev.map(ex =>
+                                  ex.id === exhibit.id
+                                    ? { ...ex, description: ex.description + (ex.description ? " " : "") + t }
+                                    : ex
+                                )
+                              );
+                            }}
+                          />
+                        </div>
+                        <Textarea
+                          value={exhibit.description}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setExhibits(prev =>
+                              prev.map(ex =>
+                                ex.id === exhibit.id
+                                  ? { ...ex, description: val }
+                                  : ex
+                              )
+                            );
+                          }}
+                          placeholder="Describe this exhibit (e.g., Email sent on Jan 5 requesting payment...)"
+                          rows={2}
+                          className="resize-none"
+                          data-testid={`exhibit-description-${idx}`}
+                        />
+                      </div>
                       {exhibit.file ? (
                         <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
                           <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
