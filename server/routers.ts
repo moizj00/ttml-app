@@ -651,7 +651,7 @@ export const appRouter = router({
             await sendStatusUpdateEmail({
               to: subscriber.email,
               name: subscriber.name ?? "Subscriber",
-              letterSubject: letter.subject,
+              subject: letter.subject,
               newStatus: "submitted",
               appUrl,
               letterId: input.letterId,
@@ -723,7 +723,7 @@ export const appRouter = router({
 
         await sendLetterToRecipient({
           recipientEmail: input.recipientEmail,
-          letterSubject: letter.subject,
+          subject: letter.subject,
           subjectOverride: input.subjectOverride?.trim() || undefined,
           note: input.note?.trim() || undefined,
           pdfUrl: letter.pdfUrl ?? undefined,
@@ -2558,7 +2558,7 @@ export const appRouter = router({
           await sendNewReviewNeededEmail({
             to: "", // Will use admin email from config
             name: "Attorney Team",
-            letterSubject: letter.subject,
+            subject: letter.subject,
             letterId: input.letterId,
             letterType: letter.letterType,
             jurisdiction: letter.jurisdictionState ?? "Unknown",
