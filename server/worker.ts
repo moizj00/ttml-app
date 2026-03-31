@@ -210,6 +210,17 @@ async function processJob(job: Job<PipelineJobData>): Promise<void> {
 }
 
 async function startWorker() {
+  // ── OPENAI_API_KEY availability check — required for model failover ──
+  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.trim().length === 0) {
+    console.warn(
+      "[Worker] WARNING: OPENAI_API_KEY is not set. Model failover is unavailable. " +
+      "If Perplexity or Claude hit rate limits, their errors will be treated as fatal. " +
+      "Set OPENAI_API_KEY to enable automatic failover to GPT-4o."
+    );
+  } else {
+    console.log("[Worker] OPENAI_API_KEY detected — model failover to GPT-4o is enabled for all pipeline stages.");
+  }
+
   console.log("[Worker] Warming up database connection...");
   await getDb().catch((err) => {
     console.error("[Worker] Database warmup failed:", err);

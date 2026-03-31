@@ -19,8 +19,8 @@ import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { sendLetterReadyEmail, sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
-import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock } from "./shared";
-import { getAnthropicClient, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
+import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
+import { getAnthropicClient, getVettingModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { runCitationAudit, replaceUnverifiedCitations, buildCitationRegistry } from "./citations";
 import { runAssemblyStage } from "./assembly";
@@ -376,20 +376,62 @@ export async function runVettingStage(
   const userPrompt = baseUserPrompt + preVetBlock;
 
   const vettingTokens = createTokenAccumulator();
+  let vettingProvider = "anthropic";
+  let vettingModelKey = "claude-sonnet-4-20250514";
+
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
-    const anthropic = getAnthropicClient();
-    const { text, usage: vettingUsage } = await generateText({
-      model: anthropic("claude-sonnet-4-20250514"),
-      system: systemPrompt,
-      prompt: promptWithFeedback,
-      maxOutputTokens: 16000,
-      abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-    });
-    accumulateTokens(vettingTokens, vettingUsage);
-    return text;
+    const { result: vettingText, failoverTriggered: retryFailover } = await withModelFailover(
+      "Stage 4 (vetting retry)",
+      letterId,
+      async () => {
+        if (vettingProvider === "openai-failover") {
+          const { text, usage: vettingUsage } = await generateText({
+            model: getVettingModelFallback(),
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 16000,
+            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+          });
+          accumulateTokens(vettingTokens, vettingUsage);
+          return text;
+        }
+        const anthropic = getAnthropicClient();
+        const { text, usage: vettingUsage } = await generateText({
+          model: anthropic("claude-sonnet-4-20250514"),
+          system: systemPrompt,
+          prompt: promptWithFeedback,
+          maxOutputTokens: 16000,
+          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+        });
+        accumulateTokens(vettingTokens, vettingUsage);
+        return text;
+      },
+      async () => {
+        vettingProvider = "openai-failover";
+        vettingModelKey = "gpt-4o";
+        const { text, usage: vettingUsage } = await generateText({
+          model: getVettingModelFallback(),
+          system: systemPrompt,
+          prompt: promptWithFeedback,
+          maxOutputTokens: 16000,
+          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+        });
+        accumulateTokens(vettingTokens, vettingUsage);
+        return text;
+      }
+    );
+    if (retryFailover && pipelineCtx) {
+      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
+        pipelineCtx.qualityWarnings.push(
+          `VETTING_FAILOVER: Switched to OpenAI GPT-4o during vetting retry due to rate limit on primary model. Heightened attorney scrutiny recommended.`
+        );
+      }
+    }
+    return vettingText;
   };
 
   const parseVettingResponse = (raw: string): { vettedLetter: string; vettingReport: VettingReport } | null => {
@@ -425,7 +467,45 @@ export async function runVettingStage(
       `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
     );
 
-    let rawResponse = await generateVetting();
+    const { result: initialVettingText, failoverTriggered: vettingFailover } = await withModelFailover(
+      "Stage 4 (vetting)",
+      letterId,
+      () => {
+        const anthropic = getAnthropicClient();
+        return generateText({
+          model: anthropic("claude-sonnet-4-20250514"),
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 16000,
+          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+        }).then(r => { accumulateTokens(vettingTokens, r.usage); return r.text; });
+      },
+      () => {
+        vettingProvider = "openai-failover";
+        vettingModelKey = "gpt-4o";
+        return generateText({
+          model: getVettingModelFallback(),
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 16000,
+          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+        }).then(r => { accumulateTokens(vettingTokens, r.usage); return r.text; });
+      }
+    );
+
+    if (vettingFailover) {
+      console.warn(
+        `[Pipeline] Stage 4: Switched to OpenAI GPT-4o failover for letter #${letterId} (provider=${vettingProvider})`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
+        );
+      }
+    }
+
+    let rawResponse = initialVettingText;
     let parsed = parseVettingResponse(rawResponse);
 
     if (!parsed) {
@@ -599,7 +679,7 @@ export async function runVettingStage(
         completedAt: new Date(),
         promptTokens: vettingTokens.promptTokens,
         completionTokens: vettingTokens.completionTokens,
-        estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
+        estimatedCostUsd: calculateCost(vettingModelKey, vettingTokens),
         errorMessage: formatStructuredError(
           PIPELINE_ERROR_CODES.VETTING_REJECTED,
           "Vetting validation issues",
@@ -607,6 +687,8 @@ export async function runVettingStage(
           checks.validation.errors.join("; ")
         ),
         responsePayloadJson: {
+          provider: vettingProvider,
+          failoverUsed: vettingProvider === "openai-failover",
           vettingReport: currentReport,
           bloatDetected: detectedBloat.length,
           preVetCitationAudit: {
@@ -649,7 +731,7 @@ export async function runVettingStage(
       completedAt: new Date(),
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
-      estimatedCostUsd: calculateCost("claude-sonnet-4-20250514", vettingTokens),
+      estimatedCostUsd: calculateCost(vettingModelKey, vettingTokens),
       errorMessage: checks.validation.valid ? undefined : formatStructuredError(
         PIPELINE_ERROR_CODES.VETTING_REJECTED,
         "Vetting validation issues",
@@ -657,6 +739,8 @@ export async function runVettingStage(
         checks.validation.errors.join("; ")
       ),
       responsePayloadJson: {
+        provider: vettingProvider,
+        failoverUsed: vettingProvider === "openai-failover",
         vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
         preVetCitationAudit: {
@@ -674,6 +758,9 @@ export async function runVettingStage(
       },
     });
 
+    console.log(
+      `[Pipeline] Stage 4 complete for letter #${letterId}: provider=${vettingProvider}, risk=${currentReport.riskLevel}`
+    );
     return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -697,7 +784,7 @@ export async function runVettingStage(
       completedAt: new Date(),
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
-      estimatedCostUsd: vettingTokens.promptTokens > 0 ? calculateCost("claude-sonnet-4-20250514", vettingTokens) : undefined,
+      estimatedCostUsd: vettingTokens.promptTokens > 0 ? calculateCost(vettingModelKey, vettingTokens) : undefined,
     });
     throw err instanceof PipelineError ? err : new PipelineError(vettingErrCode, `Stage 4 vetting failed for letter #${letterId}: ${msg}`, "vetting");
   }
@@ -725,7 +812,11 @@ export async function finalizeLetterAfterVetting(
     content: vettedLetter,
     createdByType: "system",
     metadataJson: {
-      provider: "anthropic",
+      provider: "multi-provider",
+      researchProvider: pipelineCtx?.researchProvider,
+      failoverUsed: qualityWarnings.some(w =>
+        w.includes("_FAILOVER:") || w.includes("FAILOVER")
+      ),
       stage: "vetted_final",
       vettingReport,
       researchUnverified: pipelineCtx?.researchUnverified ?? false,

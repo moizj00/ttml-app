@@ -238,6 +238,8 @@ export async function runFullPipeline(
 
     const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
     pipelineCtx.researchProvider = researchProvider;
+    // openai-failover uses gpt-4o-search-preview + webSearchPreview — still web-grounded.
+    // Only anthropic-fallback (Claude, no web access) is truly ungrounded.
     pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
     pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
     await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
@@ -364,13 +366,16 @@ export async function runFullPipeline(
  * Per product spec:
  *   - CONTENT_POLICY_VIOLATION / API_KEY_MISSING — permanent blockers
  *   - INTAKE_INCOMPLETE — cannot generate without data
- *   - RATE_LIMITED — fail-stop per spec ("only rate limiting stops delivery")
+ *
+ * NOTE: RATE_LIMITED is intentionally excluded from this set. With the model
+ * failover system in place, a RATE_LIMITED error means BOTH the primary and
+ * backup models were exhausted. In this case we still deliver a degraded draft
+ * (best-effort fallback) rather than treating it as completely fatal.
  */
 export const FALLBACK_EXCLUDED_CODES: ReadonlySet<string> = new Set([
   PIPELINE_ERROR_CODES.CONTENT_POLICY_VIOLATION,
   PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
   PIPELINE_ERROR_CODES.API_KEY_MISSING,
-  PIPELINE_ERROR_CODES.RATE_LIMITED,
 ]);
 
 /**

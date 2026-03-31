@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText, type ToolSet } from "ai";
 import {
   createResearchRun,
   createWorkflowJob,
@@ -11,8 +11,8 @@ import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
-import { formatStructuredError, classifyErrorCode } from "./shared";
-import { getResearchModel, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
+import { getResearchModel, getResearchModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
@@ -81,7 +81,6 @@ export async function runResearchStage(
   const userPrompt = buildResearchUserPrompt(normalizedIntake);
 
   const researchTokens = createTokenAccumulator();
-  const researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-opus-4-5";
 
   // ── KV Cache: check for a matching research packet before calling Perplexity ──
   const situationText = [
@@ -144,17 +143,64 @@ export async function runResearchStage(
   }
   // ── End KV Cache check ──
 
+  // Declare provider-tracking variables at function scope so the catch block
+  // can read the active model key for accurate cost reporting after failover.
+  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-opus-4-5";
+
   try {
     console.log(
       `[Pipeline] Stage 1: ${researchConfig.provider} 8-task deep research for letter #${letterId}`
     );
-    const { text, usage: initialUsage } = await generateText({
-      model: researchConfig.model,
-      system: systemPrompt,
-      prompt: userPrompt,
-      maxOutputTokens: 6000,
-      abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
-    });
+
+    // Track the active model — may switch to failover mid-stage
+    let activeModel = researchConfig.model;
+    let activeProvider = researchConfig.provider;
+    let activeFallbackTools: ToolSet | undefined;
+
+    const callGenerateText = async (prompt: string) => {
+      return generateText({
+        model: activeModel,
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 6000,
+        abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+      });
+    };
+
+    const { result: initialResult, failoverTriggered: initialFailover } = await withModelFailover(
+      "Stage 1 (research)",
+      letterId,
+      () => callGenerateText(userPrompt),
+      () => {
+        const fallback = getResearchModelFallback();
+        activeModel = fallback.model;
+        activeProvider = fallback.provider;
+        activeFallbackTools = fallback.tools;
+        researchModelKey = "gpt-4o-search-preview";
+        return generateText({
+          model: fallback.model,
+          tools: fallback.tools,
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 6000,
+          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+        });
+      }
+    );
+
+    if (initialFailover) {
+      console.warn(
+        `[Pipeline] Stage 1: Switched to OpenAI GPT-4o (web search) failover for letter #${letterId} (provider=${activeProvider})`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_FAILOVER: Primary research model (Perplexity) was rate-limited. Research performed by OpenAI gpt-4o-search-preview with web search grounding. Citation style and format may differ slightly from Perplexity standard.`
+        );
+      }
+    }
+
+    const { text, usage: initialUsage } = initialResult;
     accumulateTokens(researchTokens, initialUsage);
 
     const parseResearchJson = (raw: string): ResearchPacket => {
@@ -165,17 +211,58 @@ export async function runResearchStage(
       return JSON.parse(jsonStr);
     };
 
-    const generateResearch = async (errorFeedback?: string): Promise<string> => {
-      const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
-      const { text: t, usage: retryUsage } = await generateText({
-        model: researchConfig.model,
+    const callWithActiveFallback = (prompt: string) => {
+      if (activeFallbackTools) {
+        return generateText({
+          model: activeModel,
+          tools: activeFallbackTools,
+          system: systemPrompt,
+          prompt,
+          maxOutputTokens: 6000,
+          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+        });
+      }
+      return generateText({
+        model: activeModel,
         system: systemPrompt,
-        prompt: promptWithFeedback,
+        prompt,
         maxOutputTokens: 6000,
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
-      accumulateTokens(researchTokens, retryUsage);
-      return t;
+    };
+
+    const generateResearch = async (errorFeedback?: string): Promise<string> => {
+      const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
+      const { result: retryResult, failoverTriggered: retryFailover } = await withModelFailover(
+        "Stage 1 (research retry)",
+        letterId,
+        () => callWithActiveFallback(promptWithFeedback),
+        async () => {
+          const fallback = getResearchModelFallback();
+          activeModel = fallback.model;
+          activeProvider = fallback.provider;
+          activeFallbackTools = fallback.tools;
+          researchModelKey = "gpt-4o-search-preview";
+          return generateText({
+            model: fallback.model,
+            tools: fallback.tools,
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 6000,
+            abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+          });
+        }
+      );
+      if (retryFailover && pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_FAILOVER"))) {
+          pipelineCtx.qualityWarnings.push(
+            `RESEARCH_FAILOVER: Switched to OpenAI gpt-4o-search-preview during research retry due to rate limit.`
+          );
+        }
+      }
+      accumulateTokens(researchTokens, retryResult.usage);
+      return retryResult.text;
     };
 
     let researchPacket: ResearchPacket;
@@ -310,7 +397,11 @@ export async function runResearchStage(
       );
     }
 
-    const isClaudeFallback = researchConfig.provider === "anthropic-fallback";
+    const isClaudeFallback = activeProvider === "anthropic-fallback";
+    const isOpenAIFailover = activeProvider === "openai-failover";
+    // OpenAI failover uses gpt-4o-search-preview + webSearchPreview tool — still web-grounded.
+    // Only the Claude anthropic-fallback (no web access) is truly ungrounded.
+    const isWebGrounded = !isClaudeFallback;
     const successResult: ValidationResult = {
       stage: "research",
       check: "research_packet_validation",
@@ -318,7 +409,8 @@ export async function runResearchStage(
       errors: [],
       warnings: [
         ...validation.warnings,
-        ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used)"] : []),
+        ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used — no web access)"] : []),
+        ...(isOpenAIFailover ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
       ],
       timestamp: new Date().toISOString(),
     };
@@ -326,7 +418,7 @@ export async function runResearchStage(
     await updateResearchRun(runId, {
       status: "completed",
       resultJson: researchPacket,
-      validationResultJson: { ...successResult, webGrounded: !isClaudeFallback },
+      validationResultJson: { ...successResult, webGrounded: isWebGrounded, provider: activeProvider },
       cacheHit: false,
       cacheKey: kvCacheKey,
     });
@@ -338,13 +430,15 @@ export async function runResearchStage(
       estimatedCostUsd: calculateCost(researchModelKey, researchTokens),
       responsePayloadJson: {
         researchRunId: runId,
-        webGrounded: !isClaudeFallback,
+        webGrounded: isWebGrounded,
+        provider: activeProvider,
+        failoverUsed: isOpenAIFailover,
         validationResult: successResult,
       },
     });
 
     // Store new result in KV cache (only for web-grounded Perplexity results)
-    if (!isClaudeFallback) {
+    if (isWebGrounded) {
       await setCachedResearch(kvCacheKey, researchPacket);
     }
 
@@ -352,10 +446,14 @@ export async function runResearchStage(
       console.warn(
         `[Pipeline] Stage 1: Claude fallback used for letter #${letterId} — research is NOT web-grounded. Citations may not be verified.`
       );
+    } else if (isOpenAIFailover) {
+      console.warn(
+        `[Pipeline] Stage 1: OpenAI gpt-4o-search-preview failover used for letter #${letterId} — research IS web-grounded via webSearchPreview tool. Perplexity was rate-limited.`
+      );
     }
 
-    console.log(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${researchConfig.provider})`);
-    return { packet: researchPacket, provider: researchConfig.provider };
+    console.log(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${activeProvider})`);
+    return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] Stage 1 failed for letter #${letterId}:`, msg);
