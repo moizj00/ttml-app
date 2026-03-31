@@ -12,7 +12,7 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { captureServerException } from "../sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getResearchModel, getResearchModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
@@ -167,7 +167,7 @@ export async function runResearchStage(
       });
     };
 
-    const { result: initialResult, failoverTriggered: initialFailover } = await withModelFailover(
+    const { result: initialResult, failoverTriggered: initialFailover, provider: initialProvider } = await withModelFailover(
       "Stage 1 (research)",
       letterId,
       () => callGenerateText(userPrompt),
@@ -185,10 +185,34 @@ export async function runResearchStage(
           maxOutputTokens: 6000,
           abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
         });
+      },
+      () => {
+        activeModel = getFreeOSSModelFallback();
+        activeProvider = "groq-oss-fallback";
+        activeFallbackTools = undefined;
+        researchModelKey = "llama-3.3-70b-versatile";
+        return generateText({
+          model: activeModel,
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 6000,
+          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+        });
       }
     );
 
-    if (initialFailover) {
+    if (initialProvider === "groq-oss-fallback") {
+      console.warn(
+        `[Pipeline] Stage 1: Groq Llama 3.3 used as last-resort for letter #${letterId} (RESEARCH_OSS_FALLBACK) — research is NOT web-grounded.`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for research (both Perplexity and OpenAI were unavailable). Research is NOT web-grounded and citations cannot be verified. Heightened attorney scrutiny required.`
+        );
+        pipelineCtx.researchUnverified = true;
+      }
+    } else if (initialFailover) {
       console.warn(
         `[Pipeline] Stage 1: Switched to OpenAI GPT-4o (web search) failover for letter #${letterId} (provider=${activeProvider})`
       );
@@ -233,7 +257,7 @@ export async function runResearchStage(
 
     const generateResearch = async (errorFeedback?: string): Promise<string> => {
       const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
-      const { result: retryResult, failoverTriggered: retryFailover } = await withModelFailover(
+      const { result: retryResult, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
         "Stage 1 (research retry)",
         letterId,
         () => callWithActiveFallback(promptWithFeedback),
@@ -251,9 +275,30 @@ export async function runResearchStage(
             maxOutputTokens: 6000,
             abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
           });
+        },
+        () => {
+          activeModel = getFreeOSSModelFallback();
+          activeProvider = "groq-oss-fallback";
+          activeFallbackTools = undefined;
+          researchModelKey = "llama-3.3-70b-versatile";
+          return generateText({
+            model: activeModel,
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 6000,
+            abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+          });
         }
       );
-      if (retryFailover && pipelineCtx) {
+      if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_OSS_FALLBACK"))) {
+          pipelineCtx.qualityWarnings.push(
+            `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during research retry. Research is NOT web-grounded. Heightened attorney scrutiny required.`
+          );
+        }
+        pipelineCtx.researchUnverified = true;
+      } else if (retryFailover && pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_FAILOVER"))) {
           pipelineCtx.qualityWarnings.push(
@@ -399,9 +444,10 @@ export async function runResearchStage(
 
     const isClaudeFallback = activeProvider === "anthropic-fallback";
     const isOpenAIFailover = activeProvider === "openai-failover";
+    const isGroqOSSFallback = activeProvider === "groq-oss-fallback";
     // OpenAI failover uses gpt-4o-search-preview + webSearchPreview tool — still web-grounded.
-    // Only the Claude anthropic-fallback (no web access) is truly ungrounded.
-    const isWebGrounded = !isClaudeFallback;
+    // Claude anthropic-fallback and Groq OSS fallback have no web access — ungrounded.
+    const isWebGrounded = !isClaudeFallback && !isGroqOSSFallback;
     const successResult: ValidationResult = {
       stage: "research",
       check: "research_packet_validation",
@@ -411,6 +457,7 @@ export async function runResearchStage(
         ...validation.warnings,
         ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used — no web access)"] : []),
         ...(isOpenAIFailover ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
+        ...(isGroqOSSFallback ? ["Research is NOT web-grounded (Groq Llama 3.3 OSS last-resort used — no web access). Citations cannot be verified. Heightened attorney scrutiny required."] : []),
       ],
       timestamp: new Date().toISOString(),
     };
@@ -449,6 +496,10 @@ export async function runResearchStage(
     } else if (isOpenAIFailover) {
       console.warn(
         `[Pipeline] Stage 1: OpenAI gpt-4o-search-preview failover used for letter #${letterId} — research IS web-grounded via webSearchPreview tool. Perplexity was rate-limited.`
+      );
+    } else if (isGroqOSSFallback) {
+      console.warn(
+        `[Pipeline] Stage 1: Groq Llama 3.3 70B OSS last-resort used for letter #${letterId} — research is NOT web-grounded. Both Perplexity and OpenAI were exhausted.`
       );
     }
 

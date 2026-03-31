@@ -2,7 +2,7 @@ import { getActiveLessons, incrementLessonInjectionStats } from "../db";
 import type { PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
-import { isOpenAIFailoverAvailable } from "./providers";
+import { isOpenAIFailoverAvailable, isGroqFallbackAvailable } from "./providers";
 
 export function formatStructuredError(
   code: PipelineErrorCode,
@@ -95,17 +95,26 @@ export function isFailoverCandidate(err: unknown): boolean {
 
 export interface FailoverResult<T> {
   result: T;
-  provider: "primary" | "openai-failover";
+  provider: "primary" | "openai-failover" | "groq-oss-fallback";
   failoverTriggered: boolean;
 }
 
 /**
- * Wraps a primary AI generation function with an OpenAI GPT-4o fallback.
+ * Wraps a primary AI generation function with an OpenAI GPT-4o fallback and an
+ * optional Groq Llama 3.3 70B OSS last-resort fallback.
+ *
+ * Three-tier failover:
+ *   1. primaryFn — primary model (Perplexity / Claude Opus)
+ *   2. fallbackFn — OpenAI GPT-4o (existing)
+ *   3. ossLastResortFn (optional) — Groq Llama 3.3 70B (free OSS, last resort)
+ *
  * On rate-limit, 429, credits-depleted, quota, billing, overloaded, or
  * token/context-length-exceeded errors from the primary model, transparently
- * retries the same operation using the fallback function (GPT-4o).
+ * retries the same operation using the OpenAI fallback. If that also fails, and
+ * ossLastResortFn is provided and GROQ_API_KEY is set, tries Groq before throwing.
  *
- * If OPENAI_API_KEY is not set, skips failover and re-throws the original error.
+ * If OPENAI_API_KEY is not set, skips OpenAI failover and attempts OSS fallback directly.
+ * If GROQ_API_KEY is not set, logs a warning and skips the OSS tier.
  * All other error types (timeout, parse failure, content policy) are re-thrown
  * immediately without attempting failover.
  *
@@ -113,12 +122,14 @@ export interface FailoverResult<T> {
  * @param letterId - Letter ID (used for logging)
  * @param primaryFn - The primary generation function to call first
  * @param fallbackFn - The OpenAI GPT-4o fallback function
+ * @param ossLastResortFn - Optional Groq Llama 3.3 OSS last-resort function
  */
 export async function withModelFailover<T>(
   stage: string,
   letterId: number,
   primaryFn: () => Promise<T>,
   fallbackFn: () => Promise<T>,
+  ossLastResortFn?: () => Promise<T>,
 ): Promise<FailoverResult<T>> {
   try {
     const result = await primaryFn();
@@ -128,44 +139,136 @@ export async function withModelFailover<T>(
       throw primaryErr;
     }
 
+    const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+
     if (!isOpenAIFailoverAvailable()) {
-      const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
       console.error(
-        `[Pipeline] ${stage} for letter #${letterId}: rate-limit/credits error detected but OPENAI_API_KEY is not set — failover unavailable. Original error: ${msg}`
+        `[Pipeline] ${stage} for letter #${letterId}: rate-limit/credits error detected but OPENAI_API_KEY is not set — skipping OpenAI failover. Original error: ${primaryMsg}`
+      );
+      // Skip straight to OSS fallback if available
+    } else {
+      console.warn(
+        `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o failover. Original error: ${primaryMsg}`
+      );
+
+      try {
+        const result = await fallbackFn();
+        console.log(
+          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover succeeded (provider=openai-failover)`
+        );
+        return { result, provider: "openai-failover", failoverTriggered: true };
+      } catch (fallbackErr) {
+        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        console.error(
+          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
+        );
+
+        if (!ossLastResortFn) {
+          captureServerException(fallbackErr, {
+            tags: {
+              component: "pipeline",
+              error_type: "failover_also_failed",
+              pipeline_stage: stage,
+              all_providers_exhausted: "true",
+            },
+            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg },
+          });
+          throw new Error(
+            `All providers exhausted for ${stage} (letter #${letterId}). ` +
+            `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
+          );
+        }
+
+        if (!isGroqFallbackAvailable()) {
+          console.warn(
+            `[Pipeline] ${stage} for letter #${letterId}: GROQ_API_KEY is not set — OSS last resort unavailable. All providers exhausted.`
+          );
+          captureServerException(fallbackErr, {
+            tags: {
+              component: "pipeline",
+              error_type: "all_providers_exhausted",
+              pipeline_stage: stage,
+              all_providers_exhausted: "true",
+              oss_skipped: "no_api_key",
+            },
+            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg },
+          });
+          throw new Error(
+            `All providers exhausted for ${stage} (letter #${letterId}). ` +
+            `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
+          );
+        }
+
+        console.warn(
+          `[Pipeline] ${stage} for letter #${letterId}: switching to Groq Llama 3.3 70B OSS last resort.`
+        );
+        try {
+          const result = await ossLastResortFn();
+          console.log(
+            `[Pipeline] ${stage} for letter #${letterId}: Groq Llama 3.3 OSS last resort succeeded (provider=groq-oss-fallback)`
+          );
+          return { result, provider: "groq-oss-fallback", failoverTriggered: true };
+        } catch (ossErr) {
+          const ossMsg = ossErr instanceof Error ? ossErr.message : String(ossErr);
+          console.error(
+            `[Pipeline] ${stage} for letter #${letterId}: Groq OSS last resort also failed (all 3 providers exhausted): ${ossMsg}`
+          );
+          captureServerException(ossErr, {
+            tags: {
+              component: "pipeline",
+              error_type: "all_providers_exhausted",
+              pipeline_stage: stage,
+              all_providers_exhausted: "true",
+              tiers_attempted: "3",
+            },
+            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg, ossError: ossMsg },
+          });
+          throw new Error(
+            `All providers exhausted for ${stage} (letter #${letterId}). ` +
+            `Primary error: ${primaryMsg}. OpenAI error: ${fallbackMsg}. Groq OSS error: ${ossMsg}`
+          );
+        }
+      }
+    }
+
+    // OpenAI was unavailable — try OSS fallback directly
+    if (!ossLastResortFn) {
+      throw primaryErr;
+    }
+
+    if (!isGroqFallbackAvailable()) {
+      console.warn(
+        `[Pipeline] ${stage} for letter #${letterId}: GROQ_API_KEY is not set — OSS last resort unavailable. Original error: ${primaryMsg}`
       );
       throw primaryErr;
     }
 
-    const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
     console.warn(
-      `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o failover. Original error: ${primaryMsg}`
+      `[Pipeline] ${stage} for letter #${letterId}: OpenAI unavailable — switching directly to Groq Llama 3.3 70B OSS last resort. Original error: ${primaryMsg}`
     );
-
     try {
-      const result = await fallbackFn();
+      const result = await ossLastResortFn();
       console.log(
-        `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover succeeded (provider=openai-failover)`
+        `[Pipeline] ${stage} for letter #${letterId}: Groq Llama 3.3 OSS last resort succeeded (provider=groq-oss-fallback)`
       );
-      return { result, provider: "openai-failover", failoverTriggered: true };
-    } catch (fallbackErr) {
-      const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      return { result, provider: "groq-oss-fallback", failoverTriggered: true };
+    } catch (ossErr) {
+      const ossMsg = ossErr instanceof Error ? ossErr.message : String(ossErr);
       console.error(
-        `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover also failed (all providers exhausted): ${fallbackMsg}`
+        `[Pipeline] ${stage} for letter #${letterId}: Groq OSS last resort also failed: ${ossMsg}`
       );
-      captureServerException(fallbackErr, {
+      captureServerException(ossErr, {
         tags: {
           component: "pipeline",
-          error_type: "failover_also_failed",
+          error_type: "all_providers_exhausted",
           pipeline_stage: stage,
           all_providers_exhausted: "true",
         },
-        extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg },
+        extra: { letterId, primaryError: primaryMsg, ossError: ossMsg },
       });
-      // Re-throw as a descriptive error so callers / classifyErrorCode can identify
-      // "all providers exhausted" vs. "primary throttled but not yet tried failover".
       throw new Error(
         `All providers exhausted for ${stage} (letter #${letterId}). ` +
-        `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
+        `Primary error: ${primaryMsg}. Groq OSS error: ${ossMsg}`
       );
     }
   }

@@ -12,7 +12,7 @@ import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getDraftModel, getDraftModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
@@ -146,12 +146,12 @@ export async function runDraftingStage(
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;
-    const { result, failoverTriggered: retryFailover } = await withModelFailover(
+    const { result, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 2 (drafting retry)",
       letterId,
       async () => {
         const r = await generateText({
-          model: draftProvider === "openai-failover" ? getDraftModelFallback() : getDraftModel(),
+          model: draftProvider === "openai-failover" ? getDraftModelFallback() : draftProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getDraftModel(),
           system: draftSystemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 8000,
@@ -172,9 +172,29 @@ export async function runDraftingStage(
         });
         accumulateTokens(draftTokens, r.usage);
         return r;
+      },
+      async () => {
+        draftProvider = "groq-oss-fallback";
+        draftModelKey = "llama-3.3-70b-versatile";
+        const r = await generateText({
+          model: getFreeOSSModelFallback(),
+          system: draftSystemPrompt,
+          prompt: promptWithFeedback,
+          maxOutputTokens: 8000,
+          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
+        });
+        accumulateTokens(draftTokens, r.usage);
+        return r;
       }
     );
-    if (retryFailover && pipelineCtx) {
+    if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
+      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFT_OSS_FALLBACK"))) {
+        pipelineCtx.qualityWarnings.push(
+          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for draft retry (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
+        );
+      }
+    } else if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
@@ -210,7 +230,7 @@ export async function runDraftingStage(
       `[Pipeline] Stage 2: Claude structured drafting for letter #${letterId}`
     );
 
-    const { result: initialDraftResult, failoverTriggered: draftFailover } = await withModelFailover(
+    const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
       letterId,
       () => callGenerateText(draftUserPrompt),
@@ -218,10 +238,33 @@ export async function runDraftingStage(
         draftProvider = "openai-failover";
         draftModelKey = "gpt-4o";
         return callGenerateTextFallback(draftUserPrompt);
+      },
+      async () => {
+        draftProvider = "groq-oss-fallback";
+        draftModelKey = "llama-3.3-70b-versatile";
+        const r = await generateText({
+          model: getFreeOSSModelFallback(),
+          system: draftSystemPrompt,
+          prompt: draftUserPrompt,
+          maxOutputTokens: 8000,
+          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
+        });
+        accumulateTokens(draftTokens, r.usage);
+        return r;
       }
     );
 
-    if (draftFailover) {
+    if (initialDraftProvider === "groq-oss-fallback") {
+      console.warn(
+        `[Pipeline] Stage 2: Groq Llama 3.3 used as last-resort for letter #${letterId} (DRAFT_OSS_FALLBACK)`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for drafting (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
+        );
+      }
+    } else if (draftFailover) {
       console.warn(
         `[Pipeline] Stage 2: Switched to OpenAI GPT-4o failover for letter #${letterId} (provider=${draftProvider})`
       );
@@ -370,7 +413,7 @@ export async function runDraftingStage(
       metadataJson: {
         provider: draftProvider,
         stage: "draft_generation",
-        failoverUsed: draftProvider === "openai-failover",
+        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
         attorneyReviewSummary: draft.attorneyReviewSummary,
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
@@ -398,7 +441,7 @@ export async function runDraftingStage(
       responsePayloadJson: {
         versionId,
         provider: draftProvider,
-        failoverUsed: draftProvider === "openai-failover",
+        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
         groundingReport: pipelineCtx?.groundingReport,
         consistencyReport: pipelineCtx?.consistencyReport,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),

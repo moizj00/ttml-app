@@ -108,6 +108,29 @@ export function getVettingModelFallback() {
   return openai("gpt-4o");
 }
 
+// ── Groq — free OSS last-resort fallback for all stages ──
+/** Returns Groq Llama 3.3 70B model (free-tier, OpenAI-compatible) for use as OSS last resort */
+export function getFreeOSSModelFallback() {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error(
+      "[Pipeline] GROQ_API_KEY is not set — Groq OSS fallback is unavailable"
+    );
+  }
+  const groq = createOpenAI({
+    apiKey,
+    baseURL: "https://api.groq.com/openai/v1",
+    name: "groq",
+  });
+  return groq("llama-3.3-70b-versatile");
+}
+
+/** Returns true if Groq OSS fallback is available (GROQ_API_KEY is set) */
+export function isGroqFallbackAvailable(): boolean {
+  const apiKey = process.env.GROQ_API_KEY;
+  return !!(apiKey && apiKey.trim().length > 0);
+}
+
 // Timeout constants (ms)
 export const RESEARCH_TIMEOUT_MS = 90_000; // 90s — Perplexity web search can be slow
 export const DRAFT_TIMEOUT_MS = 120_000; // 120s — Claude drafting a full legal letter
@@ -122,6 +145,7 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "claude-sonnet-4": SONNET_PRICING,
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },
+  "llama-3.3-70b-versatile": { inputPerMillion: 0, outputPerMillion: 0 },
 };
 
 export function createTokenAccumulator(): TokenUsage {
