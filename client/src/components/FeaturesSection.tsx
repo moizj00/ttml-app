@@ -12,18 +12,18 @@ import {
 const supportingFeatures = [
   {
     icon: FileText,
-    title: "7 Letter Types",
-    desc: "Demand letters, cease and desist notices, contract breach, eviction, employment disputes, consumer complaints, and general legal correspondence.",
+    title: "California-Specific Letter Types",
+    desc: "Landlord-tenant, employment disputes, demand letters, collections/debt response, and business dispute letters — all built around California legal language.",
   },
   {
     icon: Copy,
     title: "Real-Time Status Tracking",
-    desc: "Follow your letter from submission through attorney drafting, review, and final approval with live status updates and email notifications.",
+    desc: "Follow your draft from intake through the drafting workflow, attorney review, and final approval with live status updates and email notifications.",
   },
   {
     icon: History,
     title: "Full Audit Trail",
-    desc: "Every action is logged — from intake to attorney drafting, edits, and final approval. Complete transparency at every step.",
+    desc: "Every action is logged — from intake to drafting, attorney edits, and final approval. Complete transparency at every step.",
   },
   {
     icon: Shield,
@@ -162,10 +162,10 @@ export default function FeaturesSection() {
           }}
         >
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-            Built for Real Legal Situations
+            Built for California Legal Correspondence
           </h2>
           <p className="text-lg text-slate-600">
-            Every feature exists to get you a stronger letter, faster
+            Every feature exists to get you a stronger draft, faster — structured around California legal language
           </p>
         </div>
 
@@ -225,20 +225,20 @@ function FeatureRow1({
           <Zap className="w-7 h-7 text-blue-600" />
         </div>
         <h3 className="text-3xl font-bold mb-4">
-          Jurisdiction-Aware Research
+          California-Focused Drafting Engine
         </h3>
         <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-          Our attorneys identify statutes, regulations, and case law
-          specific to your state and situation — cited directly in your
-          letter. We don't just use generic templates; we provide real
-          legal authority.
+          The drafting system is built around California legal-letter
+          conventions — structured around repeatable workflows and
+          designed to reduce unsupported output. You get review-friendly
+          drafts grounded in a controlled drafting process.
         </p>
         <ul className="space-y-4">
           {[
-            "State-specific legal codes applied",
-            "Relevant case law citations included",
-            "Statute of limitations checked",
-            "Local regulatory compliance verified",
+            "California-specific legal language applied",
+            "Built from curated legal-letter patterns",
+            "Structured around repeatable letter workflows",
+            "Designed to reduce drafting time significantly",
           ].map((item, i) => (
             <li
               key={i}
@@ -387,15 +387,16 @@ function FeatureRow2({
         </h3>
         <p className="text-lg text-slate-600 mb-8 leading-relaxed">
           Licensed attorneys work in a dedicated Review Center — editing
-          language, verifying citations, and ensuring professional
-          quality. No letter is delivered without human legal oversight.
+          language, verifying draft quality, and providing inline feedback.
+          Your draft is built for review before it reaches an attorney or
+          goes out the door.
         </p>
         <div className="grid grid-cols-2 gap-6">
           {[
-            { value: "100%", label: "Human reviewed" },
+            { value: "100%", label: "Human-reviewable drafts" },
             { value: "24-48h", label: "Average turnaround" },
-            { value: "50+", label: "Jurisdictions covered" },
-            { value: "Inline", label: "Draft feedback" },
+            { value: "CA-first", label: "California language focus" },
+            { value: "Inline", label: "Attorney draft feedback" },
           ].map((stat, i) => (
             <div
               key={i}

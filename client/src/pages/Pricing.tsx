@@ -181,10 +181,10 @@ export default function Pricing() {
             <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            Resolve your dispute faster with lawyer-drafted letters and negotiations
+            Reduce drafting time for repetitive California legal letters
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            Professionally drafted and attorney-reviewed legal letters. Choose the plan that fits your needs.
+            Get a polished draft before attorney review. California-focused drafting, structured around repeatable letter workflows.
           </p>
         </div>
       </header>
@@ -302,11 +302,11 @@ export default function Pricing() {
           <h3 className="font-semibold text-foreground mb-2">How It Works</h3>
           <p className="text-sm text-muted-foreground">
             Choose a plan and complete checkout to get started. Pay{" "}
-            <strong>${PRICING.singleLetter.price}</strong> for a single letter,
+            <strong>${PRICING.singleLetter.price}</strong> for a single draft,
             or subscribe for{" "}
-            <strong>${PRICING.monthly.price}/month</strong> (4 letters, $50 per letter) or{" "}
-            <strong>${PRICING.yearly.price}/year</strong> (4 letters/month, 2 months free). All
-            plans include attorney review and PDF delivery.
+            <strong>${PRICING.monthly.price}/month</strong> (4 drafts, $50 per draft) or{" "}
+            <strong>${PRICING.yearly.price}/year</strong> (4 drafts/month, 2 months free). All
+            plans include California-focused drafting and PDF delivery.
           </p>
         </div>
 
@@ -314,18 +314,18 @@ export default function Pricing() {
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
           <div className="flex flex-col items-center gap-2">
             <Shield className="w-8 h-8 text-[#3b82f6]" />
-            <h3 className="font-semibold">Attorney Reviewed</h3>
+            <h3 className="font-semibold">Built for Attorney Review</h3>
             <p className="text-sm text-muted-foreground">
-              Every letter reviewed and approved by a licensed attorney before
-              delivery
+              Every draft is structured for licensed attorney review before
+              delivery — review-friendly outputs every time
             </p>
           </div>
           <div className="flex flex-col items-center gap-2">
             <Zap className="w-8 h-8 text-amber-500" />
-            <h3 className="font-semibold">Professional Drafting</h3>
+            <h3 className="font-semibold">California-Focused Drafting</h3>
             <p className="text-sm text-muted-foreground">
-              Multi-stage legal research and professional drafting for every
-              letter
+              Built from curated legal-letter patterns designed around
+              California legal language and repeatable workflows
             </p>
           </div>
           <div className="flex flex-col items-center gap-2">

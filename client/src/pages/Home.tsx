@@ -23,11 +23,11 @@ import FeaturesSection from "@/components/FeaturesSection";
 import FirstVisitPopup from "@/components/FirstVisitPopup";
 
 const letterTypes = [
-  "Breach of Contract",
-  "Demand for Payment",
-  "Cease and Desist",
-  "Pre-Litigation Settlement",
-  "Debt Collection",
+  "California Landlord-Tenant Letters",
+  "California Employment Dispute Letters",
+  "California Demand Letters",
+  "California Collections / Debt Response Letters",
+  "California Business Dispute Letters",
 ];
 
 
@@ -296,13 +296,13 @@ export default function Home() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-6 sm:mb-8 text-xs sm:text-sm text-blue-700 font-medium">
               <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse flex-shrink-0"></span>
-              View Your First Letter For Free
+              View Your First Draft For Free
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-[2.8rem] lg:text-[3.2rem] xl:text-[3.6rem] font-extrabold leading-[1.12] tracking-tight mb-6 sm:mb-8">
-              Professional{" "}
+              California-focused{" "}
               <span className="text-blue-600 relative inline-block">
-                Legal Letters
+                legal letter drafting
                 <svg
                   className="absolute w-full h-3 -bottom-1 left-0 text-blue-200"
                   viewBox="0 0 100 10"
@@ -315,24 +315,24 @@ export default function Home() {
                     fill="transparent"
                   />
                 </svg>
-              </span>{" "}
-              Drafted & Approved by Attorneys
+              </span>
+              {", built for speed."}
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              Describe your legal situation. Our attorneys research applicable
-              laws, draft a professional letter, and review every word before
-              delivery.
+              Turn your facts into structured legal-letter drafts using a system
+              designed around California legal language and repeatable letter
+              workflows.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
               <button
                 onClick={goToLogin}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
                 data-testid="hero-cta"
               >
                 <Play className="w-5 h-5 fill-current" />
-                Get Started
+                Generate your first draft
               </button>
               <button
                 onClick={() => scrollTo("pricing")}
@@ -341,6 +341,21 @@ export default function Home() {
               >
                 View Pricing <ArrowRight className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 mb-8 sm:mb-10">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                California-focused workflows
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                Structured drafting, not blank-page guessing
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                Built for attorney review or self-organized first drafts
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
@@ -420,10 +435,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
-              Resolve your dispute faster with lawyer-drafted letters and negotiations
+              Reduce drafting time for repetitive letters
             </h2>
             <p className="text-lg text-slate-400">
-              Choose the plan that fits your needs. All plans include attorney review and PDF delivery.
+              Get a polished draft before attorney review. All plans include California-focused drafting and PDF delivery.
             </p>
           </div>
 

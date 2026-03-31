@@ -5,20 +5,20 @@ const steps = [
   {
     step: "01",
     icon: FileText,
-    title: "Describe Your Situation",
-    desc: "Complete a guided intake form with the facts of your case. No legal expertise required.",
+    title: "Turn Your Facts Into a Draft",
+    desc: "Complete a guided intake form with the facts of your situation. The system structures your input into a California-focused legal-letter draft — no blank-page guessing.",
   },
   {
     step: "02",
     icon: Search,
-    title: "Attorneys Research & Draft",
-    desc: "Our legal team researches applicable statutes for your jurisdiction and drafts your letter.",
+    title: "Send a Stronger First Draft in 10 Minutes",
+    desc: "The drafting engine applies California legal language and repeatable letter workflows to generate a structured, review-ready draft fast.",
   },
   {
     step: "03",
     icon: CheckCircle2,
-    title: "Attorney Reviews & Approves",
-    desc: "A licensed attorney makes final edits and signs off before delivery. Human oversight guaranteed.",
+    title: "Review With an Attorney or Send Directly",
+    desc: "Your draft is ready for attorney review or self-organized use. A licensed attorney can review, edit, and approve before delivery.",
   },
 ];
 
@@ -133,10 +133,10 @@ export default function HowItWorks() {
             How It Works
           </p>
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-slate-900" data-testid="text-hiw-heading">
-            Three Steps to a Professional Legal Letter
+            From Facts to Structured Draft in Minutes
           </h2>
           <p className="text-lg text-slate-500" data-testid="text-hiw-subheading">
-            From intake to attorney-approved PDF in as little as 24 hours
+            Reduce drafting time for California legal letters — structured, review-friendly outputs every time
           </p>
         </div>
 

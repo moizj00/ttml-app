@@ -50,6 +50,7 @@ import {
   ExternalLink,
   CalendarClock,
   AlertTriangle,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -240,8 +241,7 @@ export default function AffiliateDashboard() {
             )}
           </div>
           <p className="mt-1 text-blue-100">
-            Earn 5% commission on every sale made with your discount code. Share
-            your code and grow your earnings.
+            Promote a California-focused legal drafting platform and earn 5% commission on every paid draft or subscription you refer. Share your link and grow your earnings.
           </p>
         </div>
 
@@ -376,7 +376,7 @@ export default function AffiliateDashboard() {
                 Referral Program
               </CardTitle>
               <CardDescription>
-                Share your unique link. New subscribers get 20% off their first payment, and you earn 5% commission in real-time.
+                Share your unique link. New subscribers get 20% off their first payment, and you earn 5% commission in real-time. Disclosure: recipients should know you may earn a commission if they buy through your link.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -511,6 +511,77 @@ export default function AffiliateDashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Compliance & Swipe Copy Card — referrals tab */}
+          {activeTab === "referrals" && (
+            <Card data-testid="card-affiliate-compliance">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-emerald-600" />
+                  What to Say (and What to Never Say)
+                </CardTitle>
+                <CardDescription>
+                  Use these compliant hooks when sharing your link. FTC guidelines require you to disclose your affiliate relationship.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-bold uppercase text-emerald-700 mb-3">Approved hooks — use these</p>
+                  <ul className="space-y-2">
+                    {[
+                      "I found a faster way to draft legal-style letters.",
+                      "This tool helps organize your facts into a stronger first draft.",
+                      "For California-specific letters, this is way more focused than generic AI.",
+                      "Useful for first drafts before legal review.",
+                      "This is a drafting tool — it helps create a structured first draft.",
+                      "This organizes your facts into a legal-style letter.",
+                      "Review with a licensed attorney where needed.",
+                    ].map((hook, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-emerald-800">
+                        <span className="mt-0.5 text-emerald-600 font-bold">✓</span>
+                        <span>"{hook}"</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                  <p className="text-xs font-bold uppercase text-red-700 mb-3">Never say these</p>
+                  <ul className="space-y-2">
+                    {[
+                      "This is legal advice.",
+                      "This replaces a lawyer.",
+                      "Guaranteed legally correct.",
+                      "Zero hallucinations.",
+                      "Wins your case.",
+                      "Certified by California courts.",
+                      "We connect you to lawyers.",
+                    ].map((no, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-red-800">
+                        <span className="mt-0.5 text-red-600 font-bold">✗</span>
+                        <span>"{no}"</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs font-bold uppercase text-amber-700 mb-2">Mandatory FTC Disclosure</p>
+                  <p className="text-sm text-amber-800 mb-3">You must include one of the following in any post, video, or content where you share your affiliate link:</p>
+                  <ul className="space-y-2">
+                    {[
+                      "I may earn a commission if you buy through this link.",
+                      "Affiliate link — I earn a small commission at no extra cost to you.",
+                      "Paid partnership / Sponsored.",
+                    ].map((disclosure, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                        <span className="mt-0.5 text-amber-600">•</span>
+                        <span>"{disclosure}"</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Click Analytics Card — referrals tab */}
           {activeTab === "referrals" && (
