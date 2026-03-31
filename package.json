@@ -63,6 +63,7 @@
     "dotenv": "^17.2.2",
     "drizzle-orm": "^0.44.5",
     "express": "^4.21.2",
+    "framer-motion": "^12.38.0",
     "google-auth-library": "^10.6.2",
     "ioredis": "^5.10.1",
     "jose": "6.1.0",
