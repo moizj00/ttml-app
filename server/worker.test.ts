@@ -339,6 +339,44 @@ describe("processRunPipeline — usage refund paths", () => {
   });
 });
 
+describe("processRunPipeline — stage-aware retry on subsequent attempts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    skipDelays();
+    vi.mocked(acquirePipelineLock).mockResolvedValue(true);
+    vi.mocked(getLetterRequestById).mockResolvedValue(mockLetter as never);
+    vi.mocked(bestEffortFallback).mockResolvedValue(false);
+    vi.mocked(getAllUsers).mockResolvedValue([] as never);
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("retries from 'drafting' stage when getLatestResearchRun returns a completed research run", async () => {
+    const { getLatestResearchRun } = await import("./db");
+    vi.mocked(runFullPipeline).mockRejectedValueOnce(new Error("drafting failed"));
+    vi.mocked(getLatestResearchRun).mockResolvedValue({ resultJson: '{"facts":[]}' } as never);
+    vi.mocked(retryPipelineFn).mockResolvedValue(undefined);
+
+    await processRunPipeline(baseRunData);
+
+    expect(retryPipelineFn).toHaveBeenCalledWith(LETTER_ID, baseRunData.intake, "drafting", USER_ID);
+    expect(runFullPipeline).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to full pipeline when getLatestResearchRun returns null", async () => {
+    const { getLatestResearchRun } = await import("./db");
+    vi.mocked(runFullPipeline)
+      .mockRejectedValueOnce(new Error("first attempt failed"))
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(getLatestResearchRun).mockResolvedValue(null);
+
+    await processRunPipeline(baseRunData);
+
+    expect(retryPipelineFn).not.toHaveBeenCalled();
+    expect(runFullPipeline).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("processRetryFromStage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
