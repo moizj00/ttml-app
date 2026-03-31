@@ -31,12 +31,10 @@ import {
   updateLetterVersionPointers,
   logReviewAction,
   getLetterRequestById,
-  getUserById,
   hasLetterBeenPreviouslyUnlocked,
 } from "./db";
 import { runAssemblyStage, autoAdvanceIfPreviouslyUnlocked } from "./pipeline";
 import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
-import { sendLetterReadyEmail } from "./email";
 import { captureServerException } from "./sentry";
 
 interface N8nVettingReport {
@@ -360,35 +358,16 @@ export function registerN8nCallbackRoute(app: Express): void {
         if (!assemblyHandledEmails) {
           const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
           if (!wasAlreadyUnlocked) {
-            try {
-              const letterRecord = await getLetterRequestById(letterId);
-              if (letterRecord) {
-                const subscriber = letterRecord.userId != null ? await getUserById(letterRecord.userId) : null;
-                const appBaseUrl = getAppBaseUrl();
-                if (subscriber?.email) {
-                  await sendLetterReadyEmail({
-                    to: subscriber.email,
-                    name: subscriber.name ?? "Subscriber",
-                    subject: letterRecord.subject,
-                    letterId,
-                    appUrl: appBaseUrl,
-                    letterType: letterRecord.letterType ?? undefined,
-                    jurisdictionState: letterRecord.jurisdictionState ?? undefined,
-                  });
-                  console.log(
-                    `[n8n Callback] Letter-ready email sent to ${subscriber.email} for letter #${letterId}`
-                  );
-                }
-              }
-            } catch (emailErr) {
-              console.error(
-                `[n8n Callback] Failed to send letter-ready email for #${letterId}:`,
-                emailErr
-              );
-            }
+            // The initial paywall notification email (10–15 min delay) is handled by
+            // the paywallEmailCron job (POST /api/cron/paywall-emails).
+            // We do NOT send an immediate email here — the cron picks up the letter
+            // once lastStatusChangedAt falls in the 10–15 minute window.
+            console.log(
+              `[n8n Callback] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+            );
           } else {
             console.log(
-              `[n8n Callback] Skipping letter-ready (paywall) email for #${letterId} — previously unlocked`
+              `[n8n Callback] Skipping paywall email for #${letterId} — previously unlocked`
             );
           }
 

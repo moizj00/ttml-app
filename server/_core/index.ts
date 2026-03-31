@@ -34,6 +34,7 @@ import { registerSupabaseAuthRoutes, authenticateRequest } from "../supabaseAuth
 import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
+import { registerPaywallEmailRoute } from "../paywallEmailCron";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { registerSentryDebugRoute } from "../sentryDebugRoute";
@@ -251,6 +252,7 @@ async function startServer() {
   registerN8nCallbackRoute(app);
   registerEmailPreviewRoute(app);
   registerDraftRemindersRoute(app);
+  registerPaywallEmailRoute(app);
   registerDraftPdfRoute(app);
   registerBlogInternalRoutes(app);
 

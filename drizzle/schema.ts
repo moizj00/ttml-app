@@ -213,6 +213,7 @@ export const letterRequests = pgTable("letter_requests", {
   priority: priorityEnum("priority").default("normal").notNull(),
   lastStatusChangedAt: timestamp("last_status_changed_at", { withTimezone: true }).defaultNow(),
   draftReminderSentAt: timestamp("draft_reminder_sent_at", { withTimezone: true }),
+  initialPaywallEmailSentAt: timestamp("initial_paywall_email_sent_at", { withTimezone: true }),
   researchUnverified: boolean("research_unverified").default(false).notNull(),
   qualityDegraded: boolean("quality_degraded").default(false).notNull(),
   pipelineLockedAt: timestamp("pipeline_locked_at", { withTimezone: true }),

@@ -8,6 +8,8 @@
  *   - Draft Reminder: every hour at :00 — calls processDraftReminders()
  *   - Subscription Sync: every 6 hours — reconciles local subscription status with Stripe
  *   - Stripe Event Pruning: daily at 03:00 — removes processed webhook events older than 7 days
+ *   - Paywall Email Notification: every 5 minutes — sends initial paywall email to subscribers
+ *     whose letter reached generated_locked status 10–15 minutes ago (idempotent)
  *
  * The scheduler is only started in production (NODE_ENV !== 'test').
  * In test environments, jobs are not registered to avoid side effects.
@@ -22,6 +24,7 @@ import { processDraftReminders } from "./draftReminders";
 import { syncSubscriptionsWithStripe, pruneProcessedStripeEvents } from "./subscriptionSync";
 import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
+import { processPaywallEmails } from "./paywallEmailCron";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
@@ -106,7 +109,27 @@ export function startCronScheduler(): void {
     }
   });
 
-  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30)");
+  // Paywall email notification: runs every 5 minutes
+  // Sends the initial "your draft is ready — unlock it" email to subscribers
+  // whose letter reached generated_locked status 10–15 minutes ago.
+  // Idempotent: initial_paywall_email_sent_at column prevents duplicate sends.
+  cron.schedule("*/5 * * * *", async () => {
+    const startTime = Date.now();
+    console.log(`[Cron] [${new Date().toISOString()}] Running paywall email notifications...`);
+    try {
+      const result = await processPaywallEmails();
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `[Cron] Paywall emails done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Cron] Paywall email job failed: ${msg}`);
+      captureServerException(err, { tags: { component: "cron", job: "paywall_emails" } });
+    }
+  });
+
+  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min)");
 }
 
 /**

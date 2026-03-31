@@ -9,7 +9,6 @@ import {
   markPriorPipelineRunsSuperseded,
   getLetterRequestById as getLetterById,
   hasLetterBeenPreviouslyUnlocked,
-  getUserById,
   getAllUsers,
   createNotification,
   setLetterQualityDegraded,
@@ -17,7 +16,7 @@ import {
 import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, PipelineContext, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
-import { sendLetterReadyEmail, sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
+import { sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
 import { getAnthropicClient, getVettingModelFallback, getFreeOSSModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
@@ -938,41 +937,18 @@ export async function finalizeLetterAfterVetting(
     })();
   }
 
-  const letterRecord = await getLetterById(letterId);
   const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
   if (!wasAlreadyUnlocked) {
-    (() => {
-      const record = letterRecord;
-      if (!record) return;
-      (record.userId != null ? getUserById(record.userId) : Promise.resolve(null))
-        .then(async subscriber => {
-          const appBaseUrl =
-            process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-          if (subscriber?.email) {
-            await sendLetterReadyEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: record.subject,
-              letterId,
-              appUrl: appBaseUrl,
-              letterType: record.letterType ?? undefined,
-              jurisdictionState: record.jurisdictionState ?? undefined,
-            });
-            console.log(
-              `[Pipeline] Letter-ready email sent to ${subscriber.email} for letter #${letterId}`
-            );
-          }
-        })
-        .catch(emailErr =>
-          console.error(
-            `[Pipeline] Failed to send letter-ready email for #${letterId}:`,
-            emailErr
-          )
-        );
-    })();
+    // The initial paywall notification email (10–15 min delay) is handled by
+    // the paywallEmailCron job (POST /api/cron/paywall-emails).
+    // We do NOT send an immediate email here — the cron picks up the letter
+    // once lastStatusChangedAt falls in the 10–15 minute window.
+    console.log(
+      `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+    );
   } else {
     console.log(
-      `[Pipeline] Skipping letter-ready (paywall) email for #${letterId} — previously unlocked`
+      `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
     );
   }
 }
