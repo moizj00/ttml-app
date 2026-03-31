@@ -124,4 +124,6 @@ DB connection pool max is configurable via `DB_POOL_MAX` environment variable (d
 - **BullMQ + ioredis**: Job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
 - **Cloudflare R2**: S3-compatible object storage for PDFs and attachments.
+- **Google Cloud Platform**: GCP project `ttml-488901-n8` (us-west1). Vertex AI for fine-tuning, Cloud Storage (`gs://ttml-training`) for training data. Config via env vars documented in `.env.llm.example`. Packages: `@google-cloud/storage`, `@google-cloud/vertexai`, `google-auth-library`.
+- **OpenAI**: Embeddings (`text-embedding-3-small`, 1536 dims) for RAG pipeline; GPT-4o as failover provider for all pipeline stages.
 - **Railway**: Hosting and deployment.
