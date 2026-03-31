@@ -14,22 +14,48 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { storagePut } from "./storage";
+import { generatePdfViaWorker } from "./workerPdfClient";
+import { generateAndUploadApprovedPdf } from "./pdfGenerator";
+
+// Module-level mocks — must be at top scope for Vitest to hoist them correctly.
+// vi.mock() inside it() blocks does not get hoisted, so the already-cached
+// pdfGenerator module would still use the real storagePut (hitting Cloudflare R2
+// and timing out). Both ./storage and ./workerPdfClient are mocked here.
+
+vi.mock("./storage", () => ({
+  storagePut: vi.fn(),
+}));
+
+vi.mock("./workerPdfClient", () => ({
+  generatePdfViaWorker: vi.fn(),
+}));
 
 // ─── Unit tests for the PDF generator ────────────────────────────────────────
 
 describe("pdfGenerator", () => {
-  it("generates a non-empty PDF buffer that starts with %PDF", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(generatePdfViaWorker).mockResolvedValue({
+      buffer: Buffer.from("%PDF-1.4 fake pdf content for testing"),
+      source: "mock" as any,
+    });
+    vi.mocked(storagePut).mockResolvedValue({
+      url: "https://s3.example.com/mock.pdf",
+      key: "mock.pdf",
+    } as any);
+  });
+
+  it("generates a non-empty PDF buffer that starts with %PDF", () => {
     // Verify the function is exported and callable (actual PDF generation requires Cloudflare)
-    const pdfModule = await import("./pdfGenerator");
-    expect(typeof pdfModule.generateAndUploadApprovedPdf).toBe("function");
+    expect(typeof generateAndUploadApprovedPdf).toBe("function");
   });
 
   it("generates PDF with full intakeJson (sender/recipient blocks)", async () => {
-    vi.mock("./storage", () => ({
-      storagePut: vi.fn().mockResolvedValue({ url: "https://s3.example.com/full.pdf", key: "full.pdf" }),
-    }));
-
-    const { generateAndUploadApprovedPdf } = await import("./pdfGenerator");
+    vi.mocked(storagePut).mockResolvedValueOnce({
+      url: "https://s3.example.com/full.pdf",
+      key: "full.pdf",
+    } as any);
 
     const result = await generateAndUploadApprovedPdf({
       letterId: 2,
@@ -59,11 +85,10 @@ describe("pdfGenerator", () => {
   });
 
   it("generates PDF without intakeJson (graceful fallback)", async () => {
-    vi.mock("./storage", () => ({
-      storagePut: vi.fn().mockResolvedValue({ url: "https://s3.example.com/fallback.pdf", key: "fallback.pdf" }),
-    }));
-
-    const { generateAndUploadApprovedPdf } = await import("./pdfGenerator");
+    vi.mocked(storagePut).mockResolvedValueOnce({
+      url: "https://s3.example.com/fallback.pdf",
+      key: "fallback.pdf",
+    } as any);
 
     // Should not throw even when intakeJson is null
     const result = await generateAndUploadApprovedPdf({
@@ -77,18 +102,16 @@ describe("pdfGenerator", () => {
     expect(result.pdfUrl).toBeTruthy();
   });
 
-  it("generates PDF with long multi-paragraph content (multi-page support)", async () => {
+  it("generates PDF with long multi-paragraph content (multi-page support)", () => {
     // Verify the function signature accepts content without size restrictions
-    const pdfModule = await import("./pdfGenerator");
-    expect(typeof pdfModule.generateAndUploadApprovedPdf).toBe("function");
+    expect(typeof generateAndUploadApprovedPdf).toBe("function");
   });
 
   it("sanitizes special characters in the file key", async () => {
-    vi.mock("./storage", () => ({
-      storagePut: vi.fn().mockResolvedValue({ url: "https://s3.example.com/sanitized.pdf", key: "sanitized.pdf" }),
-    }));
-
-    const { generateAndUploadApprovedPdf } = await import("./pdfGenerator");
+    vi.mocked(storagePut).mockResolvedValueOnce({
+      url: "https://s3.example.com/sanitized.pdf",
+      key: "sanitized.pdf",
+    } as any);
 
     const result = await generateAndUploadApprovedPdf({
       letterId: 5,
