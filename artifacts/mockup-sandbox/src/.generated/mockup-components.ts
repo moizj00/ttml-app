@@ -4,6 +4,10 @@ export const modules: ModuleMap = {
   "./components/mockups/homepage-layouts/DarkPrestige.tsx": () => import("../components/mockups/homepage-layouts/DarkPrestige.tsx"),
   "./components/mockups/homepage-layouts/EditorialColumns.tsx": () => import("../components/mockups/homepage-layouts/EditorialColumns.tsx"),
   "./components/mockups/homepage-layouts/KineticBold.tsx": () => import("../components/mockups/homepage-layouts/KineticBold.tsx"),
+  "./components/mockups/homepage-layouts/MinimalConcierge.tsx": () => import("../components/mockups/homepage-layouts/MinimalConcierge.tsx"),
+  "./components/mockups/homepage-layouts/NarrativeArc.tsx": () => import("../components/mockups/homepage-layouts/NarrativeArc.tsx"),
+  "./components/mockups/homepage-layouts/ProblemSolver.tsx": () => import("../components/mockups/homepage-layouts/ProblemSolver.tsx"),
   "./components/mockups/homepage-layouts/SplitHero.tsx": () => import("../components/mockups/homepage-layouts/SplitHero.tsx"),
-  "./components/mockups/homepage-layouts/StackedImpact.tsx": () => import("../components/mockups/homepage-layouts/StackedImpact.tsx")
+  "./components/mockups/homepage-layouts/StackedImpact.tsx": () => import("../components/mockups/homepage-layouts/StackedImpact.tsx"),
+  "./components/mockups/homepage-layouts/TrustAuthority.tsx": () => import("../components/mockups/homepage-layouts/TrustAuthority.tsx")
 };
