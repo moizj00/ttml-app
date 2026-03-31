@@ -45,7 +45,7 @@ export async function runAssemblyStage(
   const citationRegistryBlock = pipelineCtx?.citationRegistry
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
-  const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly");
+  const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly", undefined, pipelineCtx);
   const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`

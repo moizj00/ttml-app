@@ -314,6 +314,11 @@ export async function runFullPipeline(
         consistencyReport: pipelineCtx.consistencyReport,
         vettingReport: vettingResult.vettingReport,
         assemblyRetries,
+        ragExampleCount: pipelineCtx.ragExampleCount ?? 0,
+        ragSimilarityScores: pipelineCtx.ragSimilarityScores ?? [],
+        ragAbGroup: pipelineCtx.ragAbGroup ?? "test",
+        ragInjected: (pipelineCtx.ragExampleCount ?? 0) > 0,
+        lessonCount: pipelineCtx.lessonCount ?? 0,
         ...(isDegraded && {
           qualityDegraded: true,
           degradationReasons: pipelineCtx.qualityWarnings,

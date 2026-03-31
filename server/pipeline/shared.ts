@@ -1,5 +1,5 @@
 import { getActiveLessons, incrementLessonInjectionStats } from "../db";
-import type { PipelineErrorCode } from "../../shared/types";
+import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
 import { isOpenAIFailoverAvailable, isGroqFallbackAvailable } from "./providers";
@@ -313,6 +313,7 @@ export async function buildLessonsPromptBlock(
   jurisdiction: string | null,
   stage: string,
   queryContext?: string,
+  pipelineCtx?: PipelineContext,
 ): Promise<string> {
   try {
     const primaryLessons = await getActiveLessons({
@@ -336,18 +337,23 @@ export async function buildLessonsPromptBlock(
 
     if (lessons.length === 0) return "";
 
-    const lessonIds = lessons.map((l: any) => l.id).filter(Boolean);
+    const lessonIds = (lessons as Array<{ id?: number | null }>).map((l) => l.id).filter((id): id is number => id != null);
     if (lessonIds.length > 0) {
       incrementLessonInjectionStats(lessonIds).catch((err) =>
         console.warn("[Pipeline] Failed to increment injection stats:", err)
       );
     }
 
+    // Accumulate lesson count on pipelineCtx for metadata logging
+    if (pipelineCtx) {
+      pipelineCtx.lessonCount = (pipelineCtx.lessonCount ?? 0) + lessons.length;
+    }
+
     const grouped: Record<string, string[]> = {};
-    for (const l of lessons as any[]) {
+    for (const l of lessons as Array<{ category?: string | null; lesson_text?: string; lessonText?: string }>) {
       const cat = l.category ?? "general";
       if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(l.lesson_text ?? l.lessonText);
+      grouped[cat].push(l.lesson_text ?? l.lessonText ?? "");
     }
 
     const sections = Object.entries(grouped).map(([cat, texts]) => {

@@ -76,6 +76,9 @@ import {
   getQualityScoreTrend,
   getQualityScoresByLetterType,
   getLessonImpactSummary,
+  getRAGAnalytics,
+  getFineTuneRuns,
+  getEditDistanceTrend,
   assignRoleId,
   getPublishedBlogPosts,
   getBlogPostBySlug,
@@ -955,4 +958,14 @@ export const adminRouter = router({
     pipelineAnalytics: adminProcedure
       .input(z.object({ dateRange: z.enum(["7d", "30d", "90d", "all"]).default("30d") }).optional())
       .query(async ({ input }) => getPipelineAnalytics(input?.dateRange ?? "30d")),
+
+    ragAnalytics: adminProcedure
+      .input(z.object({ days: z.number().default(30) }).optional())
+      .query(async ({ input }) => getRAGAnalytics(input?.days ?? 30)),
+
+    fineTuneRuns: adminProcedure.query(async () => getFineTuneRuns()),
+
+    editDistanceTrend: adminProcedure
+      .input(z.object({ days: z.number().default(30) }).optional())
+      .query(async ({ input }) => getEditDistanceTrend(input?.days ?? 30)),
 });

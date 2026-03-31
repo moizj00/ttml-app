@@ -156,6 +156,11 @@ function getNavItems(role: string): NavItem[] {
         icon: <BarChart3 className="w-4 h-4" />,
       },
       {
+        label: "Quality & Learning",
+        href: "/admin/quality",
+        icon: <Brain className="w-4 h-4" />,
+      },
+      {
         label: "Failed Jobs",
         href: "/admin/jobs",
         icon: <AlertCircle className="w-4 h-4" />,

@@ -73,31 +73,52 @@ export async function runDraftingStage(
   const citationRegistryBlock = pipelineCtx?.citationRegistry
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
-  const lessonsBlockDrafting = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "drafting");
+  const lessonsBlockDrafting = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "drafting", undefined, pipelineCtx);
 
   let ragBlock = "";
-  try {
-    const { findSimilarLetters } = await import("./embeddings");
-    const intakeText = [
-      intake.matter?.subject,
-      intake.matter?.description,
-      intake.letterType,
-      intake.jurisdiction?.state,
-      intake.desiredOutcome,
-    ].filter(Boolean).join(" ");
+  let ragExampleCount = 0;
+  let ragSimilarityScores: number[] = [];
+  let ragAbGroup: "test" | "control" = "test";
 
-    if (intakeText.length > 20) {
-      const similarLetters = await findSimilarLetters(intakeText, 3, 0.7);
-      if (similarLetters.length > 0) {
-        ragBlock = "\n\n## Previously Approved Similar Letters (for reference — adapt style and structure, do NOT copy verbatim)\n\n" +
-          similarLetters.map((sl: { content: string; similarity: number }, i: number) =>
-            `### Example ${i + 1} (similarity: ${(sl.similarity * 100).toFixed(0)}%)\n${sl.content.slice(0, 2000)}`
-          ).join("\n\n");
-        console.log(`[Pipeline] Stage 2: Injected ${similarLetters.length} RAG examples for letter #${letterId}`);
+  // A/B testing: RAG_AB_TEST_CONTROL_PCT (0-100) determines % of runs that skip RAG
+  const controlPct = Math.max(0, Math.min(100, parseInt(process.env.RAG_AB_TEST_CONTROL_PCT ?? "0", 10)));
+  const isControlRun = controlPct > 0 && Math.random() * 100 < controlPct;
+  if (isControlRun) {
+    ragAbGroup = "control";
+    console.log(`[Pipeline] Stage 2: A/B control group — skipping RAG injection for letter #${letterId} (controlPct=${controlPct}%)`);
+  } else {
+    try {
+      const { findSimilarLetters } = await import("./embeddings");
+      const intakeText = [
+        intake.matter?.subject,
+        intake.matter?.description,
+        intake.letterType,
+        intake.jurisdiction?.state,
+        intake.desiredOutcome,
+      ].filter(Boolean).join(" ");
+
+      if (intakeText.length > 20) {
+        const similarLetters = await findSimilarLetters(intakeText, 3, 0.7);
+        if (similarLetters.length > 0) {
+          ragExampleCount = similarLetters.length;
+          ragSimilarityScores = similarLetters.map((sl: { similarity: number }) => sl.similarity);
+          ragBlock = "\n\n## Previously Approved Similar Letters (for reference — adapt style and structure, do NOT copy verbatim)\n\n" +
+            similarLetters.map((sl: { content: string; similarity: number }, i: number) =>
+              `### Example ${i + 1} (similarity: ${(sl.similarity * 100).toFixed(0)}%)\n${sl.content.slice(0, 2000)}`
+            ).join("\n\n");
+          console.log(`[Pipeline] Stage 2: Injected ${similarLetters.length} RAG examples for letter #${letterId}`);
+        }
       }
+    } catch (ragErr) {
+      console.warn(`[Pipeline] Stage 2: RAG retrieval failed for letter #${letterId} (non-blocking):`, ragErr);
     }
-  } catch (ragErr) {
-    console.warn(`[Pipeline] Stage 2: RAG retrieval failed for letter #${letterId} (non-blocking):`, ragErr);
+  }
+
+  // Store RAG metadata on pipelineCtx for access by orchestrator
+  if (pipelineCtx) {
+    pipelineCtx.ragExampleCount = ragExampleCount;
+    pipelineCtx.ragSimilarityScores = ragSimilarityScores;
+    pipelineCtx.ragAbGroup = ragAbGroup;
   }
 
   const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
@@ -445,6 +466,10 @@ export async function runDraftingStage(
         groundingReport: pipelineCtx?.groundingReport,
         consistencyReport: pipelineCtx?.consistencyReport,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),
+        ragExampleCount: pipelineCtx?.ragExampleCount ?? ragExampleCount,
+        ragSimilarityScores: pipelineCtx?.ragSimilarityScores ?? ragSimilarityScores,
+        ragAbGroup: pipelineCtx?.ragAbGroup ?? ragAbGroup,
+        ragInjected: (pipelineCtx?.ragExampleCount ?? ragExampleCount) > 0,
       },
     });
 

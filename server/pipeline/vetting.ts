@@ -367,7 +367,7 @@ export async function runVettingStage(
     preVetIssues.push(`JURISDICTION MISMATCH: Letter references "${preVetConsistency.foundJurisdiction}" law but should only reference "${preVetConsistency.expectedJurisdiction}". Remove all cross-jurisdiction citations.`);
   }
 
-  const lessonsBlockVetting = await buildLessonsPromptBlock(letterType, jurisdiction, "vetting");
+  const lessonsBlockVetting = await buildLessonsPromptBlock(letterType, jurisdiction, "vetting", undefined, pipelineCtx);
   const systemPrompt = buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) + lessonsBlockVetting;
   const baseUserPrompt = buildVettingUserPrompt(assembledLetter, intake, research, citationRegistry);
   const preVetBlock = preVetIssues.length > 0

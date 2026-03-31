@@ -591,6 +591,14 @@ export interface PipelineContext {
   assemblyVettingFeedback?: string;
   citationRevalidationTokens?: TokenUsage;
   qualityWarnings?: string[];
+  /** Number of RAG examples injected in the drafting stage (0 = none retrieved or control group). */
+  ragExampleCount?: number;
+  /** Similarity scores of injected RAG examples (empty if none injected). */
+  ragSimilarityScores?: number[];
+  /** A/B testing group: "test" = RAG was injected (or attempted); "control" = RAG was skipped. */
+  ragAbGroup?: "test" | "control";
+  /** Total lesson count injected across all pipeline stages for this run. */
+  lessonCount?: number;
   /**
    * Best intermediate draft content captured progressively as stages complete.
    * Used by the best-effort fallback to deliver a draft even when pipeline fails
