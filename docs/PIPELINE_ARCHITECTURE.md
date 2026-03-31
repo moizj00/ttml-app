@@ -63,7 +63,7 @@ This system uses **attorney-approved letters** to improve draft quality from the
 
 ### Exactly how it works (step-by-step)
 1. **On attorney approval (post-approval hooks):**
-   - **Embedding capture:** The final approved content is embedded using OpenAI `text-embedding-3-small` (1536 dims) and stored in `letter_versions.embedding` (pgvector). This is a **retrieval-only** step; we intentionally use OpenAI embeddings for similarity search while fine-tuning runs on Vertex AI’s Gemini models.
+   - **Embedding capture:** The final approved content is embedded using OpenAI `text-embedding-3-small` (1536 dims) and stored in `letter_versions.embedding` (pgvector). This is a **retrieval-only** step; we intentionally use OpenAI embeddings for stable, cost-efficient similarity search, while **fine-tuning** is handled by Vertex AI because the tuning jobs target Gemini base models (`gemini-1.5-flash-002`).
    - **Training capture:** A single JSONL example is generated with:
      - `system`: generic drafting instruction
      - `user`: intake summary (letter type, subject, jurisdiction, issue, desired outcome, parties)
@@ -72,7 +72,7 @@ This system uses **attorney-approved letters** to improve draft quality from the
 
 2. **During Stage 2 drafting (first draft):**
    - The intake summary is embedded and used to query `match_letters()` in Postgres.
-   - **Top 3 similar approved letters** (similarity ≥ **0.70**) are returned and injected into the **system prompt** as reference examples (each trimmed to **2,000 raw content characters** before prompt headings/metadata are added).
+   - **Top 3 similar approved letters** (similarity ≥ **0.70**) are returned and injected into the **system prompt** as reference examples (each trimmed to **2,000 characters of raw letter content only**, excluding any prompt headings/metadata).
    - The prompt explicitly instructs the model to **adapt style/structure — not copy verbatim**.
    - If retrieval fails or no matches exist yet, the pipeline continues without RAG (no blocking).
 
