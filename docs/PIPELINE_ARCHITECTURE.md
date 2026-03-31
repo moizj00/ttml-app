@@ -53,6 +53,38 @@ PDF available in subscriber's "My Letters"
 
 ---
 
+## RAG + Recursive Learning (Self-Improving Loop)
+
+This system uses **attorney-approved letters** to improve draft quality from the **very first iteration** of new letters. The loop is fully automated and non-blocking — failures log but never block approval.
+
+### What we use RAG for
+- **Draft quality uplift:** Provide style/structure examples in **Stage 2 drafting** so the first draft is closer to previously approved outcomes.
+- **Training data capture:** Build supervised datasets for fine-tuning, enabling longer-term model improvement.
+
+### Exactly how it works (step-by-step)
+1. **On attorney approval (post-approval hooks):**
+   - **Embedding capture:** The final approved content is embedded using OpenAI `text-embedding-3-small` (1536 dims) and stored in `letter_versions.embedding` (pgvector).
+   - **Training capture:** A single JSONL example is generated with:
+     - `system`: generic drafting instruction
+     - `user`: intake summary (letter type, subject, jurisdiction, issue, desired outcome, parties)
+     - `assistant`: approved letter content  
+     This file is uploaded to `gs://<GCS_TRAINING_BUCKET>/training-data/YYYY/MM/DD/letter-<id>-<ts>.jsonl` and logged in `training_log`.
+
+2. **During Stage 2 drafting (first draft):**
+   - The intake summary is embedded and used to query `match_letters()` in Postgres.
+   - **Top 3 similar approved letters** (similarity ≥ **0.70**) are returned and injected into the **system prompt** as reference examples (each trimmed to 2,000 chars).
+   - The prompt explicitly instructs the model to **adapt style/structure — not copy verbatim**.
+   - If retrieval fails or no matches exist yet, the pipeline continues without RAG (no blocking).
+
+3. **Recursive learning / fine-tuning loop:**
+   - When **50+ examples** exist since the last run, all per-example JSONL files are merged into a single dataset (`fine-tune-datasets/YYYY-MM-DD-merged.jsonl`).
+   - A **Vertex AI tuning job** is submitted (base model: `gemini-1.5-flash-002`) and recorded in `fine_tune_runs`.
+   - This creates a continuous improvement cycle where every approved letter strengthens the next generation of drafts.
+
+**Required configuration:** `OPENAI_API_KEY`, `GCP_PROJECT_ID`, `GCP_REGION`, `GCS_TRAINING_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`.
+
+---
+
 ## Service Resilience — Primary vs Fallback
 
 This section documents every service pair in the system: what is primary, what the fallback is, what triggers the switch, and what capability is lost on fallback.
