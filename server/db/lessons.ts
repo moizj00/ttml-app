@@ -33,7 +33,28 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
     .insert(pipelineLessons)
     .values(data)
     .returning({ insertId: pipelineLessons.id });
-  return result[0];
+  const inserted = result[0];
+
+  // Fire-and-forget: embed the lesson text in the background
+  if (inserted?.insertId && data.lessonText) {
+    setImmediate(async () => {
+      try {
+        const { generateEmbedding } = await import("../pipeline/embeddings");
+        const embedding = await generateEmbedding(data.lessonText);
+        const vectorStr = `[${embedding.join(",")}]`;
+        const embDb = await getDb();
+        if (!embDb) return;
+        await embDb.execute(
+          sql`UPDATE pipeline_lessons SET embedding = ${vectorStr}::vector WHERE id = ${inserted.insertId}`
+        );
+        console.log(`[Lessons] Stored embedding for lesson #${inserted.insertId}`);
+      } catch (embErr) {
+        console.warn(`[Lessons] Failed to embed lesson #${inserted?.insertId}:`, embErr);
+      }
+    });
+  }
+
+  return inserted;
 }
 
 export async function getActiveLessons(filters: {

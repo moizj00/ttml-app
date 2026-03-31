@@ -274,19 +274,67 @@ export async function withModelFailover<T>(
   }
 }
 
+async function findSimilarLessons(
+  queryText: string,
+  letterType: string,
+  jurisdiction: string | null,
+  stage: string,
+  limit: number = 5,
+): Promise<any[]> {
+  try {
+    const { generateEmbedding } = await import("./embeddings");
+    const { getDb } = await import("../db/core");
+    const { sql } = await import("drizzle-orm");
+
+    const embedding = await generateEmbedding(queryText);
+    const db = await getDb();
+    if (!db) return [];
+
+    const vectorStr = `[${embedding.join(",")}]`;
+    const results = await db.execute(sql`
+      SELECT * FROM match_lessons(
+        ${vectorStr}::vector,
+        0.65,
+        ${limit},
+        ${letterType},
+        ${jurisdiction ?? null},
+        ${stage}
+      )
+    `);
+    return results as any[];
+  } catch (err) {
+    console.warn("[Pipeline] Semantic lesson search failed, skipping:", err);
+    return [];
+  }
+}
+
 export async function buildLessonsPromptBlock(
   letterType: string,
   jurisdiction: string | null,
   stage: string,
+  queryContext?: string,
 ): Promise<string> {
   try {
-    const lessons = await getActiveLessons({
+    const primaryLessons = await getActiveLessons({
       letterType,
       jurisdiction: jurisdiction ?? undefined,
       pipelineStage: stage,
       limit: 10,
     });
-    if (!lessons || lessons.length === 0) return "";
+
+    // Secondary retrieval: semantic similarity across all letter types/jurisdictions
+    // when a query context (e.g. the intake summary) is provided or OPENAI_API_KEY is set
+    let semanticLessons: any[] = [];
+    if (queryContext && process.env.OPENAI_API_KEY) {
+      semanticLessons = await findSimilarLessons(queryContext, letterType, jurisdiction, stage, 5);
+    }
+
+    // Merge: primary lessons first, then semantic additions not already covered
+    const primaryIds = new Set((primaryLessons ?? []).map((l: any) => l.id));
+    const additionalSemantic = semanticLessons.filter((l: any) => !primaryIds.has(l.id));
+    const lessons = [...(primaryLessons ?? []), ...additionalSemantic];
+
+    if (lessons.length === 0) return "";
 
     const lessonIds = lessons.map((l: any) => l.id).filter(Boolean);
     if (lessonIds.length > 0) {

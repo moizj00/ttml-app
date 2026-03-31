@@ -230,9 +230,11 @@ async function startWorker() {
   } else {
     const gcsOk = !!process.env.GCS_TRAINING_BUCKET;
     const vertexOk = !!process.env.GCP_REGION;
+    const credentialsOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
     console.log(
       `[Worker] GCP_PROJECT_ID detected — GCS training capture: ${gcsOk ? "enabled" : "DISABLED (set GCS_TRAINING_BUCKET)"}, ` +
-      `Vertex AI fine-tuning: ${vertexOk ? "enabled" : "DISABLED (set GCP_REGION)"}`
+      `Vertex AI fine-tuning: ${vertexOk ? "enabled" : "DISABLED (set GCP_REGION)"}` +
+      (credentialsOk ? ", GOOGLE_APPLICATION_CREDENTIALS: set" : ", GOOGLE_APPLICATION_CREDENTIALS: using ADC (Application Default Credentials)")
     );
   }
 
@@ -252,6 +254,24 @@ async function startWorker() {
         (missing.length > 0 ? `Missing env vars: ${missing.join(", ")}` : "Unknown configuration issue.")
       );
     }
+  }
+
+  // ── Fine-tune status polling (every 30 minutes when GCP is configured) ──
+  if (process.env.GCP_PROJECT_ID && process.env.GCP_REGION && process.env.GCS_TRAINING_BUCKET) {
+    const POLL_INTERVAL_MS = 30 * 60 * 1000;
+    const runPoll = async () => {
+      try {
+        const { pollFineTuneRunStatuses } = await import("./pipeline/fine-tune");
+        await pollFineTuneRunStatuses();
+      } catch (pollErr) {
+        console.warn("[Worker] Fine-tune poll error:", pollErr);
+      }
+    };
+    // Initial poll on startup (deferred slightly to let DB warm up)
+    setTimeout(runPoll, 10_000);
+    // Then every 30 minutes
+    setInterval(runPoll, POLL_INTERVAL_MS);
+    console.log("[Worker] Fine-tune status polling scheduled every 30 minutes.");
   }
 
   console.log("[Worker] Warming up database connection...");

@@ -498,6 +498,7 @@ export const pipelineLessons = pgTable("pipeline_lessons", {
   pipelineStage: pipelineStageEnum("pipeline_stage"),
   category: lessonCategoryEnum("category").default("general").notNull(),
   lessonText: text("lesson_text").notNull(),
+  embedding: vector("embedding"),
   sourceLetterRequestId: integer("source_letter_request_id"),
   sourceAction: lessonSourceEnum("source_action").notNull(),
   isActive: boolean("is_active").default(true).notNull(),

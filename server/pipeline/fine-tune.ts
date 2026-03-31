@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/core";
 import { fineTuneRuns } from "../../drizzle/schema";
 import { captureServerException } from "../sentry";
@@ -140,7 +140,73 @@ async function submitVertexFineTuningJob(
   return jobName;
 }
 
-export async function checkAndTriggerFineTune(): Promise<void> {
+/**
+ * Dry-run mode: validates GCP connectivity, counts examples, and logs what
+ * would happen — without actually submitting a job or writing to the DB.
+ */
+export async function dryRunFineTuneCheck(): Promise<{
+  gcpConfigured: boolean;
+  exampleCount: number;
+  thresholdMet: boolean;
+  trainingFilesCount: number;
+  inProgress: boolean;
+  wouldSubmit: boolean;
+  notes: string[];
+}> {
+  const notes: string[] = [];
+  const gcpConfigured = isVertexConfigured();
+
+  if (!gcpConfigured) {
+    notes.push("GCP not configured: set GCP_PROJECT_ID, GCP_REGION, GCS_TRAINING_BUCKET.");
+    return { gcpConfigured: false, exampleCount: 0, thresholdMet: false, trainingFilesCount: 0, inProgress: false, wouldSubmit: false, notes };
+  }
+
+  const inProgress = await hasSubmittedRunInProgress();
+  if (inProgress) {
+    notes.push("A fine-tune run is already submitted/running — would skip.");
+  }
+
+  const exampleCount = await countTrainingExamplesSinceLastTune();
+  const thresholdMet = exampleCount >= FINE_TUNE_THRESHOLD;
+  notes.push(`Training examples since last tune: ${exampleCount} (threshold: ${FINE_TUNE_THRESHOLD})`);
+
+  let trainingFilesCount = 0;
+  if (thresholdMet && !inProgress) {
+    const paths = await getAllTrainingGcsPathsSinceLastTune();
+    trainingFilesCount = paths.length;
+    notes.push(`Training files available in GCS: ${trainingFilesCount}`);
+    if (trainingFilesCount === 0) {
+      notes.push("No training files found in training_log — cannot submit job.");
+    }
+  }
+
+  // Verify GCP credentials are reachable
+  try {
+    const { GoogleAuth } = await import("google-auth-library");
+    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const authOpts: Record<string, unknown> = { scopes: ["https://www.googleapis.com/auth/cloud-platform"] };
+    if (credentialsPath) authOpts.keyFilename = credentialsPath;
+    const auth = new GoogleAuth(authOpts);
+    const client = await auth.getClient();
+    await client.getAccessToken();
+    notes.push("GCP credentials: OK (access token obtained).");
+  } catch (credErr) {
+    notes.push(`GCP credentials: FAILED — ${credErr instanceof Error ? credErr.message : String(credErr)}`);
+  }
+
+  const wouldSubmit = gcpConfigured && thresholdMet && !inProgress && trainingFilesCount > 0;
+  notes.push(wouldSubmit ? "DRY RUN: would submit Vertex AI fine-tuning job." : "DRY RUN: would NOT submit a job.");
+
+  console.log("[FineTune][DryRun]", notes.join(" | "));
+  return { gcpConfigured, exampleCount, thresholdMet, trainingFilesCount, inProgress, wouldSubmit, notes };
+}
+
+export async function checkAndTriggerFineTune(opts?: { dryRun?: boolean }): Promise<void> {
+  if (opts?.dryRun) {
+    await dryRunFineTuneCheck();
+    return;
+  }
+
   if (!isVertexConfigured()) {
     console.warn("[FineTune] Vertex AI not configured — skipping fine-tune check. Set GCP_PROJECT_ID, GCP_REGION, and GCS_TRAINING_BUCKET.");
     return;
@@ -188,5 +254,104 @@ export async function checkAndTriggerFineTune(): Promise<void> {
     captureServerException(err, {
       tags: { component: "fine_tune", error_type: "trigger_failed" },
     });
+  }
+}
+
+/**
+ * Poll Vertex AI for the status of all submitted/running fine-tune jobs and
+ * update `fine_tune_runs` accordingly.
+ */
+export async function pollFineTuneRunStatuses(): Promise<void> {
+  if (!isVertexConfigured()) return;
+
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const activeRuns = await db
+      .select()
+      .from(fineTuneRuns)
+      .where(inArray(fineTuneRuns.status, ["submitted", "running"]));
+
+    if (activeRuns.length === 0) return;
+
+    console.log(`[FineTune] Polling ${activeRuns.length} active fine-tune run(s)...`);
+
+    const { GoogleAuth } = await import("google-auth-library");
+    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const authOpts: Record<string, unknown> = { scopes: ["https://www.googleapis.com/auth/cloud-platform"] };
+    if (credentialsPath) authOpts.keyFilename = credentialsPath;
+
+    const auth = new GoogleAuth(authOpts);
+    const client = await auth.getClient();
+    const tokenResponse = await client.getAccessToken();
+    const accessToken = tokenResponse.token ?? "";
+
+    for (const run of activeRuns) {
+      if (!run.vertexJobId) continue;
+
+      try {
+        const region = process.env.GCP_REGION!;
+        const jobUrl = run.vertexJobId.startsWith("projects/")
+          ? `https://${region}-aiplatform.googleapis.com/v1/${run.vertexJobId}`
+          : `https://${region}-aiplatform.googleapis.com/v1/${run.vertexJobId}`;
+
+        const resp = await fetch(jobUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+
+        if (!resp.ok) {
+          console.warn(`[FineTune] Failed to poll job ${run.vertexJobId}: HTTP ${resp.status}`);
+          continue;
+        }
+
+        const jobData: Record<string, unknown> = await resp.json();
+        const state = (jobData.state ?? "") as string;
+
+        // Vertex AI tuning job states:
+        // JOB_STATE_QUEUED, JOB_STATE_PENDING, JOB_STATE_RUNNING,
+        // JOB_STATE_SUCCEEDED, JOB_STATE_FAILED, JOB_STATE_CANCELLED
+        let newStatus: string | null = null;
+        let resultModelId: string | null = null;
+        let errorMessage: string | null = null;
+
+        if (state === "JOB_STATE_RUNNING" || state === "JOB_STATE_PENDING" || state === "JOB_STATE_QUEUED") {
+          newStatus = "running";
+        } else if (state === "JOB_STATE_SUCCEEDED") {
+          newStatus = "completed";
+          const tunedModel = jobData.tunedModel as Record<string, unknown> | undefined;
+          resultModelId = (tunedModel?.model ?? tunedModel?.endpoint ?? null) as string | null;
+        } else if (state === "JOB_STATE_FAILED" || state === "JOB_STATE_CANCELLED") {
+          newStatus = "failed";
+          const errObj = jobData.error as Record<string, unknown> | undefined;
+          errorMessage = errObj?.message ? String(errObj.message) : `Vertex AI job ended with state: ${state}`;
+        }
+
+        if (newStatus && newStatus !== run.status) {
+          console.log(`[FineTune] Job ${run.vertexJobId}: ${run.status} → ${newStatus}`);
+          await db
+            .update(fineTuneRuns)
+            .set({
+              status: newStatus,
+              ...(resultModelId ? { resultModelId } : {}),
+              ...(errorMessage ? { errorMessage } : {}),
+              ...(newStatus === "completed" || newStatus === "failed" ? { completedAt: new Date() } : {}),
+            } as any)
+            .where(eq(fineTuneRuns.id, run.id));
+        } else {
+          console.log(`[FineTune] Job ${run.vertexJobId}: status unchanged (${run.status})`);
+        }
+      } catch (pollErr) {
+        console.warn(`[FineTune] Error polling job ${run.vertexJobId}:`, pollErr);
+        captureServerException(pollErr, {
+          tags: { component: "fine_tune", error_type: "poll_failed" },
+          extra: { runId: run.id, vertexJobId: run.vertexJobId },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[FineTune] pollFineTuneRunStatuses failed:", err);
+    captureServerException(err, { tags: { component: "fine_tune", error_type: "poll_setup_failed" } });
   }
 }
