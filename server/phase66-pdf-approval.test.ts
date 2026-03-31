@@ -38,12 +38,12 @@ describe("pdfGenerator", () => {
     vi.clearAllMocks();
     vi.mocked(generatePdfViaWorker).mockResolvedValue({
       buffer: Buffer.from("%PDF-1.4 fake pdf content for testing"),
-      source: "mock" as any,
+      source: "local",
     });
     vi.mocked(storagePut).mockResolvedValue({
       url: "https://s3.example.com/mock.pdf",
       key: "mock.pdf",
-    } as any);
+    });
   });
 
   it("generates a non-empty PDF buffer that starts with %PDF", () => {
@@ -55,7 +55,7 @@ describe("pdfGenerator", () => {
     vi.mocked(storagePut).mockResolvedValueOnce({
       url: "https://s3.example.com/full.pdf",
       key: "full.pdf",
-    } as any);
+    });
 
     const result = await generateAndUploadApprovedPdf({
       letterId: 2,
@@ -88,7 +88,7 @@ describe("pdfGenerator", () => {
     vi.mocked(storagePut).mockResolvedValueOnce({
       url: "https://s3.example.com/fallback.pdf",
       key: "fallback.pdf",
-    } as any);
+    });
 
     // Should not throw even when intakeJson is null
     const result = await generateAndUploadApprovedPdf({
@@ -111,7 +111,7 @@ describe("pdfGenerator", () => {
     vi.mocked(storagePut).mockResolvedValueOnce({
       url: "https://s3.example.com/sanitized.pdf",
       key: "sanitized.pdf",
-    } as any);
+    });
 
     const result = await generateAndUploadApprovedPdf({
       letterId: 5,
