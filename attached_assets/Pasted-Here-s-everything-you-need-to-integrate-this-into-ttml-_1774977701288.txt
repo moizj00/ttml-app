@@ -1,0 +1,83 @@
+Here's everything you need to integrate this into ttml-pro. I'll give you a clean copy-paste guide organized by file:
+
+1. Install this one dependency (if not already in ttml-pro):
+
+npm install framer-motion
+2. Copy these 2 image files from this project's artifacts/section-two-animation/public/ into your ttml-pro's public/ folder:
+
+bg-texture.png
+doc-mockup.png
+3. Create these component files in your ttml-pro project:
+
+components/HowItWorks/icons.tsx — all the SVG icons (IconDocument, IconSearch, IconCheckmark, IconScale, IconSparkles)
+
+components/HowItWorks/PersistentLayers.tsx — the background with the drifting violet blob, watermark step numbers, and the animated progress pipeline bar at the bottom
+
+components/HowItWorks/scenes/IntroScene.tsx — "From Facts to Draft. Precision Flow."
+
+components/HowItWorks/scenes/Step1Scene.tsx — "Turn Your Facts Into a Draft" with the document mockup
+
+components/HowItWorks/scenes/Step2Scene.tsx — "A Stronger Draft in 10 Minutes" with the scanning animation
+
+components/HowItWorks/scenes/Step3Scene.tsx — "Review With an Attorney or Send" with the green checkmark seal
+
+components/HowItWorks/scenes/OutroScene.tsx — "Ready to Send." with the pulsing rings
+
+4. Create the main orchestrator component — components/HowItWorks/index.tsx:
+
+import { useState, useEffect, useRef } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { PersistentLayers } from './PersistentLayers';
+import { IntroScene } from './scenes/IntroScene';
+import { Step1Scene } from './scenes/Step1Scene';
+import { Step2Scene } from './scenes/Step2Scene';
+import { Step3Scene } from './scenes/Step3Scene';
+import { OutroScene } from './scenes/OutroScene';
+const SCENE_DURATIONS = [4000, 4000, 3500, 4000, 3500];
+export function HowItWorksAnimation() {
+  const [currentScene, setCurrentScene] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    timerRef.current = setTimeout(() => {
+      setCurrentScene(prev => (prev + 1) % SCENE_DURATIONS.length);
+    }, SCENE_DURATIONS[currentScene]);
+    return () => clearTimeout(timerRef.current);
+  }, [currentScene]);
+  return (
+    <div className="relative w-full h-screen overflow-hidden" style={{ background: '#FAFAFF' }}>
+      <PersistentLayers currentScene={currentScene} />
+      <AnimatePresence mode="wait">
+        {currentScene === 0 && <IntroScene key="intro" />}
+        {currentScene === 1 && <Step1Scene key="step1" />}
+        {currentScene === 2 && <Step2Scene key="step2" />}
+        {currentScene === 3 && <Step3Scene key="step3" />}
+        {currentScene === 4 && <OutroScene key="outro" />}
+      </AnimatePresence>
+    </div>
+  );
+}
+5. Add these CSS variables to your global stylesheet:
+
+:root {
+  --color-primary: #5B2EFF;
+  --color-accent: #8B6FFF;
+  --color-bg-light: #FAFAFF;
+  --color-bg-muted: #E8E2FF;
+  --color-text-primary: #1A1033;
+  --color-text-secondary: #6B5B95;
+  --color-text-muted: #9CA3AF;
+  --color-success: #00C48C;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+And add this Google Fonts import:
+
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+6. Drop it into your landing page wherever the second section lives:
+
+import { HowItWorksAnimation } from '@/components/HowItWorks';
+// Inside your landing page:
+<section id="how-it-works">
+  <HowItWorksAnimation />
+</section>
+The one thing to adapt: anywhere a file references import.meta.env.BASE_URL (for the image paths), replace it with just / or your ttml-pro's equivalent base URL — since ttml-pro is likely served at the root, src="/bg-texture.png" and src="/doc-mockup.png" will work directly.
