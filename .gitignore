@@ -111,9 +111,18 @@ database/backups/
 secrets/
 .secrets/
 private/
-*credentials*
-*secret*
-*token*
+# Use extension-specific patterns to avoid matching source code files (e.g. auth-tokens.ts)
+*credentials*.json
+*credentials*.txt
+*credentials*.env
+*secret*.json
+*secret*.txt
+*secret*.env
+*.token
+*token*.json
+*token*.txt
+*token*.env
+!server/db/auth-tokens.ts
 !.env.example
 
 # Lock files — not committed in this repo
