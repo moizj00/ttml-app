@@ -397,12 +397,12 @@ export default function Home() {
                 </div>
               </div>
               <div className="space-y-3">
-                <div className="h-3 w-full bg-slate-100 rounded"></div>
-                <div className="h-3 w-[90%] bg-slate-100 rounded"></div>
-                <div className="h-3 w-[95%] bg-slate-100 rounded"></div>
-                <div className="h-3 w-[85%] bg-slate-100 rounded"></div>
+                <div className="hero-doc-line hero-doc-line-1"></div>
+                <div className="hero-doc-line hero-doc-line-2"></div>
+                <div className="hero-doc-line hero-doc-line-3"></div>
+                <div className="hero-doc-line hero-doc-line-4"></div>
               </div>
-              <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-start gap-3">
+              <div className="hero-doc-badge mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-start gap-3">
                 <div className="mt-0.5">
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                 </div>
@@ -415,6 +415,27 @@ export default function Home() {
                     {new Date().toLocaleDateString()}
                   </div>
                 </div>
+              </div>
+              <div className="px-2">
+                <svg
+                  viewBox="0 0 220 48"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-40 h-10"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M8 36 C20 10, 36 8, 44 24 C52 40, 48 44, 56 30 C62 18, 70 14, 78 22 C86 30, 82 40, 90 32 C98 24, 106 12, 116 20 C126 28, 120 40, 130 34 C138 28, 144 16, 154 24 C162 30, 160 40, 170 34 C178 28, 184 22, 194 28 C202 33, 206 38, 212 36"
+                    stroke="#1e3a5f"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="520"
+                    strokeDashoffset="520"
+                    className="hero-doc-signature"
+                    style={{ fill: "none" }}
+                  />
+                </svg>
               </div>
             </div>
           </div>
