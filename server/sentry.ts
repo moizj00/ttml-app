@@ -87,3 +87,4 @@ export function setServerUser(user: {
 
 // Re-export for direct access
 export { Sentry };
+export { wrapMcpServer } from "./mcp";
