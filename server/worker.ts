@@ -30,7 +30,7 @@ import { getDb } from "./db";
 const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
 
-async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
+export async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
   const { letterId, intake, userId, appUrl, label, usageContext } = data;
 
   const lockAcquired = await acquirePipelineLock(letterId);
@@ -180,12 +180,12 @@ async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
   }
 }
 
-async function processRetryFromStage(data: RetryFromStageJobData): Promise<void> {
+export async function processRetryFromStage(data: RetryFromStageJobData): Promise<void> {
   const { letterId, intake, stage, userId } = data;
   await retryPipelineFromStage(letterId, intake as any, stage, userId);
 }
 
-async function processJob(job: Job<PipelineJobData>): Promise<void> {
+export async function processJob(job: Job<PipelineJobData>): Promise<void> {
   const startTime = Date.now();
   console.log(`[Worker] Processing job ${job.id} (type=${job.data.type}, letterId=${job.data.letterId})`);
 
