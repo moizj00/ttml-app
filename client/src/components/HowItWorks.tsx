@@ -22,8 +22,20 @@ const steps = [
   },
 ];
 
-const LAST_CARD_DELAY = 150 + 2 * 200;
-const SHIMMER_DELAY = LAST_CARD_DELAY + 900;
+// True sequential choreography — no overlaps between steps:
+// Card 01 → connector/segment → Card 02 → connector/segment → Card 03
+// All durations compositor-friendly (transform + opacity only).
+const CARD_DURATION = 450;    // ms — snappy spring entrance
+const CONNECTOR_DUR = 200;    // ms — timeline segment travel
+
+// Absolute start times:
+const T_STEP0  = 150;                                     // 150
+const T_SEG1   = T_STEP0  + CARD_DURATION;               // 600  — segment 1 fires after card 01 lands
+const T_STEP1  = T_SEG1   + CONNECTOR_DUR;               // 800
+const T_SEG2   = T_STEP1  + CARD_DURATION;               // 1250 — segment 2 fires after card 02 lands
+const T_STEP2  = T_SEG2   + CONNECTOR_DUR;               // 1450
+const T_ALL_DONE = T_STEP2 + CARD_DURATION;              // 1900 — entire sequence complete
+const T_SHIMMER  = T_ALL_DONE + 100;                     // 2000 — final shimmer sweep (ends 2400ms, under 2500)
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -89,13 +101,13 @@ export default function HowItWorks() {
 
         /* Card entrance with spring overshoot */
         @keyframes hiw-card-in {
-          0%   { opacity: 0; transform: translateY(70px) scale(0.95); }
-          55%  { opacity: 1; transform: translateY(-8px) scale(1.02); }
-          75%  { transform: translateY(3px) scale(0.99); }
+          0%   { opacity: 0; transform: translateY(60px) scale(0.95); }
+          55%  { opacity: 1; transform: translateY(-6px) scale(1.015); }
+          75%  { transform: translateY(2px) scale(0.998); }
           100% { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        /* Icon pop with big overshoot */
+        /* Icon pop — fires together with card */
         @keyframes hiw-icon-in {
           0%   { opacity: 0; transform: scale(0.3) rotate(-15deg); }
           50%  { opacity: 1; transform: scale(1.25) rotate(5deg); }
@@ -103,16 +115,32 @@ export default function HowItWorks() {
           100% { opacity: 1; transform: scale(1) rotate(0deg); }
         }
 
-        /* Icon idle pulse */
-        @keyframes hiw-icon-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.35), 0 12px 40px rgba(37,99,235,0.18); }
-          50%       { box-shadow: 0 0 0 10px rgba(37,99,235,0), 0 12px 40px rgba(37,99,235,0.25); }
+        /* Watermark number — scale-down spotlight entrance */
+        @keyframes hiw-watermark-in {
+          0%   { opacity: 0; transform: scale(2) translateY(-6px); }
+          40%  { opacity: 0.7; transform: scale(1.06) translateY(1px); }
+          65%  { opacity: 1; transform: scale(0.98) translateY(0); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
         }
 
-        /* Step number fade in */
-        @keyframes hiw-step-number-in {
-          0%   { opacity: 0; transform: translateY(12px) scale(0.9); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+        /* Card glow pulse — compositor-friendly: opacity + transform on overlay ring */
+        @keyframes hiw-glow-ring-in {
+          0%   { opacity: 0; transform: scale(0.88); }
+          40%  { opacity: 1; transform: scale(1.02); }
+          100% { opacity: 0; transform: scale(1.08); }
+        }
+
+        /* Timeline segment fill */
+        @keyframes hiw-line-seg-in {
+          0%   { transform: scaleX(0); opacity: 0.6; }
+          60%  { opacity: 1; }
+          100% { transform: scaleX(1); opacity: 1; }
+        }
+
+        /* Mobile connector fill */
+        @keyframes hiw-mobile-seg-in {
+          0%   { transform: scaleY(0); opacity: 0.6; }
+          100% { transform: scaleY(1); opacity: 1; }
         }
 
         /* Dot appear */
@@ -122,7 +150,14 @@ export default function HowItWorks() {
           100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
 
-        /* Timeline glow shimmer */
+        /* Mobile dot appear (no translate wrapper) */
+        @keyframes hiw-dot-pulse-mobile {
+          0%   { transform: scale(0); opacity: 0; }
+          50%  { transform: scale(1.7); opacity: 0.5; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Timeline shimmer sweep */
         @keyframes hiw-shimmer-sweep {
           0%   { transform: translateX(-100%); opacity: 1; }
           100% { transform: translateX(300%); opacity: 0; }
@@ -197,14 +232,16 @@ export default function HowItWorks() {
         /* Reduced motion overrides */
         @media (prefers-reduced-motion: reduce) {
           .hiw-card, .hiw-heading, .hiw-icon-wrap, .hiw-watermark,
-          .hiw-line-fill, .hiw-mobile-fill, .hiw-dot, .hiw-shimmer-overlay {
+          .hiw-line-seg, .hiw-mobile-fill, .hiw-dot, .hiw-shimmer-overlay,
+          .hiw-glow-ring {
             animation: none !important;
             opacity: 1 !important;
             transform: none !important;
             transition: none !important;
           }
-          .hiw-line-fill { transform: scaleX(1) !important; }
+          .hiw-line-seg { transform: scaleX(1) !important; }
           .hiw-mobile-fill { transform: scaleY(1) !important; }
+          .hiw-glow-ring { opacity: 0 !important; }
           .hiw-card-inner {
             transition: none !important;
           }
@@ -279,7 +316,7 @@ export default function HowItWorks() {
         </div>
 
         <div className="sr-only" aria-live="polite" role="status">
-          {revealed && "Step 1: Describe Your Situation. Step 2: Attorneys Research and Draft. Step 3: Attorney Reviews and Approves. "}
+          {revealed && "Step 1: Turn Your Facts Into a Draft. Step 2: Send a Stronger First Draft in 10 Minutes. Step 3: Review With an Attorney or Send Directly. "}
         </div>
       </div>
     </section>
@@ -297,7 +334,7 @@ function ShimmerSweep({ revealed, skip }: { revealed: boolean; skip: boolean }) 
         className="absolute inset-y-0 w-1/3"
         style={{
           background: "linear-gradient(90deg, transparent 0%, rgba(37, 99, 235, 0.07) 40%, rgba(37, 99, 235, 0.04) 60%, transparent 100%)",
-          animation: revealed ? `hiw-shimmer-sweep 700ms cubic-bezier(0.16, 1, 0.3, 1) ${SHIMMER_DELAY}ms both` : "none",
+          animation: revealed ? `hiw-shimmer-sweep 400ms cubic-bezier(0.16, 1, 0.3, 1) ${T_SHIMMER}ms both` : "none",
         }}
       />
     </div>
@@ -305,6 +342,11 @@ function ShimmerSweep({ revealed, skip }: { revealed: boolean; skip: boolean }) 
 }
 
 function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean }) {
+  // Dot 1 appears with Step 01, dot 2 appears after seg1, dot 3 appears after seg2
+  const dot0Delay = T_STEP0 + 80;
+  const dot1Delay = T_SEG1 + CONNECTOR_DUR - 80;
+  const dot2Delay = T_SEG2 + CONNECTOR_DUR - 80;
+
   return (
     <div className="hidden md:block absolute top-[66px] left-0 right-0 z-0 pointer-events-none" aria-hidden="true">
       <div className="relative mx-auto" style={{ width: "66.66%", height: 6 }}>
@@ -314,36 +356,65 @@ function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean 
           style={{ background: "rgba(37,99,235,0.10)" }}
         />
 
-        {/* Animated fill */}
+        {/* Segment 1: left half (dot1 → dot2) — starts after card 01 lands */}
         <div
-          className="absolute inset-0 rounded-full hiw-line-fill"
+          className="absolute top-0 bottom-0 left-0 rounded-full hiw-line-seg"
           style={skip ? {
+            width: "50%",
             transform: "scaleX(1)",
-            background: "linear-gradient(90deg, #60a5fa, #3b82f6, #2563eb, #1d4ed8)",
-            boxShadow: "0 0 16px rgba(37,99,235,0.55), 0 0 6px rgba(37,99,235,0.8)",
-          } : {
-            background: "linear-gradient(90deg, #60a5fa, #3b82f6, #2563eb, #1d4ed8)",
-            boxShadow: "0 0 16px rgba(37,99,235,0.55), 0 0 6px rgba(37,99,235,0.8)",
             transformOrigin: "left center",
-            transform: revealed ? "scaleX(1)" : "scaleX(0)",
-            opacity: revealed ? 1 : 0,
-            transition: "transform 1400ms cubic-bezier(0.16, 1, 0.3, 1) 500ms, opacity 300ms ease 500ms",
+            background: "linear-gradient(90deg, #60a5fa, #3b82f6)",
+            boxShadow: "0 0 12px rgba(37,99,235,0.5)",
+          } : {
+            width: "50%",
+            background: "linear-gradient(90deg, #60a5fa, #3b82f6)",
+            boxShadow: "0 0 12px rgba(37,99,235,0.5)",
+            transformOrigin: "left center",
+            animation: revealed
+              ? `hiw-line-seg-in ${CONNECTOR_DUR}ms cubic-bezier(0.16, 1, 0.3, 1) ${T_SEG1}ms both`
+              : "none",
           }}
         />
 
-        {/* Glow pulse overlay on line */}
+        {/* Segment 2: right half (dot2 → dot3) — starts after card 02 lands */}
+        <div
+          className="absolute top-0 bottom-0 rounded-full hiw-line-seg"
+          style={skip ? {
+            left: "50%",
+            width: "50%",
+            transform: "scaleX(1)",
+            transformOrigin: "left center",
+            background: "linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8)",
+            boxShadow: "0 0 12px rgba(37,99,235,0.5)",
+          } : {
+            left: "50%",
+            width: "50%",
+            background: "linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8)",
+            boxShadow: "0 0 12px rgba(37,99,235,0.5)",
+            transformOrigin: "left center",
+            animation: revealed
+              ? `hiw-line-seg-in ${CONNECTOR_DUR}ms cubic-bezier(0.16, 1, 0.3, 1) ${T_SEG2}ms both`
+              : "none",
+          }}
+        />
+
+        {/* Glow pulse overlay on line — starts after full sequence */}
         {!skip && revealed && (
           <div
             className="absolute inset-0 rounded-full hiw-dot-glow"
             style={{
               background: "linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.35) 50%, transparent 90%)",
-              animationDelay: "1800ms",
+              animationDelay: `${T_ALL_DONE}ms`,
             }}
           />
         )}
 
-        {/* Dot markers */}
-        {[0, 50, 100].map((pos, i) => (
+        {/* Dot markers — timed sequentially */}
+        {[
+          { pos: 0, delay: dot0Delay },
+          { pos: 50, delay: dot1Delay },
+          { pos: 100, delay: dot2Delay },
+        ].map(({ pos, delay }, i) => (
           <div
             key={i}
             className="absolute top-1/2"
@@ -369,7 +440,7 @@ function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean 
                 background: "linear-gradient(135deg, #60a5fa, #2563eb)",
                 boxShadow: "0 0 0 4px rgba(37,99,235,0.18), 0 0 12px rgba(37,99,235,0.5)",
               } : {
-                animation: revealed ? `hiw-dot-pulse 600ms cubic-bezier(0.34, 1.56, 0.64, 1) ${800 + i * 280}ms both` : "none",
+                animation: revealed ? `hiw-dot-pulse 500ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}ms both` : "none",
                 background: "linear-gradient(135deg, #60a5fa, #2563eb)",
                 boxShadow: "0 0 0 4px rgba(37,99,235,0.18), 0 0 12px rgba(37,99,235,0.5)",
               }}
@@ -381,7 +452,7 @@ function DesktopTimeline({ revealed, skip }: { revealed: boolean; skip: boolean 
   );
 }
 
-function MobileConnector({ skip, revealed, delay }: { skip: boolean; revealed: boolean; delay: number }) {
+function MobileConnector({ skip, revealed, segStart }: { skip: boolean; revealed: boolean; segStart: number }) {
   return (
     <div className="md:hidden flex flex-col items-center" style={{ height: 52 }} aria-hidden="true">
       <div className="relative w-[4px] flex-1">
@@ -400,9 +471,9 @@ function MobileConnector({ skip, revealed, delay }: { skip: boolean; revealed: b
             background: "linear-gradient(180deg, #60a5fa, #2563eb)",
             boxShadow: "0 0 8px rgba(37,99,235,0.5)",
             transformOrigin: "top center",
-            transform: revealed ? "scaleY(1)" : "scaleY(0)",
-            opacity: revealed ? 1 : 0,
-            transition: `transform 700ms cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms, opacity 200ms ease ${delay}ms`,
+            animation: revealed
+              ? `hiw-mobile-seg-in ${CONNECTOR_DUR}ms cubic-bezier(0.16, 1, 0.3, 1) ${segStart}ms both`
+              : "none",
           }}
         />
       </div>
@@ -416,12 +487,16 @@ function MobileConnector({ skip, revealed, delay }: { skip: boolean; revealed: b
         } : {
           background: "linear-gradient(135deg, #60a5fa, #2563eb)",
           boxShadow: "0 0 0 3px rgba(37,99,235,0.18), 0 0 10px rgba(37,99,235,0.4)",
-          animation: revealed ? `hiw-dot-pulse 600ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay + 450}ms both` : "none",
+          animation: revealed ? `hiw-dot-pulse-mobile 500ms cubic-bezier(0.34, 1.56, 0.64, 1) ${segStart + CONNECTOR_DUR - 60}ms both` : "none",
         }}
       />
     </div>
   );
 }
+
+// Map step index to absolute start time and segment start time
+const STEP_STARTS = [T_STEP0, T_STEP1, T_STEP2];
+const SEG_STARTS  = [T_SEG1, T_SEG2];
 
 function StepCard({
   item,
@@ -436,9 +511,12 @@ function StepCard({
   skip: boolean;
   isLast: boolean;
 }) {
-  const cardDelay = 150 + index * 200;
-  const iconDelay = cardDelay + 280;
-  const numberDelay = cardDelay + 80;
+  const cardDelay    = STEP_STARTS[index];
+  // Icon and watermark animate simultaneously with the card — one cohesive unit
+  const iconDelay    = cardDelay;
+  const numberDelay  = cardDelay;
+  // Glow ring overlay pulses after card fully lands
+  const glowDelay    = cardDelay + CARD_DURATION;
 
   return (
     <>
@@ -446,10 +524,26 @@ function StepCard({
         className="relative flex flex-col items-center text-center group hiw-card"
         data-testid={`step-${item.step}`}
         style={skip ? {} : {
-          animation: revealed ? `hiw-card-in 900ms cubic-bezier(0.16, 1, 0.3, 1) ${cardDelay}ms both` : "none",
+          animation: revealed ? `hiw-card-in ${CARD_DURATION}ms cubic-bezier(0.16, 1, 0.3, 1) ${cardDelay}ms both` : "none",
           opacity: revealed ? undefined : 0,
         }}
       >
+        {/* Compositor-friendly glow ring — opacity+transform only, absolutely positioned */}
+        {!skip && (
+          <div
+            className="hiw-glow-ring absolute inset-0 rounded-2xl pointer-events-none"
+            aria-hidden="true"
+            style={{
+              border: "2px solid rgba(37,99,235,0.35)",
+              boxShadow: "0 0 24px rgba(37,99,235,0.18)",
+              opacity: 0,
+              animation: revealed
+                ? `hiw-glow-ring-in 160ms cubic-bezier(0.16, 1, 0.3, 1) ${glowDelay}ms both`
+                : "none",
+            }}
+          />
+        )}
+
         <div
           className="relative rounded-2xl px-6 pt-16 pb-8 w-full hiw-card-inner"
           style={{
@@ -460,7 +554,7 @@ function StepCard({
             backdropFilter: "blur(4px)",
           }}
         >
-          {/* Bold watermark step number */}
+          {/* Bold watermark step number — scale-down spotlight entrance */}
           <div
             className="absolute top-3 right-4 font-black leading-none select-none pointer-events-none hiw-watermark"
             style={skip ? {
@@ -477,7 +571,7 @@ function StepCard({
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
-              animation: revealed ? `hiw-step-number-in 700ms cubic-bezier(0.16, 1, 0.3, 1) ${numberDelay}ms both` : "none",
+              animation: revealed ? `hiw-watermark-in 600ms cubic-bezier(0.16, 1, 0.3, 1) ${numberDelay}ms both` : "none",
             }}
             aria-hidden="true"
           >
@@ -506,7 +600,7 @@ function StepCard({
               <div
                 className="hiw-icon-wrap"
                 style={skip ? {} : {
-                  animation: revealed ? `hiw-icon-in 600ms cubic-bezier(0.34, 1.56, 0.64, 1) ${iconDelay}ms both` : "none",
+                  animation: revealed ? `hiw-icon-in 550ms cubic-bezier(0.34, 1.56, 0.64, 1) ${iconDelay}ms both` : "none",
                 }}
               >
                 <item.icon
@@ -540,7 +634,11 @@ function StepCard({
       </div>
 
       {!isLast && (
-        <MobileConnector skip={skip} revealed={revealed} delay={cardDelay + 400} />
+        <MobileConnector
+          skip={skip}
+          revealed={revealed}
+          segStart={SEG_STARTS[index]}
+        />
       )}
     </>
   );
