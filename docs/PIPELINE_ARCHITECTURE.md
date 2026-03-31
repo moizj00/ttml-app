@@ -78,7 +78,7 @@ This system uses **attorney-approved letters** to improve draft quality from the
    - If retrieval fails or no matches exist yet, the pipeline continues without RAG (no blocking).
 
 3. **Recursive learning / fine-tuning loop:**
-   - **Trigger condition:** When **50+ examples** exist since the last run.
+   - **Trigger condition:** When **50 or more examples** exist since the last run.
    - **Tracking mechanism:** The count is based on `training_log` rows after the most recent non-failed `fine_tune_runs.started_at`.
    - **Dataset merge:** All per-example JSONL files are merged into a single dataset (`fine-tune-datasets/YYYY-MM-DD-merged.jsonl`).
    - A **Vertex AI tuning job** is submitted (base model: `gemini-1.5-flash-002`) and recorded in `fine_tune_runs`.
