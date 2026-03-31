@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit, getClientIp } from "../rateLimiter";
-import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../../shared/types";
+import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult, type IntakeJson } from "../../shared/types";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
@@ -586,6 +586,37 @@ export const reviewRouter = router({
         }
         extractLessonFromApproval(input.letterId, input.finalContent, ctx.user.id, input.internalNote).catch(console.error);
         computeAndStoreQualityScore(input.letterId, "approved", input.finalContent).catch(console.error);
+        // ── RAG embedding + training capture (fire-and-forget) ──
+        (async () => {
+          try {
+            const { embedAndStoreLetterVersion } = await import("../pipeline/embeddings");
+            await embedAndStoreLetterVersion(versionId, input.finalContent);
+          } catch (embErr) {
+            console.error(`[Approve] Embedding failed for letter #${input.letterId}:`, embErr);
+          }
+        })();
+        (async () => {
+          try {
+            const { captureTrainingExample } = await import("../pipeline/training-capture");
+            await captureTrainingExample(
+              input.letterId,
+              letter.letterType,
+              letter.jurisdictionState ?? null,
+              letter.intakeJson as IntakeJson,
+              input.finalContent,
+            );
+          } catch (trainErr) {
+            console.error(`[Approve] Training capture failed for letter #${input.letterId}:`, trainErr);
+          }
+        })();
+        (async () => {
+          try {
+            const { checkAndTriggerFineTune } = await import("../pipeline/fine-tune");
+            await checkAndTriggerFineTune();
+          } catch (ftErr) {
+            console.error(`[Approve] Fine-tune check failed:`, ftErr);
+          }
+        })();
         try {
           const appUrl2 = getAppUrl(ctx.req);
           await notifyAdmins({

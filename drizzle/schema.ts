@@ -12,7 +12,22 @@ import {
   serial,
   index,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const vector = customType<{ data: number[]; driverParam: string }>({
+  dataType() {
+    return "vector(1536)";
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === "string") return JSON.parse(value);
+    if (Array.isArray(value)) return value as number[];
+    return [];
+  },
+});
 
 // ─── User Roles ───
 export const USER_ROLES = ["subscriber", "employee", "attorney", "admin"] as const;
@@ -224,6 +239,7 @@ export const letterVersions = pgTable("letter_versions", {
   createdByType: actorTypeEnum("created_by_type").notNull(),
   createdByUserId: integer("created_by_user_id"),
   metadataJson: jsonb("metadata_json"),
+  embedding: vector("embedding"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_letter_versions_letter_request_id").on(t.letterRequestId),
@@ -635,3 +651,44 @@ export const blogPosts = pgTable("blog_posts", {
 
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = typeof blogPosts.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: training_log (RAG training example capture)
+// ═══════════════════════════════════════════════════════
+export const trainingLog = pgTable("training_log", {
+  id: serial("id").primaryKey(),
+  letterRequestId: integer("letter_request_id").notNull(),
+  letterType: varchar("letter_type", { length: 50 }).notNull(),
+  jurisdiction: varchar("jurisdiction", { length: 100 }),
+  gcsPath: varchar("gcs_path", { length: 1000 }),
+  tokenCount: integer("token_count"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  letterIdx: index("idx_training_log_letter_request_id").on(t.letterRequestId),
+  createdAtIdx: index("idx_training_log_created_at").on(t.createdAt),
+}));
+
+export type TrainingLogEntry = typeof trainingLog.$inferSelect;
+export type InsertTrainingLogEntry = typeof trainingLog.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: fine_tune_runs (Vertex AI fine-tuning job tracking)
+// ═══════════════════════════════════════════════════════
+export const fineTuneRuns = pgTable("fine_tune_runs", {
+  id: serial("id").primaryKey(),
+  vertexJobId: varchar("vertex_job_id", { length: 500 }),
+  baseModel: varchar("base_model", { length: 200 }).notNull(),
+  trainingExampleCount: integer("training_example_count").notNull(),
+  status: varchar("status", { length: 50 }).default("submitted").notNull(),
+  gcsTrainingFile: varchar("gcs_training_file", { length: 1000 }),
+  resultModelId: varchar("result_model_id", { length: 500 }),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (t) => ({
+  statusIdx: index("idx_fine_tune_runs_status").on(t.status),
+  startedAtIdx: index("idx_fine_tune_runs_started_at").on(t.startedAt),
+}));
+
+export type FineTuneRun = typeof fineTuneRuns.$inferSelect;
+export type InsertFineTuneRun = typeof fineTuneRuns.$inferInsert;

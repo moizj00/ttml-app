@@ -9,3 +9,6 @@ export * from "./assembly";
 export * from "./vetting";
 export * from "./orchestrator";
 export * from "./prompts";
+export * from "./embeddings";
+export * from "./training-capture";
+export * from "./fine-tune";

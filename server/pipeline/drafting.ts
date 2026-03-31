@@ -74,7 +74,33 @@ export async function runDraftingStage(
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
   const lessonsBlockDrafting = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "drafting");
-  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting;
+
+  let ragBlock = "";
+  try {
+    const { findSimilarLetters } = await import("./embeddings");
+    const intakeText = [
+      intake.matter?.subject,
+      intake.matter?.description,
+      intake.letterType,
+      intake.jurisdiction?.state,
+      intake.desiredOutcome,
+    ].filter(Boolean).join(" ");
+
+    if (intakeText.length > 20) {
+      const similarLetters = await findSimilarLetters(intakeText, 3, 0.7);
+      if (similarLetters.length > 0) {
+        ragBlock = "\n\n## Previously Approved Similar Letters (for reference — adapt style and structure, do NOT copy verbatim)\n\n" +
+          similarLetters.map((sl: { content: string; similarity: number }, i: number) =>
+            `### Example ${i + 1} (similarity: ${(sl.similarity * 100).toFixed(0)}%)\n${sl.content.slice(0, 2000)}`
+          ).join("\n\n");
+        console.log(`[Pipeline] Stage 2: Injected ${similarLetters.length} RAG examples for letter #${letterId}`);
+      }
+    }
+  } catch (ragErr) {
+    console.warn(`[Pipeline] Stage 2: RAG retrieval failed for letter #${letterId} (non-blocking):`, ragErr);
+  }
+
+  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
   // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];

@@ -221,6 +221,21 @@ async function startWorker() {
     console.log("[Worker] OPENAI_API_KEY detected — model failover to GPT-4o is enabled for all pipeline stages.");
   }
 
+  // ── GCS/Vertex AI availability checks ──
+  if (!process.env.GCP_PROJECT_ID) {
+    console.warn(
+      "[Worker] WARNING: GCP_PROJECT_ID is not set. Training capture to GCS and Vertex AI fine-tuning are disabled. " +
+      "Set GCP_PROJECT_ID, GCS_TRAINING_BUCKET, and GCP_REGION to enable."
+    );
+  } else {
+    const gcsOk = !!process.env.GCS_TRAINING_BUCKET;
+    const vertexOk = !!process.env.GCP_REGION;
+    console.log(
+      `[Worker] GCP_PROJECT_ID detected — GCS training capture: ${gcsOk ? "enabled" : "DISABLED (set GCS_TRAINING_BUCKET)"}, ` +
+      `Vertex AI fine-tuning: ${vertexOk ? "enabled" : "DISABLED (set GCP_REGION)"}`
+    );
+  }
+
   console.log("[Worker] Warming up database connection...");
   await getDb().catch((err) => {
     console.error("[Worker] Database warmup failed:", err);
