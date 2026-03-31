@@ -291,11 +291,17 @@
   animation: signature-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1) 2.1s both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-doc-line,
-  .hero-doc-badge,
+  .hero-doc-line {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  .hero-doc-badge {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
   .hero-doc-signature {
     animation: none !important;
-    width: var(--final-w, 100%) !important;
     opacity: 1 !important;
     stroke-dashoffset: 0 !important;
   }
