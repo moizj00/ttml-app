@@ -63,7 +63,8 @@ This system uses **attorney-approved letters** to improve draft quality from the
 
 ### Exactly how it works (step-by-step)
 1. **On attorney approval (post-approval hooks):**
-   - **Embedding capture:** The final approved content is embedded using OpenAI `text-embedding-3-small` (1536 dims) and stored in `letter_versions.embedding` (pgvector). This is a **retrieval-only** step. We use OpenAI embeddings for stable, cost-efficient similarity search, while **fine-tuning** is handled by Vertex AI because the tuning jobs target Gemini base models (`gemini-1.5-flash-002`).
+   - **Embedding capture:** The final approved content is embedded using OpenAI `text-embedding-3-small` (1536 dims) and stored in `letter_versions.embedding` (pgvector).
+   - **Provider rationale:** OpenAI embeddings are used for stable, cost-efficient similarity search. Fine-tuning is handled by Vertex AI because tuning jobs target Gemini base models (`gemini-1.5-flash-002`).
    - **Training capture:** A single JSONL example is generated with:
      - `system`: generic drafting instruction
      - `user`: intake summary (letter type, subject, jurisdiction, issue, desired outcome, parties)
@@ -77,7 +78,9 @@ This system uses **attorney-approved letters** to improve draft quality from the
    - If retrieval fails or no matches exist yet, the pipeline continues without RAG (no blocking).
 
 3. **Recursive learning / fine-tuning loop:**
-   - When **50+ examples** exist since the last run (tracked by `fine_tune_runs`; the DB query uses the most recent non-failed `started_at`), all per-example JSONL files are merged into a single dataset (`fine-tune-datasets/YYYY-MM-DD-merged.jsonl`).
+   - **Trigger condition:** When **50+ examples** exist since the last run.
+   - **Tracking mechanism:** The count is based on `training_log` rows after the most recent non-failed `fine_tune_runs.started_at`.
+   - **Dataset merge:** All per-example JSONL files are merged into a single dataset (`fine-tune-datasets/YYYY-MM-DD-merged.jsonl`).
    - A **Vertex AI tuning job** is submitted (base model: `gemini-1.5-flash-002`) and recorded in `fine_tune_runs`.
    - This creates a continuous improvement cycle where every approved letter strengthens the next generation of drafts.
 
