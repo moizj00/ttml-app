@@ -236,6 +236,24 @@ async function startWorker() {
     );
   }
 
+  // ── Vertex AI Vector Search availability check ──
+  {
+    const { isVertexSearchConfigured, getVertexSearchMissingVars } = await import("./pipeline/vertex-search");
+    if (isVertexSearchConfigured()) {
+      console.log(
+        `[Worker] Vertex AI Vector Search: ENABLED (index=${process.env.VERTEX_SEARCH_INDEX_ID}, ` +
+        `endpoint=${process.env.VERTEX_SEARCH_INDEX_ENDPOINT_ID}, ` +
+        `deployedIndex=${process.env.VERTEX_SEARCH_DEPLOYED_INDEX_ID})`
+      );
+    } else {
+      const missing = getVertexSearchMissingVars();
+      console.warn(
+        `[Worker] Vertex AI Vector Search: disabled — falling back to pgvector. ` +
+        (missing.length > 0 ? `Missing env vars: ${missing.join(", ")}` : "Unknown configuration issue.")
+      );
+    }
+  }
+
   console.log("[Worker] Warming up database connection...");
   await getDb().catch((err) => {
     console.error("[Worker] Database warmup failed:", err);
