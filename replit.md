@@ -1,7 +1,7 @@
 # Talk to My Lawyer
 
 ## Overview
-Talk to My Lawyer is a full-stack legal letter platform that provides AI-drafted, attorney-reviewed legal letters for common disputes. The platform focuses on streamlining legal correspondence, initially targeting California jurisdiction with email-based delivery and simplified pricing. Its core purpose is to make legal assistance more accessible and efficient through a sophisticated AI pipeline backed by human attorney oversight, ensuring accuracy, consistency, and compliance. Key capabilities include a multi-stage AI pipeline for drafting and vetting, a recursive learning system for continuous improvement, and a document analyzer tool.
+Talk to My Lawyer is a full-stack legal letter platform that provides AI-drafted, attorney-reviewed legal letters for common disputes. The platform aims to streamline legal correspondence, making legal assistance more accessible and efficient. It focuses on California jurisdiction, offering email-based delivery and simplified pricing. Key capabilities include a multi-stage AI pipeline for drafting and vetting, a recursive learning system for continuous improvement, and a document analyzer tool, all backed by human attorney oversight.
 
 ## User Preferences
 I prefer iterative development, with a focus on delivering small, functional pieces of the project regularly.
@@ -26,104 +26,58 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 ### UI/UX Decisions
 - **Frontend Framework**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui components, wouter for routing.
 - **Branding**: Consistent use of `logo-full.png`.
-- **Admin Notification System**: In-app and optional email alerts, categorized by `users`, `letters`, `employee`, `general`.
+- **Admin Notification System**: In-app and optional email alerts.
 - **Homepage**: Features a "View Your First Letter For Free" badge and "Get Started" CTA, with a first-visit popup.
 - **Pricing Section**: Custom headline and simplified plan names.
 - **Role Terminology**: "Employee" displayed as "Affiliate".
 - **Onboarding**: Multi-step modal for new subscribers.
 - **PDF Download**: Professional PDF generation with rich text, attorney-approved badge, and certified footer.
-- **Review Modal**: Designed for attorney efficiency, displaying key intake data.
+- **Review Modal**: Designed for attorney efficiency.
 - **Letter Display**: Dynamic rendering of HTML or plain text.
-- **How It Works**: Scroll-paced animations, SVG gradients, and accessibility considerations.
-- **Platform Animation Foundation**: Reusable CSS keyframes for page transitions, card hovers, sidebar interactions, mobile drawers, notifications, badges, and tab content. All animations respect `prefers-reduced-motion`.
-- **Dashboard Animations**: Reusable hooks for stagger-reveal, fade-up entrances, drag-glow, and multi-step form transitions, all respecting `prefers-reduced-motion` and using compositor-friendly transforms/opacity.
-- **Pipeline Analytics Dashboard** (`/admin/pipeline`): Admin-only observability dashboard showing pipeline success rates, avg processing time per stage, citation validation stats, attorney review turnaround, quality score distribution/trends, retry stats, and categorized failure reasons. Supports date range filtering (7d/30d/90d/all). Uses parallelized server-side aggregation queries across `workflow_jobs`, `research_runs`, `review_actions`, and `letter_quality_scores`.
+- **How It Works**: Scroll-paced animations, SVG gradients, and accessibility considerations respecting `prefers-reduced-motion`.
+- **Platform Animation Foundation**: Reusable CSS keyframes and dashboard animation hooks respecting `prefers-reduced-motion`.
+- **Pipeline Analytics Dashboard**: Admin-only observability dashboard showing pipeline success rates, processing times, citation validation, attorney review turnaround, quality scores, and retry stats.
 
 ### Technical Implementations
 - **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + postgres-js driver.
-- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails, suppressed default Supabase emails. Admin 2FA enforced via email code and `admin_2fa` cookie for tRPC procedures.
-- **AI Pipeline**: A 4-stage pipeline:
-    1.  **Perplexity Research**: Web-grounded legal research with citation revalidation.
-    2.  **Claude Opus Drafting**: Validation for JSON parse, grounding, and consistency.
-    3.  **Claude Opus Assembly**: Validation for structure, word count, and consistency.
-    4.  **Claude Sonnet Vetting**: Jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness.
-    5.  **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback (approvals/rejections/changes) and computes quality scores, injecting lessons into future AI stages for continuous improvement. Features include:
-        - **AI-powered categorization**: Lessons are classified by Claude (with keyword fallback) into categories like citation_error, tone_issue, etc.
-        - **Deduplication**: Before inserting, the system uses LLM comparison to detect semantically similar existing lessons, merging via hitCount + weight boost instead of creating duplicates.
-        - **Consolidation**: Admin endpoint to merge similar lessons within a letter type/jurisdiction scope using AI, deactivating originals and tracking lineage via `consolidatedFromIds`.
-        - **Effectiveness tracking**: Tracks `timesInjected`, `lettersBeforeAvgScore`, `lettersAfterAvgScore`, and `effectivenessSamples` to measure lesson impact on quality.
-        - **Smart weight decay**: Lessons are ranked by `weight * recencyMultiplier * effectivenessBoost` where recency decays 10% per 30 days (floor 0.3) and effectiveness adjusts based on before/after quality score comparison.
-        - **Grouped prompt injection**: Lessons in the prompt block are grouped by category for clearer AI consumption.
-        - **Admin dashboard**: Shows effectiveness badges (trending up/down/neutral), hit counts, injection stats, age, consolidation controls, and a "Lesson Impact" table on the Quality tab.
-- **RAG Embedding + Training Pipeline**: Post-approval hooks automatically: (1) generate OpenAI `text-embedding-3-small` embeddings for approved letters, stored in `letter_versions.embedding` (pgvector); (2) capture training examples (JSONL) to GCS `gs://ttml-training` bucket and log in `training_log` table; (3) inject top-3 similar approved letters as few-shot RAG context during drafting; (4) auto-trigger Vertex AI fine-tuning when 50+ examples accumulate since last run (tracked in `fine_tune_runs`). GCP config via env vars: `GCP_PROJECT_ID`, `GCP_REGION`, `GCS_TRAINING_BUCKET`, `GOOGLE_APPLICATION_CREDENTIALS`. All fire-and-forget with error logging — failures never block approval.
-- **Pipeline Worker (BullMQ)**: Pipeline processing runs in a dedicated worker process (`server/worker.ts`), separate from the Express API server. Jobs are enqueued via BullMQ (`server/queue.ts`) using Upstash Redis (ioredis TCP connection). The API server only enqueues jobs and returns immediately. Job types: `runPipeline` (submit/updateForChanges/retryFromRejected) and `retryPipelineFromStage`. Queue health monitoring available via `admin.queueHealth` tRPC endpoint. Worker started via the "Pipeline Worker" Replit workflow.
-- **Pipeline Error Codes**: Structured error codes (`shared/types.ts`) with `{ code, message, stage, details, category }` JSON stored in `workflow_jobs.error_message`. Categories: transient (retryable) vs permanent. Codes: `JSON_PARSE_FAILED`, `CITATION_VALIDATION_FAILED`, `API_TIMEOUT`, `RATE_LIMITED`, `RESEARCH_VALIDATION_FAILED`, `DRAFT_VALIDATION_FAILED`, `JURISDICTION_MISMATCH`, `ASSEMBLY_STRUCTURE_INVALID`, `VETTING_REJECTED`, `CONTENT_POLICY_VIOLATION`, `N8N_ERROR`, `SUPERSEDED`, `UNKNOWN_ERROR`, etc. Admin UI (Jobs, Dashboard) parses and displays error code, category badge, and details. Backwards-compatible with legacy string errors.
-- **Pipeline Resilience**: Automatic retry mechanism (up to 3 attempts with exponential backoff) before marking as `pipeline_failed`. DB-level lock uses `lt()` Drizzle operator for `pipeline_locked_at` comparison (fixed from broken `sql` template tag).
-- **Rate Limiting**: Upstash Redis for fine-grained, per-user limits on sensitive endpoints, with a fail-closed mode for pipeline-triggering endpoints.
-- **Database Security Hardening** (Migration 0015): All public helper functions have `search_path = ''` to prevent search_path injection. RLS enabled on all tables including `admin_verification_codes`, `blog_posts`, `document_analyses`, `letter_quality_scores`, `pipeline_lessons`, `processed_stripe_events`, `commission_ledger`, `email_verification_tokens`, `discount_codes`, `payout_requests`. Overly-permissive INSERT policies (WITH CHECK (true)) replaced with role-scoped conditions.
-- **Database Indexes**: Comprehensive btree indexes on frequently queried columns in `letter_requests`, `workflow_jobs`, `review_actions`, `letter_versions`, `notifications`, `attachments`, `research_runs`.
-- **research_runs schema**: Includes `cache_hit` (boolean, default false) and `cache_key` (varchar 256) columns for KV cache integration.
-- **Health Check & Monitoring**: `GET /health` (public, overall status for Railway health checks) and `GET /health/details` (admin-only, per-service breakdown with response times). Also available at `/api/health` and `/api/health/details`. Checks: database, Redis, Stripe, Resend, Anthropic, Perplexity, Cloudflare R2. Each check has a 3-second timeout. Full results cached 30s.
+- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails. Admin 2FA enforced.
+- **AI Pipeline**: A 4-stage pipeline: Perplexity Research, Claude Opus Drafting, Claude Opus Assembly, Claude Sonnet Vetting.
+- **Recursive Learning System**: Self-optimizing knowledge engine capturing structured lessons from attorney feedback, with AI-powered categorization, deduplication, consolidation, effectiveness tracking, and smart weight decay.
+- **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples to GCS, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning.
+- **Pipeline Worker (BullMQ)**: Pipeline processing runs in a dedicated worker process, separate from the API server, using Upstash Redis for job queues.
+- **Pipeline Error Codes**: Structured error codes with categories for transient vs. permanent errors.
+- **Pipeline Resilience**: Automatic retry mechanism with exponential backoff.
+- **Rate Limiting**: Upstash Redis for fine-grained, per-user limits.
+- **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
+- **Database Indexes**: Comprehensive btree indexes on frequently queried columns.
+- **research_runs schema**: Includes `cache_hit` and `cache_key` for KV cache integration.
+- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints checking database, Redis, Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
 - **Error Tracking**: Sentry.
 - **Deployment**: Railway.
 
 ### Feature Specifications
-- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction (California), parties, incident details, desired outcome, and exhibit uploads (PDF, DOCX, JPG, PNG, TXT up to 10MB each).
+- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction (California), parties, incident details, desired outcome, and exhibit uploads.
 - **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
-- **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX) for subscribers, employees, and attorneys.
-- **Letter Role Tracking**: Records submitter and reviewer IDs for tracking attorney review counts.
-- **Attorney Invitation Flow**: Admin-initiated invitation process for new attorneys, involving Supabase user creation, recovery links, and a branded invitation email.
-- **Affiliate Program**: Single-use rotating discount codes with a commission settlement algorithm.
-- **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks. Flags unverified research for attorney acknowledgment.
-
-## Test Users
-
-Seeded via `npx tsx scripts/seed-test-users.ts` — password for all: `TestPass123!`
-
-| Role       | Email                        | App DB | Supabase Auth |
-|------------|------------------------------|--------|---------------|
-| subscriber | test-subscriber@ttml.dev     | yes    | yes           |
-| employee   | test-employee@ttml.dev       | yes    | yes           |
-| attorney   | test-attorney@ttml.dev       | yes    | yes           |
-| admin      | test-admin@ttml.dev          | yes    | yes           |
-
-Production admin accounts (not test):
-- moizj00@gmail.com (admin, IDs 1 & 83)
-- ravivo@homes.land (admin, ID 105)
-
-## Code Organization
-
-### Backend Module Splits (Scalability Refactoring)
-The three large backend "God Files" have been split into a subdirectory pattern for maintainability. The original filenames are preserved as thin barrel re-exports so all existing imports continue to work without change:
-- `server/db.ts` → barrel re-export of `server/db/index.ts` (2,774 lines — all DB/storage logic)
-- `server/pipeline.ts` → barrel re-export of `server/pipeline/index.ts` (4,002 lines — AI pipeline)
-- `server/routers.ts` → barrel re-export of `server/routers/index.ts` (3,589 lines — tRPC routers)
-
-### Frontend Module Splits
-Large page files have been decomposed into focused sub-components:
-- `client/src/pages/subscriber/SubmitLetter.tsx` (639 lines) uses step components from `intake-steps/`:
-  - `Step1LetterType.tsx`, `Step2Jurisdiction.tsx`, `Step3Parties.tsx`
-  - `Step4Details.tsx`, `Step5Outcome.tsx`, `Step6Exhibits.tsx`, `types.ts`
-- `client/src/pages/attorney/ReviewDetail.tsx` (791 lines) uses panel components from `review/`:
-  - `IntakePanel.tsx`, `ResearchPanel.tsx`, `CitationAuditPanel.tsx`, `HistoryPanel.tsx`
-
-### DB Connection Pool
-DB connection pool max is configurable via `DB_POOL_MAX` environment variable (default: 25, was previously hardcoded to 10). Configured in `server/db/index.ts` line 36.
+- **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
+- **Letter Role Tracking**: Records submitter and reviewer IDs.
+- **Attorney Invitation Flow**: Admin-initiated process for new attorneys.
+- **Affiliate Program**: Single-use rotating discount codes with commission settlement.
+- **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
 
 ## External Dependencies
 - **Supabase**: PostgreSQL database, authentication services.
-- **Drizzle ORM**: Object-relational mapping. Migrations tracked in `public.__drizzle_migrations` (not the default `drizzle` schema) to avoid Supabase PgBouncer `CREATE SCHEMA` errors. `drizzle.config.ts` uses session-mode pooler (port 5432) with SSL for migrations. CLI `drizzle-kit migrate` may exit 1 due to a known issue; use the ORM-level `migrate()` API for programmatic migrations.
+- **Drizzle ORM**: Object-relational mapping.
 - **postgres-js**: PostgreSQL client.
 - **Resend**: Transactional email sending.
 - **Stripe**: Payment processing.
 - **Perplexity API**: Legal research for AI pipeline.
 - **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting.
-- **Upstash Redis**: Rate limiting and BullMQ job queue (pipeline worker).
+- **Upstash Redis**: Rate limiting and BullMQ job queue.
 - **BullMQ + ioredis**: Job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
 - **Cloudflare R2**: S3-compatible object storage for PDFs and attachments.
-- **Google Cloud Platform**: GCP project `ttml-488901-n8` (us-west1). Vertex AI for fine-tuning, Cloud Storage (`gs://ttml-training`) for training data. Config via env vars documented in `.env.llm.example`. Packages: `@google-cloud/storage`, `@google-cloud/vertexai`, `google-auth-library`.
-- **OpenAI**: Embeddings (`text-embedding-3-small`, 1536 dims) for RAG pipeline; GPT-4o as failover provider for all pipeline stages.
+- **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data.
+- **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
 - **Railway**: Hosting and deployment.

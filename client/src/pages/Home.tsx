@@ -21,14 +21,7 @@ import BrandLogo from "@/components/shared/BrandLogo";
 import HowItWorks from "@/components/HowItWorks";
 import FeaturesSection from "@/components/FeaturesSection";
 import FirstVisitPopup from "@/components/FirstVisitPopup";
-
-const letterTypes = [
-  "California Landlord-Tenant Letters",
-  "California Employment Dispute Letters",
-  "California Demand Letters",
-  "California Collections / Debt Response Letters",
-  "California Business Dispute Letters",
-];
+import CategoryPicker from "@/components/CategoryPicker";
 
 
 const faqs = [
@@ -83,6 +76,10 @@ export default function Home() {
 
   const goToLogin = () => {
     navigate("/login");
+  };
+
+  const goToLoginWithCategory = (categoryId: string) => {
+    navigate(`/login?category=${encodeURIComponent(categoryId)}`);
   };
 
   const scrollTo = (id: string) => {
@@ -358,21 +355,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
-              {letterTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={goToLogin}
-                  className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                  data-testid={`pill-${type.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  {type}
-                </button>
-              ))}
-              <span className="bg-slate-50 border border-slate-200 text-slate-400 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full cursor-default">
-                And more
-              </span>
-            </div>
+            <CategoryPicker onCategorySelect={goToLoginWithCategory} />
           </div>
         </div>
 
