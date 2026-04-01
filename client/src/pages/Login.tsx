@@ -28,10 +28,10 @@ export default function Login() {
 
   const utils = trpc.useUtils();
 
-  // Parse ?next= from query string
+  // Parse ?next= or ?redirect= from query string
   const nextPath = (() => {
     const params = new URLSearchParams(search);
-    const raw = params.get("next");
+    const raw = params.get("next") ?? params.get("redirect");
     if (!raw) return null;
     try {
       return decodeURIComponent(raw);

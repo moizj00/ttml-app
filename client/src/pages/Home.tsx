@@ -79,7 +79,12 @@ export default function Home() {
   };
 
   const goToLoginWithCategory = (categoryId: string) => {
-    navigate(`/login?category=${encodeURIComponent(categoryId)}`);
+    const submitPath = `/submit?type=${encodeURIComponent(categoryId)}`;
+    if (isAuthenticated) {
+      navigate(submitPath);
+    } else {
+      navigate(`/login?redirect=${encodeURIComponent(submitPath)}`);
+    }
   };
 
   const scrollTo = (id: string) => {
