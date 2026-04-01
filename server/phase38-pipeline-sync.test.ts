@@ -20,15 +20,24 @@ const CLIENT_DIR = path.resolve(__dirname, "../client/src");
 
 function readAllRouters() {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  return subRouters.map(r => fs.readFileSync(path.join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+  return subRouters.map(r => {
+    const p = path.join(SERVER_DIR, "routers", `${r}.ts`);
+    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
+  }).join("\n");
 }
 function readAllDb() {
   const files = ["core", "letters", "letter-versions", "users", "admin", "affiliates", "analytics", "auth-tokens", "lessons", "notifications", "pipeline-records", "quality", "review-actions"];
-  return files.map(f => fs.readFileSync(path.join(SERVER_DIR, "db", `${f}.ts`), "utf-8")).join("\n");
+  return files.map(f => {
+    const p = path.join(SERVER_DIR, "db", `${f}.ts`);
+    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
+  }).join("\n");
 }
 function readAllPipeline() {
   const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
-  return files.map(f => fs.readFileSync(path.join(SERVER_DIR, "pipeline", `${f}.ts`), "utf-8")).join("\n");
+  return files.map(f => {
+    const p = path.join(SERVER_DIR, "pipeline", `${f}.ts`);
+    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
+  }).join("\n");
 }
 
 describe("Phase 38: Pipeline Sync + PDF Generation", () => {
@@ -234,11 +243,11 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
 
   // ─── Pipeline Integrity ────────────────────────────────────────────
   describe("Pipeline Integrity", () => {
-    it("pipeline.ts has all 3 stages: research, draft, assembly", () => {
+    it("pipeline has all 4 stages: research, draft, assembly, vetting", () => {
       const content = readAllPipeline();
       expect(content).toContain("runResearchStage");
       expect(content).toContain("runDraftingStage");
-      expect(content).toContain("runAssemblyStage");
+      expect(content).toContain("runAssemblyVettingLoop");
     });
 
     it("pipeline orchestrator runs all stages in sequence", () => {
