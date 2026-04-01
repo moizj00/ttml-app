@@ -672,7 +672,8 @@ export default function LetterDetail() {
   const aiDraftVersion = versions?.find((v) => v.versionType === "ai_draft");
   const userVisibleActions = actions?.filter((a) => a.noteVisibility === "user_visible" && a.noteText);
   const isPolling = POLLING_STATUSES.includes(letter.status);
-  const isGeneratedLocked = letter.status === "generated_locked";
+  // generated_unlocked is a legacy status (Phase ≤68) treated identically to generated_locked
+  const isGeneratedLocked = letter.status === "generated_locked" || letter.status === "generated_unlocked";
 
   return (
     <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: letter.subject }]}>

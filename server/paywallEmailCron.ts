@@ -22,7 +22,7 @@
  * to fire as a follow-up for subscribers who still haven't acted.
  */
 
-import { eq, and, isNull, lt, gte } from "drizzle-orm";
+import { inArray, and, isNull, lt, gte } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -94,13 +94,15 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
   // Letters that transitioned to generated_locked no more than MAX minutes ago
   const maxThresholdDate = new Date(now - PAYWALL_EMAIL_MIN_DELAY_MINUTES * 60 * 1000);
 
-  // Query: generated_locked letters in the 10–15 min window with no email sent yet
+  // Query: generated_locked (and legacy generated_unlocked) letters in the
+  // 10–15 min window with no paywall email sent yet.
+  // generated_unlocked is a legacy status (Phase ≤68) treated identically.
   const eligibleLetters = await db
     .select()
     .from(letterRequests)
     .where(
       and(
-        eq(letterRequests.status, "generated_locked"),
+        inArray(letterRequests.status, ["generated_locked", "generated_unlocked"]),
         isNull(letterRequests.initialPaywallEmailSentAt),
         gte(letterRequests.lastStatusChangedAt, minThresholdDate),
         lt(letterRequests.lastStatusChangedAt, maxThresholdDate)

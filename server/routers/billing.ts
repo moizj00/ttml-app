@@ -538,6 +538,97 @@ export const billingRouter = router({
       }
     }),
 
+    // ─── Subscription Submit: active subscribers bypass paywall entirely ───
+    // Subscribers with an active recurring plan submit a generated_locked letter
+    // directly to pending_review without any Stripe checkout.
+    // Guards:
+    //   1. subscriberProcedure — only subscribers can call this
+    //   2. hasActiveRecurringSubscription — must have an active plan
+    //   3. letter.status === "generated_locked" — only locked letters
+    //   4. letter.userId === ctx.user.id — ownership check via getLetterRequestSafeForSubscriber
+    subscriptionSubmit: subscriberProcedure
+      .input(z.object({ letterId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        // Guard: must have active recurring subscription
+        const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
+        if (!isSubscribed) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "An active subscription is required to use this feature.",
+          });
+        }
+        // Ownership + status guard
+        const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
+        if (letter.status !== "generated_locked") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not in generated_locked status",
+          });
+        }
+        // Transition to pending_review
+        await updateLetterStatus(input.letterId, "pending_review");
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "subscription_submit",
+          noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
+          noteVisibility: "internal",
+          fromStatus: "generated_locked",
+          toStatus: "pending_review",
+        });
+        // Notify subscriber
+        try {
+          await sendLetterUnlockedEmail({
+            to: ctx.user.email ?? "",
+            name: ctx.user.name ?? "Subscriber",
+            subject: letter.subject,
+            letterId: input.letterId,
+            appUrl: getAppUrl(ctx.req),
+          });
+        } catch (e) {
+          console.error("[subscriptionSubmit] Email error:", e);
+          captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
+        }
+        // Notify all attorneys that a new letter is ready for review
+        try {
+          const { getAllUsers } = await import("../db");
+          const attorneys = await getAllUsers("attorney");
+          const appUrl = getAppUrl(ctx.req);
+          for (const attorney of attorneys) {
+            if (attorney.email) {
+              await sendNewReviewNeededEmail({
+                to: attorney.email,
+                name: attorney.name ?? "Attorney",
+                letterSubject: letter.subject,
+                letterId: input.letterId,
+                letterType: letter.letterType,
+                jurisdiction: letter.jurisdictionState ?? "Unknown",
+                appUrl,
+              });
+            }
+          }
+        } catch (notifyErr) {
+          console.error("[subscriptionSubmit] Failed to notify attorneys:", notifyErr);
+          captureServerException(notifyErr, { tags: { component: "billing", error_type: "subscription_submit_attorney_notify_failed" } });
+        }
+        // Notify admins
+        try {
+          await notifyAdmins({
+            category: "letters",
+            type: "subscription_submit",
+            title: `Subscription submit — letter #${input.letterId} enters review queue`,
+            body: `${ctx.user.name ?? "A subscriber"} submitted "${letter.subject}" via active subscription. Now pending review.`,
+            link: `/admin/letters/${input.letterId}`,
+          });
+        } catch (err) {
+          console.error("[notifyAdmins] subscription_submit:", err);
+          captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
+        }
+        return { ok: true as const };
+      }),
+
     // ─── Pay-to-unlock: one-time $200 checkout for a specific locked letter ───
     payToUnlock: subscriberProcedure
       .input(

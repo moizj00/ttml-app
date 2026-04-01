@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
-  FileText, Gift, Loader2, AlertCircle,
+  FileText, Gift, Loader2, AlertCircle, CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,7 +67,19 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
     },
   });
 
-  const isPending = payToUnlock.isPending || isRedirecting || freeUnlockMutation.isPending;
+  const subscriptionSubmitMutation = trpc.billing.subscriptionSubmit.useMutation({
+    onSuccess: () => {
+      toast.success("Your letter has been submitted for attorney review!", {
+        description: "An attorney will review your letter shortly.",
+      });
+      window.location.reload();
+    },
+    onError: (err) => {
+      toast.error("Could not submit for review", { description: err.message });
+    },
+  });
+
+  const isPending = payToUnlock.isPending || isRedirecting || freeUnlockMutation.isPending || subscriptionSubmitMutation.isPending;
 
   const hasDraft = !!draftContent && draftContent.length > 0;
 
@@ -78,14 +90,57 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
 
   if (isSubscribed) {
     return (
-      <Card className="border-emerald-200 bg-emerald-50/30">
-        <CardContent className="p-5 text-center">
-          <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-          <p className="text-sm font-semibold text-emerald-800" data-testid="text-subscribed-status">
-            You have an active subscription — this letter will be submitted for review automatically.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <CreditCard className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold leading-tight">Active Subscription</h2>
+            <p className="text-sm text-white/80 mt-1">
+              Your subscription covers attorney review. Submit your letter now and a licensed attorney will review, edit, and approve it.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          {[
+            { icon: Shield, text: "Licensed attorney review" },
+            { icon: CheckCircle, text: "Edits & approval included" },
+            { icon: FileText, text: "Professional PDF delivered" },
+          ].map(({ icon: Icon, text }) => (
+            <div key={text} className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2">
+              <Icon className="w-4 h-4 text-white/80 flex-shrink-0" />
+              <span className="text-xs text-white/90">{text}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <span className="text-3xl font-extrabold text-white">$0</span>
+            <p className="text-xs text-white/60 mt-0.5">Covered by your subscription</p>
+          </div>
+          <Button
+            onClick={() => subscriptionSubmitMutation.mutate({ letterId })}
+            disabled={subscriptionSubmitMutation.isPending}
+            size="lg"
+            className="bg-white text-emerald-800 hover:bg-white/90 font-bold shadow-md w-full sm:w-auto"
+            data-testid="button-subscription-submit"
+          >
+            {subscriptionSubmitMutation.isPending ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Submitting...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Gavel className="w-4 h-4" />
+                Submit for Attorney Review
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
     );
   }
 

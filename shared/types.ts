@@ -14,6 +14,11 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   submitted: ["researching", "pipeline_failed"],
   researching: ["drafting", "submitted", "pipeline_failed"],
   drafting: ["generated_locked", "submitted", "pipeline_failed"],
+  // generated_unlocked is a legacy status (Phase ≤68). New letters always go to
+  // generated_locked. Legacy letters in generated_unlocked are treated identically
+  // to generated_locked on the frontend (StatusTimeline maps them). The only
+  // valid forward transition is pending_review (subscriber submits for review).
+  generated_unlocked: ["pending_review"],
   generated_locked: ["pending_review"],
   pending_review: ["under_review"],
   under_review: ["approved", "rejected", "needs_changes", "pending_review"],
@@ -53,6 +58,12 @@ export const STATUS_CONFIG: Record<
     bgColor: "bg-purple-100",
   },
   generated_locked: {
+    label: "Draft Ready",
+    color: "text-yellow-700",
+    bgColor: "bg-yellow-100",
+  },
+  // Legacy alias — same display as generated_locked
+  generated_unlocked: {
     label: "Draft Ready",
     color: "text-yellow-700",
     bgColor: "bg-yellow-100",
