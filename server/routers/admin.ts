@@ -125,6 +125,7 @@ import {
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
   hasActiveRecurringSubscription,
+  hasEverSubscribed,
 } from "../stripe";
 
 /**
@@ -302,17 +303,17 @@ export const adminRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        // ── Guard: block promoting active subscribers to attorney ──
-        // An active subscriber has a billing relationship (Stripe subscription).
-        // Changing their role to attorney would remove their subscriber dashboard
-        // while Stripe keeps billing them — a logic flaw.
+        // ── Guard: permanently block promoting any subscriber to attorney ──
+        // Once a user has EVER subscribed (any plan, any status — including canceled),
+        // they can never be promoted to attorney. This is a permanent, irreversible rule:
+        // subscriber → attorney is a forbidden transition to prevent billing/role conflicts.
         if (input.role === "attorney") {
-          const hasActiveSub = await hasActiveRecurringSubscription(input.userId);
-          if (hasActiveSub) {
+          const everSubscribed = await hasEverSubscribed(input.userId);
+          if (everSubscribed) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
-                "This user has an active subscription. Cancel their subscription before promoting them to Attorney.",
+                "This user has a subscription history and cannot be promoted to Attorney. The subscriber role is permanent once a plan has been purchased.",
             });
           }
         }
@@ -382,11 +383,12 @@ export const adminRouter = router({
               message: "This user is already an attorney.",
             });
           }
-          const hasActiveSub = await hasActiveRecurringSubscription(existingUser.id);
-          if (hasActiveSub) {
+          // Permanent block: once a user has EVER subscribed, they cannot become attorney
+          const everSubscribed = await hasEverSubscribed(existingUser.id);
+          if (everSubscribed) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "This user has an active subscription. Cancel their subscription before promoting them to Attorney.",
+              message: "This user has a subscription history and cannot be promoted to Attorney. The subscriber role is permanent once a plan has been purchased.",
             });
           }
           await updateUserRole(existingUser.id, "attorney");

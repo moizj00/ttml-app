@@ -32,9 +32,10 @@ import BrandLogo from "@/components/shared/BrandLogo";
 // Google OAuth icon (inline SVG)
 import GoogleIcon from "@/components/shared/GoogleIcon";
 
-// Frontend role names (user/affiliate) map to DB roles (subscriber/employee)
+// Signup offers two options:
+// - 'user'      → no role sent to server (defaults to 'subscriber' in DB)
+// - 'affiliate' → sends 'affiliate' to server (maps to 'employee' in DB)
 type RoleOption = "user" | "affiliate";
-type DBRole = "subscriber" | "employee";
 
 const ROLE_OPTIONS: {
   value: RoleOption;
@@ -55,11 +56,6 @@ const ROLE_OPTIONS: {
     icon: <Briefcase className="w-5 h-5" />,
   },
 ];
-
-const roleMap: Record<RoleOption, DBRole> = {
-  "user": "subscriber",
-  "affiliate": "employee",
-};
 
 export default function Signup() {
   const [, navigate] = useLocation();
@@ -146,12 +142,13 @@ export default function Signup() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
+            body: JSON.stringify({
             access_token: accessToken,
             refresh_token: refreshToken,
             expires_in: expiresIn,
             next: nextPath,
-            role: requestedRoleFromSearch ?? role,
+            // Only send 'affiliate' to server; 'user' is the default (no role needed)
+            role: (requestedRoleFromSearch ?? role) === "affiliate" ? "affiliate" : undefined,
           }),
         });
         const data = await response.json();
@@ -218,7 +215,8 @@ export default function Signup() {
               email,
               password,
               name: name || undefined,
-              role,
+              // Only send 'affiliate' to server; 'user' is the default (no role needed)
+              role: role === "affiliate" ? "affiliate" : undefined,
               wantsAffiliate: role === "affiliate" ? wantsAffiliate : undefined,
             }),
             signal: controller.signal,
@@ -272,7 +270,8 @@ export default function Signup() {
       localStorage.removeItem("ttml_onboarding_seen");
 
       // Redirect based on role — honour ?next= if the role is allowed on that path
-      const dbRole = roleMap[role];
+      // affiliate → employee dashboard; user → subscriber dashboard
+      const dbRole = role === "affiliate" ? "employee" : "subscriber";
       if (nextPath && isRoleAllowedOnPath(dbRole, nextPath)) {
         navigate(nextPath);
       } else {
@@ -300,7 +299,8 @@ export default function Signup() {
         credentials: "include",
         body: JSON.stringify({
           intent: "signup",
-          role,
+          // Only send 'affiliate' to server; 'user' is the default (no role needed)
+          role: role === "affiliate" ? "affiliate" : undefined,
           next: nextPath,
         }),
       });

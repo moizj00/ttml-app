@@ -425,7 +425,26 @@ export async function hasActiveRecurringSubscription(
   ].includes(sub.plan);
 }
 
-// ─── Create Trial Review Checkout (DEPRECATED — first letter is now fully free) ────────
+// ─── Check if User Has Ever Had Any Subscription (permanent attorney block) ────────
+/**
+ * Returns true if the user has ANY subscription record, regardless of status or plan.
+ * This is the permanent gate for attorney promotion:
+ * once a user has subscribed (even if canceled), they can never become an attorney.
+ * This prevents the billing/role conflict where a subscriber is promoted to attorney
+ * while Stripe still has their payment history.
+ */
+export async function hasEverSubscribed(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ id: subscriptions.id })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// ─── Create Trial Review Checkout (DEPRECATED — first letter is now fully free) ————————───
 /**
  * @deprecated The first letter is now completely free (no $50 trial review fee).
  * This function is kept for backward compatibility with any existing webhook

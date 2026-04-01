@@ -555,16 +555,16 @@ export function registerSupabaseAuthRoutes(app: Express) {
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const { email, password, name, role: requestedRole, wantsAffiliate } = req.body;
-      // Signup only allows 'user' (→ subscriber in DB) and 'affiliate' (→ employee in DB)
-      // Attorney role is NOT self-assignable — it can only be granted by a super admin via the Users page
-      const ALLOWED_SIGNUP_ROLES = ["user", "affiliate"];
+      // Signup accepts 'affiliate' (maps to 'employee' in DB) or no role (defaults to 'subscriber').
+      // 'user' is NOT a valid signup role — all new users default to 'subscriber'.
+      // Attorney role is NOT self-assignable — only admin can grant it.
+      const ALLOWED_SIGNUP_ROLES = ["affiliate"];
       if (requestedRole && !ALLOWED_SIGNUP_ROLES.includes(requestedRole)) {
-        res.status(400).json({ error: "Invalid role. Only 'user' or 'affiliate' roles are allowed for signup." });
+        res.status(400).json({ error: "Invalid role. Only 'affiliate' role is allowed for signup. All other users default to subscriber." });
         return;
       }
-      // Map frontend role names to DB role names
-      const roleMap: Record<string, "subscriber" | "employee"> = { "user": "subscriber", "affiliate": "employee" };
-      const signupRole = requestedRole && roleMap[requestedRole] ? roleMap[requestedRole] : "subscriber";
+      // Only 'affiliate' maps to 'employee'; everything else is 'subscriber' by default
+      const signupRole: "subscriber" | "employee" = requestedRole === "affiliate" ? "employee" : "subscriber";
 
       if (!email || !password) {
         res.status(400).json({ error: "Email and password are required" });
@@ -1450,16 +1450,15 @@ export function registerSupabaseAuthRoutes(app: Express) {
       };
       const safeNext = getSafeRelativePath(next);
       const safeIntent = intent === "signup" ? "signup" : "login";
-      // Map frontend role names to DB role names
-      const roleMap: Record<string, "subscriber" | "employee"> = { "user": "subscriber", "affiliate": "employee" };
-      const ALLOWED_OAUTH_ROLES = ["user", "affiliate"];
+      // Only 'affiliate' is a valid signup role via OAuth (maps to 'employee' in DB)
+      // All other users default to 'subscriber' — 'user' is not a valid role
+      const ALLOWED_OAUTH_ROLES = ["affiliate"];
       if (role && !ALLOWED_OAUTH_ROLES.includes(String(role))) {
-        res.status(400).json({ error: "Invalid role. Only 'user' or 'affiliate' roles are allowed." });
+        res.status(400).json({ error: "Invalid role. Only 'affiliate' role is allowed for signup." });
         return;
       }
-      const safeRole = role && ALLOWED_OAUTH_ROLES.includes(String(role))
-        ? roleMap[String(role)]
-        : undefined;
+      // affiliate → employee; everything else defaults to subscriber (no role param needed)
+      const safeRole: "employee" | undefined = role === "affiliate" ? "employee" : undefined;
       const redirectUrl = new URL(`${origin}/api/auth/callback`);
       redirectUrl.searchParams.set("intent", safeIntent);
       if (safeNext) redirectUrl.searchParams.set("next", safeNext);
@@ -1535,11 +1534,8 @@ export function registerSupabaseAuthRoutes(app: Express) {
       }
 
       // Attorney role is NOT self-assignable via OAuth — only admin can grant it
-      const roleMap: Record<string, "subscriber" | "employee"> = { "user": "subscriber", "affiliate": "employee" };
-      const ALLOWED_ROLES = ["user", "affiliate"];
-      const requestedRole = ALLOWED_ROLES.includes(String(role))
-        ? roleMap[String(role)]
-        : undefined;
+      // Only 'affiliate' maps to 'employee'; all others default to 'subscriber'
+      const requestedRole: "employee" | undefined = role === "affiliate" ? "employee" : undefined;
       const safeNext = getSafeRelativePath(next);
       const { dbUser, resolvedRole } = await syncGoogleUser({
         req,
@@ -1602,11 +1598,8 @@ export function registerSupabaseAuthRoutes(app: Express) {
       const intent = req.query.intent === "signup" ? "signup" : "login";
       const next = getSafeRelativePath(req.query.next);
       // Attorney role is NOT self-assignable via OAuth — only admin can grant it
-      const roleMap: Record<string, "subscriber" | "employee"> = { "user": "subscriber", "affiliate": "employee" };
-      const ALLOWED_ROLES = ["user", "affiliate"];
-      const requestedRole = ALLOWED_ROLES.includes(String(req.query.role))
-        ? roleMap[String(req.query.role)]
-        : undefined;
+      // Only 'affiliate' maps to 'employee'; all others default to 'subscriber'
+      const requestedRole: "employee" | undefined = req.query.role === "affiliate" ? "employee" : undefined;
       if (!code) {
         // No PKCE code present — Supabase may have used the implicit (hash) flow,
         // returning tokens in the URL fragment instead. Hash fragments are never
