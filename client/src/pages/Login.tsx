@@ -113,8 +113,6 @@ export default function Login() {
           );
         }
 
-        localStorage.setItem("sb_access_token", accessToken);
-        localStorage.setItem("sb_refresh_token", refreshToken || "");
         window.history.replaceState(
           {},
           document.title,
@@ -224,15 +222,6 @@ export default function Login() {
         toast.error(msg);
         setLoading(false);
         return;
-      }
-
-      // Store the access token for tRPC requests
-      if (data.session?.access_token) {
-        localStorage.setItem("sb_access_token", data.session.access_token);
-        localStorage.setItem(
-          "sb_refresh_token",
-          data.session.refresh_token || ""
-        );
       }
 
       await utils.auth.me.invalidate();

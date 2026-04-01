@@ -85,10 +85,6 @@ export default function AcceptInvitation() {
           window.location.pathname
         );
         if (data.redirectTo) {
-          if (data.session?.access_token) {
-            localStorage.setItem("sb_access_token", data.session.access_token);
-            localStorage.setItem("sb_refresh_token", data.session.refresh_token || "");
-          }
           toast.success("Account activated!", {
             description: "Welcome to the Review Center. Redirecting to your dashboard…",
           });
