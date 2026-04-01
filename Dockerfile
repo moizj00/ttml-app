@@ -42,9 +42,15 @@ COPY --from=builder /app/patches/ ./patches/
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy the compiled server bundle + client assets
-# dist/index.js  — esbuild server bundle
-# dist/public/   — vite client build (index.html + assets/)
+# dist/index.js    — esbuild server bundle
+# dist/migrate.js  — esbuild migration runner (executed before server start)
+# dist/public/     — vite client build (index.html + assets/)
 COPY --from=builder /app/dist/ ./dist/
+
+# Copy Drizzle migration SQL files so migrate.js can apply them at startup.
+# These must live at drizzle/migrations/ relative to the working directory
+# because migrate.ts resolves the path as __dirname/../drizzle/migrations.
+COPY --from=builder /app/drizzle/migrations/ ./drizzle/migrations/
 
 # package.json must live next to dist/index.js because vite.config.ts
 # (bundled into dist/index.js) reads it via fs.readFileSync at startup.

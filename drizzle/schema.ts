@@ -241,6 +241,7 @@ export const letterVersions = pgTable("letter_versions", {
   createdByUserId: integer("created_by_user_id"),
   metadataJson: jsonb("metadata_json"),
   embedding: vector("embedding"),
+  ragSummary: text("rag_summary"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_letter_versions_letter_request_id").on(t.letterRequestId),

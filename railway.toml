@@ -7,9 +7,10 @@ dockerfilePath = "Dockerfile"
 [deploy]
 # Railway injects $PORT automatically — the server reads process.env.PORT.
 #
-# "pnpm run start" runs: NODE_ENV=production node --import ./dist/sentry-init.js dist/index.js
-# The --import flag registers Sentry ESM hooks before any application code loads.
-startCommand = "pnpm run start"
+# "pnpm run start:migrate" runs Drizzle migrations first, then starts the server.
+# migrate.js exits 0 on success and 1 on failure — a failed migration blocks the
+# deploy so a broken schema never reaches production.
+startCommand = "pnpm run start:migrate"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
