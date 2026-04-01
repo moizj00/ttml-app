@@ -253,6 +253,13 @@
       "when": 1774965183660,
       "tag": "0035_same_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775059071361,
+      "tag": "0036_shocking_mongoose",
+      "breakpoints": true
     }
   ]
 }
