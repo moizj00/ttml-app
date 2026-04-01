@@ -16,7 +16,7 @@ import { buildLessonsPromptBlock } from "./shared";
 import { buildAssemblySystemPrompt, buildAssemblyUserPrompt } from "./prompts";
 
 // ═══════════════════════════════════════════════════════
-// STAGE 3: CLAUDE FINAL LETTER ASSEMBLYY
+// STAGE 3: CLAUDE FINAL LETTER ASSEMBLY
 // ═══════════════════════════════════════════════════════
 
 export async function runAssemblyStage(
@@ -28,7 +28,7 @@ export async function runAssemblyStage(
 ): Promise<string> {
   const job = await createWorkflowJob({
     letterRequestId: letterId,
-    jobType: "draft_generation",
+    jobType: "assembly",
     provider: "anthropic",
     requestPayloadJson: {
       letterId,
