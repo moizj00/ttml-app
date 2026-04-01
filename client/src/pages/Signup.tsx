@@ -32,7 +32,9 @@ import BrandLogo from "@/components/shared/BrandLogo";
 // Google OAuth icon (inline SVG)
 import GoogleIcon from "@/components/shared/GoogleIcon";
 
-type RoleOption = "subscriber" | "employee";
+// Frontend role names (user/affiliate) map to DB roles (subscriber/employee)
+type RoleOption = "user" | "affiliate";
+type DBRole = "subscriber" | "employee";
 
 const ROLE_OPTIONS: {
   value: RoleOption;
@@ -41,18 +43,23 @@ const ROLE_OPTIONS: {
   icon: React.ReactNode;
 }[] = [
   {
-    value: "subscriber",
+    value: "user",
     label: "Client",
     description: "I need a legal letter drafted",
     icon: <User className="w-5 h-5" />,
   },
   {
-    value: "employee",
+    value: "affiliate",
     label: "Affiliate",
     description: "I work on operations & support",
     icon: <Briefcase className="w-5 h-5" />,
   },
 ];
+
+const roleMap: Record<RoleOption, DBRole> = {
+  "user": "subscriber",
+  "affiliate": "employee",
+};
 
 export default function Signup() {
   const [, navigate] = useLocation();
@@ -62,8 +69,8 @@ export default function Signup() {
   const requestedRoleFromSearch = (() => {
     const params = new URLSearchParams(search);
     const raw = params.get("role");
-    return raw === "subscriber" || raw === "employee"
-      ? raw
+    return raw === "user" || raw === "affiliate"
+      ? (raw as RoleOption)
       : null;
   })();
 
@@ -80,7 +87,7 @@ export default function Signup() {
   })();
 
   const [role, setRole] = useState<RoleOption>(
-    requestedRoleFromSearch ?? "subscriber"
+    requestedRoleFromSearch ?? "user"
   );
   const [wantsAffiliate, setWantsAffiliate] = useState(false);
   const [name, setName] = useState("");
@@ -212,7 +219,7 @@ export default function Signup() {
               password,
               name: name || undefined,
               role,
-              wantsAffiliate: role === "employee" ? wantsAffiliate : undefined,
+              wantsAffiliate: role === "affiliate" ? wantsAffiliate : undefined,
             }),
             signal: controller.signal,
           });
@@ -265,10 +272,11 @@ export default function Signup() {
       localStorage.removeItem("ttml_onboarding_seen");
 
       // Redirect based on role — honour ?next= if the role is allowed on that path
-      if (nextPath && isRoleAllowedOnPath(role, nextPath)) {
+      const dbRole = roleMap[role];
+      if (nextPath && isRoleAllowedOnPath(dbRole, nextPath)) {
         navigate(nextPath);
       } else {
-        navigate(getRoleDashboard(role));
+        navigate(getRoleDashboard(dbRole));
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {
@@ -483,11 +491,10 @@ export default function Signup() {
                     </button>
                   ))}
                 </div>
-                {role === "employee" && (
+                {role === "affiliate" && (
                   <>
                     <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                      Affiliate accounts require admin approval before full
-                      access is granted.
+                      Affiliate accounts include a unique discount code for referrals.
                     </p>
                     <div
                       className={cn(
@@ -653,7 +660,7 @@ export default function Signup() {
                     Creating account...
                   </>
                 ) : (
-                  `Create ${role === "subscriber" ? "Client" : "Affiliate"} Account`
+                  `Create ${role === "user" ? "Client" : "Affiliate"} Account`
                 )}
               </Button>
             </form>
