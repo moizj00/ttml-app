@@ -20,14 +20,14 @@ import {
   workflowJobs,
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
-import { getDb } from "./core";
+import { getDb, getReadDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
 // ADMIN STATS HELPERS
 // ═══════════════════════════════════════════════════════
 
 export async function getSystemStats() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
 
   // Core counts
@@ -119,7 +119,7 @@ export async function getSystemStats() {
 }
 
 export async function getCostAnalytics() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
 
   // Aggregate all jobs where cost was tracked (IS NOT NULL), regardless of status,

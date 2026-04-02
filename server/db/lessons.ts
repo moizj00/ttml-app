@@ -20,7 +20,7 @@ import {
   workflowJobs,
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
-import { getDb } from "./core";
+import { getDb, getReadDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
 // PIPELINE LESSONS HELPERS (Recursive Learning)
@@ -63,7 +63,7 @@ export async function getActiveLessons(filters: {
   pipelineStage?: string;
   limit?: number;
 }) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
 
   const results = await db.execute(sql`
@@ -101,7 +101,7 @@ export async function getActiveLessonsForScope(filters: {
   jurisdiction?: string;
   pipelineStage?: string;
 }) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   const conditions = [eq(pipelineLessons.isActive, true)];
   conditions.push(
@@ -161,7 +161,7 @@ export async function getAverageQualityScoreForScope(
   letterType?: string,
   jurisdiction?: string,
 ): Promise<number | null> {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
 
   let result;
@@ -211,7 +211,7 @@ export async function updateLessonEffectivenessScores(
 }
 
 export async function getLessonImpactSummary() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db.execute(sql`
     SELECT
@@ -251,7 +251,7 @@ export async function getAllLessons(filters?: {
   pipelineStage?: string;
   isActive?: boolean;
 }) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   const conditions: ReturnType<typeof eq>[] = [];
   if (filters?.letterType) conditions.push(eq(pipelineLessons.letterType, filters.letterType as NonNullable<InsertPipelineLesson["letterType"]>));
@@ -264,7 +264,7 @@ export async function getAllLessons(filters?: {
 }
 
 export async function getLessonById(id: number) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return undefined;
   const result = await db.select().from(pipelineLessons).where(eq(pipelineLessons.id, id)).limit(1);
   return result[0];

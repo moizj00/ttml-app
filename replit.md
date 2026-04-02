@@ -66,8 +66,47 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Affiliate Program**: Single-use rotating discount codes with commission settlement.
 - **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
 
+### Database Connection Architecture
+
+The app uses a **primary + read replica** database topology:
+
+- **Primary DB** (`getDb()` from `server/db/core.ts`): Used for all **write** operations (INSERT, UPDATE, DELETE). Connection URL resolved via fallback chain: `SUPABASE_DIRECT_URL → SUPABASE_DATABASE_URL → DATABASE_URL`.
+- **Read Replica** (`getReadDb()` from `server/db/core.ts`): Used for all **read-only** queries (SELECT). Connects to `SUPABASE_READ_REPLICA_URL`. Falls back to primary if the replica is unavailable or connection fails. Pool size controlled by `DB_READ_POOL_MAX` (default 15).
+- Both are exported from `server/db/index.ts`.
+
+**Modules using `getReadDb()` for reads:**
+| Module | Read functions (use replica) | Write functions (stay on primary `getDb()`) |
+|---|---|---|
+| `server/db/analytics.ts` | `getCostAnalyticsData` | — |
+| `server/db/blog.ts` | `getPublishedBlogPosts`, `getBlogPostBySlug`, `getBlogPostBySlugAnyStatus`, `getBlogPostSlugById`, `getAllBlogPosts` | `createBlogPost`, `updateBlogPost`, `deleteBlogPost` |
+| `server/db/quality.ts` | `getQualityScoreByLetterId`, `getQualityScoreStats`, `getQualityScoresByLetterType`, `getQualityScoreTrend`, `getEditDistanceTrend`, `getRAGAnalytics`, `getFineTuneRuns` | `createLetterQualityScore` |
+| `server/db/admin.ts` | `getSystemStats`, `getCostAnalytics` | `assignRoleId` |
+| `server/db/lessons.ts` | `getActiveLessons`, `getActiveLessonsForScope`, `getAverageQualityScoreForScope`, `getLessonImpactSummary`, `getAllLessons`, `getLessonById` | `createPipelineLesson`, `boostExistingLesson`, `incrementLessonInjectionStats`, `updateLessonEffectivenessScores`, `updatePipelineLesson`, `deletePipelineLesson` |
+
+**Important notes for future agents:**
+- When adding new DB query functions, use `getReadDb()` for pure reads and `getDb()` for any writes.
+- The read replica has slight replication lag (typically <1 second). Avoid using it for reads that immediately follow a write in the same request (read-after-write consistency). For such cases, use `getDb()` instead.
+- If `SUPABASE_READ_REPLICA_URL` is not set, all reads transparently fall back to the primary — no code changes needed.
+- The `_readDbFailed` flag in `core.ts` prevents repeated connection attempts if the replica is down. The app must be restarted to retry the replica connection after it recovers.
+
+### Deployment (Railway)
+
+- **Dockerfile**: `HEALTHCHECK` uses `${PORT:-3000}` dynamically (Railway injects `PORT=8080`).
+- **railway.toml**: `preDeployCommand = "node dist/migrate.js"`, HTTP health check at `/health`.
+- **Port**: Railway expects port `8080`. The Replit dev server runs on port `5000`.
+- **Git push**: Use `git push https://moibftj:${GITHUB_TOKEN}@github.com/moibftj/ttml-app.git main`. The `GITHUB_TOKEN` secret is set in Replit.
+- **Health status "degraded"**: Currently caused solely by Perplexity API quota exhaustion (401). All other services are healthy.
+
+### Known Issues & Gotchas
+
+- **drizzle-kit migration 0016**: `ELIFECYCLE exit code 1` from `CREATE INDEX CONCURRENTLY` — this is a known Drizzle issue; migrations still apply correctly.
+- **TypeScript errors**: Pre-existing TS errors in `admin2fa.ts` and blog files — non-blocking, do not fix unless specifically asked.
+- **Perplexity API**: Quota exceeded (401) — causes "degraded" health status. Non-critical; only affects legal research stage of the pipeline.
+- **Vertex AI Vector Search**: Disabled — missing `VERTEX_SEARCH_INDEX_ID`, `VERTEX_SEARCH_INDEX_ENDPOINT_ID`, `VERTEX_SEARCH_DEPLOYED_INDEX_ID` env vars. Falls back to pgvector.
+- **Secrets rotation**: API keys (OpenAI, Anthropic, Perplexity, Stripe) were previously exposed in git history (since purged via `git filter-branch`). Consider rotating as a precaution.
+
 ## External Dependencies
-- **Supabase**: PostgreSQL database, authentication services.
+- **Supabase**: PostgreSQL database (primary + read replica), authentication services.
 - **Drizzle ORM**: Object-relational mapping.
 - **postgres-js**: PostgreSQL client.
 - **Resend**: Transactional email sending.
@@ -81,3 +120,20 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data.
 - **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
 - **Railway**: Hosting and deployment.
+
+## Required Environment Secrets
+
+| Secret | Purpose |
+|---|---|
+| `DATABASE_URL` | Replit-managed PostgreSQL (fallback) |
+| `SUPABASE_DATABASE_URL` | Supabase pooler connection string (primary) |
+| `SUPABASE_READ_REPLICA_URL` | Supabase read replica connection string |
+| `SUPABASE_ANON_KEY` | Supabase auth anon key |
+| `GITHUB_TOKEN` | GitHub push authentication |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account ID |
+| `SENTRY_DSN` | Sentry server-side DSN |
+| `VITE_SENTRY_DSN` | Sentry client-side DSN |
+| `SENTRY_ORG` | Sentry organization slug |
+| `SENTRY_PROJECT` | Sentry project slug |

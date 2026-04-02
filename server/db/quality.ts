@@ -51,7 +51,7 @@ export async function createLetterQualityScore(data: InsertLetterQualityScore) {
 }
 
 export async function getQualityScoreByLetterId(letterRequestId: number) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return undefined;
   const result = await db
     .select()
@@ -62,7 +62,7 @@ export async function getQualityScoreByLetterId(letterRequestId: number) {
 }
 
 export async function getQualityScoreStats() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
   const result = await db.execute(sql`
     SELECT
@@ -79,7 +79,7 @@ export async function getQualityScoreStats() {
 }
 
 export async function getQualityScoresByLetterType() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db.execute(sql`
     SELECT
@@ -96,7 +96,7 @@ export async function getQualityScoresByLetterType() {
 }
 
 export async function getQualityScoreTrend(days: number = 30) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db.execute(sql`
     SELECT
@@ -116,7 +116,7 @@ export async function getQualityScoreTrend(days: number = 30) {
 // ═══════════════════════════════════════════════════════
 
 export async function getEditDistanceTrend(days: number = 30) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db.execute(sql`
     SELECT
@@ -138,7 +138,7 @@ export async function getEditDistanceTrend(days: number = 30) {
 // ═══════════════════════════════════════════════════════
 
 export async function getRAGAnalytics(days: number = 30) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
 
   const dateFilter = days > 0
@@ -255,7 +255,7 @@ export async function getRAGAnalytics(days: number = 30) {
 // ═══════════════════════════════════════════════════════
 
 export async function getFineTuneRuns(limit: number = 50) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db
     .select()
