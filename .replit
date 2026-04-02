@@ -91,6 +91,12 @@ build = ["npm", "run", "build"]
 
 [userenv.shared]
 PORT = "5000"
+GCP_PROJECT_ID = "ttml-488901-n8"
+GCP_REGION = "us-west1"
+GCS_TRAINING_BUCKET = "ttml-training"
+R2_BUCKET_NAME = "talk-to-my-lawyer"
+SENTRY_ORG = "gnzsolutions"
+SENTRY_PROJECT = "node-express"
 
 [userenv.production]
 
