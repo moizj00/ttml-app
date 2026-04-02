@@ -1,9 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { blogPosts } from "../../drizzle/schema";
-import { getDb } from "./core";
+import { getDb, getReadDb } from "./core";
 
 export async function getPublishedBlogPosts(options: { category?: string; limit?: number; offset?: number } = {}) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return { posts: [], total: 0 };
   const { category, limit = 12, offset = 0 } = options;
 
@@ -36,7 +36,7 @@ export async function getPublishedBlogPosts(options: { category?: string; limit?
 }
 
 export async function getBlogPostBySlug(slug: string) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
   const result = await db
     .select()
@@ -47,7 +47,7 @@ export async function getBlogPostBySlug(slug: string) {
 }
 
 export async function getBlogPostBySlugAnyStatus(slug: string) {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
   const result = await db
     .select()
@@ -58,7 +58,7 @@ export async function getBlogPostBySlugAnyStatus(slug: string) {
 }
 
 export async function getBlogPostSlugById(id: number): Promise<string | null> {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
   const result = await db
     .select({ slug: blogPosts.slug })
@@ -69,7 +69,7 @@ export async function getBlogPostSlugById(id: number): Promise<string | null> {
 }
 
 export async function getAllBlogPosts() {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return [];
   return db.select().from(blogPosts).orderBy(desc(blogPosts.updatedAt));
 }

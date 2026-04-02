@@ -21,7 +21,7 @@ import {
   fineTuneRuns,
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
-import { getDb } from "./core";
+import { getDb, getReadDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
 // LETTER QUALITY SCORES HELPERS

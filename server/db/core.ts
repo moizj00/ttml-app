@@ -5,12 +5,11 @@ import { captureServerException } from "../sentry";
 import { discountCodes } from "../../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _readDb: ReturnType<typeof drizzle> | null = null;
+let _readDbFailed = false;
 let _startupMigrationRan = false;
 
 export async function getDb() {
-  // Priority: direct connection > pooler
-  // SUPABASE_DIRECT_URL (db.*.supabase.co:5432) avoids IPv6 issues on Railway
-  // and supports prepared statements (unlike the transaction pooler on port 6543)
   const dbUrl =
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
@@ -108,4 +107,32 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+export async function getReadDb() {
+  if (_readDb) return _readDb;
+
+  const replicaUrl = process.env.SUPABASE_READ_REPLICA_URL;
+  if (!replicaUrl || _readDbFailed) {
+    return getDb();
+  }
+
+  try {
+    const client = postgres(replicaUrl, {
+      ssl: "require",
+      max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+    _readDb = drizzle(client);
+    await _readDb.execute(sql`SELECT 1`);
+    console.log("[Database] Connected to read replica");
+    return _readDb;
+  } catch (error) {
+    console.warn("[Database] Read replica connection failed, falling back to primary:", error);
+    captureServerException(error, { tags: { component: "database", error_type: "read_replica_failed" } });
+    _readDbFailed = true;
+    _readDb = null;
+    return getDb();
+  }
 }

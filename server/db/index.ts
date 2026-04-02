@@ -1,5 +1,5 @@
 // Domain-split barrel — import from domain files
-export { getDb } from "./core";
+export { getDb, getReadDb } from "./core";
 export * from "./users";
 export * from "./letters";
 export * from "./letter-versions";

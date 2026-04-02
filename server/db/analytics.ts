@@ -20,14 +20,14 @@ import {
   workflowJobs,
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
-import { getDb } from "./core";
+import { getReadDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
 // PIPELINE ANALYTICS AGGREGATION QUERIES
 // ═══════════════════════════════════════════════════════
 
 export async function getPipelineAnalytics(dateRange: "7d" | "30d" | "90d" | "all" = "30d") {
-  const db = await getDb();
+  const db = await getReadDb();
   if (!db) return null;
 
   const dateFilter = dateRange === "all"
