@@ -22,12 +22,18 @@ import {
   CreditCard,
   MessageSquare,
   Loader2,
+  ScanSearch,
+  Scale,
+  Calendar,
 } from "lucide-react";
-import { Link } from "wouter";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { Link, useLocation } from "wouter";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "../../../../shared/types";
+import type { AnalysisPrefill, DocumentAnalysisResult } from "../../../../shared/types";
+import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 // Statuses where the dashboard should auto-refresh
 const ACTIVE_STATUSES = [
@@ -36,6 +42,8 @@ const ACTIVE_STATUSES = [
   "drafting",
   "pending_review",
   "under_review",
+  "client_approval_pending",
+  "client_revision_requested",
 ];
 
 // Pipeline stages in order for the progress stepper
@@ -52,8 +60,11 @@ const PIPELINE_STAGES = [
 // Map status to pipeline stage index
 function getStageIndex(status: string): number {
   const idx = PIPELINE_STAGES.findIndex(s => s.key === status);
-  if (status === "needs_changes") return 5; // same level as under_review
-  if (status === "rejected") return 6; // terminal
+  if (status === "needs_changes") return 5;
+  if (status === "rejected" || status === "client_declined") return 6;
+  if (status === "client_approval_pending") return 6;
+  if (status === "client_revision_requested") return 5;
+  if (status === "client_approved" || status === "sent") return 6;
   return idx >= 0 ? idx : 0;
 }
 
@@ -110,6 +121,39 @@ function getStatusCTA(status: string, letterId: number) {
         href: `/letters/${letterId}`,
         animate: false,
       };
+    case "client_approval_pending":
+      return {
+        label: "Review & Approve",
+        icon: CheckCircle,
+        variant: "default" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
+    case "client_revision_requested":
+      return {
+        label: "Revision in Progress",
+        icon: Clock,
+        variant: "outline" as const,
+        href: `/letters/${letterId}`,
+        animate: true,
+      };
+    case "client_approved":
+    case "sent":
+      return {
+        label: "Download Letter",
+        icon: Download,
+        variant: "default" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
+    case "client_declined":
+      return {
+        label: "Declined",
+        icon: XCircle,
+        variant: "outline" as const,
+        href: `/letters/${letterId}`,
+        animate: false,
+      };
     case "rejected":
       return {
         label: "View Details",
@@ -148,7 +192,7 @@ function timeAgo(dateStr: string | number): string {
 // Progress stepper component
 function PipelineStepper({ status }: { status: string }) {
   const currentIdx = getStageIndex(status);
-  const isTerminalBad = status === "rejected";
+  const isTerminalBad = status === "rejected" || status === "client_declined";
   const isNeedsChanges = status === "needs_changes";
 
   return (
@@ -243,6 +287,7 @@ function PipelineStepper({ status }: { status: string }) {
 
 export default function SubscriberDashboard() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const {
     data: subscription,
@@ -263,6 +308,9 @@ export default function SubscriberDashboard() {
     },
   });
 
+  const { data: analysesData, isLoading: analysesLoading } =
+    trpc.documents.getMyAnalyses.useQuery();
+
   // Supabase Realtime — instant updates when any letter changes for this user
   useLetterListRealtime({
     userId: user?.id ?? null,
@@ -270,21 +318,53 @@ export default function SubscriberDashboard() {
     enabled: !!user?.id,
   });
 
+  // Safely cast the jsonb field — Drizzle types jsonb as unknown; we validate fields at runtime
+  const getAnalysisJson = (row: DocumentAnalysis): Partial<DocumentAnalysisResult> =>
+    (row.analysisJson ?? {}) as Partial<DocumentAnalysisResult>;
+
+  const resolveJurisdictionCode = (detected: string | null | undefined): string | undefined => {
+    if (!detected) return undefined;
+    const upper = detected.trim().toUpperCase();
+    const byCode = US_STATES.find(s => s.code === upper);
+    if (byCode) return byCode.code;
+    const lower = detected.trim().toLowerCase();
+    const byName = US_STATES.find(s => s.name.toLowerCase() === lower);
+    if (byName) return byName.code;
+    const byPrefix = US_STATES.find(s => lower.startsWith(s.name.toLowerCase()));
+    if (byPrefix) return byPrefix.code;
+    return undefined;
+  };
+
+  const handleUseAnalysis = (analysisJson: Partial<DocumentAnalysisResult>) => {
+    const prefill: AnalysisPrefill = {};
+    if (analysisJson.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
+    if (analysisJson.recommendedResponseSummary) prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
+    const jurisdictionCode = resolveJurisdictionCode(analysisJson.detectedJurisdiction);
+    if (jurisdictionCode) prefill.jurisdictionState = jurisdictionCode;
+    if (analysisJson.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
+    if (analysisJson.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
+    if (analysisJson.summary) prefill.description = analysisJson.summary.slice(0, 600);
+    try { sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
+    navigate("/submit");
+  };
+
   const stats = {
     total: letters?.length ?? 0,
     active:
-      letters?.filter(l => !["approved", "rejected"].includes(l.status))
+      letters?.filter(l => !["approved", "rejected", "client_approved", "client_declined", "sent"].includes(l.status))
         .length ?? 0,
-    approved: letters?.filter(l => l.status === "approved").length ?? 0,
+    approved: letters?.filter(l => ["approved", "client_approved", "sent"].includes(l.status)).length ?? 0,
     needsAttention:
       letters?.filter(l =>
-        ["needs_changes", "generated_locked"].includes(
+        ["needs_changes", "generated_locked", "client_approval_pending"].includes(
           l.status
         )
       ).length ?? 0,
   };
 
   const recentLetters = letters?.slice(0, 5) ?? [];
+  const statCardVisible = useStaggerReveal(4, 80);
+  const letterVisible = useStaggerReveal(recentLetters.length, 60);
 
   return (
     <AppLayout breadcrumb={[{ label: "Dashboard" }]}>
@@ -293,9 +373,16 @@ export default function SubscriberDashboard() {
       <div className="space-y-6">
         {/* Welcome Banner */}
         <div className="rounded-2xl bg-linear-to-r from-primary to-primary/80 p-5 text-primary-foreground sm:p-6">
-          <h1 className="text-xl font-bold mb-1">
-            Welcome to Talk to My Lawyer
-          </h1>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl font-bold">
+              Welcome to Talk to My Lawyer
+            </h1>
+            {user?.subscriberId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-primary-foreground" data-testid="text-subscriber-id">
+                {user.subscriberId}
+              </span>
+            )}
+          </div>
           <p className="text-primary-foreground/80 text-sm mb-4">
             Submit a legal matter and get a professionally drafted,
             attorney-approved letter.
@@ -448,8 +535,8 @@ export default function SubscriberDashboard() {
               color: "text-red-600",
               bg: "bg-red-50",
             },
-          ].map(stat => (
-            <Card key={stat.label}>
+          ].map((stat, idx) => (
+            <Card key={stat.label} style={staggerStyle(idx, statCardVisible[idx])}>
               <CardContent className="p-4">
                 <div
                   className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3 ${stat.color}`}
@@ -535,7 +622,7 @@ export default function SubscriberDashboard() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {recentLetters.map(letter => {
+              {recentLetters.map((letter, idx) => {
                 const cta = getStatusCTA(letter.status, letter.id);
                 const CTAIcon = cta.icon;
                 const isActionRequired = [
@@ -546,6 +633,7 @@ export default function SubscriberDashboard() {
                 return (
                   <Card
                     key={letter.id}
+                    style={staggerStyle(idx, letterVisible[idx])}
                     className={`overflow-hidden transition-all hover:shadow-md ${
                       isActionRequired
                         ? "ring-1 ring-amber-300 bg-amber-50/30"
@@ -625,6 +713,117 @@ export default function SubscriberDashboard() {
             </div>
           )}
         </div>
+
+        {/* Document Analysis History — always visible once data has been fetched or is loading */}
+        {(analysesLoading || analysesData !== undefined) && (
+          <Card data-testid="card-analysis-history">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ScanSearch className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-base">Document Analysis History</CardTitle>
+              </div>
+              <Link href="/analyze">
+                <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-new-analysis">
+                  <ScanSearch className="w-3.5 h-3.5" />
+                  New Analysis
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {analysesLoading ? (
+                <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading analyses…
+                </div>
+              ) : !analysesData?.rows?.length ? (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                    <ScanSearch className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-600">No analyses yet</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Upload a legal document to get an instant AI analysis and recommended action.
+                    </p>
+                  </div>
+                  <Link href="/analyze">
+                    <Button size="sm" variant="outline" className="gap-1.5 mt-1" data-testid="button-start-analysis-empty">
+                      <ScanSearch className="w-3.5 h-3.5" />
+                      Analyze a Document
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(analysesData?.rows ?? []).map((row: DocumentAnalysis) => {
+                    const analysis = getAnalysisJson(row);
+                    const letterType = analysis.recommendedLetterType;
+                    const letterLabel = letterType
+                      ? (LETTER_TYPE_CONFIG[letterType]?.label ?? letterType)
+                      : null;
+                    const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+                    const hasUsefulPrefill = !!(letterType || analysis.recommendedResponseSummary);
+
+                    return (
+                      <div
+                        key={row.id}
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors"
+                        data-testid={`row-analysis-${row.id}`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <FileText className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate" data-testid={`text-analysis-name-${row.id}`}>
+                              {row.documentName}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              {createdAt && (
+                                <span className="flex items-center gap-1 text-xs text-slate-400">
+                                  <Calendar className="w-3 h-3" />
+                                  {createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                </span>
+                              )}
+                              {letterLabel && (
+                                <Badge variant="secondary" className="text-xs flex items-center gap-1" data-testid={`badge-analysis-type-${row.id}`}>
+                                  <Scale className="w-3 h-3" />
+                                  {letterLabel}
+                                </Badge>
+                              )}
+                              {analysis.urgencyLevel === "high" && (
+                                <Badge variant="destructive" className="text-xs">
+                                  High Urgency
+                                </Badge>
+                              )}
+                              {analysis.detectedDeadline && (
+                                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                  Deadline: {analysis.detectedDeadline}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {hasUsefulPrefill && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUseAnalysis(analysis)}
+                            className="flex-shrink-0 gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+                            data-testid={`button-use-analysis-${row.id}`}
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            Draft Letter
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Status Guide — collapsible */}
         <Card>

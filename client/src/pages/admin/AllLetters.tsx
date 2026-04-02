@@ -20,6 +20,7 @@ import { FileText, Search, ArrowRight, ClipboardList, Eye } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 const REVIEWABLE_STATUSES = [
   "pending_review",
@@ -50,6 +51,7 @@ export default function AdminAllLetters() {
     const matchStatus = statusFilter === "all" || l.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const letterVisible = useStaggerReveal(filtered.length, 50);
 
   const handleLetterClick = (letter: { id: number; status: string }) => {
     if (REVIEWABLE_STATUSES.includes(letter.status)) {
@@ -115,7 +117,7 @@ export default function AdminAllLetters() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map(letter => {
+            {filtered.map((letter, idx) => {
               const isClaimable = CLAIMABLE_STATUSES.includes(letter.status);
               const isUnderReview = letter.status === "under_review";
               const isClaiming =
@@ -125,6 +127,7 @@ export default function AdminAllLetters() {
               return (
                 <div
                   key={letter.id}
+                  style={staggerStyle(idx, letterVisible[idx])}
                   onClick={() => handleLetterClick(letter)}
                   className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
                 >
@@ -183,14 +186,25 @@ export default function AdminAllLetters() {
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {letter.letterType} · {letter.jurisdictionState ?? "N/A"}
                       </p>
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <StatusBadge status={letter.status} size="sm" />
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString()}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          User #{letter.userId}
-                        </span>
+                        {letter.submitterRoleId ? (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                            {letter.submitterRoleId}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            User #{letter.userId}
+                          </span>
+                        )}
+                        {letter.reviewerRoleId && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                            {letter.reviewerRoleId}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

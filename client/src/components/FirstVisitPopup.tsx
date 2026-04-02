@@ -89,10 +89,10 @@ export default function FirstVisitPopup() {
               <Gift className="w-8 h-8 text-white drop-shadow-sm" />
             </div>
             <h2 className="text-2xl font-bold text-white tracking-tight mb-1" data-testid="first-visit-popup-title">
-              Congratulations!
+              California-Focused Drafting
             </h2>
             <p className="text-blue-200 text-sm font-medium tracking-wide uppercase">
-              As a first time client
+              Built for speed
             </p>
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function FirstVisitPopup() {
             className="text-lg font-semibold text-slate-800 mb-5 tracking-tight leading-snug"
             data-testid="first-visit-popup-message"
           >
-            View your first letter for free
+            Generate your first California-focused draft for free
           </p>
 
           <div className="flex items-center justify-center gap-2.5 mb-6">
@@ -127,11 +127,11 @@ export default function FirstVisitPopup() {
             className="w-full py-3 rounded-xl font-semibold text-white text-sm tracking-wide transition-all duration-200 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 hover:shadow-[0_4px_20px_rgba(79,70,229,0.4)] active:scale-[0.98]"
             data-testid="first-visit-popup-cta"
           >
-            Get Started
+            Generate your first draft
           </button>
 
           <p className="text-[11px] text-slate-400 mt-3">
-            No credit card required
+            No credit card required — not legal advice, for drafting purposes only
           </p>
         </div>
       </div>

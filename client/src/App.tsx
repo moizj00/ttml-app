@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -7,7 +7,29 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
-// Role-specific loading skeletons
+function lazyRetry(importFn: () => Promise<any>) {
+  return lazy(() =>
+    importFn().catch((err: Error) => {
+      const reloaded = sessionStorage.getItem("chunk_reload");
+      if (!reloaded) {
+        sessionStorage.setItem("chunk_reload", "1");
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      sessionStorage.removeItem("chunk_reload");
+      throw err;
+    })
+  );
+}
+
+function SuspenseFade({ fallback, children }: { fallback: ReactNode; children: ReactNode }) {
+  return (
+    <Suspense fallback={fallback}>
+      <div className="skeleton-crossfade">{children}</div>
+    </Suspense>
+  );
+}
+
 import {
   PublicPageSkeleton,
   AuthPageSkeleton,
@@ -22,7 +44,7 @@ import {
   AttorneyDashboardSkeleton,
   ReviewQueueSkeleton,
   ReviewDetailSkeleton,
-  EmployeeDashboardSkeleton,
+  AffiliateDashboardSkeleton,
   AdminDashboardSkeleton,
   AdminUsersSkeleton,
   AdminJobsSkeleton,
@@ -31,53 +53,56 @@ import {
   AdminAffiliateSkeleton,
   AdminLearningSkeleton,
   DocumentAnalyzerSkeleton,
+  TemplateGallerySkeleton,
 } from "./components/skeletons";
 
-// ─── Eagerly loaded (public landing + auth — needed on first paint) ───
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 
-// ─── Lazy-loaded: Auth secondary pages ───
-const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
-const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ForgotPassword = lazyRetry(() => import("./pages/ForgotPassword"));
+const VerifyEmail = lazyRetry(() => import("./pages/VerifyEmail"));
+const ResetPassword = lazyRetry(() => import("./pages/ResetPassword"));
+const AcceptInvitation = lazyRetry(() => import("./pages/AcceptInvitation"));
 
-// ─── Lazy-loaded: Public pages ───
-const Pricing = lazy(() => import("./pages/Pricing"));
-const FAQ = lazy(() => import("./pages/FAQ"));
-const Terms = lazy(() => import("./pages/Terms"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const DocumentAnalyzer = lazy(() => import("./pages/DocumentAnalyzer"));
+const Pricing = lazyRetry(() => import("./pages/Pricing"));
+const FAQ = lazyRetry(() => import("./pages/FAQ"));
+const Terms = lazyRetry(() => import("./pages/Terms"));
+const Privacy = lazyRetry(() => import("./pages/Privacy"));
+const Onboarding = lazyRetry(() => import("./pages/Onboarding"));
+const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
 
-// ─── Lazy-loaded: Subscriber pages ───
-const SubscriberDashboard = lazy(() => import("./pages/subscriber/Dashboard"));
-const SubmitLetter = lazy(() => import("./pages/subscriber/SubmitLetter"));
-const MyLetters = lazy(() => import("./pages/subscriber/MyLetters"));
-const LetterDetail = lazy(() => import("./pages/subscriber/LetterDetail"));
-const Billing = lazy(() => import("./pages/subscriber/Billing"));
-const Receipts = lazy(() => import("./pages/subscriber/Receipts"));
-const Profile = lazy(() => import("./pages/subscriber/Profile"));
+const SubscriberDashboard = lazyRetry(() => import("./pages/subscriber/Dashboard"));
+const SubmitLetter = lazyRetry(() => import("./pages/subscriber/SubmitLetter"));
+const TemplateGallery = lazyRetry(() => import("./pages/subscriber/TemplateGallery"));
+const MyLetters = lazyRetry(() => import("./pages/subscriber/MyLetters"));
+const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
+const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
+const Receipts = lazyRetry(() => import("./pages/subscriber/Receipts"));
+const Profile = lazyRetry(() => import("./pages/subscriber/Profile"));
 
-// ─── Lazy-loaded: Attorney pages (Review Center) ───
-const AttorneyDashboard = lazy(() => import("./pages/attorney/Dashboard"));
-const ReviewQueue = lazy(() => import("./pages/attorney/ReviewQueue"));
-const ReviewDetail = lazy(() => import("./pages/attorney/ReviewDetail"));
+const AttorneyDashboard = lazyRetry(() => import("./pages/attorney/Dashboard"));
+const ReviewQueue = lazyRetry(() => import("./pages/attorney/ReviewQueue"));
+const ReviewDetail = lazyRetry(() => import("./pages/attorney/ReviewDetail"));
 
-// ─── Lazy-loaded: Employee/Affiliate pages ───
-const EmployeeAffiliateDashboard = lazy(
+const EmployeeAffiliateDashboard = lazyRetry(
   () => import("./pages/employee/AffiliateDashboard")
 );
 
-// ─── Lazy-loaded: Admin pages ───
-const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
-const AdminUsers = lazy(() => import("./pages/admin/Users"));
-const AdminJobs = lazy(() => import("./pages/admin/Jobs"));
-const AdminAllLetters = lazy(() => import("./pages/admin/AllLetters"));
-const AdminLetterDetail = lazy(() => import("./pages/admin/LetterDetail"));
-const AdminAffiliate = lazy(() => import("./pages/admin/Affiliate"));
-const AdminLearning = lazy(() => import("./pages/admin/Learning"));
+const AdminVerify2FA = lazyRetry(() => import("./pages/admin/Verify2FA"));
+const AdminDashboard = lazyRetry(() => import("./pages/admin/Dashboard"));
+const AdminUsers = lazyRetry(() => import("./pages/admin/Users"));
+const AdminJobs = lazyRetry(() => import("./pages/admin/Jobs"));
+const AdminAllLetters = lazyRetry(() => import("./pages/admin/AllLetters"));
+const AdminLetterDetail = lazyRetry(() => import("./pages/admin/LetterDetail"));
+const AdminAffiliate = lazyRetry(() => import("./pages/admin/Affiliate"));
+const AdminLearning = lazyRetry(() => import("./pages/admin/Learning"));
+const AdminBlogEditor = lazyRetry(() => import("./pages/admin/BlogEditor"));
+const AdminPipelineAnalytics = lazyRetry(() => import("./pages/admin/PipelineAnalytics"));
+const AdminQualityDashboard = lazyRetry(() => import("./pages/admin/QualityDashboard"));
+
+const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
+const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
 
 function Router() {
   return (
@@ -85,234 +110,287 @@ function Router() {
       {/* ═══ Public ═══ */}
       <Route path="/" component={Home} />
       <Route path="/pricing">
-        <Suspense fallback={<PublicPageSkeleton />}>
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
           <Pricing />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/faq">
-        <Suspense fallback={<PublicPageSkeleton />}>
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
           <FAQ />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/terms">
-        <Suspense fallback={<PublicPageSkeleton />}>
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
           <Terms />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/privacy">
-        <Suspense fallback={<PublicPageSkeleton />}>
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
           <Privacy />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/analyze">
-        <Suspense fallback={<DocumentAnalyzerSkeleton />}>
+        <SuspenseFade fallback={<DocumentAnalyzerSkeleton />}>
           <DocumentAnalyzer />
-        </Suspense>
+        </SuspenseFade>
+      </Route>
+      <Route path="/blog">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <BlogIndex />
+        </SuspenseFade>
+      </Route>
+      <Route path="/blog/:slug">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <BlogPost />
+        </SuspenseFade>
       </Route>
 
       {/* ═══ Auth ═══ */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password">
-        <Suspense fallback={<AuthPageSkeleton />}>
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
           <ForgotPassword />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/verify-email">
-        <Suspense fallback={<AuthPageSkeleton />}>
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
           <VerifyEmail />
-        </Suspense>
+        </SuspenseFade>
       </Route>
       <Route path="/reset-password">
-        <Suspense fallback={<AuthPageSkeleton />}>
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
           <ResetPassword />
-        </Suspense>
+        </SuspenseFade>
+      </Route>
+      <Route path="/accept-invitation">
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
+          <AcceptInvitation />
+        </SuspenseFade>
       </Route>
       <Route path="/onboarding">
         <ProtectedRoute>
-          <Suspense fallback={<OnboardingSkeleton />}>
+          <SuspenseFade fallback={<OnboardingSkeleton />}>
             <Onboarding />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
 
       {/* ═══ Subscriber — role-gated ═══ */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<SubscriberDashboardSkeleton />}>
+          <SuspenseFade fallback={<SubscriberDashboardSkeleton />}>
             <SubscriberDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/submit">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<SubmitLetterSkeleton />}>
+          <SuspenseFade fallback={<SubmitLetterSkeleton />}>
             <SubmitLetter />
-          </Suspense>
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/templates">
+        <ProtectedRoute allowedRoles={["subscriber"]}>
+          <SuspenseFade fallback={<TemplateGallerySkeleton />}>
+            <TemplateGallery />
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/letters">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<MyLettersSkeleton />}>
+          <SuspenseFade fallback={<MyLettersSkeleton />}>
             <MyLetters />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/letters/:id">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<LetterDetailSkeleton />}>
+          <SuspenseFade fallback={<LetterDetailSkeleton />}>
             <LetterDetail />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/subscriber/billing">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<BillingSkeleton />}>
+          <SuspenseFade fallback={<BillingSkeleton />}>
             <Billing />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/subscriber/receipts">
         <ProtectedRoute allowedRoles={["subscriber"]}>
-          <Suspense fallback={<ReceiptsSkeleton />}>
+          <SuspenseFade fallback={<ReceiptsSkeleton />}>
             <Receipts />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/profile">
         <ProtectedRoute
           allowedRoles={["subscriber", "employee", "attorney", "admin"]}
         >
-          <Suspense fallback={<ProfileSkeleton />}>
+          <SuspenseFade fallback={<ProfileSkeleton />}>
             <Profile />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
 
       {/* ═══ Attorney — Review Center (attorney + admin) ═══ */}
       <Route path="/attorney">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<AttorneyDashboardSkeleton />}>
+          <SuspenseFade fallback={<AttorneyDashboardSkeleton />}>
             <AttorneyDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/attorney/queue">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<ReviewQueueSkeleton />}>
+          <SuspenseFade fallback={<ReviewQueueSkeleton />}>
             <ReviewQueue />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       {/* /attorney/review/:id — admin "Claim & Review" redirect target (must be before /attorney/:id) */}
       <Route path="/attorney/review/:id">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<ReviewDetailSkeleton />}>
+          <SuspenseFade fallback={<ReviewDetailSkeleton />}>
             <ReviewDetail />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/attorney/:id">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<ReviewDetailSkeleton />}>
+          <SuspenseFade fallback={<ReviewDetailSkeleton />}>
             <ReviewDetail />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       {/* Backward-compatible /review/* aliases */}
       <Route path="/review">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<AttorneyDashboardSkeleton />}>
+          <SuspenseFade fallback={<AttorneyDashboardSkeleton />}>
             <AttorneyDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/review/queue">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<ReviewQueueSkeleton />}>
+          <SuspenseFade fallback={<ReviewQueueSkeleton />}>
             <ReviewQueue />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/review/:id">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
-          <Suspense fallback={<ReviewDetailSkeleton />}>
+          <SuspenseFade fallback={<ReviewDetailSkeleton />}>
             <ReviewDetail />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
 
       {/* ═══ Employee/Affiliate ═══ */}
+      <Route path="/employee/dashboard">
+        {() => { window.location.replace("/employee"); return null; }}
+      </Route>
       <Route path="/employee">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <Suspense fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/employee/referrals">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <Suspense fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/employee/earnings">
         <ProtectedRoute allowedRoles={["employee", "admin"]}>
-          <Suspense fallback={<EmployeeDashboardSkeleton />}>
+          <SuspenseFade fallback={<AffiliateDashboardSkeleton />}>
             <EmployeeAffiliateDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
+      </Route>
+
+      {/* ═══ Admin — 2FA verification ═══ */}
+      <Route path="/admin/verify">
+        <SuspenseFade fallback={<AuthPageSkeleton />}>
+          <AdminVerify2FA />
+        </SuspenseFade>
       </Route>
 
       {/* ═══ Admin — role-gated ═══ */}
       <Route path="/admin">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminDashboardSkeleton />}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
             <AdminDashboard />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/users">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminUsersSkeleton />}>
+          <SuspenseFade fallback={<AdminUsersSkeleton />}>
             <AdminUsers />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/jobs">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminJobsSkeleton />}>
+          <SuspenseFade fallback={<AdminJobsSkeleton />}>
             <AdminJobs />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/letters">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminAllLettersSkeleton />}>
+          <SuspenseFade fallback={<AdminAllLettersSkeleton />}>
             <AdminAllLetters />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/letters/:id">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminLetterDetailSkeleton />}>
+          <SuspenseFade fallback={<AdminLetterDetailSkeleton />}>
             <AdminLetterDetail />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/affiliate">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminAffiliateSkeleton />}>
+          <SuspenseFade fallback={<AdminAffiliateSkeleton />}>
             <AdminAffiliate />
-          </Suspense>
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/learning">
         <ProtectedRoute allowedRoles={["admin"]}>
-          <Suspense fallback={<AdminLearningSkeleton />}>
+          <SuspenseFade fallback={<AdminLearningSkeleton />}>
             <AdminLearning />
-          </Suspense>
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/blog">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminBlogEditor />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/pipeline">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminPipelineAnalytics />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/quality">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminQualityDashboard />
+          </SuspenseFade>
         </ProtectedRoute>
       </Route>
 

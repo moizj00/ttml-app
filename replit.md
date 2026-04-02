@@ -1,7 +1,7 @@
 # Talk to My Lawyer
 
 ## Overview
-Talk to My Lawyer is a full-stack legal letter platform designed to provide users with AI-drafted, attorney-reviewed legal letters. The platform aims to streamline the process of generating legal correspondence for common disputes. The initial launch is focused exclusively on California jurisdiction, offering email-based delivery and simplified pricing plans. The project seeks to make legal assistance more accessible and efficient through a sophisticated AI pipeline that ensures accuracy, consistency, and compliance, backed by human attorney oversight.
+Talk to My Lawyer is a full-stack legal letter platform that provides AI-drafted, attorney-reviewed legal letters for common disputes. The platform aims to streamline legal correspondence, making legal assistance more accessible and efficient. It focuses on California jurisdiction, offering email-based delivery and simplified pricing. Key capabilities include a multi-stage AI pipeline for drafting and vetting, a recursive learning system for continuous improvement, and a document analyzer tool, all backed by human attorney oversight.
 
 ## User Preferences
 I prefer iterative development, with a focus on delivering small, functional pieces of the project regularly.
@@ -21,94 +21,63 @@ The review process for attorneys should be efficient and provide all necessary i
 Interactive elements, like the "How It Works" section, should be engaging with scroll-paced animations while respecting user accessibility preferences (`prefers-reduced-motion`).
 The anti-hallucination pipeline should be robust, with clear flagging for unverified research and enforced attorney acknowledgment.
 
-- **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui components, wouter for routing
-- **Backend**: Express.js + tRPC (type-safe API), Node.js 20
-- **Database**: PostgreSQL via Supabase (accessed via Drizzle ORM + postgres-js driver)
-- **Auth**: Supabase Auth — cookie-first (`sb_session`), Google OAuth PKCE, custom Resend verification emails
-- **Email**: Resend (custom transactional emails; Supabase built-in emails suppressed)
-- **Payments**: Stripe (3 subscription plans: Single Letter $200, Monthly $200/month, Yearly $2000/year)
-- **Rate Limiting**: Upstash Redis
-- **AI Pipeline**: 4-stage pipeline — Perplexity (research + citation revalidation) → Claude Opus (drafting) → Claude Opus (assembly) → Claude Sonnet (vetting: jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness). Includes intake validation, citation grounding, party/jurisdiction consistency checks, word count enforcement, retry-with-feedback, deterministic bloat phrase detection, enriched audit trail, and **recursive learning system** (prompt memory + quality scoring)
-- **Recursive Learning**: `pipeline_lessons` table captures structured lessons from attorney approve/reject/changes actions; `letter_quality_scores` tracks per-letter quality metrics (first-pass rate, edit distance, revision count, computed score). Lessons are injected into drafting/assembly/vetting prompts via `buildLessonsPromptBlock()`. Admin Learning page at `/admin/learning` for manual lesson CRUD and quality trend visualization
-- **Document Analyzer**: Public free tool at `/analyze` — users upload PDF/DOCX/TXT documents and receive AI-generated summary, action items, and flagged risks (with severity). Rate-limited to 3/hour for unauthenticated users. Uses `pdf-parse` for PDF extraction, `mammoth` for DOCX, plain text for TXT. Results stored in `document_analyses` table (best-effort). Includes copy-to-clipboard and download-as-text-file export functionality.
-- **Monitoring**: Sentry (error tracking, alerting)
-- **Deployment**: Railway (`www.talk-to-my-lawyer.com` + `talk-to-my-lawyer.com`)
-
 ## System Architecture
 
 ### UI/UX Decisions
 - **Frontend Framework**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui components, wouter for routing.
-- **Branding**: Uses `logo-full.png` for consistent branding across the application.
-- **Admin Notification System**: In-app notifications and optional email alerts categorized by `users`, `letters`, `employee`, `general`, with distinct badges for each category.
-- **Homepage Hero**: Features a badge "View Your First Letter For Free" and a "Get Started" CTA, complemented by a first-visit popup for new users.
-- **Pricing Section**: Custom headline "Resolve your dispute faster with lawyer-drafted letters and negotiations" and simplified plan names.
-- **Role Terminology**: "Employee" role is consistently displayed as "Affiliate" throughout the frontend UI.
-- **Onboarding**: Multi-step modal guides new subscribers through the letter generation process.
-- **PDF Download**: Generates professional PDF letters with rich text support, a distinct attorney-approved badge, and a certified footer.
-- **Review Modal**: Designed for attorney efficiency, displaying key intake data and controlling UI elements for approval workflows.
-- **Letter Display**: Dynamically renders HTML content or plain text with appropriate styling.
-- **How It Works**: Features scroll-paced animations, SVG gradients, and accessibility considerations (`aria-live="polite"`, `prefers-reduced-motion`).
-
-```
-client/          # React frontend (Vite root)
-  src/
-    components/  # UI components (shared/, ui/)
-    pages/       # Route pages (subscriber/, attorney/, admin/)
-    lib/         # Client utilities (trpc.ts, queryClient.ts)
-    _core/       # Auth hooks, providers
-  public/        # Static assets (logo-full.png, logo-icon-badge.png)
-server/          # Express backend
-  _core/         # Server setup (index.ts, env.ts, vite.ts, trpc.ts, cookies.ts)
-  db.ts          # Drizzle DB connection + all DB helper functions
-  supabaseAuth.ts # All auth endpoints (signup, login, verify-email, Google OAuth, session)
-  routers.ts     # All tRPC procedures
-  pipeline.ts    # AI letter generation pipeline
-  learning.ts    # Recursive learning: lesson extraction + quality scoring
-  email.ts       # Email sending (Resend)
-  stripe.ts      # Stripe integration
-  stripeWebhook.ts # Stripe webhook handler
-shared/          # Shared types (const.ts, pricing.ts, types.ts, schema.ts)
-drizzle/         # Drizzle ORM schema and migrations
-  schema.ts      # Database schema definitions
-scripts/         # Post-merge setup, DB helpers
-```
+- **Branding**: Consistent use of `logo-full.png`.
+- **Admin Notification System**: In-app and optional email alerts.
+- **Homepage**: Features a "View Your First Letter For Free" badge and "Get Started" CTA, with a first-visit popup.
+- **Pricing Section**: Custom headline and simplified plan names.
+- **Role Terminology**: "Employee" displayed as "Affiliate".
+- **Onboarding**: Multi-step modal for new subscribers.
+- **PDF Download**: Professional PDF generation with rich text, attorney-approved badge, and certified footer.
+- **Review Modal**: Designed for attorney efficiency.
+- **Letter Display**: Dynamic rendering of HTML or plain text.
+- **How It Works**: Scroll-paced animations, SVG gradients, and accessibility considerations respecting `prefers-reduced-motion`.
+- **Platform Animation Foundation**: Reusable CSS keyframes and dashboard animation hooks respecting `prefers-reduced-motion`.
+- **Pipeline Analytics Dashboard**: Admin-only observability dashboard showing pipeline success rates, processing times, citation validation, attorney review turnaround, quality scores, and retry stats.
 
 ### Technical Implementations
+- **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + postgres-js driver.
-- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails, `supabase.auth.admin.createUser()` to suppress default Supabase emails.
-- **AI Pipeline**: A 4-stage pipeline for legal letter generation:
-    1.  **Perplexity Research**: Web-grounded legal research with citation revalidation.
-    2.  **Claude Opus Drafting**: Consolidated validation for JSON parse, grounding, and consistency.
-    3.  **Claude Opus Assembly**: Consolidated validation for structure, word count, and consistency.
-    4.  **Claude Sonnet Vetting**: Jurisdiction accuracy, anti-hallucination, anti-bloat, geopolitical awareness.
-    5.  **Recursive Learning System**: Captures structured lessons from attorney feedback (approvals/rejections/changes) and computes 0-100 quality scores. Lessons are automatically injected into future AI drafting, assembly, and vetting stages to ensure continuous quality improvement.
-- **Pipeline Resilience**: Automatic retry (up to 3 attempts with 10s/20s exponential backoff) via `runPipelineWithRetry()` before marking as `pipeline_failed`. All pipeline catch handlers consolidated into single reusable function.
-- **Rate Limiting**: Implemented using Upstash Redis. Pipeline-triggering endpoints (submit, updateForChanges, retryFromRejected) use fail-closed mode — requests are denied when Redis is unavailable.
-- **Database Indexes**: Comprehensive btree indexes on frequently queried columns: `letter_requests` (userId, status, assignedReviewerId, createdAt), `workflow_jobs` (letterRequestId, status), `review_actions` (letterRequestId), `letter_versions` (letterRequestId), `notifications` (userId), `attachments` (letterRequestId), `research_runs` (letterRequestId).
-- **Error Tracking**: Sentry for error tracking and alerting.
+- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails. Admin 2FA enforced.
+- **AI Pipeline**: A 4-stage pipeline: Perplexity Research, Claude Opus Drafting, Claude Opus Assembly, Claude Sonnet Vetting.
+- **Recursive Learning System**: Self-optimizing knowledge engine capturing structured lessons from attorney feedback, with AI-powered categorization, deduplication, consolidation, effectiveness tracking, and smart weight decay.
+- **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples to GCS, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning.
+- **Pipeline Worker (BullMQ)**: Pipeline processing runs in a dedicated worker process, separate from the API server, using Upstash Redis for job queues.
+- **Pipeline Error Codes**: Structured error codes with categories for transient vs. permanent errors.
+- **Pipeline Resilience**: Automatic retry mechanism with exponential backoff.
+- **Rate Limiting**: Upstash Redis for fine-grained, per-user limits.
+- **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
+- **Database Indexes**: Comprehensive btree indexes on frequently queried columns.
+- **research_runs schema**: Includes `cache_hit` and `cache_key` for KV cache integration.
+- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints checking database, Redis, Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
+- **Error Tracking**: Sentry.
 - **Deployment**: Railway.
 
 ### Feature Specifications
-- **Multi-step Letter Generation Form**:
-    1.  Letter Type & Subject
-    2.  Jurisdiction (California only)
-    3.  Parties (Sender, Recipient)
-    4.  Details (Incident, Matter, Outcome, Deadline)
-    5.  Outcome (Desired outcome, response deadline, language preference, prior communication, delivery method: Email Only)
-    6.  Exhibits (Merged Evidence + Communications, max 10, supports PDF, DOCX, JPG, PNG, TXT up to 10MB each).
-- **Pricing Plans**: Three tiers – Single Letter ($200), Monthly ($200/month for 4 letters), Yearly ($2000/year for 48 letters). All plans include attorney review.
-- **Affiliate Program**: Single-use discount codes that rotate upon copy, with a robust commission settlement algorithm.
-- **Anti-Hallucination Pipeline**: Employs deterministic validation at each AI stage, including token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks. It flags unverified research, requiring attorney acknowledgment.
+- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction (California), parties, incident details, desired outcome, and exhibit uploads.
+- **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
+- **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
+- **Letter Role Tracking**: Records submitter and reviewer IDs.
+- **Attorney Invitation Flow**: Admin-initiated process for new attorneys.
+- **Affiliate Program**: Single-use rotating discount codes with commission settlement.
+- **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
 
 ## External Dependencies
 - **Supabase**: PostgreSQL database, authentication services.
-- **Drizzle ORM**: Object-relational mapping for database interaction.
-- **postgres-js**: PostgreSQL client for Node.js.
+- **Drizzle ORM**: Object-relational mapping.
+- **postgres-js**: PostgreSQL client.
 - **Resend**: Transactional email sending.
-- **Stripe**: Payment processing for subscriptions and single letter purchases.
-- **Perplexity API**: Legal research for the AI pipeline.
-- **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting of legal letters.
-- **Upstash Redis**: Rate limiting.
+- **Stripe**: Payment processing.
+- **Perplexity API**: Legal research for AI pipeline.
+- **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting.
+- **Upstash Redis**: Rate limiting and BullMQ job queue.
+- **BullMQ + ioredis**: Job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
-- **Railway**: Hosting and deployment platform.
+- **Cloudflare R2**: S3-compatible object storage for PDFs and attachments.
+- **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data.
+- **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
+- **Railway**: Hosting and deployment.

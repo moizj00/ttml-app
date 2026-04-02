@@ -83,8 +83,10 @@
 |----|------|-------|------|-----------|------------|
 | 1 | Moiz Jamil | moizj00@gmail.com | admin | true | 2026-02-25 04:35:03 |
 
-### Tables (11 total)
-users, letter_requests, letter_versions, review_actions, workflow_jobs, research_runs, attachments, notifications, subscriptions, audit_log (+ pdf_url column added to letter_requests)
+### Tables (19 total — as of March 2026)
+users, letter_requests, letter_versions, review_actions, workflow_jobs, research_runs, attachments, notifications, subscriptions, discount_codes, commission_ledger, payout_requests, email_verification_tokens, pipeline_lessons, letter_quality_scores, document_analyses, processed_stripe_events, admin_verification_codes, blog_posts
+
+> **Note:** The table count has grown from 11 (at the time of this audit) to 19. See `STRUCTURE.md` for the canonical schema reference.
 
 ---
 

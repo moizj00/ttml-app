@@ -1,56 +1,18 @@
 import * as Sentry from "@sentry/node";
-import { ENV } from "./_core/env";
 
 let initialized = false;
 
-/**
- * Initialize Sentry for server-side error monitoring.
- * Must be called BEFORE any other imports that might throw.
- */
 export function initServerSentry() {
   if (initialized) return;
-  if (!ENV.sentryDsn) {
-    console.log("[Sentry] No DSN configured — server-side monitoring disabled");
+
+  const client = Sentry.getClient();
+  if (client) {
+    initialized = true;
+    console.log("[Sentry] Already initialized via --import instrumentation");
     return;
   }
 
-  Sentry.init({
-    dsn: ENV.sentryDsn,
-    environment: ENV.isProduction ? "production" : "development",
-    release: `ttml-server@${process.env.npm_package_version ?? "1.0.0"}`,
-
-    // Performance: sample 30% of transactions in production
-    tracesSampleRate: ENV.isProduction ? 0.3 : 1.0,
-
-    // ─── Integrations ───
-    integrations: [
-      // Express integration for automatic request/response tracking
-      Sentry.expressIntegration(),
-    ],
-
-    // ─── Before Send Hook ───
-    beforeSend(event) {
-      // Redact sensitive data from request headers
-      if (event.request?.headers) {
-        const headers = { ...event.request.headers };
-        if (headers.authorization) headers.authorization = "[REDACTED]";
-        if (headers.cookie) headers.cookie = "[REDACTED]";
-        event.request.headers = headers;
-      }
-      return event;
-    },
-
-    // Ignore common non-actionable errors
-    ignoreErrors: [
-      "ECONNRESET",
-      "ECONNREFUSED",
-      "EPIPE",
-      "socket hang up",
-    ],
-  });
-
-  initialized = true;
-  console.log("[Sentry] Server-side monitoring initialized");
+  console.log("[Sentry] Not pre-initialized — skipping duplicate init (use --import server/instrument.ts)");
 }
 
 // ─── Helper: Capture exception with context ───
@@ -66,7 +28,7 @@ export function captureServerException(
     user?: { id: string; email?: string; role?: string };
   }
 ) {
-  if (!initialized) {
+  if (!Sentry.getClient()) {
     console.error("[Sentry] Not initialized, logging error:", error);
     return;
   }
@@ -104,7 +66,7 @@ export function addServerBreadcrumb(
   data?: Record<string, unknown>,
   level: Sentry.SeverityLevel = "info"
 ) {
-  if (!initialized) return;
+  if (!Sentry.getClient()) return;
   Sentry.addBreadcrumb({ category, message, data, level });
 }
 
@@ -116,7 +78,7 @@ export function setServerUser(user: {
   email?: string;
   role?: string;
 }) {
-  if (!initialized) return;
+  if (!Sentry.getClient()) return;
   Sentry.setUser({ id: user.id, email: user.email });
   if (user.role) {
     Sentry.setTag("user.role", user.role);
@@ -125,3 +87,4 @@ export function setServerUser(user: {
 
 // Re-export for direct access
 export { Sentry };
+export { wrapMcpServer } from "./mcp";

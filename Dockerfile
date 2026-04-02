@@ -42,9 +42,16 @@ COPY --from=builder /app/patches/ ./patches/
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy the compiled server bundle + client assets
-# dist/index.js  — esbuild server bundle
-# dist/public/   — vite client build (index.html + assets/)
+# dist/index.js    — esbuild server bundle
+# dist/migrate.js  — esbuild migration runner (executed before server start)
+# dist/public/     — vite client build (index.html + assets/)
 COPY --from=builder /app/dist/ ./dist/
+
+# Copy the Drizzle migration folder so migrate.js can apply them at startup.
+# The Drizzle migrator reads drizzle/meta/_journal.json and the auto-generated
+# SQL files in the drizzle/ root (e.g. drizzle/0000_nervous_james_howlett.sql).
+# migrate.ts resolves the path as __dirname/../drizzle (i.e. dist/../drizzle).
+COPY --from=builder /app/drizzle/ ./drizzle/
 
 # package.json must live next to dist/index.js because vite.config.ts
 # (bundled into dist/index.js) reads it via fs.readFileSync at startup.
@@ -59,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider \
   "http://localhost:3000/api/health" || exit 1
 
-CMD ["node", "--import", "./dist/sentry-init.js", "dist/index.js"]
+CMD ["node", "--import", "./dist/instrument.js", "dist/index.js"]

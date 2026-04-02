@@ -1,1 +1,1 @@
-ALTER TABLE "letter_requests" ADD COLUMN "archived_at" timestamp with time zone;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "archived_at" timestamp with time zone;

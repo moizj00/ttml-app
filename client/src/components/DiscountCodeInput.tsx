@@ -68,7 +68,7 @@ export function DiscountCodeInput({
         setAppliedCode(normalized);
         setAppliedDiscount(result.data.discountPercent);
         onCodeChange?.({ code: normalized, discountPercent: result.data.discountPercent });
-        toast.success(`Promo code applied — ${result.data.discountPercent}% off!`);
+        toast.success(`Promo code applied — ${result.data.discountPercent}% off your first payment!`);
       } else {
         setPromoError("Invalid or expired promo code.");
         setAppliedCode(null);
@@ -137,7 +137,7 @@ export function DiscountCodeInput({
               isDark ? "text-white" : "text-foreground"
             }`}
           >
-            {appliedCode} — {appliedDiscount}% off applied
+            {appliedCode} — {appliedDiscount}% off your first payment
           </span>
           <button
             onClick={handleRemovePromo}

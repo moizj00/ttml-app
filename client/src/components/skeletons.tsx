@@ -566,11 +566,11 @@ export function ReviewDetailSkeleton() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EMPLOYEE PAGE SKELETONS
+// AFFILIATE PAGE SKELETONS
 // ═══════════════════════════════════════════════════════════════
 
-/** Employee Affiliate Dashboard — sidebar + stat cards + code + referral link + tables */
-export function EmployeeDashboardSkeleton() {
+/** Affiliate Dashboard — sidebar + stat cards + code + referral link + tables */
+export function AffiliateDashboardSkeleton() {
   return (
     <AppLayoutSkeleton>
       <div className="space-y-6">
@@ -782,6 +782,41 @@ export function AdminLearningSkeleton() {
 }
 
 /** Onboarding — centered card with steps */
+export function TemplateGallerySkeleton() {
+  return (
+    <div className="min-h-screen bg-background flex">
+      <SidebarSkeleton />
+      <div className="flex min-h-screen flex-1 flex-col lg:ml-64">
+        <div className="h-14 border-b border-border bg-card" />
+        <div className="p-6 max-w-4xl mx-auto w-full space-y-6">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border overflow-hidden">
+                <div className="p-5 pb-3 bg-muted/30 space-y-3">
+                  <Skeleton className="w-12 h-12 rounded-xl" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <div className="p-5 space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-3 w-4/5" />
+                  <div className="flex justify-between items-center pt-1">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-8 w-28 rounded-md" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function OnboardingSkeleton() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">

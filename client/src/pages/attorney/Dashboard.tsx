@@ -2,6 +2,7 @@ import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
 import ReviewModal from "@/components/shared/ReviewModal";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { ClipboardList, Clock, CheckCircle, ArrowRight, FileText, AlertCircle, A
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 /** Calculate hours since a given date */
 function hoursSince(dateStr: string | Date): number {
@@ -17,6 +19,7 @@ function hoursSince(dateStr: string | Date): number {
 }
 
 export default function AttorneyDashboard() {
+  const { user } = useAuth();
   const { data: pendingLetters } = trpc.review.queue.useQuery({ status: "pending_review" }, {
     refetchInterval: 15000,
   });
@@ -48,12 +51,21 @@ export default function AttorneyDashboard() {
     overdue: slaData.overdueCount,
   };
 
+  const statCardVisible = useStaggerReveal(4, 80);
+
   return (
     <AppLayout breadcrumb={[{ label: "Review Center" }]}>
       <div className="space-y-6">
         {/* Header */}
         <div className="rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-600 p-5 text-white sm:p-6">
-          <h1 className="text-xl font-bold mb-1">Attorney Review Center</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-xl font-bold">Attorney Review Center</h1>
+            {user?.attorneyId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-white" data-testid="text-attorney-id">
+                {user.attorneyId}
+              </span>
+            )}
+          </div>
           <p className="text-purple-100 text-sm mb-4">
             Review drafted letters, edit as needed, and approve or request changes.
           </p>
@@ -89,8 +101,8 @@ export default function AttorneyDashboard() {
             { label: "Overdue (>24h)", value: stats.overdue, icon: <AlertTriangle className="w-5 h-5" />, color: "text-red-600", bg: "bg-red-50", urgent: stats.overdue > 0 },
             { label: "My Active", value: stats.myActive, icon: <FileText className="w-5 h-5" />, color: "text-blue-600", bg: "bg-blue-50", urgent: false },
             { label: "Total Reviewed", value: stats.totalReviewed, icon: <CheckCircle className="w-5 h-5" />, color: "text-green-600", bg: "bg-green-50", urgent: false },
-          ].map((stat) => (
-            <Card key={stat.label} className={stat.urgent ? "border-red-300 bg-red-50/30" : ""}>
+          ].map((stat, idx) => (
+            <Card key={stat.label} className={stat.urgent ? "border-red-300 bg-red-50/30" : ""} style={staggerStyle(idx, statCardVisible[idx])}>
               <CardContent className="p-4">
                 <div className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3 ${stat.color}`}>
                   {stat.icon}

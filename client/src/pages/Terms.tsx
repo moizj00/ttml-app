@@ -1,12 +1,28 @@
 import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 
 export default function Terms() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Helmet>
+        <title>Terms of Service | Talk to My Lawyer</title>
+        <meta name="description" content="Read the Terms of Service for Talk to My Lawyer. Understand your rights and obligations when using our professional attorney-reviewed legal letter service." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/terms" />
+        <meta property="og:title" content="Terms of Service | Talk to My Lawyer" />
+        <meta property="og:description" content="Terms of Service for Talk to My Lawyer — professional attorney-reviewed legal letter service." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/terms" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="Terms of Service | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Terms of Service for Talk to My Lawyer — professional attorney-reviewed legal letter service." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      </Helmet>
+
       {/* Header */}
-      <div className="border-b border-border">
+      <header className="border-b border-border">
         <div className="container mx-auto px-4 py-6">
           <Link href="/">
             <Button variant="ghost" size="sm" className="mb-4">
@@ -19,10 +35,10 @@ export default function Terms() {
             Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
-      </div>
+      </header>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-12 max-w-4xl">
+      <main className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="prose prose-invert max-w-none space-y-8">
           <section>
             <h2 className="text-2xl font-bold mb-4">1. Acceptance of Terms</h2>
@@ -108,11 +124,11 @@ export default function Terms() {
           <section>
             <h2 className="text-2xl font-bold mb-4">11. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
-              If you have any questions about these Terms of Service, please contact us at support@talk-to-my-lawyer.com.
+              If you have any questions about these Terms of Service, please contact us at <a href="mailto:support@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">support@talk-to-my-lawyer.com</a>.
             </p>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

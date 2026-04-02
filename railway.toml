@@ -7,20 +7,24 @@ dockerfilePath = "Dockerfile"
 [deploy]
 # Railway injects $PORT automatically — the server reads process.env.PORT.
 #
-# "pnpm run start" runs: NODE_ENV=production node --import ./dist/sentry-init.js dist/index.js
-# The --import flag registers Sentry ESM hooks before any application code loads.
-startCommand = "pnpm run start"
+# preDeployCommand runs Drizzle migrations before the new container goes live.
+# migrate.js exits 0 on success and 1 on failure — a failed migration blocks
+# the deploy so a broken schema never reaches production.
+# This runs in the built image so dist/migrate.js and drizzle/ are available.
+preDeployCommand = "node dist/migrate.js"
+startCommand = "node --import ./dist/instrument.js dist/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
 [deploy.healthCheck]
-# Plain Express GET /api/health — added in server/_core/index.ts.
-# No tRPC overhead or query params required.
-httpPath = "/api/health"
+# GET /health — checks all critical dependencies (DB, Redis, Stripe,
+# Resend, Anthropic, Perplexity, R2) via a background probe that runs
+# every 30s. Returns 503 when unhealthy. No tRPC overhead.
+httpPath = "/health"
 intervalSeconds = 30
 timeoutSeconds = 10
-# Allow extra time for DB connection warm-up on cold start.
-startPeriodSeconds = 30
+# Allow extra time for DB connection warm-up and first probe on cold start.
+startPeriodSeconds = 45
 
 [deploy.environmentVariables]
 # Tell the server it is in production mode so it serves dist/public

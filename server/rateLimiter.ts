@@ -20,7 +20,7 @@ import { ENV } from "./_core/env";
 
 let redis: Redis | null = null;
 
-function getRedis(): Redis | null {
+export function getRedis(): Redis | null {
   if (!ENV.upstashRedisRestUrl || !ENV.upstashRedisRestToken) {
     return null;
   }
@@ -310,7 +310,8 @@ export async function pingRedis(): Promise<boolean> {
   try {
     const result = await r.ping();
     return result === "PONG";
-  } catch {
+  } catch (err) {
+    console.warn("[RateLimiter] Redis ping failed:", err);
     return false;
   }
 }

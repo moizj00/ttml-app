@@ -25,6 +25,10 @@ import { join } from "path";
 
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
 const SERVER_DIR = join(__dirname);
+const allRoutersContent = () => {
+  const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+};
 
 // ─── 1. AppLayout — role_updated notification watcher ────────────────────────
 
@@ -277,11 +281,14 @@ describe("Resend verification — custom token fallback for edge-case users", ()
 // ─── 9. Notification routing — pipeline failures to admins only ───────────────
 
 describe("Notification routing — pipeline failures go to admins only", () => {
-  const filePath = join(SERVER_DIR, "routers.ts");
+  // Pipeline failure notifications are handled in worker.ts (the Bull queue worker),
+  // not in routers.ts. The worker iterates over admin users and creates a
+  // job_failed notification for each of them.
+  const filePath = join(SERVER_DIR, "worker.ts");
 
   it("job_failed notification is sent to admin users", () => {
     const content = readFileSync(filePath, "utf-8");
-    // The job_failed notification must use getAllUsers or similar to target admins
+    // The job_failed notification must target admins
     const pipelineSection = content.match(/job_failed[\s\S]{0,500}/)?.[0] || "";
     expect(pipelineSection).toContain("admin");
   });
@@ -289,14 +296,14 @@ describe("Notification routing — pipeline failures go to admins only", () => {
   it("job_failed notification is NOT sent to subscribers", () => {
     const content = readFileSync(filePath, "utf-8");
     // The job_failed notification block itself must not reference subscriber
-    // (it targets admins via getAllUsers("admin") or similar)
-    const pipelineSection = content.match(/job_failed"[\s\S]{0,300}/)?.[0] || "";
+    // (it targets admins via getEmployeesAndAdmins or similar)
+    const pipelineSection = content.match(/job_failed[\s\S]{0,300}/)?.[0] || "";
     expect(pipelineSection).not.toContain("subscriber");
   });
 
   it("job_failed notification is NOT sent to attorneys", () => {
     const content = readFileSync(filePath, "utf-8");
-    const pipelineSection = content.match(/job_failed"[\s\S]{0,300}/)?.[0] || "";
+    const pipelineSection = content.match(/job_failed[\s\S]{0,300}/)?.[0] || "";
     expect(pipelineSection).not.toContain("attorney");
   });
 });
@@ -304,16 +311,14 @@ describe("Notification routing — pipeline failures go to admins only", () => {
 // ─── 10. Notification routing — role_updated to the promoted user ─────────────
 
 describe("Notification routing — role_updated goes to the promoted user", () => {
-  const filePath = join(SERVER_DIR, "routers.ts");
-
   it("role_updated notification is created in the updateRole mutation", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     expect(content).toContain("role_updated");
     expect(content).toContain("updateRole");
   });
 
   it("role_updated notification targets the user whose role was changed (input.userId)", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     const updateRoleSection = content.match(/updateRole[\s\S]{0,2000}/)?.[0] || "";
     expect(updateRoleSection).toContain("role_updated");
     // Must target the user being promoted, not the admin
@@ -321,14 +326,14 @@ describe("Notification routing — role_updated goes to the promoted user", () =
   });
 
   it("role_updated notification has a link to the new role dashboard", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     const roleUpdatedSection = content.match(/role_updated[\s\S]{0,500}/)?.[0] || "";
     // Must include a link (e.g. /attorney or /dashboard)
     expect(roleUpdatedSection).toMatch(/link.*\/|\/.*link/);
   });
 
   it("updateRole mutation calls invalidateUserCache after role update", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     const updateRoleSection = content.match(/updateRole[\s\S]{0,2000}/)?.[0] || "";
     expect(updateRoleSection).toContain("invalidateUserCache");
   });
@@ -337,10 +342,8 @@ describe("Notification routing — role_updated goes to the promoted user", () =
 // ─── 11. Notification routing — letter status to letter owner ─────────────────
 
 describe("Notification routing — letter status notifications go to letter owner", () => {
-  const filePath = join(SERVER_DIR, "routers.ts");
-
   it("letter_approved notification targets letter.userId (the subscriber)", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     // The createNotification call for letter_approved uses userId: letter.userId
     // which appears on the line before the type field
     const approveSection = content.match(/userId: letter\.userId,[\s\S]{0,100}type: "letter_approved"/)?.[0] || "";
@@ -348,13 +351,13 @@ describe("Notification routing — letter status notifications go to letter owne
   });
 
   it("letter_rejected notification targets letter.userId", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     const rejectSection = content.match(/userId: letter\.userId,[\s\S]{0,100}type: "letter_rejected"/)?.[0] || "";
     expect(rejectSection).toBeTruthy();
   });
 
   it("needs_changes notification targets letter.userId", () => {
-    const content = readFileSync(filePath, "utf-8");
+    const content = allRoutersContent();
     const changesSection = content.match(/userId: letter\.userId,[\s\S]{0,100}type: "needs_changes"/)?.[0] || "";
     expect(changesSection).toBeTruthy();
   });

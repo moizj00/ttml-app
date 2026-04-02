@@ -5,9 +5,9 @@
 
 import Stripe from "stripe";
 import { ENV } from "./_core/env";
-import { getDb, countCompletedLetters, getDiscountCodeByCode } from "./db";
+import { getDb, countCompletedLetters, getDiscountCodeByCode, getUserById } from "./db";
 import { subscriptions } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   PLANS,
   getPlanConfig,
@@ -46,6 +46,9 @@ async function resolveStripeCoupon(
       await stripe.coupons.retrieve(couponId);
     } catch {
       // Coupon doesn't exist yet — create it
+      // Business intent: "once" means the discount applies only to the first invoice
+      // (i.e. the subscriber's first payment). This is a one-time introductory discount
+      // for customer acquisition — subsequent renewals are charged at full price.
       await stripe.coupons.create({
         id: couponId,
         percent_off: code.discountPercent,
@@ -208,6 +211,13 @@ export async function createCheckoutSession(params: {
       metadata: {
         user_id: userId.toString(),
         plan_id: planId,
+        ...(discountCode ? { discount_code: discountCode } : {}),
+        ...(resolved
+          ? {
+              employee_id: resolved.employeeId.toString(),
+              discount_code_id: resolved.discountCodeId.toString(),
+            }
+          : {}),
       },
     };
   }
@@ -315,18 +325,23 @@ export async function activateSubscription(params: {
     });
 }
 
-// ─── Increment Letters Used ───────────────────────────────────────────────────
-export async function incrementLettersUsed(userId: number): Promise<void> {
+// ─── Increment Letters Used (Atomic, Race-Safe) ─────────────────────────────
+export async function incrementLettersUsed(userId: number): Promise<boolean> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return false;
 
-  const sub = await getUserSubscription(userId);
-  if (!sub) return;
-
-  await db
+  const result = await db
     .update(subscriptions)
-    .set({ lettersUsed: sub.lettersUsed + 1 })
-    .where(eq(subscriptions.userId, userId));
+    .set({ lettersUsed: sql`${subscriptions.lettersUsed} + 1` })
+    .where(
+      and(
+        eq(subscriptions.userId, userId),
+        sql`${subscriptions.lettersUsed} < ${subscriptions.lettersAllowed}`
+      )
+    )
+    .returning({ id: subscriptions.id });
+
+  return result.length > 0;
 }
 
 // ─── Check if User Can Submit Letter ─────────────────────────────────────────
@@ -341,7 +356,24 @@ export async function checkLetterSubmissionAllowed(
   const sub = await getUserSubscription(userId);
 
   if (!sub || sub.status !== "active") {
-    // ── First-letter-free: allow users with 0 completed letters to submit ──
+    // ── First-letter-free: use freeReviewUsedAt as the authoritative gate ───
+    // This is set atomically by claimFreeTrialSlot() before pipeline starts,
+    // and cleared by refundFreeTrialSlot() if the pipeline fails — making it
+    // the single source of truth for free-trial claim state.
+    //
+    // Backward-compat fallback: for users created before freeReviewUsedAt was
+    // introduced, fall through to countCompletedLetters if the column is null.
+    const user = await getUserById(userId);
+    if (user?.freeReviewUsedAt) {
+      // Slot is explicitly claimed (and not yet refunded) → not eligible
+      return {
+        allowed: false,
+        reason:
+          "You need an active subscription to submit a letter. Please choose a plan.",
+      };
+    }
+    // freeReviewUsedAt is null — check completed letters for backward compat
+    // (covers legacy users who had letters before this column was introduced)
     const completedCount = await countCompletedLetters(userId);
     if (completedCount === 0) {
       return {
@@ -393,7 +425,26 @@ export async function hasActiveRecurringSubscription(
   ].includes(sub.plan);
 }
 
-// ─── Create Trial Review Checkout (DEPRECATED — first letter is now fully free) ────────
+// ─── Check if User Has Ever Had Any Subscription (permanent attorney block) ────────
+/**
+ * Returns true if the user has ANY subscription record, regardless of status or plan.
+ * This is the permanent gate for attorney promotion:
+ * once a user has subscribed (even if canceled), they can never become an attorney.
+ * This prevents the billing/role conflict where a subscriber is promoted to attorney
+ * while Stripe still has their payment history.
+ */
+export async function hasEverSubscribed(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ id: subscriptions.id })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// ─── Create Trial Review Checkout (DEPRECATED — first letter is now fully free) ————————───
 /**
  * @deprecated The first letter is now completely free (no $50 trial review fee).
  * This function is kept for backward compatibility with any existing webhook

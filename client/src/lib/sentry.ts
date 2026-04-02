@@ -14,6 +14,7 @@ export function initSentry() {
 
   Sentry.init({
     dsn: SENTRY_DSN,
+    sendDefaultPii: true,
     environment: import.meta.env.MODE, // "development" | "production"
     release: `ttml-client@${import.meta.env.VITE_APP_VERSION ?? "1.0.0"}`,
 

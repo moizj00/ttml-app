@@ -1,12 +1,14 @@
 /**
- * n8n Pipeline Callback Handler (Aligned 3-Stage)
+ * n8n Pipeline Callback Handler (Aligned 4-Stage)
  *
  * When the aligned n8n workflow completes, it POSTs structured results to
- * /api/pipeline/n8n-callback. The payload now mirrors the in-app pipeline:
+ * /api/pipeline/n8n-callback. The payload mirrors the in-app 4-stage pipeline:
  *
- *   - researchPacket: Full ResearchPacket JSON from Stage 1
- *   - draftOutput:    Structured DraftOutput JSON from Stage 2
+ *   - researchPacket:  Full ResearchPacket JSON from Stage 1
+ *   - draftOutput:     Structured DraftOutput JSON from Stage 2
  *   - assembledLetter: Final polished letter text from Stage 3
+ *   - vettedLetter:    Vetted letter text from Stage 4 (anti-hallucination, anti-bloat, jurisdiction accuracy)
+ *   - vettingReport:   Structured vetting report from Stage 4
  *
  * STATUS FLOW (must match pipeline.ts exactly):
  *   submitted → researching → drafting → generated_locked
@@ -15,10 +17,10 @@
  * This callback must transition through "drafting" before landing at
  * "generated_locked" to keep both pipelines in sync.
  *
- * If the n8n workflow already ran all 3 stages successfully, we skip the
- * local assembly stage and store the results directly. If the n8n workflow
- * only produced a flat draftContent (legacy format), we fall back to running
- * the local Claude assembly stage.
+ * If the n8n workflow already ran all 4 stages successfully, we skip the
+ * local assembly/vetting stages and store the results directly. If the n8n
+ * workflow only produced a flat draftContent (legacy format), we fall back
+ * to running the local Claude assembly stage.
  */
 
 import { timingSafeEqual } from "crypto";
@@ -29,26 +31,37 @@ import {
   updateLetterVersionPointers,
   logReviewAction,
   getLetterRequestById,
-  getUserById,
   hasLetterBeenPreviouslyUnlocked,
 } from "./db";
 import { runAssemblyStage, autoAdvanceIfPreviouslyUnlocked } from "./pipeline";
 import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
-import { sendLetterReadyEmail } from "./email";
+import { captureServerException } from "./sentry";
+
+interface N8nVettingReport {
+  citationsVerified: number;
+  citationsRemoved: number;
+  citationsFlagged: string[];
+  bloatPhrasesRemoved: string[];
+  jurisdictionIssues: string[];
+  factualIssuesFound: string[];
+  changesApplied: string[];
+  overallAssessment: string;
+  riskLevel: "low" | "medium" | "high";
+}
 
 interface N8nCallbackPayload {
   letterId: number;
   success: boolean;
-  // ── Aligned 3-stage structured data ──
   researchPacket?: ResearchPacket;
   draftOutput?: DraftOutput;
   assembledLetter?: string;
-  // ── Legacy flat fields (backward compat) ──
+  vettedLetter?: string;
+  vettingReport?: N8nVettingReport;
   researchOutput?: string;
   draftContent?: string;
-  // ── Metadata ──
   provider?: string;
   stages?: string[];
+  bloatDetected?: number;
   error?: string;
 }
 
@@ -63,8 +76,6 @@ export function registerN8nCallbackRoute(app: Express): void {
     async (req: Request, res: Response) => {
       const callbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
 
-      // Validate the callback secret using timing-safe comparison to prevent
-      // timing side-channel attacks. Fail loudly if the secret is not configured.
       if (!callbackSecret) {
         console.error(
           "[n8n Callback] N8N_CALLBACK_SECRET is not configured — refusing all requests"
@@ -97,10 +108,13 @@ export function registerN8nCallbackRoute(app: Express): void {
         researchPacket,
         draftOutput,
         assembledLetter,
+        vettedLetter,
+        vettingReport,
         researchOutput,
         draftContent,
         provider,
         stages,
+        bloatDetected,
         error,
       } = payload;
 
@@ -109,28 +123,27 @@ export function registerN8nCallbackRoute(app: Express): void {
         return;
       }
 
+      const hasVetting = !!(vettedLetter && vettingReport);
       const isAligned = !!(researchPacket && draftOutput && assembledLetter);
-      const providerTag = provider ?? (isAligned ? "n8n-3stage" : "n8n-legacy");
+      const providerTag = provider ?? (hasVetting ? "n8n-4stage" : isAligned ? "n8n-3stage" : "n8n-legacy");
       console.log(
         `[n8n Callback] Received for letter #${letterId}, success=${success}, ` +
-          `provider=${providerTag}, aligned=${isAligned}, stages=${(stages ?? []).join(",")}`
+          `provider=${providerTag}, aligned=${isAligned}, vetted=${hasVetting}, stages=${(stages ?? []).join(",")}`
       );
 
-      // Acknowledge immediately
       res.json({ received: true, letterId, provider: providerTag });
 
-      // Process asynchronously
       try {
-        // Determine the effective draft content
+        const effectiveFinalLetter = vettedLetter || assembledLetter;
         const effectiveDraft =
-          assembledLetter || draftOutput?.draftLetter || draftContent;
+          effectiveFinalLetter || draftOutput?.draftLetter || draftContent;
 
         if (!success || !effectiveDraft) {
           const errMsg = error ?? "n8n pipeline returned no content";
           console.error(
             `[n8n Callback] Pipeline failed for letter #${letterId}: ${errMsg}`
           );
-          await updateLetterStatus(letterId, "submitted"); // revert to allow retry
+          await updateLetterStatus(letterId, "submitted");
           await logReviewAction({
             letterRequestId: letterId,
             actorType: "system",
@@ -142,13 +155,6 @@ export function registerN8nCallbackRoute(app: Express): void {
           return;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // STATUS SYNC: Transition through "drafting" before "generated_locked"
-        //
-        // pipeline.ts sets "researching" when it fires the n8n webhook.
-        // Now we must go through "drafting" to match the direct pipeline flow:
-        //   researching → drafting → generated_locked
-        // ═══════════════════════════════════════════════════════════════════════
         await updateLetterStatus(letterId, "drafting");
         await logReviewAction({
           letterRequestId: letterId,
@@ -159,7 +165,6 @@ export function registerN8nCallbackRoute(app: Express): void {
           toStatus: "drafting",
         });
 
-        // ── Store the AI draft version ──────────────────────────────
         const draftVersion = await createLetterVersion({
           letterRequestId: letterId,
           versionType: "ai_draft",
@@ -167,7 +172,7 @@ export function registerN8nCallbackRoute(app: Express): void {
           createdByType: "system",
           metadataJson: {
             provider: providerTag,
-            stage: isAligned ? "n8n-assembly" : "n8n-pipeline",
+            stage: hasVetting ? "vetted_final" : isAligned ? "n8n-assembly" : "n8n-pipeline",
             researchSummary:
               researchPacket?.researchSummary ??
               researchOutput?.substring(0, 2000) ??
@@ -177,6 +182,12 @@ export function registerN8nCallbackRoute(app: Express): void {
             openQuestions: draftOutput?.openQuestions ?? undefined,
             riskFlags: draftOutput?.riskFlags ?? undefined,
             stages: stages ?? undefined,
+            ...(hasVetting
+              ? {
+                  vettingReport: vettingReport,
+                  bloatDetected: bloatDetected ?? 0,
+                }
+              : {}),
           },
         });
         const draftVersionId = (draftVersion as any)?.insertId ?? 0;
@@ -184,7 +195,6 @@ export function registerN8nCallbackRoute(app: Express): void {
           currentAiDraftVersionId: draftVersionId,
         });
 
-        // ── Store research version if we have structured research ──
         if (researchPacket?.researchSummary) {
           try {
             await createLetterVersion({
@@ -202,7 +212,6 @@ export function registerN8nCallbackRoute(app: Express): void {
                     researchPacket.applicableRules?.length ?? 0,
                   riskFlags: researchPacket.riskFlags,
                   draftingConstraints: researchPacket.draftingConstraints,
-                  // n8n may send extended fields not in the TS interface — store them as-is
                   ...((researchPacket as any).recentCasePrecedents
                     ? {
                         recentCasePrecedentsCount: (researchPacket as any)
@@ -235,27 +244,29 @@ export function registerN8nCallbackRoute(app: Express): void {
           }
         }
 
-        // ── Decide: skip local assembly or run it ─────────────────
-        // Track whether runAssemblyStage was called (it handles its own
-        // letter-ready email and status transition internally).
+        if (hasVetting && vettingReport) {
+          console.log(
+            `[n8n Callback] Vetted letter stored for letter #${letterId} (risk: ${vettingReport.riskLevel}, changes: ${vettingReport.changesApplied?.length ?? 0}, bloat_removed: ${vettingReport.bloatPhrasesRemoved?.length ?? 0})`
+          );
+        }
+
         let assemblyHandledEmails = false;
 
-        if (isAligned) {
-          // n8n already ran all 3 stages — skip local assembly, go straight to generated_locked
+        if (isAligned || hasVetting) {
+          const stageLabel = hasVetting ? "4-stage" : "3-stage";
           console.log(
-            `[n8n Callback] Aligned 3-stage complete for letter #${letterId}. Skipping local assembly.`
+            `[n8n Callback] Aligned ${stageLabel} complete for letter #${letterId}. Skipping local assembly.`
           );
           await updateLetterStatus(letterId, "generated_locked");
           await logReviewAction({
             letterRequestId: letterId,
             actorType: "system",
             action: "ai_pipeline_completed",
-            noteText: `n8n aligned 3-stage pipeline complete (${(stages ?? []).join(" → ")}). Draft ready — awaiting subscriber payment for attorney review.`,
+            noteText: `n8n aligned ${stageLabel} pipeline complete (${(stages ?? []).join(" → ")}). ${hasVetting ? `Vetting: risk=${vettingReport!.riskLevel}, bloat_removed=${vettingReport!.bloatPhrasesRemoved?.length ?? 0}, citations_flagged=${vettingReport!.citationsFlagged?.length ?? 0}. ` : ""}Draft ready — awaiting subscriber payment for attorney review.`,
             fromStatus: "drafting",
             toStatus: "generated_locked",
           });
         } else {
-          // Legacy n8n output — run local Claude assembly to polish
           console.log(
             `[n8n Callback] Legacy n8n output for letter #${letterId}. Running local assembly stage.`
           );
@@ -307,9 +318,6 @@ export function registerN8nCallbackRoute(app: Express): void {
                 riskFlags: [],
               };
 
-              // Stage 3: Claude polishes the n8n draft
-              // NOTE: runAssemblyStage handles its own status transition to
-              // generated_locked AND its own letter-ready email logic
               await runAssemblyStage(letterId, intake, research, draft);
               assemblyHandledEmails = true;
               console.log(
@@ -347,45 +355,22 @@ export function registerN8nCallbackRoute(app: Express): void {
           }
         }
 
-        // ── Send "letter ready" email + auto-unlock (only if runAssemblyStage
-        // did NOT already handle these — it has the same logic internally) ──
         if (!assemblyHandledEmails) {
           const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
           if (!wasAlreadyUnlocked) {
-            try {
-              const letterRecord = await getLetterRequestById(letterId);
-              if (letterRecord) {
-                const subscriber = await getUserById(letterRecord.userId);
-                const appBaseUrl = getAppBaseUrl();
-                if (subscriber?.email) {
-                  await sendLetterReadyEmail({
-                    to: subscriber.email,
-                    name: subscriber.name ?? "Subscriber",
-                    subject: letterRecord.subject,
-                    letterId,
-                    appUrl: appBaseUrl,
-                    letterType: letterRecord.letterType ?? undefined,
-                    jurisdictionState: letterRecord.jurisdictionState ?? undefined,
-                  });
-                  console.log(
-                    `[n8n Callback] Letter-ready email sent to ${subscriber.email} for letter #${letterId}`
-                  );
-                }
-              }
-            } catch (emailErr) {
-              console.error(
-                `[n8n Callback] Failed to send letter-ready email for #${letterId}:`,
-                emailErr
-              );
-            }
+            // The initial paywall notification email (10–15 min delay) is handled by
+            // the paywallEmailCron job (POST /api/cron/paywall-emails).
+            // We do NOT send an immediate email here — the cron picks up the letter
+            // once lastStatusChangedAt falls in the 10–15 minute window.
+            console.log(
+              `[n8n Callback] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+            );
           } else {
             console.log(
-              `[n8n Callback] Skipping letter-ready (paywall) email for #${letterId} — previously unlocked`
+              `[n8n Callback] Skipping paywall email for #${letterId} — previously unlocked`
             );
           }
 
-          // ── Auto-unlock: if the letter was previously unlocked (paid/free),
-          // skip generated_locked and go straight to pending_review ──
           try {
             await autoAdvanceIfPreviouslyUnlocked(letterId);
           } catch (autoUnlockErr) {
@@ -405,6 +390,10 @@ export function registerN8nCallbackRoute(app: Express): void {
           `[n8n Callback] Error processing callback for letter #${letterId}:`,
           msg
         );
+        captureServerException(err instanceof Error ? err : new Error(msg), {
+          tags: { component: "n8n_callback", error_type: "post_response_processing_failed" },
+          extra: { letterId },
+        });
       }
     }
   );

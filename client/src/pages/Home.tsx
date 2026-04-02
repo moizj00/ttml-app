@@ -1,16 +1,13 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import {
   CheckCircle2,
   ArrowRight,
   Shield,
   FileText,
   Play,
-  Zap,
-  Copy,
-  Share2,
-  History,
   HelpCircle,
   Menu,
   X,
@@ -22,38 +19,10 @@ import {
 } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
 import HowItWorks from "@/components/HowItWorks";
+import FeaturesSection from "@/components/FeaturesSection";
 import FirstVisitPopup from "@/components/FirstVisitPopup";
+import CategoryPicker from "@/components/CategoryPicker";
 
-const letterTypes = [
-  "Breach of Contract",
-  "Demand for Payment",
-  "Cease and Desist",
-  "Pre-Litigation Settlement",
-  "Debt Collection",
-];
-
-const supportingFeatures = [
-  {
-    icon: FileText,
-    title: "7 Letter Types",
-    desc: "Demand letters, cease and desist notices, contract breach, eviction, employment disputes, consumer complaints, and general legal correspondence.",
-  },
-  {
-    icon: Copy,
-    title: "Real-Time Status Tracking",
-    desc: "Follow your letter from submission through attorney drafting, review, and final approval with live status updates and email notifications.",
-  },
-  {
-    icon: History,
-    title: "Full Audit Trail",
-    desc: "Every action is logged — from intake to attorney drafting, edits, and final approval. Complete transparency at every step.",
-  },
-  {
-    icon: Shield,
-    title: "Encrypted & Confidential",
-    desc: "Your case details are encrypted in transit and at rest. Attorneys are bound by professional confidentiality obligations. Your data is never shared.",
-  },
-];
 
 const faqs = [
   {
@@ -88,9 +57,6 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  useEffect(() => {
-    document.title = "Talk to My Lawyer — Professional Legal Letters";
-  }, []);
 
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
@@ -112,12 +78,84 @@ export default function Home() {
     navigate("/login");
   };
 
+  const goToLoginWithCategory = (categoryId: string) => {
+    const submitPath = `/submit?type=${encodeURIComponent(categoryId)}`;
+    if (isAuthenticated) {
+      navigate(submitPath);
+    } else {
+      navigate(`/login?redirect=${encodeURIComponent(submitPath)}`);
+    }
+  };
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const homeJsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      logo: "https://www.talk-to-my-lawyer.com/logo-main.png",
+      description: "Professional attorney-reviewed legal letters drafted in minutes. Demand letters, cease and desist, breach of contract, and more.",
+      contactPoint: {
+        "@type": "ContactPoint",
+        email: "support@talk-to-my-lawyer.com",
+        contactType: "customer support",
+      },
+      sameAs: [],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      applicationCategory: "LegalService",
+      operatingSystem: "Web",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        description: "First letter free, no credit card required",
+      },
+      description: "Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more.",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://www.talk-to-my-lawyer.com/?q={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ];
+
   return (
     <>
+    <Helmet>
+      <title>Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters</title>
+      <meta name="description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is completely free." />
+      <link rel="canonical" href="https://www.talk-to-my-lawyer.com/" />
+      <meta property="og:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
+      <meta property="og:description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is free." />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content="https://www.talk-to-my-lawyer.com/" />
+      <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
+      <meta name="twitter:description" content="Professional attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract — your first letter is free." />
+      <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      <script type="application/ld+json">{JSON.stringify(homeJsonLd)}</script>
+    </Helmet>
     <FirstVisitPopup />
     <div className="min-h-screen bg-white font-['Inter'] text-slate-900 overflow-x-hidden">
       {/* Nav */}
@@ -153,6 +191,13 @@ export default function Home() {
               data-testid="nav-analyze"
             >
               Doc Analyzer
+            </Link>
+            <Link
+              href="/blog"
+              className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors"
+              data-testid="nav-blog"
+            >
+              Blog
             </Link>
             <div className="w-px h-4 bg-slate-200" />
             <button
@@ -246,19 +291,20 @@ export default function Home() {
         )}
       </nav>
 
+      <main>
       {/* Split Hero */}
       <section className="relative min-h-screen flex flex-col lg:flex-row pt-[64px] md:pt-[72px]">
         <div className="w-full lg:w-[60%] flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 py-8 sm:py-12 lg:py-0">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-6 sm:mb-8 text-xs sm:text-sm text-blue-700 font-medium">
               <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse flex-shrink-0"></span>
-              View Your First Letter For Free
+              View Your First Draft For Free
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-[2.8rem] lg:text-[3.2rem] xl:text-[3.6rem] font-extrabold leading-[1.12] tracking-tight mb-6 sm:mb-8">
-              Professional{" "}
+              California-focused{" "}
               <span className="text-blue-600 relative inline-block">
-                Legal Letters
+                legal letter drafting
                 <svg
                   className="absolute w-full h-3 -bottom-1 left-0 text-blue-200"
                   viewBox="0 0 100 10"
@@ -271,24 +317,24 @@ export default function Home() {
                     fill="transparent"
                   />
                 </svg>
-              </span>{" "}
-              Drafted & Approved by Attorneys
+              </span>
+              {", built for speed."}
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              Describe your legal situation. Our attorneys research applicable
-              laws, draft a professional letter, and review every word before
-              delivery.
+              Turn your facts into structured legal-letter drafts using a system
+              designed around California legal language and repeatable letter
+              workflows.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
               <button
                 onClick={goToLogin}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
                 data-testid="hero-cta"
               >
                 <Play className="w-5 h-5 fill-current" />
-                Get Started
+                Generate your first draft
               </button>
               <button
                 onClick={() => scrollTo("pricing")}
@@ -299,21 +345,22 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
-              {letterTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={goToLogin}
-                  className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                  data-testid={`pill-${type.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  {type}
-                </button>
-              ))}
-              <span className="bg-slate-50 border border-slate-200 text-slate-400 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1 sm:py-1.5 rounded-full cursor-default">
-                And more
-              </span>
+            <div className="flex flex-col sm:flex-row gap-3 mb-8 sm:mb-10">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                California-focused workflows
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                Structured drafting, not blank-page guessing
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
+                Built for attorney review or self-organized first drafts
+              </div>
             </div>
+
+            <CategoryPicker onCategorySelect={goToLoginWithCategory} />
           </div>
         </div>
 
@@ -338,12 +385,12 @@ export default function Home() {
                 </div>
               </div>
               <div className="space-y-3">
-                <div className="h-3 w-full bg-slate-100 rounded"></div>
-                <div className="h-3 w-[90%] bg-slate-100 rounded"></div>
-                <div className="h-3 w-[95%] bg-slate-100 rounded"></div>
-                <div className="h-3 w-[85%] bg-slate-100 rounded"></div>
+                <div className="hero-doc-line hero-doc-line-1"></div>
+                <div className="hero-doc-line hero-doc-line-2"></div>
+                <div className="hero-doc-line hero-doc-line-3"></div>
+                <div className="hero-doc-line hero-doc-line-4"></div>
               </div>
-              <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-start gap-3">
+              <div className="hero-doc-badge mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-start gap-3">
                 <div className="mt-0.5">
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                 </div>
@@ -357,6 +404,27 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+              <div className="px-2">
+                <svg
+                  viewBox="0 0 220 48"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-40 h-10"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M8 36 C20 10, 36 8, 44 24 C52 40, 48 44, 56 30 C62 18, 70 14, 78 22 C86 30, 82 40, 90 32 C98 24, 106 12, 116 20 C126 28, 120 40, 130 34 C138 28, 144 16, 154 24 C162 30, 160 40, 170 34 C178 28, 184 22, 194 28 C202 33, 206 38, 212 36"
+                    stroke="#1e3a5f"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="520"
+                    strokeDashoffset="520"
+                    className="hero-doc-signature"
+                    style={{ fill: "none" }}
+                  />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -366,210 +434,7 @@ export default function Home() {
       <HowItWorks />
 
       {/* Alternating Layout Features */}
-      <section
-        id="features"
-        className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 lg:px-12 bg-white overflow-hidden"
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-24">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
-              Built for Real Legal Situations
-            </h2>
-            <p className="text-lg text-slate-600">
-              Every feature exists to get you a stronger letter, faster
-            </p>
-          </div>
-
-          <div className="space-y-16 sm:space-y-24 md:space-y-32">
-            {/* Feature Row 1: Jurisdiction Research */}
-            <div className="flex flex-col lg:flex-row items-center gap-8 sm:gap-12 lg:gap-24">
-              <div className="w-full lg:w-1/2">
-                <div
-                  className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-blue-50 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center"
-                >
-                  <div
-                    className="absolute inset-0 bg-blue-600/5 rounded-3xl"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(circle at 2px 2px, rgba(37, 99, 235, 0.15) 1px, transparent 0)",
-                      backgroundSize: "24px 24px",
-                    }}
-                  ></div>
-
-                  <div className="relative w-full h-full bg-white rounded-2xl shadow-xl p-8 flex flex-col justify-between border border-blue-100">
-                    <div className="flex justify-between items-start mb-8">
-                      <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-bold">
-                        CALIFORNIA
-                      </div>
-                      <Shield className="text-blue-600 w-6 h-6" />
-                    </div>
-                    <div className="space-y-4 flex-1">
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <div className="h-2 w-20 bg-blue-200 rounded mb-2"></div>
-                        <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      </div>
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 relative">
-                        <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                          ✓
-                        </div>
-                        <div className="h-2 w-32 bg-blue-300 rounded mb-2 ml-4"></div>
-                        <div className="h-2 w-full bg-blue-200 rounded ml-4"></div>
-                      </div>
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <div className="h-2 w-24 bg-blue-200 rounded mb-2"></div>
-                        <div className="h-2 w-full bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full lg:w-1/2 flex flex-col justify-center">
-                <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
-                  <Zap className="w-7 h-7 text-blue-600" />
-                </div>
-                <h3 className="text-3xl font-bold mb-4">
-                  Jurisdiction-Aware Research
-                </h3>
-                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                  Our attorneys identify statutes, regulations, and case law
-                  specific to your state and situation — cited directly in your
-                  letter. We don't just use generic templates; we provide real
-                  legal authority.
-                </p>
-                <ul className="space-y-4">
-                  {[
-                    "State-specific legal codes applied",
-                    "Relevant case law citations included",
-                    "Statute of limitations checked",
-                    "Local regulatory compliance verified",
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                      <span className="text-slate-700 font-medium">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Feature Row 2: Attorney Review Center (Reversed) */}
-            <div className="flex flex-col lg:flex-row-reverse items-center gap-8 sm:gap-12 lg:gap-24">
-              <div className="w-full lg:w-1/2">
-                <div className="aspect-square max-h-[400px] sm:max-h-[500px] w-full bg-slate-100 rounded-2xl sm:rounded-3xl p-6 sm:p-12 relative flex items-center justify-center">
-                  <div className="relative w-full h-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-                      <span className="text-white font-medium text-sm">
-                        Attorney Review Portal
-                      </span>
-                      <div className="flex gap-2">
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                        <span className="w-2 h-2 rounded-full bg-slate-700"></span>
-                      </div>
-                    </div>
-                    <div className="flex-1 p-6 bg-slate-50 flex gap-4">
-                      <div className="w-1/3 space-y-3">
-                        <div className="p-3 bg-white rounded shadow-sm border-l-4 border-blue-600">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-1/2 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="p-3 bg-white/50 rounded shadow-sm">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-2/3 bg-slate-200 rounded"></div>
-                        </div>
-                        <div className="p-3 bg-white/50 rounded shadow-sm">
-                          <div className="h-2 w-full bg-slate-200 rounded mb-2"></div>
-                          <div className="h-2 w-3/4 bg-slate-200 rounded"></div>
-                        </div>
-                      </div>
-                      <div className="w-2/3 bg-white rounded shadow-sm border border-slate-200 p-6 flex flex-col">
-                        <div className="space-y-4 mb-auto">
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                          <div className="p-2 bg-yellow-50 rounded border border-yellow-200 relative">
-                            <div className="h-2 w-full bg-yellow-200 rounded mb-2"></div>
-                            <div className="h-2 w-4/5 bg-yellow-200 rounded"></div>
-                            <div className="absolute top-1/2 -right-12 translate-x-full -translate-y-1/2 bg-white shadow-lg rounded p-2 text-[10px] text-slate-500 border border-slate-100 w-24 hidden sm:block">
-                              Strengthened claim here.
-                            </div>
-                          </div>
-                          <div className="h-2 w-full bg-slate-100 rounded"></div>
-                        </div>
-                        <div className="mt-8 flex justify-end gap-2 border-t border-slate-100 pt-4">
-                          <div className="h-6 w-16 bg-slate-100 rounded"></div>
-                          <div className="h-6 w-20 bg-blue-600 rounded"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full lg:w-1/2 flex flex-col justify-center">
-                <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center mb-6">
-                  <Share2 className="w-7 h-7 text-indigo-600" />
-                </div>
-                <h3 className="text-3xl font-bold mb-4">
-                  Attorney Review Center
-                </h3>
-                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                  Licensed attorneys work in a dedicated Review Center — editing
-                  language, verifying citations, and ensuring professional
-                  quality. No letter is delivered without human legal oversight.
-                </p>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      100%
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Human reviewed
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      24-48h
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Average turnaround
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      50+
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Jurisdictions covered
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1">
-                      Inline
-                    </div>
-                    <div className="text-sm text-slate-600 font-medium">
-                      Draft feedback
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Supporting Feature Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 pt-12 border-t border-slate-100">
-              {supportingFeatures.map((f, i) => (
-                <div
-                  key={i}
-                  className="p-6 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors"
-                  data-testid={`feature-card-${i}`}
-                >
-                  <f.icon className="w-8 h-8 text-blue-600 mb-6" />
-                  <h4 className="text-xl font-bold mb-3">{f.title}</h4>
-                  <p className="text-slate-600 leading-relaxed">{f.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <FeaturesSection />
 
       {/* Pricing - Horizontal Stacked Cards */}
       <section
@@ -579,10 +444,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
-              Resolve your dispute faster with lawyer-drafted letters and negotiations
+              Reduce drafting time for repetitive letters
             </h2>
             <p className="text-lg text-slate-400">
-              Choose the plan that fits your needs. All plans include attorney review and PDF delivery.
+              Get a polished draft before attorney review. All plans include California-focused drafting and PDF delivery.
             </p>
           </div>
 
@@ -778,11 +643,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-400 py-8 sm:py-12 px-4 sm:px-6 lg:px-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6">
-          <BrandLogo href="/" variant="dark" size="sm" />
+          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
 
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm font-medium">
             <button
@@ -798,6 +664,13 @@ export default function Home() {
               data-testid="footer-faq"
             >
               FAQ
+            </Link>
+            <Link
+              href="/blog"
+              className="hover:text-white transition-colors"
+              data-testid="footer-blog"
+            >
+              Blog
             </Link>
             <Link
               href="/terms"

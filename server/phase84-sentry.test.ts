@@ -228,30 +228,34 @@ describe("useAuth Sentry user context sync", () => {
 // ─── 8. Pipeline Sentry instrumentation ───
 
 describe("Pipeline Sentry instrumentation", () => {
-  const pipelinePath = path.join(__dirname, "pipeline.ts");
+  function readAllPipeline() {
+    const dir = path.join(__dirname, "pipeline");
+    const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
+    return files.map(f => fs.readFileSync(path.join(dir, `${f}.ts`), "utf-8")).join("\n");
+  }
 
   it("pipeline.ts imports captureServerException", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('import { captureServerException');
   });
 
   it("Stage 1 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "research"');
   });
 
   it("Stage 2 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "drafting"');
   });
 
   it("Stage 3 catch block captures to Sentry with pipeline_stage tag", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "assembly"');
   });
 
   it("Full pipeline catch block captures to Sentry", () => {
-    const content = fs.readFileSync(pipelinePath, "utf-8");
+    const content = readAllPipeline();
     expect(content).toContain('pipeline_stage: "full_pipeline"');
   });
 });
@@ -315,5 +319,46 @@ describe("tRPC context Sentry user", () => {
   it("context.ts calls setServerUser when user is authenticated", () => {
     const content = fs.readFileSync(contextPath, "utf-8");
     expect(content).toContain("setServerUser({");
+  });
+});
+
+// ─── 12. MCP Monitoring Sentry instrumentation ───
+
+describe("MCP Monitoring Sentry instrumentation", () => {
+  const mcpPath = path.join(__dirname, "mcp.ts");
+  const instrumentPath = path.join(__dirname, "instrument.ts");
+
+  it("server/mcp.ts exists", () => {
+    expect(fs.existsSync(mcpPath)).toBe(true);
+  });
+
+  it("server/mcp.ts exports wrapMcpServer function", () => {
+    const content = fs.readFileSync(mcpPath, "utf-8");
+    expect(content).toContain("export function wrapMcpServer");
+  });
+
+  it("server/sentry.ts re-exports wrapMcpServer", () => {
+    const content = fs.readFileSync(path.join(__dirname, "sentry.ts"), "utf-8");
+    expect(content).toContain('export { wrapMcpServer } from "./mcp"');
+  });
+
+  it("server/instrument.ts uses the provided MCP monitoring DSN", () => {
+    const content = fs.readFileSync(instrumentPath, "utf-8");
+    expect(content).toContain("https://5dae3a74cf1a8e3880f06d25e44047e5@o4511125171077120.ingest.us.sentry.io/4511125474574336");
+  });
+
+  it("server/instrument.ts sets tracesSampleRate to 1.0 for MCP spans", () => {
+    const content = fs.readFileSync(instrumentPath, "utf-8");
+    expect(content).toContain("tracesSampleRate: 1.0");
+  });
+
+  it("server/instrument.ts sets sendDefaultPii to true", () => {
+    const content = fs.readFileSync(instrumentPath, "utf-8");
+    expect(content).toContain("sendDefaultPii: true");
+  });
+
+  it("server/instrument.ts exports wrapMcpServer that calls Sentry.wrapMcpServerWithSentry", () => {
+    const content = fs.readFileSync(instrumentPath, "utf-8");
+    expect(content).toContain("Sentry.wrapMcpServerWithSentry");
   });
 });

@@ -13,7 +13,7 @@
  * cron service hitting POST /api/cron/draft-reminders with the correct secret.
  */
 
-import { eq, and, isNull, lt } from "drizzle-orm";
+import { inArray, and, isNull, lt } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -68,13 +68,15 @@ export async function processDraftReminders(): Promise<ReminderResult> {
     Date.now() - REMINDER_THRESHOLD_HOURS * 60 * 60 * 1000
   );
 
-  // Query: generated_locked letters older than threshold with no reminder sent yet
+  // Query: generated_locked (and legacy generated_unlocked) letters older than
+  // threshold with no reminder sent yet.
+  // generated_unlocked is a legacy status (Phase ≤68) treated identically.
   const eligibleLetters = await db
     .select()
     .from(letterRequests)
     .where(
       and(
-        eq(letterRequests.status, "generated_locked"),
+        inArray(letterRequests.status, ["generated_locked", "generated_unlocked"]),
         isNull(letterRequests.draftReminderSentAt),
         lt(letterRequests.updatedAt, thresholdDate)
       )
@@ -89,6 +91,15 @@ export async function processDraftReminders(): Promise<ReminderResult> {
 
   for (const letter of eligibleLetters) {
     try {
+      if (letter.userId == null) {
+        result.skipped++;
+        result.details.push({
+          letterId: letter.id,
+          status: "skipped",
+          reason: "no user associated",
+        });
+        continue;
+      }
       const subscriber = await getUserById(letter.userId);
 
       if (!subscriber?.email) {

@@ -32,7 +32,10 @@ import BrandLogo from "@/components/shared/BrandLogo";
 // Google OAuth icon (inline SVG)
 import GoogleIcon from "@/components/shared/GoogleIcon";
 
-type RoleOption = "subscriber" | "employee";
+// Signup offers two options:
+// - 'user'      → no role sent to server (defaults to 'subscriber' in DB)
+// - 'affiliate' → sends 'affiliate' to server (maps to 'employee' in DB)
+type RoleOption = "user" | "affiliate";
 
 const ROLE_OPTIONS: {
   value: RoleOption;
@@ -41,13 +44,13 @@ const ROLE_OPTIONS: {
   icon: React.ReactNode;
 }[] = [
   {
-    value: "subscriber",
+    value: "user",
     label: "Client",
     description: "I need a legal letter drafted",
     icon: <User className="w-5 h-5" />,
   },
   {
-    value: "employee",
+    value: "affiliate",
     label: "Affiliate",
     description: "I work on operations & support",
     icon: <Briefcase className="w-5 h-5" />,
@@ -62,8 +65,8 @@ export default function Signup() {
   const requestedRoleFromSearch = (() => {
     const params = new URLSearchParams(search);
     const raw = params.get("role");
-    return raw === "subscriber" || raw === "employee"
-      ? raw
+    return raw === "user" || raw === "affiliate"
+      ? (raw as RoleOption)
       : null;
   })();
 
@@ -80,7 +83,7 @@ export default function Signup() {
   })();
 
   const [role, setRole] = useState<RoleOption>(
-    requestedRoleFromSearch ?? "subscriber"
+    requestedRoleFromSearch ?? "user"
   );
   const [wantsAffiliate, setWantsAffiliate] = useState(false);
   const [name, setName] = useState("");
@@ -138,12 +141,14 @@ export default function Signup() {
         const response = await fetch("/api/auth/google/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          credentials: "include",
+            body: JSON.stringify({
             access_token: accessToken,
             refresh_token: refreshToken,
             expires_in: expiresIn,
             next: nextPath,
-            role: requestedRoleFromSearch ?? role,
+            // Only send 'affiliate' to server; 'user' is the default (no role needed)
+            role: (requestedRoleFromSearch ?? role) === "affiliate" ? "affiliate" : undefined,
           }),
         });
         const data = await response.json();
@@ -152,8 +157,6 @@ export default function Signup() {
           throw new Error(data.error || "Google sign-up failed. Please try again.");
         }
 
-         localStorage.setItem("sb_access_token", accessToken);
-        localStorage.setItem("sb_refresh_token", refreshToken || "");
         // Clean the hash from the URL so tokens don't persist in browser history
         window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
         await utils.auth.me.invalidate();
@@ -205,12 +208,14 @@ export default function Signup() {
           const resp = await fetch("/api/auth/signup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               email,
               password,
               name: name || undefined,
-              role,
-              wantsAffiliate: role === "employee" ? wantsAffiliate : undefined,
+              // Only send 'affiliate' to server; 'user' is the default (no role needed)
+              role: role === "affiliate" ? "affiliate" : undefined,
+              wantsAffiliate: role === "affiliate" ? wantsAffiliate : undefined,
             }),
             signal: controller.signal,
           });
@@ -246,14 +251,6 @@ export default function Signup() {
         return;
       }
 
-      if (data.session?.access_token) {
-        localStorage.setItem("sb_access_token", data.session.access_token);
-        localStorage.setItem(
-          "sb_refresh_token",
-          data.session.refresh_token || ""
-        );
-      }
-
       await utils.auth.me.invalidate();
 
       toast.success("Account created", {
@@ -263,10 +260,12 @@ export default function Signup() {
       localStorage.removeItem("ttml_onboarding_seen");
 
       // Redirect based on role — honour ?next= if the role is allowed on that path
-      if (nextPath && isRoleAllowedOnPath(role, nextPath)) {
+      // affiliate → employee dashboard; user → subscriber dashboard
+      const dbRole = role === "affiliate" ? "employee" : "subscriber";
+      if (nextPath && isRoleAllowedOnPath(dbRole, nextPath)) {
         navigate(nextPath);
       } else {
-        navigate(getRoleDashboard(role));
+        navigate(getRoleDashboard(dbRole));
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {
@@ -283,13 +282,17 @@ export default function Signup() {
 
   const handleGoogleSignup = async () => {
     setGoogleLoading(true);
+    localStorage.removeItem("sb_access_token");
+    localStorage.removeItem("sb_refresh_token");
     try {
       const response = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           intent: "signup",
-          role,
+          // Only send 'affiliate' to server; 'user' is the default (no role needed)
+          role: role === "affiliate" ? "affiliate" : undefined,
           next: nextPath,
         }),
       });
@@ -350,6 +353,7 @@ export default function Signup() {
                   const res = await fetch("/api/auth/resend-verification", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    credentials: "include",
                     body: JSON.stringify({ email: signedUpEmail }),
                   });
                   const d = await res.json();
@@ -479,11 +483,10 @@ export default function Signup() {
                     </button>
                   ))}
                 </div>
-                {role === "employee" && (
+                {role === "affiliate" && (
                   <>
                     <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                      Affiliate accounts require admin approval before full
-                      access is granted.
+                      Affiliate accounts include a unique discount code for referrals.
                     </p>
                     <div
                       className={cn(
@@ -649,7 +652,7 @@ export default function Signup() {
                     Creating account...
                   </>
                 ) : (
-                  `Create ${role === "subscriber" ? "Client" : "Affiliate"} Account`
+                  `Create ${role === "user" ? "Client" : "Affiliate"} Account`
                 )}
               </Button>
             </form>

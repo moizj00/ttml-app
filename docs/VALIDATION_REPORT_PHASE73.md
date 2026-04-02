@@ -1,5 +1,7 @@
 # Talk-to-My-Lawyer — Comprehensive Validation Report
 
+> **HISTORICAL DOCUMENT — Phase 73 validation snapshot.** Test suite has since grown to ~617 tests across 41 files. Pipeline is now 4 stages (vetting stage added post-Phase 73). For current state, see `STRUCTURE.md` and `docs/FEATURE_MAP.md`.
+
 **Date:** February 27, 2026  
 **Scope:** Full platform revalidation through Phase 73  
 **Author:** Manus AI  

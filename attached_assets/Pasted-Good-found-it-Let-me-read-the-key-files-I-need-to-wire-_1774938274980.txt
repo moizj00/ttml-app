@@ -1,0 +1,30 @@
+Good, found it. Let me read the key files I need to wire into.The read returned metadata only. Let me try with the read_multiple_files approach:
+
+Pipeline and DB are barrel exports. Let me find the actual implementation files and the routers:The production app already has a `pipeline/` folder with `embeddings.ts`, `training-capture.ts`, `providers.ts`, and more. This is more advanced than expected — let me read the actual implementation to understand what already exists.Let me read these files individually via Desktop Commander:Desktop Commander is returning metadata instead of content for individual files. Let me use the search to find the relevant patterns:Now I can see the approve mutation is in `review.ts` starting around line 460. Let me read the full approve block:Desktop Commander's `read_file` isn't returning content with offset/length. Let me use `read_multiple_files` which showed content earlier, but target just the critical files one at a time:Now let me read the review.ts approve mutation and the fine-tune.ts:Now let me see how the approve mutation currently calls these:Now I have the full picture. The production app **already has RAG embeddings, training capture, and fine-tune triggering wired into the approve mutation.** Let me update my understanding and todo list:Let me also check the orchestrator and drafting to see how letter generation works:Now I have the full picture. Let me update the todos and provide the real analysis:Here's the reality check — your production TTML app is **much further ahead** than I assumed. Here's what I found:
+
+**Already in production (`server/pipeline/`):**
+
+| Feature | Production file | Status |
+|---------|----------------|--------|
+| Embeddings (OpenAI text-embedding-3-small, 1536 dims) | `embeddings.ts` | Already wired into `review.ts` approve |
+| RAG search via `match_letters()` | `embeddings.ts` → `findSimilarLetters()` | Already works |
+| Training data capture → GCS | `training-capture.ts` | Already wired into approve, uses `@google-cloud/storage` properly |
+| Fine-tune trigger (Vertex AI) | `fine-tune.ts` | Already wired into approve, uses `google-auth-library` properly |
+| 3-stage AI pipeline (research → draft → assembly) | `orchestrator.ts` | Uses Perplexity + Claude Opus + OpenAI fallback |
+
+**All three fire-and-forget hooks are already in `review.ts` approve mutation (around line 573-595):**
+- `embedAndStoreLetterVersion(versionId, finalContent)` 
+- `captureTrainingExample(letterId, letterType, jurisdiction, intake, finalContent)` 
+- `checkAndTriggerFineTune()` 
+
+**What the LLM folder files were designed to add that's NOT yet in production:**
+
+1. **Multi-provider embedding fallback** (Vertex → Ollama → OpenAI). Production currently only uses OpenAI. Your LLM `rag.ts` has the fallback chain.
+
+2. **Ollama/Vertex AI as letter generation providers.** Production uses Anthropic Claude + Perplexity + OpenAI. The LLM Router concept (Vertex → Ollama → OpenAI) is a completely different provider chain from what's in `providers.ts`.
+
+3. **RAG context injection into the drafting prompt.** Production has `findSimilarLetters()` but I don't see it being called inside `drafting.ts` — the RAG data isn't being injected into the prompt yet.
+
+**Bottom line:** Your production app doesn't need the files from the zip. It already has better-structured versions of everything. The only things worth adding are: (a) calling `findSimilarLetters` inside the drafting stage to inject RAG context, and (b) optionally adding Vertex/Ollama embedding providers alongside OpenAI.
+
+Want me to wire the RAG context injection into your existing `drafting.ts` — that's the one missing link that would make your approved letters actually improve future drafts?

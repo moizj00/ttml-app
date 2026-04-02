@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { signAdmin2FAToken, ADMIN_2FA_COOKIE } from "./_core/admin2fa";
 
 // ─── Mock DB helpers ─────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ vi.mock("./db", async () => {
     updateDiscountCode: vi.fn().mockResolvedValue(undefined),
     incrementDiscountCodeUsage: vi.fn().mockResolvedValue(undefined),
     createCommission: vi.fn().mockResolvedValue({ insertId: 2 }),
-    getEmployees: vi.fn().mockResolvedValue([
+    getEmployeesAndAdmins: vi.fn().mockResolvedValue([
       { id: 10, name: "John Doe", email: "john@example.com", role: "employee" },
     ]),
   };
@@ -120,11 +121,21 @@ function createContext(role: string, userId = 10): TrpcContext {
     lastSignedIn: new Date(),
   };
 
+  // For admin contexts, include a valid 2FA cookie so adminProcedure passes the
+  // 2FA gate. The signAdmin2FAToken helper generates a properly signed HMAC token.
+  const cookieHeader =
+    role === "admin"
+      ? `${ADMIN_2FA_COOKIE}=${encodeURIComponent(signAdmin2FAToken(userId))}`
+      : "";
+
   return {
     user,
     req: {
       protocol: "https",
-      headers: { host: "localhost:3000" },
+      headers: {
+        host: "localhost:3000",
+        ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      },
     } as TrpcContext["req"],
     res: {
       clearCookie: vi.fn(),

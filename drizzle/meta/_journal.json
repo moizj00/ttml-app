@@ -141,6 +141,125 @@
       "when": 1774110415344,
       "tag": "0019_gorgeous_lyja",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1774213002245,
+      "tag": "0020_large_ben_urich",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1774363173400,
+      "tag": "0021_chemical_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1774365670287,
+      "tag": "0022_amused_purifiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774375340136,
+      "tag": "0023_magenta_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1774425082706,
+      "tag": "0024_young_fantastic_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1774428593832,
+      "tag": "0025_careful_prowler",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1774485308454,
+      "tag": "0026_loose_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1774481704507,
+      "tag": "0027_lowly_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1774564513540,
+      "tag": "0028_pale_blacklash",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1774661338312,
+      "tag": "0029_gorgeous_puppet_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1774662602504,
+      "tag": "0030_volatile_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1774837696882,
+      "tag": "0031_black_black_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774880469320,
+      "tag": "0032_safe_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1774910005129,
+      "tag": "0033_sleepy_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1774920715103,
+      "tag": "0034_talented_zarek",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1774965183660,
+      "tag": "0035_same_next_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775059071361,
+      "tag": "0036_shocking_mongoose",
+      "breakpoints": true
     }
   ]
 }

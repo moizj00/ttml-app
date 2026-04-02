@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +80,10 @@ export default function Pricing() {
   const checkoutMutation = trpc.billing.createCheckout.useMutation({
     onSuccess: data => {
       toast.info("Redirecting to secure checkout...");
-      window.open(data.url, "_blank");
+      const win = window.open(data.url, "_blank");
+      if (!win) {
+        window.location.href = data.url;
+      }
     },
     onError: err => {
       toast.error(err.message || "Failed to create checkout session");
@@ -89,6 +93,10 @@ export default function Pricing() {
   const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
       navigate("/login");
+      return;
+    }
+    if (planId === "single_letter") {
+      navigate("/submit");
       return;
     }
     checkoutMutation.mutate({
@@ -105,25 +113,84 @@ export default function Pricing() {
     );
   };
 
+  const pricingJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "Talk to My Lawyer — Legal Letter Service",
+    url: "https://www.talk-to-my-lawyer.com/pricing",
+    provider: {
+      "@type": "Organization",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+    },
+    description: "Professional attorney-reviewed legal letters. Choose from single letter ($200), monthly subscription ($200/month for 4 letters), or yearly plan ($2,000/year).",
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: "Legal Letter Plans",
+      itemListElement: [
+        {
+          "@type": "Offer",
+          name: "Single Letter",
+          price: "200",
+          priceCurrency: "USD",
+          description: "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
+          eligibleQuantity: { "@type": "QuantitativeValue", value: 1 },
+        },
+        {
+          "@type": "Offer",
+          name: "Monthly Plan",
+          price: "200",
+          priceCurrency: "USD",
+          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1M" },
+          description: "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
+        },
+        {
+          "@type": "Offer",
+          name: "Yearly Plan",
+          price: "2000",
+          priceCurrency: "USD",
+          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1Y" },
+          description: "4 attorney-reviewed letters per month, billed annually. 2 months free vs monthly.",
+        },
+      ],
+    },
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My Lawyer</title>
+        <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $200, monthly $200/month (4 letters), or yearly $2,000. All plans include attorney review and PDF delivery." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/pricing" />
+        <meta property="og:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
+        <meta property="og:description" content="Choose the right plan for your legal needs. Single letter $200, monthly $200/month, or yearly $2,000. Attorney review included in every plan." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/pricing" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Transparent pricing for attorney-reviewed legal letters. Single, monthly, and yearly plans available." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <script type="application/ld+json">{JSON.stringify(pricingJsonLd)}</script>
+      </Helmet>
+
       {/* Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 px-4">
+      <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <div className="flex justify-center mb-4">
-            <Scale className="w-12 h-12 text-blue-500" />
+            <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            Resolve your dispute faster with lawyer-drafted letters and negotiations
+            Reduce drafting time for repetitive California legal letters
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            Professionally drafted and attorney-reviewed legal letters. Choose the plan that fits your needs.
+            Get a polished draft before attorney review. California-focused drafting, structured around repeatable letter workflows.
           </p>
         </div>
-      </div>
+      </header>
 
       {/* Plans */}
-      <div className="max-w-6xl mx-auto px-4 py-16">
+      <main className="max-w-6xl mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map(plan => (
             <Card
@@ -235,11 +302,11 @@ export default function Pricing() {
           <h3 className="font-semibold text-foreground mb-2">How It Works</h3>
           <p className="text-sm text-muted-foreground">
             Choose a plan and complete checkout to get started. Pay{" "}
-            <strong>${PRICING.singleLetter.price}</strong> for a single letter,
+            <strong>${PRICING.singleLetter.price}</strong> for a single draft,
             or subscribe for{" "}
-            <strong>${PRICING.monthly.price}/month</strong> (4 letters, $50 per letter) or{" "}
-            <strong>${PRICING.yearly.price}/year</strong> (4 letters/month, 2 months free). All
-            plans include attorney review and PDF delivery.
+            <strong>${PRICING.monthly.price}/month</strong> (4 drafts, $50 per draft) or{" "}
+            <strong>${PRICING.yearly.price}/year</strong> (4 drafts/month, 2 months free). All
+            plans include California-focused drafting and PDF delivery.
           </p>
         </div>
 
@@ -247,18 +314,18 @@ export default function Pricing() {
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
           <div className="flex flex-col items-center gap-2">
             <Shield className="w-8 h-8 text-[#3b82f6]" />
-            <h3 className="font-semibold">Attorney Reviewed</h3>
+            <h3 className="font-semibold">Built for Attorney Review</h3>
             <p className="text-sm text-muted-foreground">
-              Every letter reviewed and approved by a licensed attorney before
-              delivery
+              Every draft is structured for licensed attorney review before
+              delivery — review-friendly outputs every time
             </p>
           </div>
           <div className="flex flex-col items-center gap-2">
             <Zap className="w-8 h-8 text-amber-500" />
-            <h3 className="font-semibold">Professional Drafting</h3>
+            <h3 className="font-semibold">California-Focused Drafting</h3>
             <p className="text-sm text-muted-foreground">
-              Multi-stage legal research and professional drafting for every
-              letter
+              Built from curated legal-letter patterns designed around
+              California legal language and repeatable workflows
             </p>
           </div>
           <div className="flex flex-col items-center gap-2">
@@ -270,7 +337,7 @@ export default function Pricing() {
             </p>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

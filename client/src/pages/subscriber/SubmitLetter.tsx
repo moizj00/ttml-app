@@ -2,18 +2,8 @@ import AppLayout from "@/components/shared/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState, useEffect, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -27,11 +17,18 @@ import {
   Target,
   Paperclip,
   X,
-  File as FileIcon,
 } from "lucide-react";
-import { LETTER_TYPE_CONFIG, US_STATES } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
+import type { AnalysisPrefill } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
 import { Link } from "wouter";
+import { Step1LetterType } from "./intake-steps/Step1LetterType";
+import { Step2Jurisdiction } from "./intake-steps/Step2Jurisdiction";
+import { Step3Parties } from "./intake-steps/Step3Parties";
+import { Step4Details } from "./intake-steps/Step4Details";
+import { Step5Outcome } from "./intake-steps/Step5Outcome";
+import { Step6Exhibits } from "./intake-steps/Step6Exhibits";
+import type { FormData, ExhibitRow, PendingFile } from "./intake-steps/types";
 
 const STEPS = [
   { id: 1, label: "Letter Type", icon: <FileText className="w-4 h-4" /> },
@@ -43,69 +40,6 @@ const STEPS = [
 ];
 
 const EXHIBIT_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-const MAX_EXHIBITS = 10;
-
-const MAX_FILE_MB = 10;
-const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
-const ALLOWED_EXTS = [
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".webp",
-  ".txt",
-];
-
-interface PendingFile {
-  id: string;
-  name: string;
-  size: number;
-  mimeType: string;
-  base64: string;
-  status: "ready" | "error";
-  error?: string;
-}
-
-interface ExhibitRow {
-  id: string;
-  description: string;
-  file: PendingFile | null;
-}
-
-function fmtBytes(b: number) {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-interface FormData {
-  letterType: string;
-  subject: string;
-  jurisdictionState: string;
-  jurisdictionCity: string;
-  tonePreference: "firm" | "moderate" | "aggressive";
-  senderName: string;
-  senderAddress: string;
-  senderEmail: string;
-  senderPhone: string;
-  recipientName: string;
-  recipientAddress: string;
-  recipientEmail: string;
-  incidentDate: string;
-  description: string;
-  additionalContext: string;
-  amountOwed: string;
-  desiredOutcome: string;
-  deadlineDate: string;
-  language: string;
-  priorCommunication: string;
-  deliveryMethod: string;
-  communicationsSummary: string;
-  communicationsLastContactDate: string;
-  communicationsMethod: string;
-}
 
 const INITIAL: FormData = {
   letterType: "",
@@ -145,24 +79,80 @@ function getTabSessionId(): string {
   return tabId;
 }
 
+function readAndClearPrefill(): { prefill: AnalysisPrefill | null; found: boolean } {
+  try {
+    const raw = sessionStorage.getItem(ANALYZE_PREFILL_KEY);
+    if (raw) {
+      sessionStorage.removeItem(ANALYZE_PREFILL_KEY);
+      const prefill = JSON.parse(raw) as AnalysisPrefill;
+      return { prefill, found: true };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { prefill: null, found: false };
+}
+
+function buildInitialFormFromPrefill(prefill: AnalysisPrefill): FormData {
+  return {
+    ...INITIAL,
+    ...(prefill.letterType && { letterType: prefill.letterType }),
+    ...(prefill.subject && { subject: prefill.subject.slice(0, 200) }),
+    ...(prefill.jurisdictionState && { jurisdictionState: prefill.jurisdictionState }),
+    ...(prefill.senderName && { senderName: prefill.senderName }),
+    ...(prefill.recipientName && { recipientName: prefill.recipientName }),
+    ...(prefill.description && { description: prefill.description.slice(0, 600) }),
+  };
+}
+
 export default function SubmitLetter() {
   const { user } = useAuth();
+  const search = useSearch();
   const DRAFT_KEY = useMemo(() => {
     const userId = user?.id ?? "anon";
     const tabId = getTabSessionId();
     return `${DRAFT_KEY_PREFIX}_${userId}_${tabId}`;
   }, [user?.id]);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormData>(INITIAL);
+
+  const prefillApplied = useRef(false);
+  const prefillFromAnalyzer = useRef(false);
+  const [form, setForm] = useState<FormData>(() => {
+    const { prefill, found } = readAndClearPrefill();
+    if (found && prefill) {
+      prefillApplied.current = true;
+      prefillFromAnalyzer.current = true;
+      return buildInitialFormFromPrefill(prefill);
+    }
+    // Check for ?type= URL param from template gallery
+    const params = new URLSearchParams(search);
+    const typeParam = params.get("type");
+    if (typeParam && LETTER_TYPE_CONFIG[typeParam]) {
+      prefillApplied.current = true;
+      return { ...INITIAL, letterType: typeParam };
+    }
+    return INITIAL;
+  });
+
   const [exhibits, setExhibits] = useState<ExhibitRow[]>([
     { id: "exhibit-0", description: "", file: null },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
+
+  // ── Show prefill banner on mount only when prefill came from document analyzer ──
+  useEffect(() => {
+    if (prefillFromAnalyzer.current) {
+      setShowPrefillBanner(true);
+    }
+  }, []);
 
   // ── Resume draft: load saved draft on mount ─────────────────────────────
   useEffect(() => {
+    if (prefillApplied.current) return; // skip draft check if prefill was applied
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
@@ -181,8 +171,18 @@ export default function SubmitLetter() {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.form) setForm({ ...INITIAL, ...parsed.form });
-        if (parsed.step) setStep(parsed.step);
+        const restoredForm = parsed.form ? { ...INITIAL, ...parsed.form } : INITIAL;
+        setForm(restoredForm);
+        const maxValidStep = (() => {
+          if (!restoredForm.letterType || restoredForm.subject.length < 5) return 1;
+          if (!restoredForm.jurisdictionState) return 2;
+          if (!restoredForm.senderName?.trim() || !restoredForm.senderAddress?.trim() || !restoredForm.recipientName?.trim() || !restoredForm.recipientAddress?.trim()) return 3;
+          if (restoredForm.description.length < 20) return 4;
+          if (restoredForm.desiredOutcome.length < 10) return 5;
+          return 6;
+        })();
+        const targetStep = parsed.step ? Math.min(parsed.step, maxValidStep) : 1;
+        setStep(targetStep);
         toast.success("Draft restored", {
           description: "Your previously saved progress has been loaded.",
         });
@@ -222,35 +222,80 @@ export default function SubmitLetter() {
   const submit = trpc.letters.submit.useMutation();
   const uploadAttachment = trpc.letters.uploadAttachment.useMutation();
 
-  const update = (field: keyof FormData, value: string) =>
+  const update = (field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
-
-  const canProceed = () => {
-    if (step === 1) return !!form.letterType && form.subject.length >= 5;
-    if (step === 2) return !!form.jurisdictionState;
-    if (step === 3)
-      return (
-        form.senderName.trim().length > 0 &&
-        form.senderAddress.trim().length > 0 &&
-        form.recipientName.trim().length > 0 &&
-        form.recipientAddress.trim().length > 0
-      );
-    if (step === 4) return form.description.length >= 20;
-    if (step === 5) return form.desiredOutcome.length >= 10;
-    if (step === 6) return true; // exhibits are optional
-    return true;
+    if (stepErrors[field]) {
+      setStepErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
-  const readBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const getStepErrors = (s: number): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    if (s === 1) {
+      if (!form.letterType) errors.letterType = "Letter type is required.";
+      if (form.subject.length < 5) errors.subject = "Subject must be at least 5 characters.";
+    } else if (s === 2) {
+      if (!form.jurisdictionState) errors.jurisdictionState = "State / jurisdiction is required.";
+    } else if (s === 3) {
+      if (!form.senderName.trim()) errors.senderName = "Sender name is required.";
+      if (!form.senderAddress.trim()) errors.senderAddress = "Sender address is required.";
+      if (!form.recipientName.trim()) errors.recipientName = "Recipient name is required.";
+      if (!form.recipientAddress.trim()) errors.recipientAddress = "Recipient address is required.";
+    } else if (s === 4) {
+      if (form.description.length < 20) errors.description = "Description must be at least 20 characters.";
+    } else if (s === 5) {
+      if (form.desiredOutcome.length < 10) errors.desiredOutcome = "Desired outcome must be at least 10 characters.";
+    }
+    return errors;
+  };
+
+  const validateStep = (): boolean => {
+    const errors = getStepErrors(step);
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   // ── Submit with attachments ───────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (!form.jurisdictionState || form.jurisdictionState.length < 2) {
+      toast.error("Missing jurisdiction", {
+        description: "Please go back to Step 2 and select a state.",
+      });
+      setStep(2);
+      return;
+    }
+    if (!form.letterType || form.subject.length < 5) {
+      toast.error("Missing letter details", {
+        description: "Please go back to Step 1 and fill in the required fields.",
+      });
+      setStep(1);
+      return;
+    }
+    if (!form.senderName.trim() || !form.senderAddress.trim() || !form.recipientName.trim() || !form.recipientAddress.trim()) {
+      toast.error("Missing party information", {
+        description: "Please go back to Step 3 and fill in sender and recipient details.",
+      });
+      setStep(3);
+      return;
+    }
+    if (form.description.length < 20) {
+      toast.error("Description too short", {
+        description: "Please go back to Step 4 and provide more detail.",
+      });
+      setStep(4);
+      return;
+    }
+    if (form.desiredOutcome.length < 10) {
+      toast.error("Desired outcome too short", {
+        description: "Please go back to Step 5 and describe your desired outcome.",
+      });
+      setStep(5);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const intakeJson = {
@@ -335,8 +380,8 @@ export default function SubmitLetter() {
         .filter(e => e.file && e.file.status === "ready")
         .map(e => e.file!);
       if (exhibitFiles.length > 0) {
-        await Promise.allSettled(
-          exhibitFiles.map(f =>
+        const uploadResults = await Promise.allSettled(
+          exhibitFiles.map((f: PendingFile) =>
             uploadAttachment.mutateAsync({
               letterId,
               fileName: f.name,
@@ -345,6 +390,13 @@ export default function SubmitLetter() {
             })
           )
         );
+        const failedUploads = exhibitFiles.filter((_, i) => uploadResults[i].status === "rejected");
+        if (failedUploads.length > 0) {
+          toast.warning(`${failedUploads.length} attachment(s) failed to upload`, {
+            description: `${failedUploads.map((f: PendingFile) => f.name).join(", ")} — you can re-upload from the letter detail page.`,
+            duration: 8000,
+          });
+        }
       }
       // Clear saved draft on successful submission
       localStorage.removeItem(DRAFT_KEY);
@@ -403,6 +455,33 @@ export default function SubmitLetter() {
       ]}
     >
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Prefill Banner — from Document Analyzer */}
+        {showPrefillBanner && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-green-900">
+                  Pre-filled from your document analysis
+                </p>
+                <p className="text-xs text-green-700">
+                  We've populated the form with details detected from your uploaded document. Review and edit as needed.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPrefillBanner(false)}
+              className="shrink-0 border-green-300 text-green-700 hover:bg-green-100"
+              data-testid="button-dismiss-prefill-banner"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+        )}
+
         {/* Resume Draft Banner */}
         {showDraftBanner && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -460,641 +539,56 @@ export default function SubmitLetter() {
               {STEPS[step - 1].label}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Step 1: Letter Type */}
+          <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
             {step === 1 && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">
-                    Letter Type *
-                  </Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {Object.entries(LETTER_TYPE_CONFIG).map(([key, val]) => (
-                      <button
-                        key={key}
-                        onClick={() => update("letterType", key)}
-                        className={`text-left p-3 rounded-xl border-2 transition-all ${
-                          form.letterType === key
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/40"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-foreground">
-                          {val.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {val.description}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <Label
-                    htmlFor="subject"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Brief Subject Line *
-                  </Label>
-                  <Input
-                    id="subject"
-                    value={form.subject}
-                    onChange={e => update("subject", e.target.value)}
-                    placeholder="e.g., Demand for unpaid rent — 123 Main St"
-                    maxLength={500}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {form.subject.length}/500 characters
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">
-                    Tone Preference
-                  </Label>
-                  <Select
-                    value={form.tonePreference}
-                    onValueChange={v => update("tonePreference", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="firm">
-                        Firm (Professional & Direct)
-                      </SelectItem>
-                      <SelectItem value="moderate">
-                        Moderate (Balanced)
-                      </SelectItem>
-                      <SelectItem value="aggressive">
-                        Aggressive (Strong Legal Language)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <Step1LetterType
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
             )}
-
-            {/* Step 2: Jurisdiction */}
             {step === 2 && (
-              <>
-                <div>
-                  <Label className="text-sm font-medium mb-1.5 block">
-                    State / Jurisdiction *
-                  </Label>
-                  <Select
-                    value={form.jurisdictionState}
-                    onValueChange={v => update("jurisdictionState", v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select state..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CA">California</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    This determines which laws and statutes apply to your
-                    letter.
-                  </p>
-                </div>
-                <div>
-                  <Label
-                    htmlFor="city"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    City (Optional)
-                  </Label>
-                  <Input
-                    id="city"
-                    value={form.jurisdictionCity}
-                    onChange={e => update("jurisdictionCity", e.target.value)}
-                    placeholder="e.g., Los Angeles"
-                  />
-                </div>
-              </>
+              <Step2Jurisdiction
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
             )}
-
-            {/* Step 3: Parties */}
             {step === 3 && (
-              <>
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Your Information (Sender)
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label
-                        htmlFor="senderName"
-                        className="text-xs mb-1 block"
-                      >
-                        Full Name *
-                      </Label>
-                      <Input
-                        id="senderName"
-                        value={form.senderName}
-                        onChange={e => update("senderName", e.target.value)}
-                        placeholder="John Smith"
-                      />
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor="senderEmail"
-                        className="text-xs mb-1 block"
-                      >
-                        Email
-                      </Label>
-                      <Input
-                        id="senderEmail"
-                        type="email"
-                        value={form.senderEmail}
-                        onChange={e => update("senderEmail", e.target.value)}
-                        placeholder="john@example.com"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="senderAddress"
-                      className="text-xs mb-1 block"
-                    >
-                      Address *
-                    </Label>
-                    <Input
-                      id="senderAddress"
-                      value={form.senderAddress}
-                      onChange={e => update("senderAddress", e.target.value)}
-                      placeholder="123 Main St, City, State 12345"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="senderPhone" className="text-xs mb-1 block">
-                      Phone
-                    </Label>
-                    <Input
-                      id="senderPhone"
-                      value={form.senderPhone}
-                      onChange={e => update("senderPhone", e.target.value)}
-                      placeholder="(555) 000-0000"
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t border-border pt-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Recipient Information
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label
-                        htmlFor="recipientName"
-                        className="text-xs mb-1 block"
-                      >
-                        Full Name / Company *
-                      </Label>
-                      <Input
-                        id="recipientName"
-                        value={form.recipientName}
-                        onChange={e => update("recipientName", e.target.value)}
-                        placeholder="Jane Doe / Acme Corp"
-                      />
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor="recipientEmail"
-                        className="text-xs mb-1 block"
-                      >
-                        Email
-                      </Label>
-                      <Input
-                        id="recipientEmail"
-                        type="email"
-                        value={form.recipientEmail}
-                        onChange={e => update("recipientEmail", e.target.value)}
-                        placeholder="recipient@example.com"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="recipientAddress"
-                      className="text-xs mb-1 block"
-                    >
-                      Address *
-                    </Label>
-                    <Input
-                      id="recipientAddress"
-                      value={form.recipientAddress}
-                      onChange={e => update("recipientAddress", e.target.value)}
-                      placeholder="456 Other St, City, State 67890"
-                    />
-                  </div>
-                </div>
-              </>
+              <Step3Parties
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
             )}
-
-            {/* Step 4: Details */}
             {step === 4 && (
-              <>
-                <div>
-                  <Label
-                    htmlFor="description"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Describe Your Situation *
-                  </Label>
-                  <Textarea
-                    id="description"
-                    value={form.description}
-                    onChange={e => update("description", e.target.value)}
-                    placeholder="Provide a detailed description of the issue, what happened, when it happened, and any relevant background information..."
-                    rows={5}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {form.description.length} characters (minimum 20)
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label
-                      htmlFor="incidentDate"
-                      className="text-sm font-medium mb-1.5 block"
-                    >
-                      Incident Date
-                    </Label>
-                    <Input
-                      id="incidentDate"
-                      type="date"
-                      value={form.incidentDate}
-                      onChange={e => update("incidentDate", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="amountOwed"
-                      className="text-sm font-medium mb-1.5 block"
-                    >
-                      Amount Owed (USD)
-                    </Label>
-                    <Input
-                      id="amountOwed"
-                      type="number"
-                      value={form.amountOwed}
-                      onChange={e => update("amountOwed", e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label
-                    htmlFor="additionalContext"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Additional Context
-                  </Label>
-                  <Textarea
-                    id="additionalContext"
-                    value={form.additionalContext}
-                    onChange={e => update("additionalContext", e.target.value)}
-                    placeholder="Any other relevant information, prior communications, agreements, etc."
-                    rows={3}
-                    className="resize-none"
-                  />
-                </div>
-              </>
+              <Step4Details
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
             )}
-
-            {/* Step 5: Outcome */}
             {step === 5 && (
-              <>
-                <div>
-                  <Label
-                    htmlFor="desiredOutcome"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    What outcome do you want? *
-                  </Label>
-                  <Textarea
-                    id="desiredOutcome"
-                    value={form.desiredOutcome}
-                    onChange={e => update("desiredOutcome", e.target.value)}
-                    placeholder="e.g., I want the recipient to pay the outstanding balance of $2,500 within 14 days, or I will pursue legal action..."
-                    rows={4}
-                    className="resize-none"
-                  />
-                </div>
-                <div>
-                  <Label
-                    htmlFor="deadlineDate"
-                    className="text-sm font-medium mb-1.5 block"
-                  >
-                    Response Deadline
-                  </Label>
-                  <Input
-                    id="deadlineDate"
-                    type="date"
-                    value={form.deadlineDate}
-                    onChange={e => update("deadlineDate", e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Date by which you expect a response or action.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Language Preference
-                    </Label>
-                    <Select
-                      value={form.language}
-                      onValueChange={v => update("language", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="english">English</SelectItem>
-                        <SelectItem value="spanish">Spanish</SelectItem>
-                        <SelectItem value="french">French</SelectItem>
-                        <SelectItem value="portuguese">Portuguese</SelectItem>
-                        <SelectItem value="chinese">Chinese</SelectItem>
-                        <SelectItem value="arabic">Arabic</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Prior Communication?
-                    </Label>
-                    <Select
-                      value={form.priorCommunication}
-                      onValueChange={v => update("priorCommunication", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No prior contact</SelectItem>
-                        <SelectItem value="verbal">Verbal only</SelectItem>
-                        <SelectItem value="written">
-                          Written (email/letter)
-                        </SelectItem>
-                        <SelectItem value="both">
-                          Both verbal and written
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-1.5 block">
-                      Delivery Method
-                    </Label>
-                    <Select
-                      value={form.deliveryMethod}
-                      onValueChange={v => update("deliveryMethod", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email Only</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div className="bg-muted/50 rounded-xl p-4 space-y-2">
-                  <h4 className="text-sm font-semibold text-foreground">
-                    Submission Summary
-                  </h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    <span className="text-muted-foreground">Type:</span>
-                    <span className="text-foreground font-medium">
-                      {LETTER_TYPE_CONFIG[form.letterType]?.label}
-                    </span>
-                    <span className="text-muted-foreground">Jurisdiction:</span>
-                    <span className="text-foreground font-medium">
-                      {form.jurisdictionState}
-                      {form.jurisdictionCity
-                        ? `, ${form.jurisdictionCity}`
-                        : ""}
-                    </span>
-                    <span className="text-muted-foreground">Sender:</span>
-                    <span className="text-foreground font-medium">
-                      {form.senderName}
-                    </span>
-                    <span className="text-muted-foreground">Recipient:</span>
-                    <span className="text-foreground font-medium">
-                      {form.recipientName}
-                    </span>
-                    <span className="text-muted-foreground">Tone:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.tonePreference}
-                    </span>
-                    <span className="text-muted-foreground">Language:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.language}
-                    </span>
-                    <span className="text-muted-foreground">Delivery:</span>
-                    <span className="text-foreground font-medium capitalize">
-                      {form.deliveryMethod.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                </div>
-              </>
+              <Step5Outcome
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
             )}
-            {/* ── Step 6: Exhibits (merged Communications + Evidence) ──── */}
             {step === 6 && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Add supporting exhibits — prior communications, contracts,
-                  photos, or other documents that strengthen your case. Each
-                  exhibit can include a description and/or a file attachment.{" "}
-                  <span className="font-medium">Optional.</span>
-                </p>
-
-                <div className="space-y-3">
-                  {exhibits.map((exhibit, idx) => (
-                    <div
-                      key={exhibit.id}
-                      className="rounded-xl border border-border p-4 space-y-3"
-                      data-testid={`exhibit-row-${idx}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-foreground">
-                          Exhibit {EXHIBIT_LETTERS[idx]}
-                        </span>
-                        {exhibits.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExhibits(prev =>
-                                prev.filter(e => e.id !== exhibit.id)
-                              )
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                            aria-label={`Remove Exhibit ${EXHIBIT_LETTERS[idx]}`}
-                            data-testid={`exhibit-remove-${idx}`}
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <Textarea
-                        value={exhibit.description}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setExhibits(prev =>
-                            prev.map(ex =>
-                              ex.id === exhibit.id
-                                ? { ...ex, description: val }
-                                : ex
-                            )
-                          );
-                        }}
-                        placeholder="Describe this exhibit (e.g., Email sent on Jan 5 requesting payment...)"
-                        rows={2}
-                        className="resize-none"
-                        data-testid={`exhibit-description-${idx}`}
-                      />
-                      {exhibit.file ? (
-                        <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
-                          <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
-                            <FileIcon className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {exhibit.file.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {fmtBytes(exhibit.file.size)} &nbsp;·&nbsp;{" "}
-                              <span className="text-green-600 dark:text-green-400">
-                                Ready
-                              </span>
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExhibits(prev =>
-                                prev.map(ex =>
-                                  ex.id === exhibit.id
-                                    ? { ...ex, file: null }
-                                    : ex
-                                )
-                              )
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                            aria-label="Remove file"
-                            data-testid={`exhibit-file-remove-${idx}`}
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <label
-                          className="flex items-center gap-2 text-sm text-primary cursor-pointer hover:underline"
-                          data-testid={`exhibit-file-attach-${idx}`}
-                        >
-                          <Paperclip className="w-4 h-4" />
-                          Attach file
-                          <input
-                            type="file"
-                            accept={ALLOWED_EXTS.join(",")}
-                            className="hidden"
-                            onChange={async e => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const ext =
-                                "." +
-                                (file.name.split(".").pop() ?? "").toLowerCase();
-                              if (file.size > MAX_FILE_BYTES) {
-                                toast.error("File too large", {
-                                  description: `${file.name} exceeds the ${MAX_FILE_MB} MB limit.`,
-                                });
-                                return;
-                              }
-                              if (!ALLOWED_EXTS.includes(ext)) {
-                                toast.error("Unsupported file type", {
-                                  description: `${file.name} is not an accepted format.`,
-                                });
-                                return;
-                              }
-                              try {
-                                const base64 = await readBase64(file);
-                                const pf: PendingFile = {
-                                  id: `${file.name}-${Date.now()}`,
-                                  name: file.name,
-                                  size: file.size,
-                                  mimeType:
-                                    file.type || "application/octet-stream",
-                                  base64,
-                                  status: "ready",
-                                };
-                                setExhibits(prev =>
-                                  prev.map(ex =>
-                                    ex.id === exhibit.id
-                                      ? { ...ex, file: pf }
-                                      : ex
-                                  )
-                                );
-                              } catch {
-                                toast.error("Upload failed", {
-                                  description: `Could not read ${file.name}.`,
-                                });
-                              }
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {exhibits.length < MAX_EXHIBITS && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setExhibits(prev => [
-                        ...prev,
-                        {
-                          id: `exhibit-${Date.now()}`,
-                          description: "",
-                          file: null,
-                        },
-                      ])
-                    }
-                    data-testid="exhibit-add"
-                  >
-                    + Add Exhibit
-                  </Button>
-                )}
-
-                {exhibits.every(e => !e.description && !e.file) && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                    <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      No exhibits added yet. You can still submit — exhibits
-                      help the attorney build a stronger letter.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <Step6Exhibits
+                exhibits={exhibits}
+                setExhibits={setExhibits}
+              />
             )}
           </CardContent>
         </Card>
+
         {/* Navigation */}
         <div className="flex items-center justify-between">
           <Button
             variant="outline"
-            onClick={() => setStep(s => s - 1)}
+            onClick={() => { setStepErrors({}); setStep(s => s - 1); }}
             disabled={step === 1}
             className="bg-background"
           >
@@ -1103,8 +597,11 @@ export default function SubmitLetter() {
           </Button>
           {step < 6 ? (
             <Button
-              onClick={() => setStep(s => s + 1)}
-              disabled={!canProceed()}
+              onClick={() => {
+                if (validateStep()) {
+                  setStep(s => s + 1);
+                }
+              }}
             >
               Next
               <ChevronRight className="w-4 h-4 ml-1" />

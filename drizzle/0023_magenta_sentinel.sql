@@ -1,0 +1,1 @@
+ALTER TYPE "public"."letter_status" ADD VALUE 'sent' BEFORE 'rejected';

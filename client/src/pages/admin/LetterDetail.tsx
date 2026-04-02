@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -26,6 +27,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ClipboardList,
+  Cpu,
   RefreshCw,
   Shield,
   Wrench,
@@ -46,6 +48,12 @@ const ALL_STATUSES = [
   "approved",
   "rejected",
   "needs_changes",
+  "client_approval_pending",
+  "client_revision_requested",
+  "client_declined",
+  "client_approved",
+  "sent",
+  "pipeline_failed",
 ] as const;
 
 export default function AdminLetterDetail() {
@@ -202,6 +210,25 @@ export default function AdminLetterDetail() {
         </Button>
       </div>
 
+      {/* Quality Degraded Banner */}
+      {l.qualityDegraded && (
+        <div
+          data-testid="banner-quality-degraded-admin"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-300"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">
+              QUALITY DEGRADED DRAFT
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This draft was produced via best-effort fallback or has quality warnings attached (jurisdiction mismatch, vetting flags, or pipeline fallback). 
+              Attorney review should give this letter extra scrutiny. Check version metadata for degradation reasons.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Status Timeline */}
       <StatusTimeline currentStatus={letterStatus} />
 
@@ -333,12 +360,22 @@ export default function AdminLetterDetail() {
                 {l.jurisdictionState || "—"}, {l.jurisdictionCountry || "US"}
               </span>
               <span className="text-muted-foreground">Subscriber</span>
-              <span className="font-medium">User #{l.userId}</span>
+              <span className="font-medium">
+                {l.submitterRoleId ? (
+                  <span className="font-mono text-green-700">{l.submitterRoleId}</span>
+                ) : (
+                  `User #${l.userId}`
+                )}
+              </span>
               <span className="text-muted-foreground">Reviewer</span>
               <span className="font-medium">
-                {l.assignedReviewerId
-                  ? `Reviewer #${l.assignedReviewerId}`
-                  : "Unassigned"}
+                {l.reviewerRoleId ? (
+                  <span className="font-mono text-purple-700">{l.reviewerRoleId}</span>
+                ) : l.assignedReviewerId ? (
+                  `Reviewer #${l.assignedReviewerId}`
+                ) : (
+                  "Unassigned"
+                )}
               </span>
               <span className="text-muted-foreground">Created</span>
               <span className="font-medium">
@@ -360,32 +397,57 @@ export default function AdminLetterDetail() {
           <CardContent>
             {l.workflowJobs && l.workflowJobs.length > 0 ? (
               <div className="space-y-2">
-                {l.workflowJobs.map((job: any) => (
-                  <div
-                    key={job.id}
-                    className="flex items-center justify-between text-sm p-2 rounded border"
-                  >
-                    <div>
-                      <span className="font-medium">{job.jobType}</span>
-                      <span className="text-muted-foreground ml-2">
-                        ({job.provider})
-                      </span>
-                    </div>
-                    <Badge
-                      variant={
-                        job.status === "completed"
-                          ? "default"
-                          : job.status === "failed"
-                            ? "destructive"
-                            : job.status === "running"
-                              ? "secondary"
-                              : "outline"
-                      }
+                {l.workflowJobs.map((job: any) => {
+                  const structured = job.errorMessage ? parsePipelineError(job.errorMessage) : null;
+                  return (
+                    <div
+                      key={job.id}
+                      className="text-sm p-2 rounded border space-y-1"
                     >
-                      {job.status}
-                    </Badge>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-medium">{job.jobType}</span>
+                          <span className="text-muted-foreground ml-2">
+                            ({job.provider})
+                          </span>
+                        </div>
+                        <Badge
+                          variant={
+                            job.status === "completed"
+                              ? "default"
+                              : job.status === "failed"
+                                ? "destructive"
+                                : job.status === "running"
+                                  ? "secondary"
+                                  : "outline"
+                          }
+                        >
+                          {job.status}
+                        </Badge>
+                      </div>
+                      {job.status === "failed" && job.errorMessage && (
+                        structured ? (
+                          <div className="space-y-0.5 pl-0.5" data-testid={`letter-error-structured-${job.id}`}>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${structured.category === "transient" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`} data-testid={`letter-error-category-${job.id}`}>
+                                {structured.category}
+                              </span>
+                              <span className="text-xs font-medium text-foreground" data-testid={`letter-error-code-${job.id}`}>
+                                {PIPELINE_ERROR_LABELS[structured.code] ?? structured.code}
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-600" data-testid={`letter-error-message-${job.id}`}>{structured.message}</p>
+                            {structured.details && (
+                              <p className="text-[11px] text-muted-foreground" data-testid={`letter-error-details-${job.id}`}>{structured.details}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-red-600 pl-0.5" data-testid={`letter-error-message-${job.id}`}>{job.errorMessage}</p>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -395,7 +457,135 @@ export default function AdminLetterDetail() {
             {/* end jobs */}
           </CardContent>
         </Card>
+
+        {/* Research Cache Status */}
+        {l.researchRuns && l.researchRuns.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Research Cache</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {l.researchRuns.map((run: { id: number; cacheHit: boolean; cacheKey: string | null; provider: string; status: string }) => (
+                  <div
+                    key={run.id}
+                    data-testid={`row-research-run-${run.id}`}
+                    className="flex items-start justify-between text-sm p-2 rounded border gap-3"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium">{run.provider}</span>
+                      {run.cacheKey && (
+                        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5" title={run.cacheKey}>
+                          key: {run.cacheKey}
+                        </p>
+                      )}
+                    </div>
+                    <Badge
+                      data-testid={run.cacheHit ? "badge-cache-hit" : "badge-cache-miss"}
+                      variant={run.cacheHit ? "default" : "outline"}
+                      className={run.cacheHit ? "bg-emerald-100 text-emerald-800 border-emerald-200 shrink-0" : "shrink-0"}
+                    >
+                      {run.cacheHit ? "cache hit" : "fresh"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Pipeline Cost */}
+      {(() => {
+        interface JobRow {
+          id: number;
+          jobType: string;
+          provider: string;
+          promptTokens: number | null;
+          completionTokens: number | null;
+          estimatedCostUsd: string | null;
+          requestPayloadJson: { stage?: string } | null;
+        }
+        const STAGE_LABELS: Record<string, string> = {
+          initial_draft: "Initial Draft",
+          final_assembly: "Final Assembly",
+        };
+        const JOB_TYPE_LABELS: Record<string, string> = {
+          research: "Research",
+          vetting: "Vetting",
+          generation_pipeline: "Citation Revalidation",
+          retry: "Retry Pipeline",
+        };
+        const getStageLabel = (job: JobRow): string => {
+          const stageKey = job.requestPayloadJson?.stage;
+          if (stageKey && STAGE_LABELS[stageKey]) return STAGE_LABELS[stageKey];
+          return JOB_TYPE_LABELS[job.jobType] ?? job.jobType.replace(/_/g, " ");
+        };
+        const trackedJobs: JobRow[] = l.workflowJobs
+          ? (l.workflowJobs as JobRow[]).filter(j => j.estimatedCostUsd != null)
+          : [];
+        if (trackedJobs.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-primary" />
+                Pipeline Cost
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 font-medium">Stage</th>
+                      <th className="pb-2 font-medium text-right">Prompt Tokens</th>
+                      <th className="pb-2 font-medium text-right">Completion Tokens</th>
+                      <th className="pb-2 font-medium text-right">Total Tokens</th>
+                      <th className="pb-2 font-medium text-right">Est. Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {trackedJobs.map(job => (
+                      <tr key={job.id} data-testid={`row-cost-job-${job.id}`}>
+                        <td className="py-2 font-medium">
+                          {getStageLabel(job)}
+                          <span className="text-muted-foreground text-xs ml-1">
+                            ({job.provider})
+                          </span>
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                          {(job.promptTokens ?? 0).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                          {(job.completionTokens ?? 0).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {((job.promptTokens ?? 0) + (job.completionTokens ?? 0)).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-right tabular-nums font-medium text-green-700">
+                          ${parseFloat(job.estimatedCostUsd ?? "0").toFixed(4)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t">
+                    <tr>
+                      <td className="pt-2 font-semibold" colSpan={3}>Total</td>
+                      <td className="pt-2 text-right tabular-nums font-semibold">
+                        {(l.pipelineCostSummary?.totalTokens ?? 0).toLocaleString()}
+                      </td>
+                      <td className="pt-2 text-right tabular-nums font-semibold text-green-700">
+                        ${parseFloat(l.pipelineCostSummary?.totalCostUsd ?? "0").toFixed(4)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Intake Data */}
       {l.intakeJson && (

@@ -12,7 +12,9 @@ import * as crypto from "crypto";
 import * as db from "./db";
 import type { User } from "../drizzle/schema";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { sendVerificationEmail, sendWelcomeEmail, sendEmployeeWelcomeEmail, sendAttorneyWelcomeEmail } from "./email";
+import { ADMIN_2FA_COOKIE, ADMIN_2FA_TTL_MS, signAdmin2FAToken, verifyAdmin2FAToken } from "./_core/admin2fa";
+import { sendVerificationEmail, sendWelcomeEmail, sendEmployeeWelcomeEmail, sendAttorneyWelcomeEmail, sendAdminVerificationCodeEmail } from "./email";
+import { captureServerException } from "./sentry";
 
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
@@ -198,7 +200,10 @@ async function sendRoleBasedWelcomeEmail(user: User, origin: string): Promise<vo
   const userName = user.name || user.email.split("@")[0];
 
   if (user.role === "employee") {
-    const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch(() => null);
+    const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch((err) => {
+      console.warn(`[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`, err);
+      return null;
+    });
     await sendEmployeeWelcomeEmail({
       to: user.email,
       name: userName,
@@ -331,6 +336,7 @@ function extractAccessToken(req: Request): string | null {
       const parsed = JSON.parse(sbSession);
       return parsed.access_token || null;
     } catch {
+      console.warn("[SupabaseAuth] sb-session cookie is not JSON, treating as raw token");
       return sbSession; // Might be the raw token
     }
   }
@@ -369,6 +375,7 @@ function extractCookieToken(req: Request): string | null {
     const parsed = JSON.parse(sbSession);
     return parsed.access_token || null;
   } catch {
+    console.warn("[SupabaseAuth] Stored session value is not JSON, treating as raw token");
     return sbSession; // Might be the raw token
   }
 }
@@ -428,7 +435,12 @@ async function verifyToken(token: string): Promise<User | null> {
             // Update the cache entry's lastSignedInWrittenAt timestamp in-place
             const entry = _userCache.get(supabaseUid);
             if (entry) entry.lastSignedInWrittenAt = now;
-          }).catch(() => { /* non-blocking, ignore */ });
+          }).catch((err) => {
+            console.warn("[SupabaseAuth] Failed to update lastSignedIn (non-blocking):", err);
+            captureServerException(err instanceof Error ? err : new Error(String(err)), {
+              tags: { component: "supabase_auth", error_type: "last_signed_in_update_failed" },
+            });
+          });
         }
         return cachedUser;
       }
@@ -498,7 +510,11 @@ async function verifyToken(token: string): Promise<User | null> {
       _cacheSet(supabaseUid, appUser, lastSignedInWrittenAt);
     }
     return appUser || null;
-  } catch {
+  } catch (err) {
+    console.warn("[SupabaseAuth] authenticateRequest failed, returning null:", err);
+    captureServerException(err instanceof Error ? err : new Error(String(err)), {
+      tags: { component: "supabase_auth", error_type: "authenticate_request_failed" },
+    });
     return null;
   }
 }
@@ -539,13 +555,16 @@ export function registerSupabaseAuthRoutes(app: Express) {
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const { email, password, name, role: requestedRole, wantsAffiliate } = req.body;
-      // Attorney role is NOT self-assignable — it can only be granted by a super admin via the Users page
-      const ALLOWED_SIGNUP_ROLES = ["subscriber", "employee"];
+      // Signup accepts 'affiliate' (maps to 'employee' in DB) or no role (defaults to 'subscriber').
+      // 'user' is NOT a valid signup role — all new users default to 'subscriber'.
+      // Attorney role is NOT self-assignable — only admin can grant it.
+      const ALLOWED_SIGNUP_ROLES = ["affiliate"];
       if (requestedRole && !ALLOWED_SIGNUP_ROLES.includes(requestedRole)) {
-        res.status(400).json({ error: "Invalid role. Only 'subscriber' or 'employee' roles are allowed for signup." });
+        res.status(400).json({ error: "Invalid role. Only 'affiliate' role is allowed for signup. All other users default to subscriber." });
         return;
       }
-      const signupRole = ALLOWED_SIGNUP_ROLES.includes(requestedRole) ? requestedRole : "subscriber";
+      // Only 'affiliate' maps to 'employee'; everything else is 'subscriber' by default
+      const signupRole: "subscriber" | "employee" = requestedRole === "affiliate" ? "employee" : "subscriber";
 
       if (!email || !password) {
         res.status(400).json({ error: "Email and password are required" });
@@ -596,7 +615,7 @@ export function registerSupabaseAuthRoutes(app: Express) {
         email,
         loginMethod: "email",
         lastSignedIn: new Date(),
-        ...(isOwner ? { role: "admin", emailVerified: true } : { role: signupRole as "subscriber" | "employee" }),
+        ...(isOwner ? { role: "admin", emailVerified: true } : { role: signupRole }),
       });
 
       // Invalidate cache after signup upsert so the fresh DB row is returned
@@ -717,13 +736,18 @@ export function registerSupabaseAuthRoutes(app: Express) {
                    data.user.user_metadata?.full_name || 
                    email.split("@")[0];
       const supabaseEmailVerified = isSupabaseEmailConfirmed(data.user);
-      const appUserCheck = await db.getUserByEmail(email).catch(() => null);
+      const appUserCheck = await db.getUserByEmail(email).catch((err) => {
+        console.warn(`[SupabaseAuth] Failed to fetch app user by email during login (${email}):`, err);
+        return null;
+      });
 
       if (appUserCheck && appUserCheck.emailVerified === false && !supabaseEmailVerified) {
         try {
           const admin = getAdminClient();
           await admin.auth.admin.signOut(data.user.id);
-        } catch {}
+        } catch (signOutErr) {
+          console.warn("[SupabaseAuth] Failed to sign out unverified user from Supabase:", signOutErr);
+        }
         res.status(401).json({ error: "Email not verified", code: "EMAIL_NOT_VERIFIED" });
         return;
       }
@@ -754,8 +778,26 @@ export function registerSupabaseAuthRoutes(app: Express) {
         maxAge: data.session.expires_in * 1000,
       });
 
+      let emailFailed = false;
+      if (userRole === "admin" && appUser) {
+        try {
+          const code = await db.createAdminVerificationCode(appUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: email,
+            name: appUser.name || email.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${email}`);
+        } catch (err) {
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${email}:`, err);
+          emailFailed = true;
+        }
+      }
+
       res.json({
         success: true,
+        requires2FA: userRole === "admin",
+        emailFailed,
         user: {
           id: data.user.id,
           email: data.user.email,
@@ -780,24 +822,97 @@ export function registerSupabaseAuthRoutes(app: Express) {
       const token = extractAccessToken(req);
       if (token) {
         const admin = getAdminClient();
-        // Get user to sign them out
         const { data: { user } } = await admin.auth.getUser(token);
         if (user) {
           await admin.auth.admin.signOut(user.id);
         }
       }
 
-      // Clear session cookie
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie(SUPABASE_SESSION_COOKIE, { ...cookieOptions, maxAge: -1 });
+      res.clearCookie(ADMIN_2FA_COOKIE, { ...cookieOptions, maxAge: -1 });
 
       res.json({ success: true });
     } catch (err) {
       console.error("[SupabaseAuth] Logout error:", err);
-      // Still clear cookies even if Supabase call fails
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie(SUPABASE_SESSION_COOKIE, { ...cookieOptions, maxAge: -1 });
+      res.clearCookie(ADMIN_2FA_COOKIE, { ...cookieOptions, maxAge: -1 });
       res.json({ success: true });
+    }
+  });
+
+  // POST /api/auth/admin-2fa/verify — Verify admin 8-digit code
+  app.post("/api/auth/admin-2fa/verify", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const { code } = req.body;
+      if (!code || typeof code !== "string" || code.length !== 8) {
+        res.status(400).json({ error: "A valid 8-digit code is required" });
+        return;
+      }
+      const valid = await db.verifyAdminCode(user.id, code);
+      if (!valid) {
+        res.status(401).json({ error: "Invalid or expired code. Please try again or request a new code." });
+        return;
+      }
+      const cookieOptions = getSessionCookieOptions(req);
+      const signedToken = signAdmin2FAToken(user.id);
+      res.cookie(ADMIN_2FA_COOKIE, signedToken, {
+        ...cookieOptions,
+        maxAge: ADMIN_2FA_TTL_MS,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[SupabaseAuth] Admin 2FA verify error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // POST /api/auth/admin-2fa/resend — Resend admin verification code
+  app.post("/api/auth/admin-2fa/resend", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const code = await db.createAdminVerificationCode(user.id);
+      await sendAdminVerificationCodeEmail({
+        to: user.email!,
+        name: user.name || user.email!.split("@")[0],
+        code,
+      });
+      console.log(`[SupabaseAuth] Admin 2FA resend dispatched, to=${user.email}`);
+      res.json({ success: true, message: "A new verification code has been sent to your email." });
+    } catch (err) {
+      console.error("[SupabaseAuth] Admin 2FA resend error:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: `Failed to send verification code: ${message}. Please check your email address or try again.` });
+    }
+  });
+
+  // GET /api/auth/admin-2fa/status — Check if admin has completed 2FA for this session
+  app.get("/api/auth/admin-2fa/status", async (req: Request, res: Response) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const cookies = parseCookies(req.headers.cookie);
+      const tfaCookie = cookies.get(ADMIN_2FA_COOKIE);
+      if (!tfaCookie) {
+        res.json({ verified: false });
+        return;
+      }
+      res.json({ verified: verifyAdmin2FAToken(tfaCookie, user.id) });
+    } catch (err) {
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -924,7 +1039,90 @@ export function registerSupabaseAuthRoutes(app: Express) {
         return;
       }
 
-      res.json({ success: true, message: "Password has been reset successfully." });
+      // If this is an attorney accepting an invitation (first-time password set),
+      // sign them in, send welcome email + in-app notification. We detect "first time"
+      // by checking if the user_metadata.invited_attorney flag is set (placed by inviteAttorney).
+      let isInvitedAttorney = false;
+      try {
+        const admin = getAdminClient();
+        const { data: { user: supaUser } } = await admin.auth.getUser(access_token);
+        if (supaUser?.user_metadata?.invited_attorney === true) {
+          const appUser = await db.getUserByOpenId(supaUser.id);
+          if (appUser?.role === "attorney") {
+            isInvitedAttorney = true;
+            const origin = getOriginUrl(req);
+
+            // Sign the attorney in by creating a new session with their new password
+            try {
+              const signInClient = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: { autoRefreshToken: false, persistSession: false },
+              });
+              const { data: sessionData } = await signInClient.auth.signInWithPassword({
+                email: supaUser.email!,
+                password,
+              });
+              if (sessionData?.session) {
+                const cookieOptions = getSessionCookieOptions(req);
+                res.cookie(SUPABASE_SESSION_COOKIE, JSON.stringify({
+                  access_token: sessionData.session.access_token,
+                  refresh_token: sessionData.session.refresh_token,
+                }), {
+                  ...cookieOptions,
+                  maxAge: sessionData.session.expires_in * 1000,
+                });
+                (res as any)._invitationSession = sessionData.session;
+              }
+            } catch (signInErr) {
+              console.error("[SupabaseAuth] Failed to auto-sign-in attorney after invitation:", signInErr);
+            }
+
+            try {
+              await sendAttorneyWelcomeEmail({
+                to: appUser.email || supaUser.email || "",
+                name: appUser.name || supaUser.email?.split("@")[0] || "Counselor",
+                dashboardUrl: `${origin}/attorney`,
+              });
+            } catch (welcomeErr) {
+              console.error("[SupabaseAuth] Failed to send attorney welcome email:", welcomeErr);
+            }
+            try {
+              await db.createNotification({
+                userId: appUser.id,
+                type: "role_updated",
+                title: "Welcome to the Review Center!",
+                body: "Your attorney account is now active. You can start claiming and reviewing letters.",
+                link: "/attorney",
+              });
+            } catch (notifErr) {
+              console.error("[SupabaseAuth] Failed to create attorney welcome notification:", notifErr);
+            }
+            // Clear the flag so welcome email isn't sent again on future resets
+            try {
+              await admin.auth.admin.updateUserById(supaUser.id, {
+                user_metadata: { invited_attorney: false },
+              });
+            } catch (clearErr) {
+              console.error("[SupabaseAuth] Failed to clear invited_attorney flag:", clearErr);
+            }
+          }
+        }
+      } catch (postResetErr) {
+        console.error("[SupabaseAuth] Post-reset attorney check error:", postResetErr);
+      }
+
+      const invitationSession = (res as any)._invitationSession;
+      res.json({
+        success: true,
+        message: "Password has been reset successfully.",
+        isInvitedAttorney,
+        redirectTo: isInvitedAttorney ? "/attorney" : undefined,
+        ...(invitationSession ? {
+          session: {
+            access_token: invitationSession.access_token,
+            refresh_token: invitationSession.refresh_token,
+          },
+        } : {}),
+      });
     } catch (err) {
       console.error("[SupabaseAuth] Reset password error:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -1052,7 +1250,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
           } catch (emailErr) {
             console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
           }
-        }).catch(() => {});
+        }).catch((err) => {
+          console.error("[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):", err);
+          captureServerException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { component: "supabase_auth", error_type: "welcome_email_fetch_failed" },
+          });
+        });
       }
 
       const freshUser = await db.getUserByOpenId(supabaseUser.id);
@@ -1156,7 +1359,12 @@ export function registerSupabaseAuthRoutes(app: Express) {
               console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
             }
           }
-        })().catch(() => {});
+        })().catch((err) => {
+          console.error("[SupabaseAuth] Background welcome email task failed:", err);
+          captureServerException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { component: "supabase_auth", error_type: "welcome_email_background_failed" },
+          });
+        });
       }
 
       res.json({ success: true, message: "Email verified successfully! You can now sign in." });
@@ -1242,14 +1450,15 @@ export function registerSupabaseAuthRoutes(app: Express) {
       };
       const safeNext = getSafeRelativePath(next);
       const safeIntent = intent === "signup" ? "signup" : "login";
-      const ALLOWED_OAUTH_ROLES = ["subscriber", "employee"];
+      // Only 'affiliate' is a valid signup role via OAuth (maps to 'employee' in DB)
+      // All other users default to 'subscriber' — 'user' is not a valid role
+      const ALLOWED_OAUTH_ROLES = ["affiliate"];
       if (role && !ALLOWED_OAUTH_ROLES.includes(String(role))) {
-        res.status(400).json({ error: "Invalid role. Only 'subscriber' or 'employee' roles are allowed." });
+        res.status(400).json({ error: "Invalid role. Only 'affiliate' role is allowed for signup." });
         return;
       }
-      const safeRole = role && ALLOWED_OAUTH_ROLES.includes(String(role))
-        ? String(role)
-        : undefined;
+      // affiliate → employee; everything else defaults to subscriber (no role param needed)
+      const safeRole: "employee" | undefined = role === "affiliate" ? "employee" : undefined;
       const redirectUrl = new URL(`${origin}/api/auth/callback`);
       redirectUrl.searchParams.set("intent", safeIntent);
       if (safeNext) redirectUrl.searchParams.set("next", safeNext);
@@ -1325,9 +1534,8 @@ export function registerSupabaseAuthRoutes(app: Express) {
       }
 
       // Attorney role is NOT self-assignable via OAuth — only admin can grant it
-      const requestedRole = ["subscriber", "employee"].includes(String(role))
-        ? String(role)
-        : undefined;
+      // Only 'affiliate' maps to 'employee'; all others default to 'subscriber'
+      const requestedRole: "employee" | undefined = role === "affiliate" ? "employee" : undefined;
       const safeNext = getSafeRelativePath(next);
       const { dbUser, resolvedRole } = await syncGoogleUser({
         req,
@@ -1349,14 +1557,33 @@ export function registerSupabaseAuthRoutes(app: Express) {
         }
       );
 
+      const finalRole = dbUser?.role || resolvedRole;
+      let emailFailed = false;
+      if (finalRole === "admin" && dbUser) {
+        try {
+          const code = await db.createAdminVerificationCode(dbUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: data.user.email!,
+            name: dbUser.name || data.user.email!.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${data.user.email} (Google OAuth)`);
+        } catch (err) {
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth):`, err);
+          emailFailed = true;
+        }
+      }
+
       res.json({
         success: true,
+        requires2FA: finalRole === "admin",
+        emailFailed,
         user: {
           id: data.user.id,
           email: data.user.email,
-          role: dbUser?.role || resolvedRole,
+          role: finalRole,
         },
-        redirectPath: getPostAuthRedirectPath(dbUser?.role || resolvedRole, safeNext),
+        redirectPath: finalRole === "admin" ? "/admin/verify" : getPostAuthRedirectPath(finalRole, safeNext),
       });
     } catch (err) {
       console.error("[SupabaseAuth] Google finalize error:", err);
@@ -1371,9 +1598,8 @@ export function registerSupabaseAuthRoutes(app: Express) {
       const intent = req.query.intent === "signup" ? "signup" : "login";
       const next = getSafeRelativePath(req.query.next);
       // Attorney role is NOT self-assignable via OAuth — only admin can grant it
-      const requestedRole = ["subscriber", "employee"].includes(String(req.query.role))
-        ? String(req.query.role)
-        : undefined;
+      // Only 'affiliate' maps to 'employee'; all others default to 'subscriber'
+      const requestedRole: "employee" | undefined = req.query.role === "affiliate" ? "employee" : undefined;
       if (!code) {
         // No PKCE code present — Supabase may have used the implicit (hash) flow,
         // returning tokens in the URL fragment instead. Hash fragments are never
@@ -1490,8 +1716,26 @@ export function registerSupabaseAuthRoutes(app: Express) {
         maxAge: data.session.expires_in * 1000,
       });
 
-      const redirectPath = getPostAuthRedirectPath(dbUser?.role || resolvedRole, next);
-      res.redirect(redirectPath);
+      const callbackRole = dbUser?.role || resolvedRole;
+      if (callbackRole === "admin" && dbUser) {
+        let emailFailed = false;
+        try {
+          const code = await db.createAdminVerificationCode(dbUser.id);
+          await sendAdminVerificationCodeEmail({
+            to: user.email!,
+            name: dbUser.name || user.email!.split("@")[0],
+            code,
+          });
+          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${user.email} (Google callback)`);
+        } catch (err2) {
+          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback):`, err2);
+          emailFailed = true;
+        }
+        res.redirect(emailFailed ? "/admin/verify?emailFailed=1" : "/admin/verify");
+      } else {
+        const redirectPath = getPostAuthRedirectPath(callbackRole, next);
+        res.redirect(redirectPath);
+      }
     } catch (err) {
       console.error("[SupabaseAuth] Google callback error:", err);
       res.redirect("/login?error=server_error");

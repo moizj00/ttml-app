@@ -1,0 +1,1 @@
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "initial_paywall_email_sent_at" timestamp with time zone;

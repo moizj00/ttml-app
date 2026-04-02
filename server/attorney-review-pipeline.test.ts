@@ -51,7 +51,12 @@ const ADMIN_CTX = makeCtx({ id: 1, role: "admin", email: "ravivo@homes.land" });
 // ─── 1. Source Code Structural Tests ─────────────────────────────────────────
 
 describe("Attorney Review Pipeline — Source Code Structure", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  // Routers are now split — combine review + letters sub-router content
+  const routersFile = [
+    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
+    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
+    readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8"),
+  ].join("\n");
   const reviewModalFile = readFileSync(
     join(CLIENT_SRC, "components", "shared", "ReviewModal.tsx"),
     "utf-8"
@@ -239,7 +244,10 @@ describe("Attorney Review Pipeline — RBAC Enforcement", () => {
 // ─── 3. letterDetail canView Guard — Source Code Logic Tests ─────────────────
 
 describe("Attorney Review Pipeline — letterDetail canView Logic (Source Code)", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const routersFile = [
+    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
+    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
+  ].join("\n");
 
   it("canView allows access when letter is pending_review (any attorney can view)", () => {
     // The canView condition must include a pending_review OR branch
@@ -283,7 +291,7 @@ describe("Attorney Review Pipeline — letterDetail canView Logic (Source Code)"
 // ─── 4. Claim Mutation — Source Code Logic Tests ──────────────────────────────
 
 describe("Attorney Review Pipeline — Claim Mutation (Source Code)", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const routersFile = readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8");
 
   it("claim mutation checks for pending_review or under_review status", () => {
     expect(routersFile).toMatch(
@@ -324,7 +332,10 @@ describe("Attorney Review Pipeline — Claim Mutation (Source Code)", () => {
 // ─── 5. Subscriber Letter Delivery ───────────────────────────────────────────
 
 describe("Subscriber Letter Delivery — Approved Letter Visible in My Letters", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+  const routersFile = [
+    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
+    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
+  ].join("\n");
 
   it("letters.detail procedure exists for subscribers", () => {
     expect(routersFile).toContain("letters");
@@ -376,7 +387,7 @@ describe("Attorney Session Refresh — Role Updates Without Logout", () => {
   });
 
   it("updateRole sends in-app notification to promoted attorney", () => {
-    const routersFile = readFileSync(join(SERVER_DIR, "routers.ts"), "utf-8");
+    const routersFile = readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8");
     expect(routersFile).toContain("createNotification");
     expect(routersFile).toContain("role_updated");
     expect(routersFile).toContain("Review Center");

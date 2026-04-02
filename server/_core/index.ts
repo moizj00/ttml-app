@@ -1,18 +1,43 @@
 import "dotenv/config";
 // Sentry must be initialized before other imports
-import { initServerSentry, Sentry } from "../sentry";
+import { initServerSentry, Sentry, captureServerException } from "../sentry";
 initServerSentry();
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled promise rejection:", reason);
+  captureServerException(reason instanceof Error ? reason : new Error(String(reason)), {
+    tags: { component: "process", error_type: "unhandled_rejection" },
+  });
+  // Flush Sentry and exit — unhandled rejections are programmer errors
+  Sentry.close(2000).finally(() => {
+    process.exit(1);
+  });
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught exception:", err);
+  captureServerException(err, {
+    tags: { component: "process", error_type: "uncaught_exception" },
+  });
+  // Flush Sentry before exiting so the exception is captured
+  Sentry.close(2000).finally(() => {
+    process.exit(1);
+  });
+});
 
 import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
-import { registerSupabaseAuthRoutes } from "../supabaseAuth";
+import { registerSupabaseAuthRoutes, authenticateRequest } from "../supabaseAuth";
 import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
+import { registerPaywallEmailRoute } from "../paywallEmailCron";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
+import { registerBlogInternalRoutes } from "../blogInternalRoutes";
+import { registerSentryDebugRoute } from "../sentryDebugRoute";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
 import { appRouter } from "../routers";
@@ -24,6 +49,8 @@ import {
   generalRateLimitMiddleware,
 } from "../rateLimiter";
 import { validateRequiredEnv } from "./env";
+import { checkR2Connectivity } from "../storage";
+import { startHealthProbe, getPublicHealth, getDetailedHealth } from "../healthCheck";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -149,7 +176,7 @@ async function startServer() {
         "Content-Security-Policy",
         [
           "default-src 'self'",
-          "script-src 'self' https://js.stripe.com",
+          "script-src 'self' https://js.stripe.com https://static.cloudflareinsights.com",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "img-src 'self' data: https: blob:",
           "font-src 'self' data: https://fonts.gstatic.com",
@@ -169,12 +196,39 @@ async function startServer() {
   });
   // ──────────────────────────────────────────────────────────────────────────
 
-  // ─── Standalone health check (plain HTTP GET, no tRPC overhead) ───────────
-  // Used by Railway health checks and load balancers.
-  // The tRPC system.health procedure also works but requires a ?input= param.
-  app.get("/api/health", (_req, res) => {
-    res.status(200).json({ ok: true, timestamp: Date.now() });
-  });
+  // ─── Health check endpoints (plain HTTP GET, no tRPC overhead) ────────────
+  // GET /health — public, used by Railway health checks and load balancers.
+  // Returns overall status derived from all dependencies (DB, Redis, Stripe,
+  // Resend, Anthropic, Perplexity, R2) via a background probe that runs
+  // every 30s. Synchronous — no external API calls on each request.
+  const healthHandler: express.RequestHandler = (_req, res) => {
+    const result = getPublicHealth();
+    const httpStatus = result.status === "unhealthy" ? 503 : 200;
+    res.status(httpStatus).json(result);
+  };
+  app.get("/health", healthHandler);
+  app.get("/api/health", healthHandler);
+
+  // GET /health/details — admin-only, returns per-service breakdown
+  // with response times. Background probe refreshes every 30s.
+  const healthDetailsHandler: express.RequestHandler = async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        res.status(user ? 403 : 401).json({ error: "Admin authentication required" });
+        return;
+      }
+    } catch {
+      res.status(401).json({ error: "Admin authentication required" });
+      return;
+    }
+
+    const result = await getDetailedHealth();
+    const httpStatus = result.status === "unhealthy" ? 503 : 200;
+    res.status(httpStatus).json(result);
+  };
+  app.get("/health/details", healthDetailsHandler);
+  app.get("/api/health/details", healthDetailsHandler);
   // ──────────────────────────────────────────────────────────────────────────
 
   // ⚠️ Stripe webhook MUST be registered BEFORE express.json() to get raw body
@@ -198,7 +252,9 @@ async function startServer() {
   registerN8nCallbackRoute(app);
   registerEmailPreviewRoute(app);
   registerDraftRemindersRoute(app);
+  registerPaywallEmailRoute(app);
   registerDraftPdfRoute(app);
+  registerBlogInternalRoutes(app);
 
   app.use(
     "/api/trpc",
@@ -207,6 +263,8 @@ async function startServer() {
       createContext,
     })
   );
+
+  registerSentryDebugRoute(app);
 
   // ─── Sentry Express error handler (must be before other error handlers) ───
   Sentry.setupExpressErrorHandler(app);
@@ -226,9 +284,19 @@ async function startServer() {
     // Warm up DB connection on startup so first request doesn't timeout
     getDb()
       .then(() => console.log("[Startup] Database connection warmed up"))
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[Startup] Database warmup failed:", err);
+        captureServerException(err, { tags: { component: "startup", error_type: "db_warmup_failed" } });
+      });
     // Start in-process cron scheduler (draft reminders, etc.)
     startCronScheduler();
+    // Check Cloudflare R2 connectivity
+    checkR2Connectivity().catch((err) => {
+      console.error("[Startup] R2 connectivity check failed:", err);
+      captureServerException(err, { tags: { component: "startup", error_type: "r2_connectivity_failed" } });
+    });
+    // Start background health probe (checks all dependencies every 30s)
+    startHealthProbe();
   });
 }
 

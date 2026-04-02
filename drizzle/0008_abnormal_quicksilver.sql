@@ -1,1 +1,1 @@
-ALTER TABLE "letter_requests" ADD COLUMN "draft_reminder_sent_at" timestamp with time zone;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "draft_reminder_sent_at" timestamp with time zone;

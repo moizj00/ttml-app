@@ -1,12 +1,28 @@
 import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Helmet>
+        <title>Privacy Policy | Talk to My Lawyer</title>
+        <meta name="description" content="Read the Privacy Policy for Talk to My Lawyer. Learn how we collect, use, and protect your personal information when you use our attorney-reviewed legal letter service." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/privacy" />
+        <meta property="og:title" content="Privacy Policy | Talk to My Lawyer" />
+        <meta property="og:description" content="Privacy Policy for Talk to My Lawyer — how we collect, use, and protect your personal information." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/privacy" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="Privacy Policy | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Privacy Policy for Talk to My Lawyer — how we protect your personal information." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      </Helmet>
+
       {/* Header */}
-      <div className="border-b border-border">
+      <header className="border-b border-border">
         <div className="container mx-auto px-4 py-6">
           <Link href="/">
             <Button variant="ghost" size="sm" className="mb-4">
@@ -19,10 +35,10 @@ export default function Privacy() {
             Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
-      </div>
+      </header>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-12 max-w-4xl">
+      <main className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="prose prose-invert max-w-none space-y-8">
           <section>
             <h2 className="text-2xl font-bold mb-4">1. Introduction</h2>
@@ -91,8 +107,8 @@ export default function Privacy() {
             </p>
             <div className="bg-muted p-4 rounded-lg text-muted-foreground">
               <p><strong>Talk To My Lawyer</strong></p>
-              <p>Email: privacy@talk-to-my-lawyer.com</p>
-              <p>Support: support@talk-to-my-lawyer.com</p>
+              <p>Email: <a href="mailto:privacy@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">privacy@talk-to-my-lawyer.com</a></p>
+              <p>Support: <a href="mailto:support@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">support@talk-to-my-lawyer.com</a></p>
             </div>
           </section>
 
@@ -116,7 +132,7 @@ export default function Privacy() {
               <li>The right to data portability</li>
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-3">
-              To exercise any of these rights, please contact us at privacy@talk-to-my-lawyer.com.
+              To exercise any of these rights, please contact us at <a href="mailto:privacy@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">privacy@talk-to-my-lawyer.com</a>.
             </p>
           </section>
 
@@ -140,7 +156,7 @@ export default function Privacy() {
             </ul>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

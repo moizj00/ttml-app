@@ -1,0 +1,396 @@
+2026-03-31T13:46:26.246457952Z [inf]  [35m[Region: us-west1][0m
+2026-03-31T13:46:26.282121775Z [inf]  [35m=========================
+2026-03-31T13:46:26.282162156Z [inf]  Using Detected Dockerfile
+2026-03-31T13:46:26.282170655Z [inf]  =========================
+2026-03-31T13:46:26.282175935Z [inf]  [0m
+2026-03-31T13:46:26.282194249Z [inf]  context: 0qjv-_RKe
+2026-03-31T13:46:26.503439830Z [inf]  [internal] load build definition from Dockerfile
+2026-03-31T13:46:26.503500877Z [inf]  [internal] load build definition from Dockerfile
+2026-03-31T13:46:26.503522211Z [inf]  [internal] load build definition from Dockerfile
+2026-03-31T13:46:26.563829533Z [inf]  [internal] load build definition from Dockerfile
+2026-03-31T13:46:26.566249718Z [inf]  resolve image config for docker-image://docker.io/docker/dockerfile:1
+2026-03-31T13:46:26.782945781Z [inf]  [auth] docker/dockerfile:pull token for registry-1.docker.io
+2026-03-31T13:46:26.783018496Z [inf]  [auth] docker/dockerfile:pull token for registry-1.docker.io
+2026-03-31T13:46:27.478788558Z [inf]  resolve image config for docker-image://docker.io/docker/dockerfile:1
+2026-03-31T13:46:27.478845470Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.479024235Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.487833039Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.487945726Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.487969548Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.488160624Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.495984257Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.498119292Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.725337617Z [inf]  docker-image://docker.io/docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+2026-03-31T13:46:27.981544509Z [inf]  [internal] load metadata for docker.io/library/node:22-alpine
+2026-03-31T13:46:28.533842452Z [inf]  [internal] load metadata for docker.io/library/node:22-alpine
+2026-03-31T13:46:28.535800085Z [inf]  [internal] load .dockerignore
+2026-03-31T13:46:28.535861586Z [inf]  [internal] load .dockerignore
+2026-03-31T13:46:28.535882389Z [inf]  [internal] load .dockerignore
+2026-03-31T13:46:28.548502080Z [inf]  [internal] load .dockerignore
+2026-03-31T13:46:29.110756420Z [inf]  [production 3/8] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:29.110820211Z [inf]  [builder  2/12] WORKDIR /app
+2026-03-31T13:46:29.110848403Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.111098529Z [inf]  [production 4/8] COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
+2026-03-31T13:46:29.111131366Z [inf]  [builder 12/12] RUN pnpm run build
+2026-03-31T13:46:29.111150144Z [inf]  [builder 11/12] COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
+2026-03-31T13:46:29.111165304Z [inf]  [builder  8/12] COPY server/ ./server/
+2026-03-31T13:46:29.111180471Z [inf]  [builder  9/12] COPY shared/ ./shared/
+2026-03-31T13:46:29.111194655Z [inf]  [production 6/8] RUN pnpm install --frozen-lockfile --prod
+2026-03-31T13:46:29.111216769Z [inf]  [production 8/8] COPY --from=builder /app/package.json ./
+2026-03-31T13:46:29.111261137Z [inf]  [builder  6/12] RUN pnpm install --frozen-lockfile
+2026-03-31T13:46:29.111276407Z [inf]  [builder  5/12] COPY patches/ ./patches/
+2026-03-31T13:46:29.111290235Z [inf]  [builder  4/12] COPY package.json pnpm-lock.yaml ./
+2026-03-31T13:46:29.111301939Z [inf]  [internal] load build context
+2026-03-31T13:46:29.111312094Z [inf]  [production 5/8] COPY --from=builder /app/patches/ ./patches/
+2026-03-31T13:46:29.111325224Z [inf]  [production 7/8] COPY --from=builder /app/dist/ ./dist/
+2026-03-31T13:46:29.111338674Z [inf]  [builder  7/12] COPY client/ ./client/
+2026-03-31T13:46:29.111351244Z [inf]  [builder  3/12] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:29.111363433Z [inf]  [builder 10/12] COPY drizzle/ ./drizzle/
+2026-03-31T13:46:29.111385867Z [inf]  [internal] load build context
+2026-03-31T13:46:29.111447053Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.118259414Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.118360784Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.118574798Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.118646224Z [inf]  [internal] load build context
+2026-03-31T13:46:29.118661921Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.143146572Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.145160760Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:29.221073202Z [inf]  [internal] load build context
+2026-03-31T13:46:29.676086268Z [inf]  [builder  1/12] FROM docker.io/library/node:22-alpine@sha256:4d64b49e6c891c8fc821007cb1cdc6c0db7773110ac2c34bf2e6960adef62ed3
+2026-03-31T13:46:30.820925869Z [inf]  [builder  2/12] WORKDIR /app
+2026-03-31T13:46:30.984181516Z [inf]  [builder  2/12] WORKDIR /app
+2026-03-31T13:46:30.985441453Z [inf]  [builder  3/12] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:30.985499602Z [inf]  [production 3/8] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:32.730542927Z [inf]  
+added 1 package in 2s
+
+2026-03-31T13:46:32.731951119Z [inf]  npm notice
+npm notice New major version of npm available! 10.9.7 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice
+
+2026-03-31T13:46:32.814487152Z [inf]  
+added 1 package in 2s
+
+2026-03-31T13:46:32.815852585Z [inf]  npm notice
+npm notice New major version of npm available! 10.9.7 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice
+
+2026-03-31T13:46:33.055123384Z [inf]  [production 3/8] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:33.057632628Z [inf]  [builder  3/12] RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+2026-03-31T13:46:33.059113164Z [inf]  [builder  4/12] COPY package.json pnpm-lock.yaml ./
+2026-03-31T13:46:33.111760910Z [inf]  [builder  4/12] COPY package.json pnpm-lock.yaml ./
+2026-03-31T13:46:33.113104688Z [inf]  [builder  5/12] COPY patches/ ./patches/
+2026-03-31T13:46:33.140534665Z [inf]  [builder  5/12] COPY patches/ ./patches/
+2026-03-31T13:46:33.141795188Z [inf]  [builder  6/12] RUN pnpm install --frozen-lockfile
+2026-03-31T13:46:33.923947633Z [inf]  Lockfile is up to date, resolution step is skipped
+
+2026-03-31T13:46:33.992505013Z [inf]  Progress: resolved 1, reused 0, downloaded 0, added 0
+
+2026-03-31T13:46:34.572449401Z [inf]  Packages: +821
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+2026-03-31T13:46:35.291595258Z [inf]  Progress: resolved 821, reused 0, downloaded 0, added 0
+
+2026-03-31T13:46:36.217168261Z [inf]  
+   ╭───────────────────────────────────────────────────────────────────╮
+   │                                                                   │
+   │                Update available! 10.4.1 → 10.33.0.                │
+   │   Changelog: https://github.com/pnpm/pnpm/releases/tag/v10.33.0   │
+   │                 Run "pnpm add -g pnpm" to update.                 │
+   │                                                                   │
+   ╰───────────────────────────────────────────────────────────────────╯
+
+
+2026-03-31T13:46:36.291837669Z [inf]  Progress: resolved 821, reused 0, downloaded 306, added 305
+
+2026-03-31T13:46:37.291180682Z [inf]  Progress: resolved 821, reused 0, downloaded 654, added 654
+
+2026-03-31T13:46:38.291427348Z [inf]  Progress: resolved 821, reused 0, downloaded 796, added 796
+
+2026-03-31T13:46:39.291827033Z [inf]  Progress: resolved 821, reused 0, downloaded 812, added 812
+
+2026-03-31T13:46:40.292130516Z [inf]  Progress: resolved 821, reused 0, downloaded 815, added 815
+
+2026-03-31T13:46:41.292202506Z [inf]  Progress: resolved 821, reused 0, downloaded 818, added 818
+
+2026-03-31T13:46:44.841631731Z [inf]  Progress: resolved 821, reused 0, downloaded 819, added 818
+
+2026-03-31T13:46:45.042120359Z [inf]  Progress: resolved 821, reused 0, downloaded 821, added 821, done
+
+2026-03-31T13:46:45.403178783Z [inf]  
+dependencies:
++ @ai-sdk/anthropic 3.0.58
++ @ai-sdk/openai 3.0.41
++ @aws-sdk/client-s3 3.1013.0
++ @aws-sdk/s3-request-presigner 3.1013.0
++ @google-cloud/storage 7.19.0
++ @google-cloud/vertexai 1.10.3
++ @octokit/rest 21.1.1
++ @radix-ui/react-accordion 1.2.12
++ @radix-ui/react-alert-dialog 1.1.15
++ @radix-ui/react-avatar 1.1.11
++ @radix-ui/react-dialog 1.1.15
++ @radix-ui/react-dropdown-menu 2.1.16
++ @radix-ui/react-label 2.1.8
++ @radix-ui/react-progress 1.1.8
++ @radix-ui/react-select 2.2.6
++ @radix-ui/react-separator 1.1.8
++ @radix-ui/react-slot 1.2.4
++ @radix-ui/react-switch 1.2.6
++ @radix-ui/react-tabs 1.1.13
++ @radix-ui/react-tooltip 1.2.8
++ @replit/connectors-sdk 0.3.0
++ @sentry/node 10.42.0
++ @sentry/react 10.42.0
++ @stripe/stripe-js 8.9.0
++ @supabase/supabase-js 2.98.0
++ @tanstack/react-query 5.90.21
++ @tiptap/extension-highlight 3.20.1
++ @tiptap/extension-placeholder 3.20.1
++ @tiptap/extension-text-align 3.20.1
++ @tiptap/extension-underline 3.20.1
++ @tiptap/pm 3.20.1
++ @tiptap/react 3.20.1
++ @tiptap/starter-kit 3.20.1
++ @trpc/client 11.12.0
++ @trpc/react-query 11.12.0
++ @trpc/server 11.12.0
++ @types/node-cron 3.0.11
++ @types/pdfkit 0.17.5
++ @upstash/ratelimit 2.0.8
++ @upstash/redis 1.36.3
++ ai 6.0.116
++ bullmq 5.71.1
++ class-variance-authority 0.7.1
++ clsx 2.1.1
++ dompurify 3.3.2
++ dotenv 17.3.1
++ drizzle-orm 0.44.7
++ express 4.22.1
++ google-auth-library 10.6.2
++ ioredis 5.10.1
++ jose 6.1.0
++ lucide-react 0.453.0
++ mammoth 1.12.0
++ nanoid 5.1.6
++ node-cron 4.2.1
++ pdf-parse 2.4.5
++ pdfkit 0.17.2
++ pg 8.20.0
++ postgres 3.4.8
++ puppeteer 24.39.1
++ react 19.2.4
++ react-dom 19.2.4
++ react-helmet-async 3.0.0
++ resend 6.9.3
++ sonner 2.0.7
++ stripe 20.4.0
++ superjson 1.13.3
++ tailwind-merge 3.5.0
++ wouter 3.7.1
++ zod 4.3.6
+
+devDependencies:
++ @tailwindcss/typography 0.5.19
++ @tailwindcss/vite 4.2.1
++ @types/express 4.17.21
++ @types/node 24.12.0
++ @types/react 19.2.14
++ @types/react-dom 19.2.3
++ @vitejs/plugin-react 5.1.4
++ autoprefixer 10.4.27
++ drizzle-kit 0.31.10
++ esbuild 0.27.3
++ pnpm 10.30.3
++ postcss 8.5.8
++ prettier 3.8.1
++ tailwindcss 4.2.1
++ tsx 4.21.0
++ tw-animate-css 1.4.0
++ typescript 5.9.3
++ vite 7.3.1
++ vitest 4.1.0
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮│                                                                              ││   Ignored build scripts: esbuild, msgpackr-extract, protobufjs, puppeteer.   ││   Run "pnpm approve-builds" to pick which dependencies should be allowed     ││   to run scripts.                                                            ││                                                                              │╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+2026-03-31T13:46:45.45478715Z [inf]  Done in 12.1s using pnpm v10.4.1
+
+2026-03-31T13:46:46.007114613Z [inf]  [builder  6/12] RUN pnpm install --frozen-lockfile
+2026-03-31T13:46:46.008234198Z [inf]  [builder  7/12] COPY client/ ./client/
+2026-03-31T13:46:46.446331626Z [inf]  [builder  7/12] COPY client/ ./client/
+2026-03-31T13:46:46.447685798Z [inf]  [builder  8/12] COPY server/ ./server/
+2026-03-31T13:46:46.477117742Z [inf]  [builder  8/12] COPY server/ ./server/
+2026-03-31T13:46:46.477936499Z [inf]  [builder  9/12] COPY shared/ ./shared/
+2026-03-31T13:46:46.508954111Z [inf]  [builder  9/12] COPY shared/ ./shared/
+2026-03-31T13:46:46.510383568Z [inf]  [builder 10/12] COPY drizzle/ ./drizzle/
+2026-03-31T13:46:46.533984020Z [inf]  [builder 10/12] COPY drizzle/ ./drizzle/
+2026-03-31T13:46:46.535848243Z [inf]  [builder 11/12] COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
+2026-03-31T13:46:46.557279973Z [inf]  [builder 11/12] COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
+2026-03-31T13:46:46.558470034Z [inf]  [builder 12/12] RUN pnpm run build
+2026-03-31T13:46:47.048957023Z [inf]  
+> talk-to-my-lawyer@1.0.0 build /app
+> vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite && esbuild server/instrument.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --out-extension:.js=.js
+
+
+2026-03-31T13:46:47.446543374Z [inf]  vite v7.3.1 building client environment for production...
+
+2026-03-31T13:46:47.532386939Z [inf]  transforming...
+
+2026-03-31T13:46:53.07694372Z [inf]  ✓ 2320 modules transformed.
+
+2026-03-31T13:46:53.269583348Z [inf]  Generated an empty chunk: "vendor-supabase".
+
+2026-03-31T13:46:53.499921978Z [inf]  rendering chunks...
+
+2026-03-31T13:46:53.727152856Z [inf]  computing gzip size...
+
+2026-03-31T13:46:53.748651242Z [inf]  ../dist/public/index.html                               2.59 kB │ gzip:   0.86 kB
+../dist/public/assets/index-DBUgpgYk.css              165.62 kB │ gzip:  25.74 kB
+
+2026-03-31T13:46:53.748753609Z [inf]  ../dist/public/assets/vendor-supabase-l0sNRNKZ.js       0.00 kB │ gzip:   0.02 kB
+
+2026-03-31T13:46:53.748865931Z [inf]  ../dist/public/assets/StatusBadge-DAq1ntsw.js           0.44 kB │ gzip:   0.33 kB
+../dist/public/assets/useAnimations-BOGMItzz.js         1.06 kB │ gzip:   0.55 kB
+
+2026-03-31T13:46:53.748882039Z [inf]  ../dist/public/assets/textarea-DLG06nfC.js              1.10 kB │ gzip:   0.59 kB
+../dist/public/assets/badge-SB6AOWL5.js                 1.23 kB │ gzip:   0.60 kB
+
+2026-03-31T13:46:53.748916212Z [inf]  ../dist/public/assets/tabs-BiDo0OPv.js                  1.43 kB │ gzip:   0.63 kB
+../dist/public/assets/useLetterRealtime-D3GEkVFv.js     1.45 kB │ gzip:   0.59 kB
+
+2026-03-31T13:46:53.749067249Z [inf]  ../dist/public/assets/alert-dialog-VS2VESHM.js          2.00 kB │ gzip:   0.70 kB
+
+2026-03-31T13:46:53.74910842Z [inf]  ../dist/public/assets/CommissionBadges-DuSa4_vt.js      2.49 kB │ gzip:   0.76 kB
+
+2026-03-31T13:46:53.749119104Z [inf]  ../dist/public/assets/ForgotPassword-Iuvj7SDA.js        2.85 kB │ gzip:   1.25 kB
+../dist/public/assets/DiscountCodeInput-BiBBN82T.js     2.92 kB │ gzip:   1.32 kB
+
+2026-03-31T13:46:53.749154827Z [inf]  ../dist/public/assets/select-DTkIiUF-.js                3.69 kB │ gzip:   1.31 kB
+
+2026-03-31T13:46:53.749168638Z [inf]  ../dist/public/assets/Onboarding-Ht81-e45.js            4.89 kB │ gzip:   2.21 kB
+../dist/public/assets/Jobs-DM7cjQrS.js                  5.30 kB │ gzip:   1.98 kB
+
+2026-03-31T13:46:53.749192561Z [inf]  ../dist/public/assets/AllLetters-C5Yy0d2X.js            5.50 kB │ gzip:   2.13 kB
+../dist/public/assets/ResetPassword-CKFdN-jK.js         5.52 kB │ gzip:   2.05 kB
+
+2026-03-31T13:46:53.749197744Z [inf]  ../dist/public/assets/Verify2FA-sE40XenK.js             5.69 kB │ gzip:   2.35 kB
+
+2026-03-31T13:46:53.749213468Z [inf]  ../dist/public/assets/ReviewQueue-C7hY1OZD.js           5.71 kB │ gzip:   2.17 kB
+
+2026-03-31T13:46:53.749216301Z [inf]  ../dist/public/assets/Receipts-BvHOlm_K.js              5.78 kB │ gzip:   1.65 kB
+
+2026-03-31T13:46:53.74923541Z [inf]  ../dist/public/assets/VerifyEmail-BVi11OJl.js           6.82 kB │ gzip:   2.34 kB
+
+2026-03-31T13:46:53.749243117Z [inf]  ../dist/public/assets/AcceptInvitation-j7JWf78T.js      6.88 kB │ gzip:   2.47 kB
+../dist/public/assets/MyLetters-BlMYemPR.js             8.18 kB │ gzip:   2.71 kB
+
+2026-03-31T13:46:53.749253492Z [inf]  ../dist/public/assets/Terms-B2m93wtE.js                 8.23 kB │ gzip:   2.44 kB
+
+2026-03-31T13:46:53.749266701Z [inf]  ../dist/public/assets/Dashboard-BBYMDzSw.js             8.37 kB │ gzip:   2.51 kB
+
+2026-03-31T13:46:53.749291155Z [inf]  ../dist/public/assets/BlogIndex-BRSM0h8D.js             9.50 kB │ gzip:   2.75 kB
+../dist/public/assets/BlogPost-0LV4Kwnu.js              9.74 kB │ gzip:   3.08 kB
+
+2026-03-31T13:46:53.749323327Z [inf]  ../dist/public/assets/Billing-BuQoBgKs.js               9.98 kB │ gzip:   2.90 kB
+../dist/public/assets/BlogEditor-DMkneanh.js           10.18 kB │ gzip:   2.99 kB
+
+2026-03-31T13:46:53.749348754Z [inf]  ../dist/public/assets/Privacy-DADIR4ws.js              10.26 kB │ gzip:   2.81 kB
+
+2026-03-31T13:46:53.749358267Z [inf]  ../dist/public/assets/Pricing-CsES2sJz.js              10.83 kB │ gzip:   3.42 kB
+
+2026-03-31T13:46:53.749362343Z [inf]  ../dist/public/assets/Dashboard-CsjPEXOg.js            12.14 kB │ gzip:   3.30 kB
+
+2026-03-31T13:46:53.749380621Z [inf]  ../dist/public/assets/Profile-BU64fpVk.js              12.30 kB │ gzip:   3.33 kB
+
+2026-03-31T13:46:53.749397747Z [inf]  ../dist/public/assets/Users-DBvM6klf.js                12.77 kB │ gzip:   3.97 kB
+
+2026-03-31T13:46:53.749411067Z [inf]  ../dist/public/assets/FAQ-iM6GsCAe.js                  13.85 kB │ gzip:   4.85 kB
+
+2026-03-31T13:46:53.74941514Z [inf]  ../dist/public/assets/TemplateGallery-DWqDL_Sz.js      15.12 kB │ gzip:   4.65 kB
+
+2026-03-31T13:46:53.749463718Z [inf]  ../dist/public/assets/PipelineAnalytics-D_G_hK1_.js    16.20 kB │ gzip:   3.91 kB
+../dist/public/assets/AppLayout-Cfbk8N8w.js            16.59 kB │ gzip:   4.88 kB
+../dist/public/assets/LetterDetail-D3v8OXr9.js         18.57 kB │ gzip:   5.37 kB
+../dist/public/assets/ReviewModal-Ws45Ak-9.js          20.89 kB │ gzip:   5.50 kB
+
+2026-03-31T13:46:53.749472634Z [inf]  ../dist/public/assets/Affiliate-Cbsu3UKo.js            21.68 kB │ gzip:   5.11 kB
+
+2026-03-31T13:46:53.749480737Z [inf]  ../dist/public/assets/AffiliateDashboard-CXjaIuXX.js   22.54 kB │ gzip:   5.81 kB
+
+2026-03-31T13:46:53.749486459Z [inf]  ../dist/public/assets/Learning-lptM4YQI.js             24.71 kB │ gzip:   5.74 kB
+
+2026-03-31T13:46:53.749526261Z [inf]  ../dist/public/assets/Dashboard-B1lUH69p.js            24.83 kB │ gzip:   7.41 kB
+../dist/public/assets/SubmitLetter-PAp01DWI.js         27.02 kB │ gzip:   7.48 kB
+
+2026-03-31T13:46:53.749532353Z [inf]  ../dist/public/assets/RichTextEditor-BDDL-rbF.js       27.63 kB │ gzip:  10.29 kB
+
+2026-03-31T13:46:53.74955906Z [inf]  ../dist/public/assets/vendor-icons-wWBCMeyR.js         28.48 kB │ gzip:   8.85 kB
+../dist/public/assets/ReviewDetail-BUIlRyN1.js         29.02 kB │ gzip:   7.15 kB
+
+2026-03-31T13:46:53.749566097Z [inf]  ../dist/public/assets/DocumentAnalyzer-BekjApaK.js     31.43 kB │ gzip:   8.11 kB
+
+2026-03-31T13:46:53.749586922Z [inf]  ../dist/public/assets/LetterDetail-dSSmAZJV.js         39.88 kB │ gzip:  10.37 kB
+
+2026-03-31T13:46:53.749590861Z [inf]  ../dist/public/assets/types-DQKO_Df9.js                78.62 kB │ gzip:  22.23 kB
+
+2026-03-31T13:46:53.749611518Z [inf]  ../dist/public/assets/vendor-radix-Zs-mKwtD.js         98.79 kB │ gzip:  30.50 kB
+
+2026-03-31T13:46:53.749615352Z [inf]  ../dist/public/assets/vendor-react-C2fR7Ss8.js        260.79 kB │ gzip:  81.76 kB
+
+2026-03-31T13:46:53.749637231Z [inf]  ../dist/public/assets/index-DCFEOGNL.js               282.78 kB │ gzip:  73.68 kB
+
+2026-03-31T13:46:53.749643327Z [inf]  ../dist/public/assets/vendor-tiptap-Df44AXjE.js       371.83 kB │ gzip: 118.40 kB
+
+2026-03-31T13:46:53.750036497Z [inf]  ✓ built in 6.27s
+
+2026-03-31T13:46:53.86988581Z [inf]  ✘ [ERROR] Could not resolve "./auth-tokens"
+
+    server/db/index.ts:13:14:
+      13 │ export * from "./auth-tokens";
+         ╵               ~~~~~~~~~~~~~~~
+
+
+2026-03-31T13:46:53.892819636Z [inf]  1 error
+
+2026-03-31T13:46:53.898340293Z [inf]  node:child_process:955
+    throw err;
+    ^
+
+Error: Command failed: /app/node_modules/.pnpm/@esbuild+linux-x64@0.27.3/node_modules/@esbuild/linux-x64/bin/esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at checkExecSyncError (node:child_process:916:11)
+    at Object.execFileSync (node:child_process:952:15)
+    at Object.<anonymous> (/app/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/bin/esbuild:222:28)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14)
+    at Object..js (node:internal/modules/cjs/loader:1838:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 148,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v22.22.2
+
+2026-03-31T13:46:53.904278389Z [inf]   ELIFECYCLE  Command failed with exit code 1.
+
+2026-03-31T13:46:54.431018211Z [err]  [builder 12/12] RUN pnpm run build
+2026-03-31T13:46:54.451223341Z [err]  Dockerfile:26
+2026-03-31T13:46:54.451283858Z [err]  -------------------
+2026-03-31T13:46:54.451288995Z [err]  24 |
+2026-03-31T13:46:54.451293092Z [err]  25 |     # Build: vite builds client → dist/public, esbuild bundles server → dist/index.js
+2026-03-31T13:46:54.451299621Z [err]  26 | >>> RUN pnpm run build
+2026-03-31T13:46:54.451304917Z [err]  27 |
+2026-03-31T13:46:54.451309421Z [err]  28 |     # ─── Stage 2: Production ──────────────────────────────────────────────────────
+2026-03-31T13:46:54.451313671Z [err]  -------------------
+2026-03-31T13:46:54.451317549Z [err]  ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm run build" did not complete successfully: exit code: 1

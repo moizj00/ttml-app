@@ -52,7 +52,7 @@ export default function ReviewModal({
         const status = query.state.data?.letter?.status;
         if (
           status &&
-          ["pending_review", "under_review", "researching", "drafting"].includes(
+          ["pending_review", "under_review", "researching", "drafting", "client_revision_requested"].includes(
             status
           )
         )
@@ -160,7 +160,7 @@ export default function ReviewModal({
   const actions = data?.actions ?? [];
   const research = data?.research ?? [];
   const isUnderReview = letter?.status === "under_review";
-  const isPending = letter?.status === "pending_review";
+  const isPending = letter?.status === "pending_review" || letter?.status === "client_revision_requested";
 
   const latestDraft =
     versions.find(v => v.versionType === "attorney_edit") ??

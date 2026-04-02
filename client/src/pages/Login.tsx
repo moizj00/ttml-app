@@ -28,16 +28,24 @@ export default function Login() {
 
   const utils = trpc.useUtils();
 
-  // Parse ?next= from query string
+  // Parse ?next= or ?redirect= from query string
   const nextPath = (() => {
     const params = new URLSearchParams(search);
-    const raw = params.get("next");
+    const raw = params.get("next") ?? params.get("redirect");
     if (!raw) return null;
     try {
       return decodeURIComponent(raw);
     } catch {
       return null;
     }
+  })();
+
+  // Parse ?role= from query string — forwarded by the server callback handler
+  // when the implicit/hash flow redirects back to /login with a role param.
+  const requestedRoleFromSearch = (() => {
+    const params = new URLSearchParams(search);
+    const raw = params.get("role");
+    return raw === "subscriber" || raw === "employee" ? raw : null;
   })();
 
   const [email, setEmail] = useState("");
@@ -88,11 +96,13 @@ export default function Login() {
         const response = await fetch("/api/auth/google/finalize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             access_token: accessToken,
             refresh_token: refreshToken,
             expires_in: expiresIn,
             next: nextPath,
+            ...(requestedRoleFromSearch ? { role: requestedRoleFromSearch } : {}),
           }),
         });
         const data = await response.json();
@@ -103,15 +113,27 @@ export default function Login() {
           );
         }
 
-        localStorage.setItem("sb_access_token", accessToken);
-        localStorage.setItem("sb_refresh_token", refreshToken || "");
-        // Clean the hash from the URL so tokens don't persist in browser history
         window.history.replaceState(
           {},
           document.title,
           `${window.location.pathname}${window.location.search}`
         );
         await utils.auth.me.invalidate();
+
+        if (data.requires2FA) {
+          if (data.emailFailed) {
+            toast.warning("Verification required", {
+              description: "Could not send the code automatically. Please use Resend Code on the next screen.",
+            });
+            navigate("/admin/verify?emailFailed=1");
+          } else {
+            toast.info("Verification required", {
+              description: "A verification code has been sent to your email.",
+            });
+            navigate("/admin/verify");
+          }
+          return;
+        }
 
         toast.success("Signed in successfully", {
           description: "Welcome back. Redirecting to your dashboard.",
@@ -136,7 +158,7 @@ export default function Login() {
     };
 
     void finalizeGoogleLogin();
-  }, [navigate, nextPath, utils]);
+  }, [navigate, nextPath, requestedRoleFromSearch, utils]);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -174,6 +196,7 @@ export default function Login() {
           const resp = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ email, password }),
             signal: controller.signal,
           });
@@ -201,27 +224,32 @@ export default function Login() {
         return;
       }
 
-      // Store the access token for tRPC requests
-      if (data.session?.access_token) {
-        localStorage.setItem("sb_access_token", data.session.access_token);
-        localStorage.setItem(
-          "sb_refresh_token",
-          data.session.refresh_token || ""
-        );
-      }
-
-      // Invalidate the auth.me query to refresh user state
       await utils.auth.me.invalidate();
+
+      const role =
+        data.user?.role ??
+        data.session?.user?.user_metadata?.role ??
+        "subscriber";
+
+      if (data.requires2FA) {
+        if (data.emailFailed) {
+          toast.warning("Verification required", {
+            description: "Could not send the code automatically. Please use Resend Code on the next screen.",
+          });
+          navigate("/admin/verify?emailFailed=1");
+        } else {
+          toast.info("Verification required", {
+            description: "A verification code has been sent to your email.",
+          });
+          navigate("/admin/verify");
+        }
+        return;
+      }
 
       toast.success("Signed in successfully", {
         description: "Welcome back. Redirecting to your dashboard.",
       });
 
-      // Role-based redirect — honour ?next= if the role is allowed on that path
-      const role =
-        data.user?.role ??
-        data.session?.user?.user_metadata?.role ??
-        "subscriber";
       if (nextPath && isRoleAllowedOnPath(role, nextPath)) {
         navigate(nextPath);
       } else {
@@ -249,6 +277,7 @@ export default function Login() {
       const response = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           intent: "login",
           next: nextPath,
@@ -327,6 +356,7 @@ export default function Login() {
                                   headers: {
                                     "Content-Type": "application/json",
                                   },
+                                  credentials: "include",
                                   body: JSON.stringify({ email }),
                                 }
                               );

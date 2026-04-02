@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -15,19 +16,19 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "What is Talk to My Lawyer?",
-        a: "Talk to My Lawyer is a professional legal letter service with mandatory attorney review. You submit your legal matter through a structured intake form, our attorneys research applicable laws and draft a professional letter, and then a licensed attorney reviews, edits, and approves the final document before you receive it.",
+        a: "Talk to My Lawyer is a California-focused legal letter drafting platform. You submit your facts through a structured intake form, and the system generates a structured legal-letter draft using California legal language and repeatable letter workflows. Drafts can be reviewed by a licensed attorney before you use them.",
       },
       {
         q: "Is this a substitute for hiring a lawyer?",
-        a: "No. Talk to My Lawyer provides attorney-reviewed legal correspondence — not full legal representation. Every letter is reviewed and approved by a licensed attorney, but this service does not create an attorney-client relationship. For complex litigation, criminal matters, or ongoing legal representation, you should retain a licensed attorney in your jurisdiction.",
+        a: "No. This is a drafting tool — it helps you create a structured first draft, not legal advice. This service does not create an attorney-client relationship and does not replace full legal representation. For complex litigation, criminal matters, or ongoing legal representation, you should retain a licensed attorney. We recommend reviewing all drafts with a licensed attorney before sending.",
       },
       {
-        q: "What types of legal letters can I get?",
-        a: "We currently support: Demand Letters, Cease and Desist Notices, Contract Breach Letters, Eviction Notices, Employment Dispute Letters, Consumer Complaint Letters, and General Legal Correspondence. More letter types are added regularly.",
+        q: "What types of legal letters can I draft?",
+        a: "We currently support California-focused letter types including: California Landlord-Tenant Letters, California Employment Dispute Letters, California Demand Letters, California Collections/Debt Response Letters, California Business Dispute Letters, and more. The drafting system is specifically designed around California legal language.",
       },
       {
-        q: "Who reviews my letter?",
-        a: "Every letter is reviewed by a licensed attorney before delivery. Attorneys review the draft, make any necessary edits, and either approve, reject, or request changes. You only receive a letter that has been explicitly approved by a licensed attorney.",
+        q: "Who reviews my draft?",
+        a: "Drafts can be reviewed by a licensed attorney through our Review Center. Attorneys review the draft, make edits where needed, and either approve or request changes. You can also use the draft directly for self-organized first drafts — the choice is yours.",
       },
     ],
   },
@@ -35,16 +36,16 @@ const FAQ_CATEGORIES = [
     category: "Pricing & Payment",
     items: [
       {
-        q: "How much does a letter cost?",
-        a: "A single attorney-reviewed letter costs $200 (one-time), or you can subscribe for $200/month (4 letters) or $2,000/year (4 letters/month, 2 months free) with attorney review included.",
+        q: "How much does a draft cost?",
+        a: "A single drafted letter costs $200 (one-time), or you can subscribe for $200/month (4 drafts) or $2,000/year (4 drafts/month, 2 months free) with attorney review included.",
       },
       {
-        q: "What is included with each letter?",
-        a: "Every letter includes professional legal research, an attorney-drafted letter, licensed attorney review and approval, and a downloadable PDF of the final approved letter. The $200 single-letter fee covers the complete service.",
+        q: "What is included with each draft?",
+        a: "Every draft includes a structured California-focused legal-letter draft, built from curated legal-letter patterns, licensed attorney review and approval, and a PDF download. The $200 single-draft fee covers the complete service including attorney review.",
       },
       {
         q: "Do you offer subscription plans?",
-        a: "Yes. We offer two subscription plans: Monthly at $200/month (4 letters with attorney review included) and Yearly at $2,000/year (4 letters/month, equivalent to 2 months free). Subscribers bypass the per-letter paywall entirely. Visit our Pricing page for full details.",
+        a: "Yes. We offer two subscription plans: Monthly at $200/month (4 drafts with attorney review included) and Yearly at $2,000/year (4 drafts/month, equivalent to 2 months free). Subscribers bypass the per-draft paywall entirely. Visit our Pricing page for full details.",
       },
       {
         q: "What payment methods do you accept?",
@@ -52,7 +53,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Can I get a refund?",
-        a: "If your letter is rejected by our attorney review team and cannot be revised, you are entitled to a full refund. If you are unsatisfied with an approved letter, please contact our support team within 7 days of delivery and we will work to resolve the issue.",
+        a: "If your draft is rejected by our review team and cannot be revised, you are entitled to a full refund. If you are unsatisfied with an approved draft, please contact our support team within 7 days of delivery and we will work to resolve the issue.",
       },
     ],
   },
@@ -60,24 +61,24 @@ const FAQ_CATEGORIES = [
     category: "The Process",
     items: [
       {
-        q: "How long does it take to receive my letter?",
-        a: "Most letters are delivered within 24\u201348 hours of payment. The drafting stage typically completes within 2\u20135 minutes. Attorney review is the primary variable \u2014 attorneys aim to complete reviews within 24 hours during business days.",
+        q: "How long does it take to receive my draft?",
+        a: "Most drafts are generated within 2–5 minutes of submission. Attorney review is the primary variable — attorneys aim to complete reviews within 24 hours during business days, meaning most drafts are delivery-ready within 24–48 hours.",
       },
       {
         q: "What happens after I submit my request?",
-        a: "After submission: (1) Our legal team researches applicable laws and statutes for your jurisdiction, (2) A professional letter is drafted based on your intake details and research findings, (3) The draft is queued for attorney review, (4) A licensed attorney reviews, edits if necessary, and approves or requests changes, (5) You receive an email notification and can download the approved PDF.",
+        a: "After submission: (1) You fill in the structured intake form with your facts and situation, (2) The drafting system generates a California-focused legal-letter draft using curated letter patterns, (3) The draft is queued for attorney review, (4) A licensed attorney reviews and edits if necessary, and approves or requests changes, (5) You receive an email notification and can download the PDF.",
       },
       {
         q: "Can I see the draft before paying?",
-        a: "Yes. For letters without a subscription, the draft is partially blurred until you pay the $200 per-letter fee or subscribe to a monthly or yearly plan.",
+        a: "Yes. For drafts without a subscription, the draft is partially blurred until you pay the $200 per-draft fee or subscribe to a monthly or yearly plan.",
       },
       {
         q: "What if the attorney requests changes?",
-        a: "If the reviewing attorney needs additional information or clarification, your letter status will change to 'Needs Changes' and you will receive an email with the attorney's notes. You can then respond with the requested information through your dashboard, and the letter will be re-queued for review.",
+        a: "If the reviewing attorney needs additional information or clarification, your draft status will change to 'Needs Changes' and you will receive an email with the attorney's notes. You can then respond with the requested information through your dashboard, and the draft will be re-queued for review.",
       },
       {
-        q: "Can I edit the letter after attorney approval?",
-        a: "The approved letter is the final, attorney-certified version. If you need modifications after approval, you would need to submit a new letter request. We recommend providing as much detail as possible in your initial intake form to minimize the need for revisions.",
+        q: "Can I edit the draft after attorney approval?",
+        a: "The approved version is the final attorney-reviewed draft. If you need modifications after approval, you can submit a new draft request. We recommend providing as much detail as possible in your initial intake form to get the strongest first draft.",
       },
     ],
   },
@@ -85,20 +86,20 @@ const FAQ_CATEGORIES = [
     category: "Legal Validity & Use",
     items: [
       {
-        q: "Are these letters legally valid?",
-        a: "Yes. All letters are reviewed and approved by licensed attorneys. The letters are professionally drafted legal correspondence that you can use in real-world situations. However, a legal letter is not a court filing or legal judgment — it is a formal written communication that asserts your legal position.",
+        q: "Does this service provide legal advice?",
+        a: "No. This is a drafting tool — it helps organize your facts into a structured legal-style letter. It does not provide legal advice, legal strategy, or guaranteed outcomes. The drafts are built from curated legal-letter patterns structured around California legal language. Always review with a licensed attorney before sending any legal correspondence.",
       },
       {
-        q: "Can I use the letter in court?",
-        a: "A demand letter or cease and desist notice can be referenced in legal proceedings as evidence of prior notice. However, if your matter escalates to litigation, you should retain a licensed attorney for full legal representation. Our letters are designed to resolve disputes before court involvement.",
+        q: "Can I use the draft in court?",
+        a: "A demand letter or other legal correspondence can be referenced in proceedings as evidence of prior notice. However, if your matter escalates to litigation, you should retain a licensed attorney for full legal representation. Our drafts are designed to help resolve disputes and organize your facts — not to serve as legal filings.",
       },
       {
         q: "What jurisdictions do you cover?",
-        a: "We currently cover all 50 U.S. states. Our legal team identifies and applies jurisdiction-specific laws, statutes, and regulations relevant to your letter type and location. International coverage is planned for future releases.",
+        a: "Our drafting system is specifically focused on California legal language and workflows. While the platform accepts submissions from all U.S. states, the drafting patterns and letter workflows are built around California legal conventions.",
       },
       {
         q: "Is my information confidential?",
-        a: "Yes. All information you provide is treated as confidential. We use industry-standard encryption for data in transit and at rest. Attorneys who review your letters are bound by professional confidentiality obligations. We do not sell or share your personal information with third parties.",
+        a: "Yes. All information you provide is treated as confidential. We use industry-standard encryption for data in transit and at rest. Attorneys who review your drafts are bound by professional confidentiality obligations. We do not sell or share your personal information with third parties.",
       },
     ],
   },
@@ -107,15 +108,15 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "Do I need to create an account?",
-        a: "Yes, you need a free account to submit letter requests, track your letter status, and download approved letters. Creating an account takes less than a minute — just an email address and password.",
+        a: "Yes, you need a free account to submit draft requests, track your draft status, and download completed drafts. Creating an account takes less than a minute — just an email address and password.",
       },
       {
-        q: "How do I track my letter's progress?",
-        a: "Your subscriber dashboard shows real-time status updates for all your letters. You can see exactly which stage your letter is in \u2014 from research through attorney review to final approval. You also receive email notifications at key milestones.",
+        q: "How do I track my draft's progress?",
+        a: "Your dashboard shows real-time status updates for all your drafts. You can see exactly which stage your draft is in — from intake through the drafting workflow and attorney review to final approval. You also receive email notifications at key milestones.",
       },
       {
-        q: "Can I download my approved letter?",
-        a: "Yes. Once your letter is approved by an attorney, a download button appears on your letter detail page. The letter is delivered as a professionally formatted PDF with letterhead.",
+        q: "Can I download my approved draft?",
+        a: "Yes. Once your draft is approved, a download button appears on your draft detail page. The draft is delivered as a professionally formatted PDF.",
       },
       {
         q: "What if I have a question not answered here?",
@@ -128,6 +129,21 @@ const FAQ_CATEGORIES = [
 export default function FAQ() {
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Frequently Asked Questions — Legal Letter Service | Talk to My Lawyer</title>
+        <meta name="description" content="Get answers to common questions about our attorney-reviewed legal letter service. Pricing, process, legal validity, attorney review, and more — everything you need to know." />
+        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/faq" />
+        <meta property="og:title" content="FAQ — Legal Letter Service | Talk to My Lawyer" />
+        <meta property="og:description" content="Answers to common questions about attorney-reviewed legal letters, pricing, turnaround times, and how our legal letter service works." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/faq" />
+        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="FAQ — Legal Letter Service | Talk to My Lawyer" />
+        <meta name="twitter:description" content="Answers to common questions about attorney-reviewed legal letters, pricing, and how our service works." />
+        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+      </Helmet>
+
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
@@ -176,10 +192,11 @@ export default function FAQ() {
       </section>
 
       {/* FAQ Content */}
+      <main>
       <section className="py-12 px-4">
         <div className="max-w-3xl mx-auto space-y-10">
           {FAQ_CATEGORIES.map(cat => (
-            <div key={cat.category}>
+            <article key={cat.category}>
               <h2 className="text-xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">
                 {cat.category}
               </h2>
@@ -199,10 +216,11 @@ export default function FAQ() {
                   </AccordionItem>
                 ))}
               </Accordion>
-            </div>
+            </article>
           ))}
         </div>
       </section>
+      </main>
 
       {/* CTA */}
       <section className="py-16 px-4 bg-gradient-to-r from-blue-600 to-indigo-600">
@@ -237,7 +255,7 @@ export default function FAQ() {
       {/* Footer */}
       <footer className="bg-slate-900 py-8 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <BrandLogo href="/" variant="dark" size="sm" />
+          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
           <div className="flex items-center gap-6 text-slate-400 text-sm">
             <Link href="/" className="hover:text-white transition-colors">
               Home

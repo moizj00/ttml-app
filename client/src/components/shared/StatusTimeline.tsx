@@ -17,9 +17,14 @@ const STATUS_STEPS = [
 ] as const;
 
 const TERMINAL_STATUSES: Record<string, { label: string; icon: typeof CheckCircle2; color: string }> = {
-  approved:      { label: "Approved",          icon: CheckCircle2,  color: "text-emerald-500" },
-  rejected:      { label: "Rejected",          icon: XCircle,       color: "text-red-500" },
-  needs_changes: { label: "Changes Requested", icon: AlertTriangle, color: "text-amber-500" },
+  approved:                   { label: "Approved",            icon: CheckCircle2,  color: "text-emerald-500" },
+  client_approval_pending:    { label: "Awaiting Your Approval", icon: Clock,      color: "text-teal-500" },
+  client_revision_requested:  { label: "Revision Requested",  icon: AlertTriangle, color: "text-violet-500" },
+  client_approved:            { label: "Client Approved",      icon: CheckCircle2,  color: "text-emerald-500" },
+  client_declined:            { label: "Declined",             icon: XCircle,       color: "text-red-500" },
+  sent:                       { label: "Sent",                 icon: CheckCircle2,  color: "text-sky-500" },
+  rejected:                   { label: "Rejected",             icon: XCircle,       color: "text-red-500" },
+  needs_changes:              { label: "Changes Requested",    icon: AlertTriangle, color: "text-amber-500" },
 };
 
 interface StatusTimelineProps {

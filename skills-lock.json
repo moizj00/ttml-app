@@ -171,6 +171,11 @@
       "sourceType": "github",
       "computedHash": "7c63f9bf6ce2e2884b2da61e899a2701068b53ef6e87fc29e3c04a199e3092cb"
     },
+    "remotion-best-practices": {
+      "source": "remotion-dev/skills",
+      "sourceType": "github",
+      "computedHash": "2f673b7710813ac07c71c0a54657f740078aec6585f15edf351494499e1f9ac3"
+    },
     "seo-audit": {
       "source": "coreyhaines31/marketingskills",
       "sourceType": "github",
@@ -256,5 +261,8 @@
       "sourceType": "github",
       "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
     }
+  }
+}
+ }
   }
 }

@@ -1,0 +1,26 @@
+What's Already There
+Your repo has a sophisticated 4-stage pipeline (Perplexity → Claude Opus drafting → Claude Opus assembly → Claude Sonnet vetting) plus these key modules that most people would need to build from scratch:
+
+embeddings.ts — generates OpenAI embeddings (1536d), stores them in pgvector, and has a findSimilarLetters() function that does vector similarity search via a Postgres match_letters() function
+learning.ts — extracts lessons from attorney approvals, rejections, edits, and change requests using Claude Sonnet for semantic categorization. Tracks 10 lesson categories with weights and effectiveness metrics.
+training-capture.ts — saves approved letters as JSONL training data to GCS
+fine-tune.ts — auto-triggers Vertex AI fine-tuning of Gemini 1.5 Flash after 50 new training examples
+
+The Main Gap
+The orchestrator (orchestrator.ts) runs the 4 stages without ever calling findSimilarLetters() or retrieving lessons from pipeline_lessons. The retrieval code exists, the knowledge base is being populated, but the generation pipeline doesn't use it yet.
+The Plan (5 weeks)
+
+Week 1: GCP infrastructure — enable Vertex AI APIs, create Vector Search index (STREAM_UPDATE), set up service account and GCS bucket
+Week 2: Migrate embeddings to Vertex AI Vector Search (keep pgvector as fallback), backfill existing approved letters
+Week 3: Wire RAG retrieval into the orchestrator — inject similar approved letters + relevant lessons into the Stage 2 drafting prompt
+Week 4: Connect the fine-tuning pipeline to real GCP resources, add a lesson embedding index
+Week 5: Monitoring, A/B testing (with vs without RAG), quality metrics dashboard
+
+My recommendation on the LLM: keep Claude Opus 4.5 for drafting (it's already integrated and working) and use your fine-tuned Gemini Flash as a fast-path option for common letter types. Self-hosting Llama adds operational burden without clear upside for legal writing quality.
+View the full deployment plan
+Sources:
+
+RAG infrastructure using Vertex AI and Vector Search — Google Cloud
+Use Vertex AI Vector Search with RAG Engine
+Vertex AI Vector Search Overview
+The GCP RAG Spectrum — Medium

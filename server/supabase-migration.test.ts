@@ -162,10 +162,10 @@ describe("Drizzle config dialect", () => {
     expect(content).not.toContain('dialect: "mysql"');
   });
 
-  it("db.ts uses postgres-js driver (not mysql2)", async () => {
+  it("db core module uses postgres-js driver (not mysql2)", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const dbPath = path.join(process.cwd(), "server/db.ts");
+    const dbPath = path.join(process.cwd(), "server/db/core.ts");
     const content = fs.readFileSync(dbPath, "utf-8");
     expect(content).toContain('from "drizzle-orm/postgres-js"');
     expect(content).not.toContain('from "drizzle-orm/mysql2"');

@@ -39,14 +39,151 @@ import {
   TrendingUp,
   BarChart3,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import React, { useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   CommissionStatusBadge,
   PayoutStatusBadge,
 } from "@/components/shared/CommissionBadges";
+
+function SubscriptionStatusBadge({ status }: { status: string | null }) {
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  const map: Record<string, string> = {
+    active: "bg-green-100 text-green-800",
+    canceled: "bg-red-100 text-red-800",
+    past_due: "bg-amber-100 text-amber-800",
+    trialing: "bg-blue-100 text-blue-800",
+    none: "bg-gray-100 text-gray-600",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${map[status] ?? "bg-gray-100 text-gray-600"}`}
+      data-testid="badge-subscription-status"
+    >
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+function PlanBadge({ plan }: { plan: string | null }) {
+  if (!plan) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 font-mono"
+      data-testid="badge-plan"
+    >
+      {plan}
+    </span>
+  );
+}
+
+function EmployeeReferralDetails({ employeeId }: { employeeId: number }) {
+  const { data, isLoading } = trpc.affiliate.adminReferralDetails.useQuery(
+    { employeeId },
+    { staleTime: 30_000 }
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6" data-testid="referral-details-loading">
+        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mr-2" />
+        <span className="text-sm text-muted-foreground">Loading referrals…</span>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { referrals, summary } = data;
+
+  return (
+    <div className="bg-muted/30 border-t px-4 py-4 space-y-4" data-testid="referral-details-panel">
+      {/* Summary Stats */}
+      <div className="flex flex-wrap gap-4 text-sm" data-testid="referral-summary">
+        <div className="flex items-center gap-1.5">
+          <Users className="w-4 h-4 text-indigo-500" />
+          <span className="text-muted-foreground">Total referred:</span>
+          <span className="font-semibold" data-testid="summary-total-referred">{summary.totalReferred}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <TrendingUp className="w-4 h-4 text-blue-500" />
+          <span className="text-muted-foreground">Avg tenure:</span>
+          <span className="font-semibold" data-testid="summary-avg-tenure">{summary.avgTenureMonths} mo</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <DollarSign className="w-4 h-4 text-green-500" />
+          <span className="text-muted-foreground">Revenue generated:</span>
+          <span className="font-semibold" data-testid="summary-total-revenue">{formatCurrency(summary.totalRevenue)}</span>
+        </div>
+      </div>
+
+      {referrals.length === 0 ? (
+        <div className="text-center py-4 text-muted-foreground text-sm" data-testid="referral-empty">
+          No referrals recorded for this affiliate.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-md border bg-background" data-testid="referral-table-container">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Sub Status</TableHead>
+                <TableHead className="text-center">Tenure</TableHead>
+                <TableHead className="text-right">Sale</TableHead>
+                <TableHead className="text-right">Commission</TableHead>
+                <TableHead>Com. Status</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {referrals.map(r => (
+                <TableRow key={r.commissionId} data-testid={`referral-row-${r.commissionId}`}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-sm" data-testid={`referral-subscriber-name-${r.commissionId}`}>
+                        {r.subscriberName ?? "Unknown"}
+                      </p>
+                      <p className="text-xs text-muted-foreground" data-testid={`referral-subscriber-email-${r.commissionId}`}>
+                        {r.subscriberEmail ?? `#${r.subscriberId}`}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <PlanBadge plan={r.subscriptionPlan} />
+                  </TableCell>
+                  <TableCell>
+                    <SubscriptionStatusBadge status={r.subscriptionStatus} />
+                  </TableCell>
+                  <TableCell className="text-center" data-testid={`referral-tenure-${r.commissionId}`}>
+                    {r.tenureMonths !== null ? `${r.tenureMonths} mo` : "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    {formatCurrency(r.saleAmount)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-green-700">
+                    {formatCurrency(r.commissionAmount)}
+                  </TableCell>
+                  <TableCell>
+                    <CommissionStatusBadge status={r.commissionStatus} />
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatDate(r.commissionCreatedAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminAffiliate() {
   const utils = trpc.useUtils();
@@ -113,16 +250,37 @@ export default function AdminAffiliate() {
     });
   };
 
+  // ─── Referral Drill-down ────────────────────────────────────
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<number | null>(
+    null
+  );
+  const toggleEmployee = (id: number) =>
+    setExpandedEmployeeId(prev => (prev === id ? null : id));
+
   // ─── Code Toggle ────────────────────────────────────────────
   const updateCode = trpc.affiliate.adminUpdateCode.useMutation({
     onSuccess: () => {
       toast.success("Discount code updated", {
-        description: "The new code is now active for this affiliate.",
+        description: "The code settings have been saved.",
       });
       utils.affiliate.adminAllCodes.invalidate();
     },
     onError: err => toast.error("Update failed", { description: err.message }),
   });
+
+  const forceExpireCode = trpc.affiliate.adminForceExpireCode.useMutation({
+    onSuccess: () => {
+      toast.success("Code force-expired", {
+        description: "The discount code has been deactivated and expired.",
+      });
+      utils.affiliate.adminAllCodes.invalidate();
+      utils.affiliate.adminEmployeePerformance.invalidate();
+      setForceExpireCodeId(null);
+    },
+    onError: err => toast.error("Force expire failed", { description: err.message }),
+  });
+
+  const [forceExpireCodeId, setForceExpireCodeId] = useState<number | null>(null);
 
   // ─── Summary Stats ──────────────────────────────────────────
   const totalCommissions =
@@ -146,7 +304,7 @@ export default function AdminAffiliate() {
             Affiliate Program Management
           </h1>
           <p className="text-indigo-200 text-sm">
-            Manage discount codes, commissions, payouts, and employee
+            Manage discount codes, commissions, payouts, and affiliate
             performance.
           </p>
         </div>
@@ -245,7 +403,7 @@ export default function AdminAffiliate() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Employee Performance Tab */}
+          {/* Affiliate Performance Tab */}
           <TabsContent value="performance">
             <Card>
               <CardHeader>
@@ -257,7 +415,7 @@ export default function AdminAffiliate() {
                   Overview of each affiliate's referral activity and earnings.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {perfLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -267,6 +425,7 @@ export default function AdminAffiliate() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-8" />
                           <TableHead>Affiliate</TableHead>
                           <TableHead>Discount Code</TableHead>
                           <TableHead className="text-center">Uses</TableHead>
@@ -282,49 +441,94 @@ export default function AdminAffiliate() {
                       </TableHeader>
                       <TableBody>
                         {performance.map(emp => (
-                          <TableRow key={emp.employeeId}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-sm">
-                                  {emp.name ?? "Unknown"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {emp.email}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {emp.discountCode ? (
-                                <Badge
-                                  variant={
-                                    emp.codeActive ? "default" : "secondary"
+                          <React.Fragment key={emp.employeeId}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => toggleEmployee(emp.employeeId)}
+                              data-testid={`affiliate-row-${emp.employeeId}`}
+                            >
+                              <TableCell className="pr-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    toggleEmployee(emp.employeeId);
+                                  }}
+                                  data-testid={`expand-affiliate-${emp.employeeId}`}
+                                  aria-label={
+                                    expandedEmployeeId === emp.employeeId
+                                      ? "Collapse referrals"
+                                      : "Expand referrals"
                                   }
-                                  className="font-mono text-xs"
                                 >
-                                  {emp.discountCode}
-                                </Badge>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  None
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {emp.usageCount}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {emp.referralCount}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(emp.totalEarned)}
-                            </TableCell>
-                            <TableCell className="text-right text-amber-600">
-                              {formatCurrency(emp.pending)}
-                            </TableCell>
-                            <TableCell className="text-right text-green-600">
-                              {formatCurrency(emp.paid)}
-                            </TableCell>
-                          </TableRow>
+                                  {expandedEmployeeId === emp.employeeId ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-sm">
+                                    {emp.name ?? "Unknown"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {emp.email}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {emp.discountCode ? (
+                                  <Badge
+                                    variant={
+                                      emp.codeActive ? "default" : "secondary"
+                                    }
+                                    className="font-mono text-xs"
+                                  >
+                                    {emp.discountCode}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    None
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {emp.usageCount}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {emp.referralCount}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(emp.totalEarned)}
+                              </TableCell>
+                              <TableCell className="text-right text-amber-600">
+                                {formatCurrency(emp.pending)}
+                              </TableCell>
+                              <TableCell className="text-right text-green-600">
+                                {formatCurrency(emp.paid)}
+                              </TableCell>
+                            </TableRow>
+                            {expandedEmployeeId === emp.employeeId && (
+                              <TableRow
+                                key={`detail-${emp.employeeId}`}
+                                className="hover:bg-transparent"
+                              >
+                                <TableCell
+                                  colSpan={8}
+                                  className="p-0"
+                                  data-testid={`referral-details-cell-${emp.employeeId}`}
+                                >
+                                  <EmployeeReferralDetails
+                                    employeeId={emp.employeeId}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
                         ))}
                       </TableBody>
                     </Table>
@@ -365,47 +569,107 @@ export default function AdminAffiliate() {
                         <TableHead className="text-center">Discount</TableHead>
                         <TableHead className="text-center">Uses</TableHead>
                         <TableHead className="text-center">Max Uses</TableHead>
+                        <TableHead>Expires</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead className="text-center">Active</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {codes.map(code => (
-                        <TableRow key={code.id}>
-                          <TableCell className="font-mono font-medium">
-                            {code.code}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium text-sm">{code.employeeName ?? "Unknown"}</p>
-                              <p className="text-xs text-muted-foreground">{code.employeeEmail ?? `#${code.employeeId}`}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.discountPercent}%
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.usageCount}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {code.maxUses ?? "∞"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {formatDate(code.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Switch
-                              checked={code.isActive}
-                              onCheckedChange={checked =>
-                                updateCode.mutate({
-                                  id: code.id,
-                                  isActive: checked,
-                                })
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {codes.map(code => {
+                        const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+                        return (
+                          <TableRow key={code.id} data-testid={`code-row-${code.id}`}>
+                            <TableCell className="font-mono font-medium">
+                              {code.code}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-sm">{code.employeeName ?? "Unknown"}</p>
+                                <p className="text-xs text-muted-foreground">{code.employeeEmail ?? `#${code.employeeId}`}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.discountPercent}%
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.usageCount}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {code.maxUses ?? "∞"}
+                            </TableCell>
+                            <TableCell>
+                              {isExpired ? (
+                                <Badge variant="destructive" className="text-xs" data-testid={`badge-expired-${code.id}`}>
+                                  Expired
+                                </Badge>
+                              ) : code.expiresAt ? (
+                                <span className="text-sm" data-testid={`text-expires-${code.id}`}>
+                                  {formatDate(code.expiresAt)}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground" data-testid={`text-expires-${code.id}`}>
+                                  Never
+                                </span>
+                              )}
+                              <div className="mt-1">
+                                <input
+                                  type="date"
+                                  className="text-xs border rounded px-1.5 py-0.5 w-32 bg-background"
+                                  data-testid={`input-expiry-date-${code.id}`}
+                                  value={code.expiresAt ? new Date(code.expiresAt).toISOString().split("T")[0] : ""}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    updateCode.mutate({
+                                      id: code.id,
+                                      expiresAt: val ? new Date(val + "T23:59:59Z").toISOString() : null,
+                                    });
+                                  }}
+                                />
+                                {code.expiresAt && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-6 px-1.5 ml-1 text-muted-foreground"
+                                    data-testid={`button-clear-expiry-${code.id}`}
+                                    onClick={() => updateCode.mutate({ id: code.id, expiresAt: null })}
+                                  >
+                                    Clear
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {formatDate(code.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Switch
+                                checked={code.isActive}
+                                data-testid={`switch-active-${code.id}`}
+                                onCheckedChange={checked =>
+                                  updateCode.mutate({
+                                    id: code.id,
+                                    isActive: checked,
+                                  })
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="text-xs h-7"
+                                data-testid={`button-force-expire-${code.id}`}
+                                disabled={!!isExpired && !code.isActive}
+                                onClick={() => setForceExpireCodeId(code.id)}
+                              >
+                                <Ban className="w-3 h-3 mr-1" />
+                                Force Expire
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -609,7 +873,7 @@ export default function AdminAffiliate() {
               </DialogTitle>
               <DialogDescription>
                 {processingPayout?.action === "completed"
-                  ? "Confirm that this payout has been sent to the employee. Oldest pending commissions up to the payout amount will be marked as paid."
+                  ? "Confirm that this payout has been sent to the affiliate. Oldest pending commissions up to the payout amount will be marked as paid."
                   : "Provide a reason for rejecting this payout request."}
               </DialogDescription>
             </DialogHeader>
@@ -650,6 +914,53 @@ export default function AdminAffiliate() {
                 {processingPayout?.action === "completed"
                   ? "Confirm Approval"
                   : "Confirm Rejection"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Force Expire Confirmation Dialog */}
+        <Dialog
+          open={forceExpireCodeId !== null}
+          onOpenChange={open => {
+            if (!open) setForceExpireCodeId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Ban className="w-5 h-5 text-destructive" />
+                Force Expire Discount Code
+              </DialogTitle>
+              <DialogDescription>
+                This will immediately deactivate the code and set it as expired.
+                The affiliate will no longer earn commissions from this code. This
+                action cannot be undone automatically — you would need to manually
+                re-activate and clear the expiration.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setForceExpireCodeId(null)}
+                data-testid="button-cancel-force-expire"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (forceExpireCodeId !== null) {
+                    forceExpireCode.mutate({ id: forceExpireCodeId });
+                  }
+                }}
+                disabled={forceExpireCode.isPending}
+                data-testid="button-confirm-force-expire"
+              >
+                {forceExpireCode.isPending && (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                )}
+                Force Expire
               </Button>
             </DialogFooter>
           </DialogContent>

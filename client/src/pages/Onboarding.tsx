@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -29,7 +29,10 @@ import {
 import { toast } from "sonner";
 import { getRoleDashboard } from "@/components/ProtectedRoute";
 import BrandLogo from "@/components/shared/BrandLogo";
+import { useMounted, useReducedMotion } from "@/hooks/useAnimations";
 
+// Role is now determined at signup (user → subscriber, affiliate → employee)
+// Onboarding no longer has role selection — just profile setup
 type SelectedRole = "subscriber" | "employee";
 
 const ROLE_OPTIONS: {
@@ -112,11 +115,15 @@ export default function Onboarding() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
-  const [step, setStep] = useState<"role" | "profile">("role");
-  const [selectedRole, setSelectedRole] = useState<SelectedRole | null>(null);
+  // Onboarding now skips role selection — role is determined at signup
+  // Use the user's current role from auth context
+  const [step, setStep] = useState<"profile">("profile");
+  const selectedRole = (user?.role === "subscriber" || user?.role === "employee") ? user.role : "subscriber";
   const [jurisdiction, setJurisdiction] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [loading, setLoading] = useState(false);
+  const mounted = useMounted();
+  const reduced = useReducedMotion();
 
   const completeOnboarding = trpc.auth.completeOnboarding.useMutation({
     onSuccess: data => {
@@ -136,18 +143,9 @@ export default function Onboarding() {
     },
   });
 
-  const handleRoleSelect = (role: SelectedRole) => {
-    setSelectedRole(role);
-    // Subscribers can skip the profile step
-    if (role === "subscriber") {
-      setStep("profile");
-    } else {
-      setStep("profile");
-    }
-  };
+  // Role selection removed — onboarding now only handles profile setup
 
   const handleComplete = () => {
-    if (!selectedRole) return;
     setLoading(true);
     completeOnboarding.mutate({
       role: selectedRole,
@@ -168,45 +166,8 @@ export default function Onboarding() {
           </p>
         </div>
 
-        {step === "role" && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-center text-slate-800 mb-6">
-              How will you use Talk to My Lawyer?
-            </h2>
-            <div className="grid gap-4">
-              {ROLE_OPTIONS.map(opt => (
-                <Card
-                  key={opt.role}
-                  className={`cursor-pointer transition-all hover:shadow-md hover:border-indigo-300 ${
-                    selectedRole === opt.role
-                      ? "border-indigo-500 ring-2 ring-indigo-200"
-                      : ""
-                  }`}
-                  onClick={() => handleRoleSelect(opt.role)}
-                  data-testid={`card-role-${opt.role}`}
-                >
-                  <CardContent className="flex items-center gap-4 p-6">
-                    <div className="shrink-0">{opt.icon}</div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-slate-900">
-                        {opt.label}
-                      </h3>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {opt.description}
-                      </p>
-                    </div>
-                    {selectedRole === opt.role && (
-                      <CheckCircle2 className="w-6 h-6 text-indigo-600 shrink-0" />
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === "profile" && selectedRole && (
-          <Card>
+        {step === "profile" && (
+          <Card className="animate-dashboard-fade-up">
             <CardHeader>
               <CardTitle>
                 {selectedRole === "subscriber" && "Almost there!"}
@@ -256,16 +217,6 @@ export default function Onboarding() {
               )}
 
               <div className="flex gap-3 pt-4">
-                <Button
-                  variant="outline"
-                  data-testid="button-back-onboarding"
-                  onClick={() => {
-                    setStep("role");
-                    setSelectedRole(null);
-                  }}
-                >
-                  Back
-                </Button>
                 <Button
                   className="flex-1"
                   onClick={handleComplete}

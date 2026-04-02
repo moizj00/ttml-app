@@ -1,0 +1,2 @@
+ALTER TYPE "public"."letter_status" ADD VALUE 'client_revision_requested' BEFORE 'client_approved';--> statement-breakpoint
+ALTER TYPE "public"."letter_status" ADD VALUE 'client_declined' BEFORE 'client_approved';

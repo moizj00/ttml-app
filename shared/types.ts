@@ -14,14 +14,22 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   submitted: ["researching", "pipeline_failed"],
   researching: ["drafting", "submitted", "pipeline_failed"],
   drafting: ["generated_locked", "submitted", "pipeline_failed"],
+  // generated_unlocked is a legacy status (Phase ≤68). New letters always go to
+  // generated_locked. Legacy letters in generated_unlocked are treated identically
+  // to generated_locked on the frontend (StatusTimeline maps them). The only
+  // valid forward transition is pending_review (subscriber submits for review).
+  generated_unlocked: ["pending_review"],
   generated_locked: ["pending_review"],
   pending_review: ["under_review"],
-  under_review: ["approved", "rejected", "needs_changes"],
-  needs_changes: ["submitted", "researching", "drafting"],
+  under_review: ["approved", "rejected", "needs_changes", "pending_review"],
+  needs_changes: ["submitted"],
   approved: ["client_approval_pending"],
-  client_approval_pending: ["client_approved"],
-  client_approved: [],
+  client_approval_pending: ["client_approved", "client_revision_requested", "client_declined"],
+  client_revision_requested: ["pending_review", "under_review"],
+  client_approved: ["sent"],
+  sent: [],
   rejected: ["submitted"],
+  client_declined: [],
   pipeline_failed: ["submitted"],
 };
 
@@ -54,6 +62,12 @@ export const STATUS_CONFIG: Record<
     color: "text-yellow-700",
     bgColor: "bg-yellow-100",
   },
+  // Legacy alias — same display as generated_locked
+  generated_unlocked: {
+    label: "Draft Ready",
+    color: "text-yellow-700",
+    bgColor: "bg-yellow-100",
+  },
   pending_review: {
     label: "Awaiting Review",
     color: "text-amber-600",
@@ -79,10 +93,25 @@ export const STATUS_CONFIG: Record<
     color: "text-teal-600",
     bgColor: "bg-teal-100",
   },
+  client_revision_requested: {
+    label: "Revision Requested",
+    color: "text-violet-600",
+    bgColor: "bg-violet-100",
+  },
+  client_declined: {
+    label: "Client Declined",
+    color: "text-red-700",
+    bgColor: "bg-red-200",
+  },
   client_approved: {
     label: "Client Approved",
     color: "text-emerald-600",
     bgColor: "bg-emerald-100",
+  },
+  sent: {
+    label: "Sent to Recipient",
+    color: "text-sky-700",
+    bgColor: "bg-sky-100",
   },
   rejected: { label: "Rejected", color: "text-red-700", bgColor: "bg-red-200" },
   pipeline_failed: {
@@ -92,48 +121,229 @@ export const STATUS_CONFIG: Record<
   },
 };
 
+// ─── Universal Legal Subject Taxonomy ───
+// Single source of truth for all legal subject categories across the platform.
+// References: letter types, blog categories, pipeline lessons, analytics.
+export const LEGAL_SUBJECTS = [
+  "demand-letter",
+  "cease-and-desist",
+  "contract-breach",
+  "eviction-notice",
+  "employment-dispute",
+  "consumer-complaint",
+  "pre-litigation-settlement",
+  "debt-collection",
+  "estate-probate",
+  "landlord-tenant",
+  "insurance-dispute",
+  "personal-injury-demand",
+  "intellectual-property",
+  "family-law",
+  "neighbor-hoa",
+  "general-legal",
+] as const;
+export type LegalSubject = (typeof LEGAL_SUBJECTS)[number];
+
 // ─── Letter Type display config ───
 // targetWordCount: target word count for the AI drafting stage.
 // These are calibrated to produce professional, appropriately-scoped letters
 // for each category. The pipeline prompt instructs Claude to aim for this count.
+// intakeHints: contextual field hints shown in the submission form for each type.
 export const LETTER_TYPE_CONFIG: Record<
   string,
-  { label: string; description: string; targetWordCount: number }
+  {
+    label: string;
+    description: string;
+    targetWordCount: number;
+    tip: string;
+    intakeHints?: {
+      subjectPlaceholder?: string;
+      descriptionPlaceholder?: string;
+      desiredOutcomePlaceholder?: string;
+      amountOwedLabel?: string;
+    };
+  }
 > = {
   "demand-letter": {
     label: "Demand Letter",
     description: "Formal demand for payment, action, or resolution",
     targetWordCount: 450,
+    tip: "Best for unpaid debts, invoices, or property damage claims.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for unpaid invoice #1042 — $3,500 owed",
+      descriptionPlaceholder: "Describe what is owed, when it was due, and what efforts you have already made to collect...",
+      desiredOutcomePlaceholder: "e.g., Full payment of $3,500 within 14 days or I will pursue legal action.",
+      amountOwedLabel: "Amount Owed (USD)",
+    },
   },
   "cease-and-desist": {
     label: "Cease and Desist",
     description: "Order to stop specific activities or face legal action",
     targetWordCount: 500,
+    tip: "Used to stop harassment, defamation, or IP infringement.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Cease and Desist — Unauthorized use of trademark",
+      descriptionPlaceholder: "Describe the specific conduct or activity that must stop, when it began, and how it has harmed you...",
+      desiredOutcomePlaceholder: "e.g., Immediate cessation of all infringing activity and written confirmation within 7 days.",
+    },
   },
   "contract-breach": {
     label: "Contract Breach",
     description: "Notice of breach of contract terms",
     targetWordCount: 550,
+    tip: "For when a party has failed to uphold agreed-upon terms.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Notice of Breach — Service Agreement dated Jan 15, 2025",
+      descriptionPlaceholder: "Describe the contract terms that were violated, when the breach occurred, and the resulting damages...",
+      desiredOutcomePlaceholder: "e.g., Cure the breach within 10 days or compensate for damages of $X.",
+    },
   },
   "eviction-notice": {
     label: "Eviction Notice",
-    description: "Formal notice to vacate a property",
+    description: "Formal notice to vacate a rental property",
     targetWordCount: 350,
+    tip: "Formally notifies a tenant to vacate a rental property.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Notice to Vacate — 123 Main St, Unit 4B",
+      descriptionPlaceholder: "Include the property address, lease start date, reason for eviction (e.g., nonpayment, lease violation), and amount owed if applicable...",
+      desiredOutcomePlaceholder: "e.g., Vacate the premises within 30 days or legal proceedings will commence.",
+    },
   },
   "employment-dispute": {
     label: "Employment Dispute",
     description: "Workplace-related legal matter",
     targetWordCount: 600,
+    tip: "Covers wrongful termination, discrimination, or wage issues.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Wrongful Termination — Notice of Legal Action",
+      descriptionPlaceholder: "Describe your employment history, the incident or dispute, any witnesses, and HR communications that occurred...",
+      desiredOutcomePlaceholder: "e.g., Reinstatement and back pay, or a settlement of $X within 21 days.",
+    },
   },
   "consumer-complaint": {
     label: "Consumer Complaint",
     description: "Complaint against a business or service provider",
     targetWordCount: 500,
+    tip: "File formal complaints against businesses or service providers.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Formal Complaint — Defective Product / Failure to Refund",
+      descriptionPlaceholder: "Describe the product or service, what was promised vs. what was delivered, order numbers, and prior attempts to resolve...",
+      desiredOutcomePlaceholder: "e.g., Full refund of $X within 14 days or I will file a complaint with the BBB and pursue legal remedies.",
+    },
+  },
+  "pre-litigation-settlement": {
+    label: "Pre-Litigation Settlement",
+    description: "Formal settlement offer before filing a lawsuit",
+    targetWordCount: 550,
+    tip: "Resolve disputes cost-effectively before proceeding to court.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Pre-Litigation Settlement Offer — Slip and Fall at 456 Oak Ave",
+      descriptionPlaceholder: "Describe the dispute, the damages or harm suffered, and the basis for your claim. Include relevant dates, incidents, and any prior communications...",
+      desiredOutcomePlaceholder: "e.g., Settlement payment of $X within 30 days to avoid civil litigation.",
+      amountOwedLabel: "Settlement Amount Sought (USD)",
+    },
+  },
+  "debt-collection": {
+    label: "Debt Collection",
+    description: "Formal notice demanding repayment of a debt",
+    targetWordCount: 450,
+    tip: "For collecting overdue balances from individuals or businesses.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Final Notice — $2,400 Outstanding Balance Due",
+      descriptionPlaceholder: "Include the original amount owed, original due date, any partial payments made, and the total balance remaining...",
+      desiredOutcomePlaceholder: "e.g., Full payment of $2,400 by [date] or account will be referred to collections.",
+      amountOwedLabel: "Total Balance Owed (USD)",
+    },
+  },
+  "estate-probate": {
+    label: "Estate / Probate",
+    description: "Legal correspondence related to estates, wills, and probate",
+    targetWordCount: 550,
+    tip: "Covers executor duties, inheritance disputes, and probate proceedings.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Estate of [Name] — Notice to Creditors / Heir Dispute",
+      descriptionPlaceholder: "Include the decedent's name, date of death, probate case number if applicable, nature of the dispute, and your role (executor, heir, creditor)...",
+      desiredOutcomePlaceholder: "e.g., Distribution of estate assets per the will within 60 days.",
+    },
+  },
+  "landlord-tenant": {
+    label: "Landlord–Tenant",
+    description: "Disputes between landlords and tenants beyond eviction",
+    targetWordCount: 500,
+    tip: "For security deposit disputes, habitability issues, or lease violations.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for Security Deposit Return — 789 Elm St, Unit 2",
+      descriptionPlaceholder: "Include the property address, lease dates, the specific issue (security deposit, repairs, harassment, lease terms), and any relevant communications...",
+      desiredOutcomePlaceholder: "e.g., Return of full $1,800 security deposit within 21 days as required by state law.",
+    },
+  },
+  "insurance-dispute": {
+    label: "Insurance Dispute",
+    description: "Dispute a denied or underpaid insurance claim",
+    targetWordCount: 550,
+    tip: "Challenge unfair claim denials or bad faith insurance practices.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Appeal of Denied Claim — Policy #ABC12345",
+      descriptionPlaceholder: "Include your policy number, the claim details, the denial reason given by the insurer, and why you believe the denial is incorrect...",
+      desiredOutcomePlaceholder: "e.g., Approval and payment of claim totaling $X within 30 days.",
+      amountOwedLabel: "Claim Amount (USD)",
+    },
+  },
+  "personal-injury-demand": {
+    label: "Personal Injury Demand",
+    description: "Demand letter for compensation after personal injury",
+    targetWordCount: 600,
+    tip: "Document injuries, medical costs, and lost wages for compensation.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Personal Injury Demand — Car Accident on [Date]",
+      descriptionPlaceholder: "Describe the incident, your injuries, medical treatment received, medical costs, lost income, and how the recipient is liable...",
+      desiredOutcomePlaceholder: "e.g., Settlement payment of $X covering medical expenses, lost wages, and pain and suffering within 30 days.",
+      amountOwedLabel: "Total Damages Sought (USD)",
+    },
+  },
+  "intellectual-property": {
+    label: "Intellectual Property",
+    description: "Protect trademarks, copyrights, patents, or trade secrets",
+    targetWordCount: 550,
+    tip: "Enforce IP rights and demand infringement stops immediately.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Copyright Infringement Notice — [Work Title]",
+      descriptionPlaceholder: "Identify your IP (trademark name/registration, copyright work, patent number), describe how it is being infringed, and when you discovered the infringement...",
+      desiredOutcomePlaceholder: "e.g., Immediately remove all infringing content and provide written confirmation within 7 days.",
+    },
+  },
+  "family-law": {
+    label: "Family Law",
+    description: "Legal matters involving divorce, custody, or support",
+    targetWordCount: 550,
+    tip: "Address custody, child support, alimony, or asset division disputes.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Demand for Child Support — Case No. 2025-DR-0042",
+      descriptionPlaceholder: "Describe the family law matter, relevant court orders or agreements, the issue at hand, and any non-compliance by the other party...",
+      desiredOutcomePlaceholder: "e.g., Compliance with existing support order or payment of arrears of $X within 14 days.",
+    },
+  },
+  "neighbor-hoa": {
+    label: "Neighbor / HOA Dispute",
+    description: "Resolve conflicts with neighbors or homeowners associations",
+    targetWordCount: 500,
+    tip: "Address noise, property damage, HOA rule violations, or boundary disputes.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Formal Complaint — Persistent Noise Violation at [Address]",
+      descriptionPlaceholder: "Describe the dispute, specific incidents with dates, prior verbal or written attempts to resolve, and how it has affected you...",
+      desiredOutcomePlaceholder: "e.g., Immediate cessation of the nuisance activity within 10 days or I will file a complaint with local authorities.",
+    },
   },
   "general-legal": {
     label: "General Legal Letter",
-    description: "Other legal correspondence",
+    description: "Other legal correspondence not covered by specific categories",
     targetWordCount: 450,
+    tip: "Any other legal correspondence that doesn't fit the above.",
+    intakeHints: {
+      subjectPlaceholder: "e.g., Legal Notice — [Brief description of issue]",
+      descriptionPlaceholder: "Describe your legal matter in detail, including relevant dates, parties involved, and the basis for your claim or concern...",
+      desiredOutcomePlaceholder: "e.g., Describe the specific action or resolution you are seeking.",
+    },
   },
 };
 
@@ -370,6 +580,13 @@ export interface ContentConsistencyReport {
   warnings: string[];
 }
 
+// ─── Token Usage (captured from AI SDK generateText calls) ───
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 // ─── Pipeline Context (source of truth throughout all stages) ───
 export interface PipelineContext {
   letterId: number;
@@ -383,6 +600,23 @@ export interface PipelineContext {
   groundingReport?: GroundingReport;
   consistencyReport?: ContentConsistencyReport;
   assemblyVettingFeedback?: string;
+  citationRevalidationTokens?: TokenUsage;
+  qualityWarnings?: string[];
+  /** Number of RAG examples injected in the drafting stage (0 = none retrieved or control group). */
+  ragExampleCount?: number;
+  /** Similarity scores of injected RAG examples (empty if none injected). */
+  ragSimilarityScores?: number[];
+  /** A/B testing group: "test" = RAG was injected (or attempted); "control" = RAG was skipped. */
+  ragAbGroup?: "test" | "control";
+  /** Total lesson count injected across all pipeline stages for this run. */
+  lessonCount?: number;
+  /**
+   * Best intermediate draft content captured progressively as stages complete.
+   * Used by the best-effort fallback to deliver a draft even when pipeline fails
+   * mid-run before finalizeLetterAfterVetting persists the final version.
+   * Ladder (latest wins): draft → assembled → vetted
+   */
+  _intermediateDraftContent?: string;
 }
 
 // ─── Draft Output Shape ───
@@ -403,11 +637,69 @@ export const flaggedRiskSchema = z.object({
 });
 export type FlaggedRisk = z.infer<typeof flaggedRiskSchema>;
 
+export const TTML_LETTER_TYPES = [
+  "demand-letter",
+  "cease-and-desist",
+  "contract-breach",
+  "eviction-notice",
+  "employment-dispute",
+  "consumer-complaint",
+  "general-legal",
+] as const;
+export type TtmlLetterType = (typeof TTML_LETTER_TYPES)[number];
+
+export const EMOTION_LABELS = [
+  "anger",
+  "fear",
+  "urgency",
+  "friendliness",
+  "condescension",
+  "sarcasm",
+  "guilt-tripping",
+  "confidence",
+  "deception",
+  "desperation",
+] as const;
+export type EmotionLabel = (typeof EMOTION_LABELS)[number];
+
+export const emotionBreakdownItemSchema = z.object({
+  emotion: z.string(),
+  intensity: z.number().min(0).max(100),
+});
+export type EmotionBreakdownItem = z.infer<typeof emotionBreakdownItemSchema>;
+
+export const redFlagItemSchema = z.object({
+  passage: z.string(),
+  explanation: z.string(),
+});
+export type RedFlagItem = z.infer<typeof redFlagItemSchema>;
+
+export const emotionalIntelligenceSchema = z.object({
+  overallTone: z.string(),
+  toneConfidence: z.enum(["low", "medium", "high"]),
+  emotionBreakdown: z.array(emotionBreakdownItemSchema),
+  hiddenImplications: z.array(z.string()),
+  redFlags: z.array(redFlagItemSchema),
+  manipulationTactics: z.array(z.string()),
+  trueIntentSummary: z.string(),
+});
+export type EmotionalIntelligence = z.infer<typeof emotionalIntelligenceSchema>;
+
 // Canonical (strict) result schema — use for return types and DB storage
 export const documentAnalysisResultSchema = z.object({
   summary: z.string(),
   actionItems: z.array(z.string()),
   flaggedRisks: z.array(flaggedRiskSchema),
+  recommendedLetterType: z.enum(TTML_LETTER_TYPES).nullable(),
+  urgencyLevel: z.enum(["low", "medium", "high"]),
+  detectedDeadline: z.string().nullable(),
+  detectedJurisdiction: z.string().nullable(),
+  detectedParties: z.object({
+    senderName: z.string().nullable(),
+    recipientName: z.string().nullable(),
+  }),
+  recommendedResponseSummary: z.string(),
+  emotionalIntelligence: emotionalIntelligenceSchema.nullable(),
 });
 export type DocumentAnalysisResult = z.infer<typeof documentAnalysisResultSchema>;
 
@@ -422,6 +714,34 @@ export const documentAnalysisResultLenientSchema = z.object({
       severity: z.enum(["low", "medium", "high"]).default("medium"),
     })
   ).default([]),
+  recommendedLetterType: z.enum(TTML_LETTER_TYPES).nullable().default(null),
+  urgencyLevel: z.enum(["low", "medium", "high"]).default("medium"),
+  detectedDeadline: z.string().nullable().default(null),
+  detectedJurisdiction: z.string().nullable().default(null),
+  detectedParties: z.object({
+    senderName: z.string().nullable(),
+    recipientName: z.string().nullable(),
+  }).default({ senderName: null, recipientName: null }),
+  recommendedResponseSummary: z.string().default(""),
+  emotionalIntelligence: z.object({
+    overallTone: z.string().default("Neutral"),
+    toneConfidence: z.enum(["low", "medium", "high"]).default("medium"),
+    emotionBreakdown: z.array(
+      z.object({
+        emotion: z.string().default("neutral"),
+        intensity: z.number().min(0).max(100).default(50),
+      })
+    ).default([]),
+    hiddenImplications: z.array(z.string()).default([]),
+    redFlags: z.array(
+      z.object({
+        passage: z.string().default(""),
+        explanation: z.string().default(""),
+      })
+    ).default([]),
+    manipulationTactics: z.array(z.string()).default([]),
+    trueIntentSummary: z.string().default(""),
+  }).nullable().default(null),
 });
 
 // Zod insert schema for the document_analyses table
@@ -431,3 +751,163 @@ export const insertDocumentAnalysisSchema = z.object({
   analysisJson: documentAnalysisResultSchema,
   userId: z.number().int().nullable().optional(),
 });
+
+// SessionStorage key and shape for passing analysis prefill to the SubmitLetter form
+export const ANALYZE_PREFILL_KEY = "documentAnalysisPrefill";
+export interface AnalysisPrefill {
+  letterType?: string;
+  subject?: string;
+  jurisdictionState?: string;
+  senderName?: string;
+  recipientName?: string;
+  description?: string;
+}
+
+// ─── Pipeline Error Codes ───
+export const PIPELINE_ERROR_CODES = {
+  JSON_PARSE_FAILED: "JSON_PARSE_FAILED",
+  CITATION_VALIDATION_FAILED: "CITATION_VALIDATION_FAILED",
+  WORD_COUNT_EXCEEDED: "WORD_COUNT_EXCEEDED",
+  API_TIMEOUT: "API_TIMEOUT",
+  RATE_LIMITED: "RATE_LIMITED",
+  GROUNDING_CHECK_FAILED: "GROUNDING_CHECK_FAILED",
+  CONTENT_POLICY_VIOLATION: "CONTENT_POLICY_VIOLATION",
+  ASSEMBLY_STRUCTURE_INVALID: "ASSEMBLY_STRUCTURE_INVALID",
+  VETTING_REJECTED: "VETTING_REJECTED",
+  RESEARCH_VALIDATION_FAILED: "RESEARCH_VALIDATION_FAILED",
+  DRAFT_VALIDATION_FAILED: "DRAFT_VALIDATION_FAILED",
+  JURISDICTION_MISMATCH: "JURISDICTION_MISMATCH",
+  INTAKE_INCOMPLETE: "INTAKE_INCOMPLETE",
+  API_KEY_MISSING: "API_KEY_MISSING",
+  N8N_ERROR: "N8N_ERROR",
+  SUPERSEDED: "SUPERSEDED",
+  UNKNOWN_ERROR: "UNKNOWN_ERROR",
+} as const;
+
+export type PipelineErrorCode = typeof PIPELINE_ERROR_CODES[keyof typeof PIPELINE_ERROR_CODES];
+
+export type PipelineErrorCategory = "transient" | "permanent";
+
+export const PIPELINE_ERROR_CATEGORY: Record<PipelineErrorCode, PipelineErrorCategory> = {
+  JSON_PARSE_FAILED: "transient",
+  CITATION_VALIDATION_FAILED: "transient",
+  WORD_COUNT_EXCEEDED: "transient",
+  API_TIMEOUT: "transient",
+  RATE_LIMITED: "transient",
+  GROUNDING_CHECK_FAILED: "transient",
+  CONTENT_POLICY_VIOLATION: "permanent",
+  ASSEMBLY_STRUCTURE_INVALID: "transient",
+  VETTING_REJECTED: "transient",
+  RESEARCH_VALIDATION_FAILED: "transient",
+  DRAFT_VALIDATION_FAILED: "transient",
+  JURISDICTION_MISMATCH: "transient",
+  INTAKE_INCOMPLETE: "permanent",
+  API_KEY_MISSING: "permanent",
+  N8N_ERROR: "transient",
+  SUPERSEDED: "permanent",
+  UNKNOWN_ERROR: "transient",
+};
+
+export const PIPELINE_ERROR_LABELS: Record<PipelineErrorCode, string> = {
+  JSON_PARSE_FAILED: "JSON Parse Failed",
+  CITATION_VALIDATION_FAILED: "Citation Validation Failed",
+  WORD_COUNT_EXCEEDED: "Word Count Exceeded",
+  API_TIMEOUT: "API Timeout",
+  RATE_LIMITED: "Rate Limited",
+  GROUNDING_CHECK_FAILED: "Grounding Check Failed",
+  CONTENT_POLICY_VIOLATION: "Content Policy Violation",
+  ASSEMBLY_STRUCTURE_INVALID: "Assembly Structure Invalid",
+  VETTING_REJECTED: "Vetting Rejected",
+  RESEARCH_VALIDATION_FAILED: "Research Validation Failed",
+  DRAFT_VALIDATION_FAILED: "Draft Validation Failed",
+  JURISDICTION_MISMATCH: "Jurisdiction Mismatch",
+  INTAKE_INCOMPLETE: "Intake Incomplete",
+  API_KEY_MISSING: "API Key Missing",
+  N8N_ERROR: "n8n Integration Error",
+  SUPERSEDED: "Superseded",
+  UNKNOWN_ERROR: "Unknown Error",
+};
+
+export interface StructuredPipelineError {
+  code: PipelineErrorCode;
+  message: string;
+  stage: string;
+  details?: string;
+  category: PipelineErrorCategory;
+}
+
+export function createPipelineError(
+  code: PipelineErrorCode,
+  message: string,
+  stage: string,
+  details?: string,
+): StructuredPipelineError {
+  return {
+    code,
+    message,
+    stage,
+    details,
+    category: PIPELINE_ERROR_CATEGORY[code],
+  };
+}
+
+export class PipelineError extends Error {
+  public readonly code: PipelineErrorCode;
+  public readonly stage: string;
+  public readonly details?: string;
+  public readonly category: PipelineErrorCategory;
+
+  constructor(code: PipelineErrorCode, message: string, stage: string, details?: string) {
+    super(message);
+    this.name = "PipelineError";
+    this.code = code;
+    this.stage = stage;
+    this.details = details;
+    this.category = PIPELINE_ERROR_CATEGORY[code];
+  }
+
+  toStructured(): StructuredPipelineError {
+    return createPipelineError(this.code, this.message, this.stage, this.details);
+  }
+
+  toJSON(): string {
+    return JSON.stringify(this.toStructured());
+  }
+}
+
+export function parsePipelineError(errorMessage: string | null | undefined): StructuredPipelineError | null {
+  if (!errorMessage) return null;
+  try {
+    const parsed = JSON.parse(errorMessage);
+    if (parsed && typeof parsed === "object" && "code" in parsed && "message" in parsed && "stage" in parsed) {
+      return {
+        code: parsed.code as PipelineErrorCode,
+        message: parsed.message as string,
+        stage: parsed.stage as string,
+        details: parsed.details as string | undefined,
+        category: PIPELINE_ERROR_CATEGORY[parsed.code as PipelineErrorCode] ?? "transient",
+      };
+    }
+  } catch {
+    // Not JSON — legacy string error
+  }
+  return null;
+}
+
+export function getErrorDisplayMessage(errorMessage: string | null | undefined): string {
+  if (!errorMessage) return "";
+  const structured = parsePipelineError(errorMessage);
+  if (structured) return structured.message;
+  return errorMessage;
+}
+
+export function isTransientError(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage) return true;
+  const structured = parsePipelineError(errorMessage);
+  if (structured) return structured.category === "transient";
+  const lower = errorMessage.toLowerCase();
+  if (lower.includes("content policy") || lower.includes("content filter")) return false;
+  if (lower.includes("intake validation failed") || lower.includes("intake pre-flight")) return false;
+  if (lower.includes("api key") || lower.includes("api_key") || lower.includes("apikey")) return false;
+  return true;
+}

@@ -25,6 +25,11 @@ function readServer(file: string) {
   return readFileSync(join(SERVER_DIR, file), "utf-8");
 }
 
+function readAllRouters() {
+  const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
+  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+}
+
 function readClient(...segments: string[]) {
   return readFileSync(join(CLIENT_SRC, ...segments), "utf-8");
 }
@@ -32,7 +37,7 @@ function readClient(...segments: string[]) {
 // ─── 1. canView Guard — Visibility Before Claim ─────────────────────────────
 
 describe("Letter Claiming Flow — canView Guard (Visibility Before Claim)", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("canView allows admin to view all letters", () => {
     expect(routersFile).toContain('ctx.user.role === "admin"');
@@ -74,7 +79,7 @@ describe("Letter Claiming Flow — canView Guard (Visibility Before Claim)", () 
 // ─── 2. Claim Mutation ───────────────────────────────────────────────────────
 
 describe("Letter Claiming Flow — Claim Mutation", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("claim mutation calls claimLetterForReview", () => {
     expect(routersFile).toContain("claimLetterForReview");
@@ -94,7 +99,7 @@ describe("Letter Claiming Flow — Claim Mutation", () => {
   });
 
   it("claimLetterForReview DB function uses atomic update (WHERE clause)", () => {
-    const dbFile = readServer("db.ts");
+    const dbFile = readServer("db/letters.ts");
     // The function uses isNull(letterRequests.assignedReviewerId) in the WHERE clause
     expect(dbFile).toContain("claimLetterForReview");
     expect(dbFile).toContain("isNull(letterRequests.assignedReviewerId)");
@@ -108,7 +113,7 @@ describe("Letter Claiming Flow — Claim Mutation", () => {
 // ─── 3. Approve Mutation ─────────────────────────────────────────────────────
 
 describe("Letter Claiming Flow — Approve Mutation", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("approve mutation creates a final_approved version", () => {
     expect(routersFile).toContain('"final_approved"');
@@ -154,7 +159,7 @@ describe("Letter Claiming Flow — Approve Mutation", () => {
 // ─── 4. Reject Mutation ──────────────────────────────────────────────────────
 
 describe("Letter Claiming Flow — Reject Mutation", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("reject mutation throws FORBIDDEN for non-assigned attorneys", () => {
     expect(routersFile).toContain('Letter must be under_review to reject');
@@ -172,7 +177,7 @@ describe("Letter Claiming Flow — Reject Mutation", () => {
 // ─── 5. Request Changes Mutation ─────────────────────────────────────────────
 
 describe("Letter Claiming Flow — Request Changes Mutation", () => {
-  const routersFile = readServer("routers.ts");
+  const routersFile = readAllRouters();
 
   it("requestChanges mutation requires a userVisibleNote with min length 10", () => {
     expect(routersFile).toMatch(
@@ -192,8 +197,8 @@ describe("Letter Claiming Flow — Request Changes Mutation", () => {
 // ─── 6. State Machine Integrity — DB Functions ──────────────────────────────
 
 describe("Letter Claiming Flow — State Machine Integrity", () => {
-  const dbFile = readServer("db.ts");
-  const routersFile = readServer("routers.ts");
+  const dbFile = readServer("db/letters.ts");
+  const routersFile = readAllRouters();
 
   it("claimLetterForReview transitions to under_review status", () => {
     expect(dbFile).toContain("claimLetterForReview");
@@ -276,7 +281,7 @@ describe("Letter Claiming Flow — Subscriber Delivery (My Letters Area)", () =>
   });
 
   it("server letters.detail returns versions via getLetterVersionsByRequestId", () => {
-    const routersFile = readServer("routers.ts");
+    const routersFile = readAllRouters();
     expect(routersFile).toContain("getLetterVersionsByRequestId");
   });
 });

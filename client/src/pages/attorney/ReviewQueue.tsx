@@ -5,16 +5,17 @@ import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Search, ArrowRight, Sparkles } from "lucide-react";
+import { FileText, Search, ArrowRight, Sparkles, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useReviewQueueRealtime } from "@/hooks/useLetterRealtime";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
 // Letters that arrived in the queue within the last 24 hours are considered "New"
 const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 // Only statuses that belong in the attorney review workflow
-const REVIEW_STATUSES = ["pending_review", "under_review", "needs_changes", "approved", "rejected"];
+const REVIEW_STATUSES = ["pending_review", "under_review", "needs_changes", "approved", "rejected", "client_approval_pending", "client_revision_requested", "client_declined", "client_approved"];
 
 export default function ReviewQueue() {
   const utils = trpc.useUtils();
@@ -41,12 +42,13 @@ export default function ReviewQueue() {
         statusFilter === "all"
           ? true
           : statusFilter === "active"
-          ? ["pending_review", "under_review", "needs_changes"].includes(l.status)
+          ? ["pending_review", "under_review", "needs_changes", "client_revision_requested"].includes(l.status)
           : l.status === statusFilter;
       return matchSearch && matchStatus;
     });
 
-  const pendingCount = (letters ?? []).filter((l) => l.status === "pending_review").length;
+  const pendingCount = (letters ?? []).filter((l) => l.status === "pending_review" || l.status === "client_revision_requested").length;
+  const letterVisible = useStaggerReveal(filtered.length, 50);
 
   return (
     <AppLayout breadcrumb={[{ label: "Review Center", href: "/review" }, { label: "Queue" }]}>
@@ -69,10 +71,10 @@ export default function ReviewQueue() {
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search letters..." className="pl-9" />
+            <Input data-testid="input-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search letters..." className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger data-testid="select-status-filter" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -103,7 +105,7 @@ export default function ReviewQueue() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((letter) => {
+            {filtered.map((letter, idx) => {
               const isNew =
                 letter.status === "pending_review" &&
                 Date.now() - new Date(letter.createdAt).getTime() < NEW_THRESHOLD_MS;
@@ -111,7 +113,9 @@ export default function ReviewQueue() {
               return (
                 <div
                   key={letter.id}
+                  data-testid={`card-letter-${letter.id}`}
                   onClick={() => setSelectedLetterId(letter.id)}
+                  style={staggerStyle(idx, letterVisible[idx])}
                   className={`bg-card border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${
                     isNew ? "border-amber-300 bg-amber-50/30" : "border-border"
                   }`}
@@ -125,11 +129,17 @@ export default function ReviewQueue() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-foreground leading-tight">{letter.subject}</p>
+                          <p data-testid={`text-subject-${letter.id}`} className="text-sm font-semibold text-foreground leading-tight">{letter.subject}</p>
                           {isNew && (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
                               <Sparkles className="w-2.5 h-2.5" />
                               New
+                            </Badge>
+                          )}
+                          {letter.qualityDegraded && (
+                            <Badge data-testid={`badge-quality-degraded-${letter.id}`} className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Degraded
                             </Badge>
                           )}
                         </div>
@@ -140,7 +150,7 @@ export default function ReviewQueue() {
                         {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
                       </p>
                       <div className="flex items-center gap-3 mt-2">
-                        <StatusBadge status={letter.status} size="sm" />
+                        <StatusBadge status={letter.status} size="sm" data-testid={`status-badge-${letter.id}`} />
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString()}
                         </span>
