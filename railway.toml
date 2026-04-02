@@ -7,10 +7,12 @@ dockerfilePath = "Dockerfile"
 [deploy]
 # Railway injects $PORT automatically — the server reads process.env.PORT.
 #
-# "pnpm run start:migrate" runs Drizzle migrations first, then starts the server.
-# migrate.js exits 0 on success and 1 on failure — a failed migration blocks the
-# deploy so a broken schema never reaches production.
-startCommand = "pnpm run start:migrate"
+# preDeployCommand runs Drizzle migrations before the new container goes live.
+# migrate.js exits 0 on success and 1 on failure — a failed migration blocks
+# the deploy so a broken schema never reaches production.
+# This runs in the built image so dist/migrate.js and drizzle/ are available.
+preDeployCommand = "node dist/migrate.js"
+startCommand = "node --import ./dist/sentry-init.js dist/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 

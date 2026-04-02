@@ -1,12 +1,20 @@
 /**
  * migrate.ts — Run Drizzle ORM migrations against the production database.
  *
- * This script is executed as a Railway deploy hook (before the server starts)
+ * This script is executed as a Railway preDeployCommand (before the server starts)
  * to ensure the database schema is always up-to-date on every deployment.
  *
  * Usage:
  *   node dist/migrate.js          (production — compiled by esbuild)
  *   tsx server/migrate.ts         (development)
+ *
+ * Migration folder layout:
+ *   drizzle/                      ← Drizzle-generated SQL files (0000_*.sql … 0036_*.sql)
+ *   drizzle/meta/_journal.json    ← Drizzle migration journal (source of truth)
+ *   drizzle/migrations/           ← Hand-written SQL files (NOT used by this runner)
+ *
+ * IMPORTANT: The Drizzle migrator must point at the drizzle/ root folder where
+ * the journal lives, NOT at drizzle/migrations/ which contains hand-written SQL.
  */
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -28,13 +36,12 @@ async function runMigrations() {
     process.exit(1);
   }
 
-  // Supabase uses port 6543 for pooled connections (PgBouncer).
-  // Drizzle migrations require a direct connection on port 5432.
-  const directUrl = connectionString.replace(/:6543\//, ":5432/");
-
+  // Use the connection string as-is (pooler on port 6543 is fine for migrations
+  // when using postgres-js with max:1 — Drizzle migrator does not require a
+  // direct connection for this driver).
   console.log("[Migrate] Connecting to database...");
 
-  const client = postgres(directUrl, {
+  const client = postgres(connectionString, {
     ssl: "require",
     max: 1,
     connect_timeout: 30,
@@ -43,9 +50,11 @@ async function runMigrations() {
 
   const db = drizzle(client);
 
-  // Resolve migrations folder relative to this file.
-  // In production (dist/migrate.js) we need to go up one level to find drizzle/migrations/.
-  const migrationsFolder = path.resolve(__dirname, "../drizzle/migrations");
+  // The Drizzle journal lives at drizzle/meta/_journal.json and references SQL
+  // files in the drizzle/ root (e.g. drizzle/0000_nervous_james_howlett.sql).
+  // In production the compiled bundle is at dist/migrate.js, so we go up one
+  // level from __dirname (dist/) to reach the project root, then into drizzle/.
+  const migrationsFolder = path.resolve(__dirname, "../drizzle");
 
   console.log(`[Migrate] Running migrations from: ${migrationsFolder}`);
 
