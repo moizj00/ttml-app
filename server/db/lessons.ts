@@ -293,3 +293,59 @@ export async function deletePipelineLesson(id: number) {
   await db.delete(pipelineLessons).where(eq(pipelineLessons.id, id));
 }
 
+export async function getDistinctLessonScopes(minActiveLessons: number = 5): Promise<
+  Array<{ letterType: string; jurisdiction: string | null; count: number }>
+> {
+  const db = await getReadDb();
+  if (!db) return [];
+  const results = await db.execute(sql`
+    SELECT letter_type, jurisdiction, COUNT(*)::int AS count
+    FROM pipeline_lessons
+    WHERE is_active = true AND letter_type IS NOT NULL
+    GROUP BY letter_type, jurisdiction
+    HAVING COUNT(*) >= ${minActiveLessons}
+    ORDER BY count DESC
+  `);
+  return (results as any[]).map((r) => ({
+    letterType: r.letter_type,
+    jurisdiction: r.jurisdiction,
+    count: r.count,
+  }));
+}
+
+export async function archiveStaleIneffectiveLessons(): Promise<
+  Array<{ id: number; archival_reason: string }>
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available for archival");
+  const results = await db.execute(sql`
+    UPDATE pipeline_lessons
+    SET is_active = false, updated_at = NOW()
+    WHERE is_active = true
+      AND (
+        (created_at < NOW() - INTERVAL '6 months' AND times_injected = 0)
+        OR (effectiveness_samples >= 5
+            AND letters_after_avg_score IS NOT NULL
+            AND letters_before_avg_score IS NOT NULL
+            AND letters_after_avg_score < letters_before_avg_score)
+        OR (weight < 10
+            AND (last_injected_at IS NULL OR last_injected_at < NOW() - INTERVAL '90 days'))
+      )
+    RETURNING id,
+      CASE
+        WHEN created_at < NOW() - INTERVAL '6 months' AND times_injected = 0
+          THEN 'stale_never_injected'
+        WHEN effectiveness_samples >= 5
+          AND letters_after_avg_score IS NOT NULL
+          AND letters_before_avg_score IS NOT NULL
+          AND letters_after_avg_score < letters_before_avg_score
+          THEN 'proven_harmful'
+        WHEN weight < 10
+          AND (last_injected_at IS NULL OR last_injected_at < NOW() - INTERVAL '90 days')
+          THEN 'low_weight_inactive'
+        ELSE 'unknown'
+      END AS archival_reason
+  `);
+  return results as any[];
+}
+

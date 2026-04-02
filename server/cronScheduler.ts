@@ -10,6 +10,8 @@
  *   - Stripe Event Pruning: daily at 03:00 — removes processed webhook events older than 7 days
  *   - Paywall Email Notification: every 5 minutes — sends initial paywall email to subscribers
  *     whose letter reached generated_locked status 10–15 minutes ago (idempotent)
+ *   - Lesson Consolidation: weekly on Sundays at 02:00 — merges similar lessons in scopes with 5+ active lessons
+ *   - Lesson Auto-Archival: weekly on Sundays at 02:30 — deactivates stale/ineffective lessons
  *
  * The scheduler is only started in production (NODE_ENV !== 'test').
  * In test environments, jobs are not registered to avoid side effects.
@@ -25,6 +27,7 @@ import { syncSubscriptionsWithStripe, pruneProcessedStripeEvents } from "./subsc
 import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
 import { processPaywallEmails } from "./paywallEmailCron";
+import { runAutomatedConsolidation, archiveIneffectiveLessons } from "./learning";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
@@ -129,7 +132,48 @@ export function startCronScheduler(): void {
     }
   });
 
-  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min)");
+  // Lesson consolidation: runs weekly on Sundays at 02:00
+  // Iterates over (letter_type, jurisdiction) scopes with 5+ active lessons
+  // and merges semantically similar lessons to prevent prompt bloat.
+  cron.schedule("0 2 * * 0", async () => {
+    const startTime = Date.now();
+    console.log(`[Cron] [${new Date().toISOString()}] Running lesson consolidation...`);
+    try {
+      const result = await runAutomatedConsolidation();
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `[Cron] Lesson consolidation done in ${elapsed}ms — scopes: ${result.scopesProcessed}, consolidated: ${result.totalConsolidated}, deactivated: ${result.totalDeactivated}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Cron] Lesson consolidation failed: ${msg}`);
+      captureServerException(err, { tags: { component: "cron", job: "lesson_consolidation" } });
+    }
+  });
+
+  // Lesson auto-archival: runs weekly on Sundays at 02:30
+  // Deactivates stale/ineffective lessons: old with zero injections,
+  // proven harmful (after-score < before-score), or low weight with no recent injections.
+  cron.schedule("30 2 * * 0", async () => {
+    const startTime = Date.now();
+    console.log(`[Cron] [${new Date().toISOString()}] Running lesson auto-archival...`);
+    try {
+      const result = await archiveIneffectiveLessons();
+      const elapsed = Date.now() - startTime;
+      const reasonSummary = Object.entries(result.reasons)
+        .map(([r, c]) => `${r}: ${c}`)
+        .join(", ");
+      console.log(
+        `[Cron] Lesson auto-archival done in ${elapsed}ms — archived: ${result.archived}${reasonSummary ? ` (${reasonSummary})` : ""}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Cron] Lesson auto-archival failed: ${msg}`);
+      captureServerException(err, { tags: { component: "cron", job: "lesson_archival" } });
+    }
+  });
+
+  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)");
 }
 
 /**

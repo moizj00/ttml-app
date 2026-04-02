@@ -9,7 +9,10 @@ import {
   boostExistingLesson,
   updateLessonEffectivenessScores,
   getAverageQualityScoreForScope,
+  getDistinctLessonScopes,
+  archiveStaleIneffectiveLessons,
 } from "./db";
+import { addServerBreadcrumb, captureServerException } from "./sentry";
 import type { InsertPipelineLesson, PipelineLesson } from "../drizzle/schema";
 
 type LetterType = InsertPipelineLesson["letterType"];
@@ -534,6 +537,91 @@ export async function consolidateLessonsForScope(
     deactivated += verifiedIds.length;
   }
 
-  console.log(`[Learning] Consolidation complete: ${consolidated} new lessons, ${deactivated} deactivated`);
+  console.log(`[Learning] Consolidation complete for ${letterType}/${jurisdiction ?? "all"}: ${consolidated} new lessons, ${deactivated} deactivated`);
+  addServerBreadcrumb("learning", "Lesson consolidation completed", {
+    letterType,
+    jurisdiction,
+    consolidated,
+    deactivated,
+  });
   return { consolidated, deactivated };
+}
+
+export async function runAutomatedConsolidation(): Promise<{
+  scopesProcessed: number;
+  totalConsolidated: number;
+  totalDeactivated: number;
+  errors: number;
+}> {
+  const scopes = await getDistinctLessonScopes(5);
+  let scopesProcessed = 0;
+  let totalConsolidated = 0;
+  let totalDeactivated = 0;
+  let errors = 0;
+
+  console.log(`[Learning] Automated consolidation starting — ${scopes.length} scope(s) with 5+ active lessons`);
+  addServerBreadcrumb("learning", "Automated consolidation starting", {
+    scopeCount: scopes.length,
+    scopes: scopes.map((s) => `${s.letterType}/${s.jurisdiction ?? "all"} (${s.count})`),
+  });
+
+  for (const scope of scopes) {
+    try {
+      const result = await consolidateLessonsForScope(scope.letterType, scope.jurisdiction);
+      scopesProcessed++;
+      totalConsolidated += result.consolidated;
+      totalDeactivated += result.deactivated;
+    } catch (err) {
+      errors++;
+      console.error(`[Learning] Consolidation failed for ${scope.letterType}/${scope.jurisdiction ?? "all"}:`, err);
+      captureServerException(err, {
+        tags: { component: "learning", job: "consolidation" },
+        extra: { letterType: scope.letterType, jurisdiction: scope.jurisdiction },
+      });
+    }
+  }
+
+  console.log(
+    `[Learning] Automated consolidation complete — scopes: ${scopesProcessed}, consolidated: ${totalConsolidated}, deactivated: ${totalDeactivated}, errors: ${errors}`
+  );
+  addServerBreadcrumb("learning", "Automated consolidation complete", {
+    scopesProcessed,
+    totalConsolidated,
+    totalDeactivated,
+    errors,
+  });
+
+  return { scopesProcessed, totalConsolidated, totalDeactivated, errors };
+}
+
+export async function archiveIneffectiveLessons(): Promise<{
+  archived: number;
+  reasons: Record<string, number>;
+}> {
+  const archivedRows = await archiveStaleIneffectiveLessons();
+  const reasons: Record<string, number> = {};
+
+  if (archivedRows.length === 0) {
+    console.log("[Learning] Auto-archival: no stale/ineffective lessons found");
+    return { archived: 0, reasons };
+  }
+
+  for (const row of archivedRows) {
+    const reason = row.archival_reason;
+    reasons[reason] = (reasons[reason] ?? 0) + 1;
+  }
+
+  const ids = archivedRows.map((r) => r.id);
+  const reasonSummary = Object.entries(reasons)
+    .map(([r, c]) => `${r}: ${c}`)
+    .join(", ");
+
+  console.log(`[Learning] Auto-archival complete: ${archivedRows.length} lessons deactivated (${reasonSummary})`);
+  addServerBreadcrumb("learning", "Auto-archival of ineffective lessons", {
+    archived: archivedRows.length,
+    reasons,
+    archivedIds: ids.slice(0, 20),
+  });
+
+  return { archived: archivedRows.length, reasons };
 }
