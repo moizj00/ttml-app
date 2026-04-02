@@ -59,7 +59,14 @@ async function runMigrations() {
   console.log(`[Migrate] Running migrations from: ${migrationsFolder}`);
 
   try {
-    await migrate(db, { migrationsFolder });
+    // Use migrationsSchema: "public" to avoid `CREATE SCHEMA IF NOT EXISTS "drizzle"`
+    // which fails on Supabase pooler connections (no CREATE privilege on database).
+    // The __drizzle_migrations tracking table lives in the public schema.
+    await migrate(db, {
+      migrationsFolder,
+      migrationsSchema: "public",
+      migrationsTable: "__drizzle_migrations",
+    });
     console.log("[Migrate] All migrations applied successfully.");
   } catch (err) {
     console.error("[Migrate] Migration failed:", err);
