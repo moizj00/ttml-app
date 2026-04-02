@@ -11,12 +11,17 @@
  * Migration folder layout:
  *   drizzle/                      ← Drizzle-generated SQL files (0000_*.sql … 0036_*.sql)
  *   drizzle/meta/_journal.json    ← Drizzle migration journal (source of truth)
- *   drizzle/migrations/           ← Hand-written SQL files (NOT used by this runner)
  *
- * Connection strategy:
- *   1. Prefer SUPABASE_DIRECT_URL (direct connection, port 5432) — best for migrations
- *   2. Fall back to SUPABASE_DATABASE_URL or DATABASE_URL (pooler, port 6543)
- *   Retries up to 3 times on transient pooler errors (circuit breaker, etc.)
+ * Connection strategy (in priority order):
+ *   1. SUPABASE_DIRECT_URL  — direct connection to db.*.supabase.co:5432 (IPv4, no pooler)
+ *   2. SUPABASE_DATABASE_URL — fallback pooler URL
+ *   3. DATABASE_URL          — last resort
+ *
+ * IMPORTANT: Railway build containers do NOT have IPv6 connectivity.
+ * The Supabase session pooler (pooler.supabase.com) resolves to IPv6 addresses
+ * and will fail with ENETUNREACH. Always use SUPABASE_DIRECT_URL for migrations.
+ *
+ * Retries up to 3 times on transient errors (circuit breaker, connection reset, etc.)
  */
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -34,13 +39,30 @@ const TRANSIENT_CODES = new Set([
   "08006", // Connection failure
   "08001", // Unable to establish connection
   "57P03", // Cannot connect now
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
 ]);
 
 function isTransient(err: unknown): boolean {
   if (err && typeof err === "object") {
     const cause = (err as any).cause;
+    // ENETUNREACH = IPv6 not reachable — this is a hard config error, not transient
+    if (cause?.code === "ENETUNREACH") return false;
+    if ((err as any).code === "ENETUNREACH") return false;
     if (cause && TRANSIENT_CODES.has(cause.code)) return true;
     if (TRANSIENT_CODES.has((err as any).code)) return true;
+  }
+  return false;
+}
+
+function isIPv6Unreachable(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const cause = (err as any).cause;
+    if (cause?.code === "ENETUNREACH") return true;
+    if ((err as any).code === "ENETUNREACH") return true;
+    const msg = (err as any)?.message || "";
+    if (msg.includes("ENETUNREACH")) return true;
   }
   return false;
 }
@@ -58,9 +80,18 @@ async function runMigrations() {
 
   if (!connectionString) {
     console.error(
-      "[Migrate] ERROR: SUPABASE_DIRECT_URL, SUPABASE_DATABASE_URL, or DATABASE_URL is required."
+      "[Migrate] ERROR: No database URL found. Set SUPABASE_DIRECT_URL to:\n" +
+      "  postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres?sslmode=require"
     );
     process.exit(1);
+  }
+
+  // Warn if using a pooler URL that may resolve to IPv6 on Railway
+  if (connectionString.includes("pooler.supabase.com")) {
+    console.warn(
+      "[Migrate] WARNING: Using pooler URL for migrations. " +
+      "Set SUPABASE_DIRECT_URL to db.*.supabase.co:5432 to avoid IPv6/pgBouncer issues on Railway."
+    );
   }
 
   // The Drizzle journal lives at drizzle/meta/_journal.json and references SQL
@@ -79,7 +110,7 @@ async function runMigrations() {
     const client = postgres(connectionString, {
       ssl: "require",
       max: 1,
-      connect_timeout: 10,
+      connect_timeout: 15,
       idle_timeout: 5,
     });
 
@@ -100,6 +131,18 @@ async function runMigrations() {
       process.exit(0);
     } catch (err) {
       await client.end();
+
+      // Hard fail immediately for IPv6 unreachable — retrying won't help
+      if (isIPv6Unreachable(err)) {
+        console.error(
+          "[Migrate] FATAL: IPv6 network unreachable (ENETUNREACH).\n" +
+          "Railway does not support IPv6. The pooler URL resolves to an IPv6 address.\n" +
+          "Fix: Set SUPABASE_DIRECT_URL to the direct connection URL:\n" +
+          "  postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require\n" +
+          "Original error:", err
+        );
+        process.exit(1);
+      }
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
         const delay = attempt * 2000; // 2s, 4s backoff

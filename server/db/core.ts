@@ -8,7 +8,13 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _startupMigrationRan = false;
 
 export async function getDb() {
-  const dbUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+  // Priority: direct connection > pooler
+  // SUPABASE_DIRECT_URL (db.*.supabase.co:5432) avoids IPv6 issues on Railway
+  // and supports prepared statements (unlike the transaction pooler on port 6543)
+  const dbUrl =
+    process.env.SUPABASE_DIRECT_URL ||
+    process.env.SUPABASE_DATABASE_URL ||
+    process.env.DATABASE_URL;
   if (!_db && dbUrl) {
     try {
       const client = postgres(dbUrl, {
