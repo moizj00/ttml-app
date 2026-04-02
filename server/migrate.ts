@@ -79,8 +79,8 @@ async function runMigrations() {
     const client = postgres(connectionString, {
       ssl: "require",
       max: 1,
-      connect_timeout: 30,
-      idle_timeout: 10,
+      connect_timeout: 10,
+      idle_timeout: 5,
     });
 
     const db = drizzle(client);
@@ -102,7 +102,7 @@ async function runMigrations() {
       await client.end();
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
-        const delay = attempt * 3000; // 3s, 6s backoff
+        const delay = attempt * 2000; // 2s, 4s backoff
         console.warn(
           `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`,
           (err as any)?.cause?.message || (err as any)?.message
