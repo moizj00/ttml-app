@@ -44,11 +44,19 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + postgres-js driver.
 - **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails. Admin 2FA enforced.
 - **AI Pipeline**: A 4-stage pipeline: Perplexity Research, Claude Opus Drafting, Claude Opus Assembly, Claude Sonnet Vetting.
+- **Pipeline Research Resilience (Stage 1)**: 4-tier failover chain ensures the pipeline **never stops** due to research provider failures:
+  1. **Perplexity sonar-pro** (primary, web-grounded)
+  2. **OpenAI gpt-4o-search-preview** (failover, web-grounded via webSearchPreview tool)
+  3. **Groq Llama 3.3 70B** (OSS last-resort, NOT web-grounded)
+  4. **Synthetic intake fallback** (synthesizes a research packet from client intake data — no external research, fully degraded, marked for heightened attorney review)
+  - The `isFailoverCandidate()` function in `server/pipeline/shared.ts` determines which errors trigger failover (rate limits, quota, billing, invalid API keys, capacity, auth errors, HTTP 401/402/429/503/529).
+  - Quality warnings are injected into `pipelineCtx.qualityWarnings` at each degradation level.
+  - The `synthesizeResearchFromIntake()` function in `server/pipeline/research.ts` builds a minimal valid `ResearchPacket` from intake data when all providers fail.
 - **Recursive Learning System**: Self-optimizing knowledge engine capturing structured lessons from attorney feedback, with AI-powered categorization, deduplication, consolidation, effectiveness tracking, and smart weight decay.
 - **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples to GCS, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning.
 - **Pipeline Worker (BullMQ)**: Pipeline processing runs in a dedicated worker process, separate from the API server, using Upstash Redis for job queues.
 - **Pipeline Error Codes**: Structured error codes with categories for transient vs. permanent errors.
-- **Pipeline Resilience**: Automatic retry mechanism with exponential backoff.
+- **Pipeline Resilience**: Automatic retry mechanism with exponential backoff. Best-effort fallback (`bestEffortFallback` in `server/pipeline/orchestrator.ts`) delivers degraded drafts after all retries are exhausted.
 - **Rate Limiting**: Upstash Redis for fine-grained, per-user limits.
 - **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
 - **Database Indexes**: Comprehensive btree indexes on frequently queried columns.

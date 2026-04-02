@@ -239,9 +239,10 @@ export async function runFullPipeline(
     const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
     pipelineCtx.researchProvider = researchProvider;
     // openai-failover uses gpt-4o-search-preview + webSearchPreview — still web-grounded.
-    // Only anthropic-fallback (Claude, no web access) is truly ungrounded.
-    pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
-    pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
+    // anthropic-fallback (Claude, no web access), groq-oss-fallback, and synthetic-intake-fallback are ungrounded.
+    const ungroundedProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+    pipelineCtx.researchUnverified = ungroundedProviders.has(researchProvider);
+    pipelineCtx.webGrounded = !ungroundedProviders.has(researchProvider);
     await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
 
     addValidationResult(pipelineCtx, {

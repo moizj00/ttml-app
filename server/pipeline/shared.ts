@@ -70,6 +70,11 @@ export function isFailoverCandidate(err: unknown): boolean {
   if (lower.includes("credits") || lower.includes("quota") || lower.includes("billing") ||
       lower.includes("insufficient_quota") || lower.includes("payment_required")) return true;
 
+  // Invalid / missing API key — treat as failover candidate so the next provider gets a chance
+  if (lower.includes("incorrect api key") || lower.includes("invalid api key") ||
+      lower.includes("invalid_api_key") || lower.includes("authentication") ||
+      lower.includes("unauthorized") || lower.includes("invalid x-api-key")) return true;
+
   // Capacity / overload signals
   if (lower.includes("overloaded") || lower.includes("capacity") || lower.includes("service unavailable") ||
       lower.includes("529")) return true;
@@ -84,7 +89,7 @@ export function isFailoverCandidate(err: unknown): boolean {
   // Check for numeric HTTP status codes on error objects (Anthropic SDK pattern)
   const errObj = err as Record<string, unknown>;
   const status = typeof errObj?.status === "number" ? errObj.status : undefined;
-  if (status === 429 || status === 529 || status === 402 || status === 503) return true;
+  if (status === 401 || status === 429 || status === 529 || status === 402 || status === 503) return true;
 
   return false;
 }

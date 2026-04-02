@@ -17,6 +17,55 @@ import { validateResearchPacket, retryOnValidationFailure, addValidationResult }
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
 
+function synthesizeResearchFromIntake(intake: IntakeJson): ResearchPacket {
+  const state = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "Unknown";
+  const country = intake.jurisdiction?.country ?? "US";
+  const city = intake.jurisdiction?.city;
+  const letterType = intake.letterType ?? "general";
+  const subject = intake.matter?.subject ?? "Legal Matter";
+  const description = intake.matter?.description ?? "";
+  const desiredOutcome = intake.desiredOutcome ?? "";
+
+  return {
+    researchSummary:
+      `[SYNTHETIC RESEARCH — All research providers were unavailable. This research packet was synthesized from the client's intake data and must be independently verified by the reviewing attorney.]\n\n` +
+      `Subject: ${subject}\n` +
+      `Letter Type: ${letterType}\n` +
+      `Jurisdiction: ${state}, ${country}\n` +
+      (description ? `\nClient Description: ${description}\n` : "") +
+      (desiredOutcome ? `\nDesired Outcome: ${desiredOutcome}\n` : "") +
+      `\nATTORNEY NOTE: No external legal research was performed. The reviewing attorney must independently verify all applicable statutes, regulations, case law, and procedural requirements for ${state} before approving this letter.`,
+    jurisdictionProfile: {
+      country,
+      stateProvince: state,
+      city: city ?? undefined,
+      authorityHierarchy: [
+        `${state} State Legislature`,
+        `${state} Courts`,
+        country === "US" ? "Federal Courts" : `${country} National Courts`,
+      ],
+    },
+    issuesIdentified: [
+      `Client seeks ${letterType} letter regarding: ${subject}`,
+      ...(desiredOutcome ? [`Desired outcome: ${desiredOutcome}`] : []),
+      `[UNVERIFIED] All legal issues require independent attorney verification — no external research was available.`,
+    ],
+    applicableRules: [],
+    localJurisdictionElements: [
+      {
+        element: `${state} jurisdiction requirements`,
+        whyItMatters: `Letter must comply with ${state} procedural and substantive requirements. Attorney must verify applicable rules.`,
+        sourceUrl: "",
+        confidence: "low" as const,
+      },
+    ],
+    recentCasePrecedents: [],
+    statuteOfLimitations: {
+      notes: `[UNVERIFIED] Attorney must independently determine applicable statute of limitations for ${state}.`,
+    },
+  };
+}
+
 // ═══════════════════════════════════════════════════════
 // STAGE 1: PERPLEXITY LEGAL RESEARCH
 // ═══════════════════════════════════════════════════════
@@ -512,31 +561,60 @@ export async function runResearchStage(
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },
     });
-    const failedResult: ValidationResult = {
+
+    const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
+
+    const syntheticPacket = synthesizeResearchFromIntake(intake);
+    console.warn(
+      `[Pipeline] Stage 1: All research providers failed for letter #${letterId} — synthesizing research from intake data. Pipeline will continue with degraded research.`
+    );
+
+    if (pipelineCtx) {
+      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+      pipelineCtx.qualityWarnings.push(
+        `RESEARCH_ALL_PROVIDERS_FAILED: All research providers (Perplexity, OpenAI, Groq) were unavailable. Research was synthesized from client intake data only — no external legal research was performed. Original error: ${msg}. Heightened attorney scrutiny required.`
+      );
+      pipelineCtx.researchUnverified = true;
+    }
+
+    const syntheticResult: ValidationResult = {
       stage: "research",
-      check: "stage_completion",
-      passed: false,
-      errors: [msg],
-      warnings: [],
+      check: "synthetic_fallback",
+      passed: true,
+      errors: [],
+      warnings: [
+        `All research providers failed (${stageErrCode}). Synthetic research packet created from intake data.`,
+        `Original error: ${msg}`,
+        "No external legal research was performed. Attorney must independently verify all legal claims.",
+      ],
       timestamp: new Date().toISOString(),
     };
-    const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
-    const structuredCatchErr = formatStructuredError(stageErrCode, msg, "research");
+    addValidationResult(pipelineCtx, syntheticResult);
+
     await updateResearchRun(runId, {
-      status: "failed",
-      errorMessage: structuredCatchErr,
-      validationResultJson: failedResult,
+      status: "completed",
+      resultJson: syntheticPacket,
+      validationResultJson: { ...syntheticResult, webGrounded: false, provider: "synthetic-intake-fallback", originalError: msg },
+      cacheHit: false,
+      cacheKey: kvCacheKey,
     });
     await updateWorkflowJob(jobId, {
-      status: "failed",
-      errorMessage: structuredCatchErr,
+      status: "completed",
       completedAt: new Date(),
       promptTokens: researchTokens.promptTokens,
       completionTokens: researchTokens.completionTokens,
-      estimatedCostUsd: researchTokens.promptTokens > 0 ? calculateCost(researchModelKey, researchTokens) : undefined,
-      responsePayloadJson: { validationResult: failedResult },
+      estimatedCostUsd: researchTokens.promptTokens > 0 ? calculateCost(researchModelKey, researchTokens) : "0",
+      responsePayloadJson: {
+        researchRunId: runId,
+        webGrounded: false,
+        provider: "synthetic-intake-fallback",
+        syntheticFallback: true,
+        originalError: msg,
+        validationResult: syntheticResult,
+      },
     });
-    throw err instanceof PipelineError ? err : new PipelineError(stageErrCode, msg, "research");
+
+    return { packet: syntheticPacket, provider: "synthetic-intake-fallback" };
   }
 }
 
