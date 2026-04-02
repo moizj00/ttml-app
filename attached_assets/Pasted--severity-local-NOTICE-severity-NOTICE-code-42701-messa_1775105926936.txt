@@ -1,0 +1,110 @@
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "times_injected" of relation "pipeline_lessons" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "consolidated_from_ids" of relation "pipeline_lessons" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "letters_before_avg_score" of relation "pipeline_lessons" already exists, skipping',
+}
+  message: 'column "last_injected_at" of relation "pipeline_lessons" already exists, skipping',
+  file: 'tablecmds.c',
+  file: 'tablecmds.c',
+{
+  line: '7471',
+  severity_local: 'NOTICE',
+  line: '7471',
+  severity: 'NOTICE',
+  routine: 'check_for_column_name_collision'
+  code: '42701',
+}
+  message: 'column "effectiveness_samples" of relation "pipeline_lessons" already exists, skipping',
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42701',
+  message: 'column "letters_after_avg_score" of relation "pipeline_lessons" already exists, skipping',
+  file: 'tablecmds.c',
+  line: '7471',
+  routine: 'check_for_column_name_collision'
+[Database] Migration: ensured 'consolidation' enum value exists
+}
+{
+{
+  severity_local: 'NOTICE',
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42P07',
+  code: '42710',
+  message: 'relation "idx_pipeline_lessons_type_jurisdiction_active" already exists, skipping',
+  file: 'index.c',
+  line: '889',
+  routine: 'index_create'
+}
+[Database] Migration: ensured pipeline_lessons hardening columns exist
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'enum label "consolidation" already exists, skipping',
+  where: `SQL statement "ALTER TYPE lesson_source ADD VALUE IF NOT EXISTS 'consolidation'"\n` +
+    'PL/pgSQL function inline_code_block line 2 at SQL statement',
+  file: 'pg_enum.c',
+  line: '341',
+  routine: 'AddEnumLabel'
+}
+  routine: 'check_for_column_name_collision'
+  message: 'enum label "client_revision_requested" already exists, skipping',
+  where: `SQL statement "ALTER TYPE letter_status ADD VALUE IF NOT EXISTS 'client_revision_requested'"\n` +
+    'PL/pgSQL function inline_code_block line 2 at SQL statement',
+  file: 'pg_enum.c',
+  line: '341',
+  routine: 'AddEnumLabel'
+}
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'enum label "client_declined" already exists, skipping',
+  where: `SQL statement "ALTER TYPE letter_status ADD VALUE IF NOT EXISTS 'client_declined'"\n` +
+    'PL/pgSQL function inline_code_block line 2 at SQL statement',
+  file: 'pg_enum.c',
+  line: '341',
+  routine: 'AddEnumLabel'
+}
+[Database] Migration: ensured client_revision_requested and client_declined enum values exist
+[Startup] Database connection warmed up
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connectivity check passed.
+[R2] Cloudflare R2 connecti
