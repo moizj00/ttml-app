@@ -12,7 +12,7 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { captureServerException } from "../sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, runOpenAIStoredPromptResearch, isOpenAIFailoverAvailable } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
@@ -220,20 +220,14 @@ export async function runResearchStage(
       "Stage 1 (research)",
       letterId,
       () => callGenerateText(userPrompt),
-      () => {
-        const fallback = getResearchModelFallback();
-        activeModel = fallback.model;
-        activeProvider = fallback.provider;
-        activeFallbackTools = fallback.tools;
+      async () => {
+        activeProvider = "openai-stored-prompt";
+        activeFallbackTools = undefined;
         researchModelKey = "gpt-4o-search-preview";
-        return generateText({
-          model: fallback.model,
-          tools: fallback.tools,
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: 6000,
-          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
-        });
+        console.log(`[Pipeline] Stage 1: Using OpenAI stored prompt for letter #${letterId}`);
+        const storedResult = await runOpenAIStoredPromptResearch(userPrompt);
+        activeModel = null as any;
+        return { text: storedResult.text, usage: storedResult.usage } as any;
       },
       () => {
         activeModel = getFreeOSSModelFallback();
@@ -261,14 +255,24 @@ export async function runResearchStage(
         );
         pipelineCtx.researchUnverified = true;
       }
-    } else if (initialFailover) {
+    } else if (initialProvider === "openai-stored-prompt") {
       console.warn(
-        `[Pipeline] Stage 1: Switched to OpenAI GPT-4o (web search) failover for letter #${letterId} (provider=${activeProvider})`
+        `[Pipeline] Stage 1: OpenAI stored prompt (web search) used for letter #${letterId} — Perplexity was unavailable.`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `RESEARCH_FAILOVER: Primary research model (Perplexity) was rate-limited. Research performed by OpenAI gpt-4o-search-preview with web search grounding. Citation style and format may differ slightly from Perplexity standard.`
+          `RESEARCH_FAILOVER: Primary research model (Perplexity) was unavailable. Research performed by OpenAI stored prompt with web search grounding. Citation style and format may differ from Perplexity standard.`
+        );
+      }
+    } else if (initialFailover) {
+      console.warn(
+        `[Pipeline] Stage 1: Switched to OpenAI failover for letter #${letterId} (provider=${activeProvider})`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_FAILOVER: Primary research model (Perplexity) was rate-limited. Research performed by OpenAI failover with web search grounding. Citation style and format may differ slightly from Perplexity standard.`
         );
       }
     }
@@ -311,19 +315,12 @@ export async function runResearchStage(
         letterId,
         () => callWithActiveFallback(promptWithFeedback),
         async () => {
-          const fallback = getResearchModelFallback();
-          activeModel = fallback.model;
-          activeProvider = fallback.provider;
-          activeFallbackTools = fallback.tools;
+          activeProvider = "openai-stored-prompt";
+          activeFallbackTools = undefined;
           researchModelKey = "gpt-4o-search-preview";
-          return generateText({
-            model: fallback.model,
-            tools: fallback.tools,
-            system: systemPrompt,
-            prompt: promptWithFeedback,
-            maxOutputTokens: 6000,
-            abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
-          });
+          const storedResult = await runOpenAIStoredPromptResearch(promptWithFeedback);
+          activeModel = null as any;
+          return { text: storedResult.text, usage: storedResult.usage } as any;
         },
         () => {
           activeModel = getFreeOSSModelFallback();
@@ -492,9 +489,9 @@ export async function runResearchStage(
     }
 
     const isClaudeFallback = activeProvider === "anthropic-fallback";
-    const isOpenAIFailover = activeProvider === "openai-failover";
+    const isOpenAIFailover = activeProvider === "openai-failover" || activeProvider === "openai-stored-prompt";
     const isGroqOSSFallback = activeProvider === "groq-oss-fallback";
-    // OpenAI failover uses gpt-4o-search-preview + webSearchPreview tool — still web-grounded.
+    // OpenAI failover (stored prompt or SDK) uses web search — still web-grounded.
     // Claude anthropic-fallback and Groq OSS fallback have no web access — ungrounded.
     const isWebGrounded = !isClaudeFallback && !isGroqOSSFallback;
     const successResult: ValidationResult = {
@@ -505,7 +502,8 @@ export async function runResearchStage(
       warnings: [
         ...validation.warnings,
         ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used — no web access)"] : []),
-        ...(isOpenAIFailover ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
+        ...(activeProvider === "openai-stored-prompt" ? ["Research used OpenAI stored prompt with web search grounding. Perplexity was unavailable."] : []),
+        ...(activeProvider === "openai-failover" ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
         ...(isGroqOSSFallback ? ["Research is NOT web-grounded (Groq Llama 3.3 OSS last-resort used — no web access). Citations cannot be verified. Heightened attorney scrutiny required."] : []),
       ],
       timestamp: new Date().toISOString(),

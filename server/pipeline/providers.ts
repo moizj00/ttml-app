@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, type ToolSet } from "ai";
+import OpenAI from "openai";
 import type { TokenUsage } from "../../shared/types";
 
 // ═══════════════════════════════════════════════════════
@@ -169,4 +170,50 @@ export function calculateCost(modelKey: string, usage: TokenUsage): string {
   const inputCost = (usage.promptTokens / 1_000_000) * pricing.inputPerMillion;
   const outputCost = (usage.completionTokens / 1_000_000) * pricing.outputPerMillion;
   return (inputCost + outputCost).toFixed(6);
+}
+
+const OPENAI_STORED_RESEARCH_PROMPT_ID = "pmpt_69ce00ac398081948f6d0a08e4f3eae206666fe163342fa9";
+const OPENAI_STORED_RESEARCH_PROMPT_VERSION = "1";
+
+export function getNativeOpenAIClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error("[Pipeline] OPENAI_API_KEY is not set — native OpenAI client unavailable");
+  }
+  return new OpenAI({ apiKey });
+}
+
+export async function runOpenAIStoredPromptResearch(userPrompt: string): Promise<{
+  text: string;
+  usage: { promptTokens: number; completionTokens: number };
+}> {
+  const client = getNativeOpenAIClient();
+  const response = await client.responses.create({
+    prompt: {
+      id: OPENAI_STORED_RESEARCH_PROMPT_ID,
+      version: OPENAI_STORED_RESEARCH_PROMPT_VERSION,
+    },
+    input: userPrompt,
+    tools: [{ type: "web_search_preview" }],
+  } as any);
+
+  const outputText = typeof response.output_text === "string"
+    ? response.output_text
+    : Array.isArray(response.output)
+      ? response.output
+          .filter((item: any) => item.type === "message")
+          .flatMap((item: any) => item.content ?? [])
+          .filter((c: any) => c.type === "output_text")
+          .map((c: any) => c.text)
+          .join("\n")
+      : "";
+
+  const usage = (response as any).usage ?? {};
+  return {
+    text: outputText,
+    usage: {
+      promptTokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
+      completionTokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
+    },
+  };
 }
