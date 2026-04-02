@@ -1,1 +1,1 @@
-ALTER TABLE "notifications" ADD COLUMN "category" varchar(50) DEFAULT 'general' NOT NULL;
+ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "category" varchar(50) DEFAULT 'general' NOT NULL;

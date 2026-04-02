@@ -66,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider \
   "http://localhost:3000/api/health" || exit 1
 
-CMD ["node", "--import", "./dist/sentry-init.js", "dist/index.js"]
+CMD ["node", "--import", "./dist/instrument.js", "dist/index.js"]

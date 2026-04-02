@@ -5,4 +5,4 @@
 -- NULL means the email has not been sent yet.
 -- Idempotency: the cron job only sends the email once per letter.
 
-ALTER TABLE "letter_requests" ADD COLUMN "initial_paywall_email_sent_at" timestamp with time zone;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "initial_paywall_email_sent_at" timestamp with time zone;

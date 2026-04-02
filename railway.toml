@@ -12,7 +12,7 @@ dockerfilePath = "Dockerfile"
 # the deploy so a broken schema never reaches production.
 # This runs in the built image so dist/migrate.js and drizzle/ are available.
 preDeployCommand = "node dist/migrate.js"
-startCommand = "node --import ./dist/sentry-init.js dist/index.js"
+startCommand = "node --import ./dist/instrument.js dist/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 

@@ -1,1 +1,1 @@
-ALTER TABLE "letter_requests" ADD COLUMN "pdf_url" text;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "pdf_url" text;

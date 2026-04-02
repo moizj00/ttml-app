@@ -1,1 +1,1 @@
-ALTER TABLE "letter_requests" ADD COLUMN "pipeline_locked_at" timestamp with time zone;
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "pipeline_locked_at" timestamp with time zone;

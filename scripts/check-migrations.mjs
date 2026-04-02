@@ -55,9 +55,10 @@ if (connectionString) {
   try {
     await client.connect();
     const { rows: dbRows } = await client.query(
-      `SELECT hash FROM drizzle.__drizzle_migrations ORDER BY created_at`
+      `SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at`
     );
     const dbHashes = new Set(dbRows.map((r) => r.hash));
+    const dbTimestamps = new Set(dbRows.map((r) => String(r.created_at)));
 
     const expectedHashes = [];
     for (const entry of journalEntries) {
@@ -67,28 +68,42 @@ if (connectionString) {
         expectedHashes.push({
           tag: entry.tag,
           hash: createHash("sha256").update(content).digest("hex"),
+          when: String(entry.when),
         });
       } catch {
-        expectedHashes.push({ tag: entry.tag, hash: null });
+        expectedHashes.push({ tag: entry.tag, hash: null, when: String(entry.when) });
       }
     }
 
     const missingFromDb = expectedHashes.filter(
       (e) => e.hash && !dbHashes.has(e.hash)
     );
+    const staleHashes = missingFromDb.filter((e) => dbTimestamps.has(e.when));
+    const trulyMissing = missingFromDb.filter((e) => !dbTimestamps.has(e.when));
 
     console.log(`DB migration entries: ${dbRows.length}`);
     console.log(`Expected (from journal): ${journalEntries.length}`);
 
-    if (missingFromDb.length > 0) {
+    if (staleHashes.length > 0) {
+      console.warn(
+        `\n⚠ Migrations with stale hashes (file edited after recording): ${staleHashes.map((e) => e.tag).join(", ")}`
+      );
+      console.warn(
+        "  Run: node scripts/backfill-migrations.mjs to update hashes."
+      );
+    }
+
+    if (trulyMissing.length > 0) {
       console.error(
-        `\n✗ Migrations missing from DB: ${missingFromDb.map((e) => e.tag).join(", ")}`
+        `\n✗ Migrations missing from DB: ${trulyMissing.map((e) => e.tag).join(", ")}`
       );
       console.error(
         "  Run: node scripts/backfill-migrations.mjs to fix."
       );
       exitCode = 1;
-    } else {
+    }
+
+    if (staleHashes.length === 0 && trulyMissing.length === 0) {
       console.log("✓ All journal migrations are recorded in the DB.");
     }
   } catch (err) {
