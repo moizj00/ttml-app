@@ -730,9 +730,7 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   email: varchar("email", { length: 320 }).notNull().unique(),
   source: varchar("source", { length: 100 }).default("footer"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (t) => [
-  uniqueIndex("idx_newsletter_subscribers_email").on(t.email),
-]);
+});
 
 export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
 export type InsertNewsletterSubscriber = typeof newsletterSubscribers.$inferInsert;
