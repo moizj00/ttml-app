@@ -20,6 +20,8 @@ import {
 import BrandLogo from "@/components/shared/BrandLogo";
 import HowItWorks from "@/components/HowItWorks";
 import FeaturesSection from "@/components/FeaturesSection";
+import Testimonials from "@/components/Testimonials";
+import Footer from "@/components/shared/Footer";
 import FirstVisitPopup from "@/components/FirstVisitPopup";
 import CategoryPicker from "@/components/CategoryPicker";
 
@@ -451,6 +453,8 @@ export default function Home() {
       {/* Alternating Layout Features */}
       <FeaturesSection />
 
+      <Testimonials />
+
       {/* Pricing - Horizontal Stacked Cards */}
       <section
         id="pricing"
@@ -660,62 +664,7 @@ export default function Home() {
       </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-950 text-slate-400 py-8 sm:py-12 px-4 sm:px-6 lg:px-12 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6">
-          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
-
-          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm font-medium">
-            <button
-              onClick={() => scrollTo("pricing")}
-              className="hover:text-white transition-colors"
-              data-testid="footer-pricing"
-            >
-              Pricing
-            </button>
-            <Link
-              href="/faq"
-              className="hover:text-white transition-colors"
-              data-testid="footer-faq"
-            >
-              FAQ
-            </Link>
-            <Link
-              href="/blog"
-              className="hover:text-white transition-colors"
-              data-testid="footer-blog"
-            >
-              Blog
-            </Link>
-            <Link
-              href="/terms"
-              className="hover:text-white transition-colors"
-              data-testid="footer-terms"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              className="hover:text-white transition-colors"
-              data-testid="footer-privacy"
-            >
-              Privacy
-            </Link>
-            <button
-              onClick={goToLogin}
-              className="hover:text-white transition-colors"
-              data-testid="footer-signin"
-            >
-              Sign In
-            </button>
-          </div>
-
-          <div className="text-sm">
-            &copy; {new Date().getFullYear()} Talk to My Lawyer. All rights
-            reserved.
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
     </>
   );

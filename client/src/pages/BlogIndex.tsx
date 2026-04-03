@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Clock, Calendar, ArrowRight, BookOpen } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import Footer from "@/components/shared/Footer";
 
 const CATEGORIES = [
   { value: "", label: "All Posts" },
@@ -213,20 +214,7 @@ export default function BlogIndex() {
           </div>
         </main>
 
-        <footer className="bg-[#0c2340] text-slate-300 py-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
-            <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
-            <div className="flex flex-wrap gap-6 text-sm">
-              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
-            </div>
-            <div className="text-sm">&copy; {new Date().getFullYear()} Talk to My Lawyer. All rights reserved.</div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </>
   );

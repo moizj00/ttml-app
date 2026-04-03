@@ -36,6 +36,10 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Letter Display**: Dynamic rendering of HTML or plain text.
 - **How It Works**: Scroll-paced animations, SVG gradients, and accessibility considerations respecting `prefers-reduced-motion`.
 - **Platform Animation Foundation**: Reusable CSS keyframes and dashboard animation hooks respecting `prefers-reduced-motion`.
+- **Testimonials Section**: 3-card grid between Features and Pricing on homepage (Sarah M./Austin TX/Contractor, Marcus T./LA/IP, Priya K./SF/Security Deposit).
+- **Shared Footer**: `client/src/components/shared/Footer.tsx` — 4-column layout with brand info, Services links, Company links, and newsletter signup + social media icons (LinkedIn, X). Used on Home, BlogIndex, BlogPost, FAQ.
+- **Blog Author Bylines**: BlogPost.tsx shows shield icon + "Reviewed by licensed attorneys" under author name.
+- **Newsletter Signup**: Footer form posts to `POST /api/newsletter/subscribe` → `newsletter_subscribers` table (id, email unique, source, created_at).
 - **Pipeline Analytics Dashboard**: Admin-only observability dashboard showing pipeline success rates, processing times, citation validation, attorney review turnaround, quality scores, and retry stats.
 
 ### Technical Implementations

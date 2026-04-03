@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/accordion";
 import { ArrowRight, HelpCircle } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import Footer from "@/components/shared/Footer";
 
 const FAQ_CATEGORIES = [
   {
@@ -252,32 +253,7 @@ export default function FAQ() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
-          <div className="flex items-center gap-6 text-slate-400 text-sm">
-            <Link href="/" className="hover:text-white transition-colors">
-              Home
-            </Link>
-            <Link
-              href="/pricing"
-              className="hover:text-white transition-colors"
-            >
-              Pricing
-            </Link>
-            <Link
-              href="/faq"
-              className="hover:text-white transition-colors text-white"
-            >
-              FAQ
-            </Link>
-          </div>
-          <p className="text-slate-500 text-sm">
-            &copy; {new Date().getFullYear()} Talk to My Lawyer.
-          </p>
-        </div>
-      </footer>
+      <Footer />
 
       {/* JSON-LD structured data for SEO */}
       <script

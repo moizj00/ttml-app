@@ -1,8 +1,9 @@
 import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText } from "lucide-react";
+import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText, Shield } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import Footer from "@/components/shared/Footer";
 import { SERVICES } from "./services/serviceData";
 import type { ServiceData } from "./services/serviceData";
 
@@ -191,7 +192,15 @@ export default function BlogPost() {
                 </h1>
 
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mb-8 pb-8 border-b border-slate-100">
-                  <span className="font-medium text-slate-700" data-testid="text-author">{post.authorName}</span>
+                  <div className="flex items-center gap-3" data-testid="text-author">
+                    <div className="w-9 h-9 rounded-full bg-[#0c2340] flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-4 h-4 text-blue-300" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-800 text-sm">{post.authorName || "Talk to My Lawyer Legal Team"}</div>
+                      <div className="text-xs text-slate-500">Reviewed by licensed attorneys</div>
+                    </div>
+                  </div>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
                     {formatDate(post.publishedAt)}
@@ -267,20 +276,7 @@ export default function BlogPost() {
           </div>
         </main>
 
-        <footer className="bg-[#0c2340] text-slate-300 py-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
-            <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
-            <div className="flex flex-wrap gap-6 text-sm">
-              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
-            </div>
-            <div className="text-sm">&copy; {new Date().getFullYear()} Talk to My Lawyer. All rights reserved.</div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </>
   );

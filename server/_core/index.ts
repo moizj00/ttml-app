@@ -38,6 +38,7 @@ import { registerPaywallEmailRoute } from "../paywallEmailCron";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { registerSitemapRoute } from "../sitemapRoute";
+import { registerNewsletterRoute } from "../newsletterRoute";
 import { registerSentryDebugRoute } from "../sentryDebugRoute";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
@@ -257,6 +258,7 @@ async function startServer() {
   registerDraftPdfRoute(app);
   registerBlogInternalRoutes(app);
   registerSitemapRoute(app);
+  registerNewsletterRoute(app);
 
   app.use(
     "/api/trpc",
