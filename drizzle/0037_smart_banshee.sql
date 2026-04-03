@@ -1,0 +1,1 @@
+ALTER TABLE "letter_versions" ADD COLUMN "rag_summary" text;
