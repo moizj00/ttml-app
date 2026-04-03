@@ -18,6 +18,10 @@ export function registerNewsletterRoute(app: Express) {
       }
 
       const db = await getDb();
+      if (!db) {
+        res.status(503).json({ error: "Database unavailable." });
+        return;
+      }
       await db
         .insert(newsletterSubscribers)
         .values({

@@ -40,7 +40,7 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-3 mt-5">
               <a
-                href="https://www.linkedin.com/company/talk-to-my-lawyer"
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
@@ -50,7 +50,7 @@ export default function Footer() {
                 <Linkedin className="w-3.5 h-3.5" />
               </a>
               <a
-                href="https://x.com/talktomylawyer"
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
@@ -60,7 +60,7 @@ export default function Footer() {
                 <Twitter className="w-3.5 h-3.5" />
               </a>
               <a
-                href="https://www.instagram.com/talktomylawyer"
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
@@ -70,7 +70,7 @@ export default function Footer() {
                 <Instagram className="w-3.5 h-3.5" />
               </a>
               <a
-                href="https://www.youtube.com/@talktomylawyer"
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
@@ -80,7 +80,7 @@ export default function Footer() {
                 <Youtube className="w-3.5 h-3.5" />
               </a>
               <a
-                href="https://www.tiktok.com/@talktomylawyer"
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"

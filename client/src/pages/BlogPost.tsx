@@ -206,11 +206,9 @@ export default function BlogPost() {
                     <Calendar className="w-3.5 h-3.5" />
                     {formatDate(post.publishedAt)}
                   </span>
-                  {post.updatedAt && post.updatedAt !== post.publishedAt && (
-                    <span className="flex items-center gap-1 text-xs text-slate-400" data-testid="text-last-updated">
-                      Last updated: {formatDate(post.updatedAt)}
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1 text-xs text-slate-400" data-testid="text-last-updated">
+                    Last updated: {formatDate(post.updatedAt || post.publishedAt)}
+                  </span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
                     {post.readingTimeMinutes} min read
