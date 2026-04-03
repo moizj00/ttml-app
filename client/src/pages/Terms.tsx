@@ -15,7 +15,7 @@ export default function Terms() {
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.talk-to-my-lawyer.com/terms" />
         <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
-        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Terms of Service | Talk to My Lawyer" />
         <meta name="twitter:description" content="Terms of Service for Talk to My Lawyer — professional attorney-reviewed legal letter service." />
         <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />

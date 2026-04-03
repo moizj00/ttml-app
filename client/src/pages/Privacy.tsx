@@ -15,7 +15,7 @@ export default function Privacy() {
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.talk-to-my-lawyer.com/privacy" />
         <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
-        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Privacy Policy | Talk to My Lawyer" />
         <meta name="twitter:description" content="Privacy Policy for Talk to My Lawyer — how we protect your personal information." />
         <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />

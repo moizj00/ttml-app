@@ -3,6 +3,8 @@ import { getPublishedBlogSlugs } from "./db";
 
 const BASE = "https://www.talk-to-my-lawyer.com";
 
+const LAST_UPDATED = new Date().toISOString().split("T")[0];
+
 const SERVICE_SLUGS = [
   "demand-letter",
   "cease-and-desist",
@@ -11,15 +13,15 @@ const SERVICE_SLUGS = [
   "employment-dispute-letter",
 ];
 
-const STATIC_URLS: { loc: string; changefreq: string; priority: string }[] = [
-  { loc: "/", changefreq: "weekly", priority: "1.0" },
-  { loc: "/pricing", changefreq: "monthly", priority: "0.9" },
-  { loc: "/analyze", changefreq: "monthly", priority: "0.8" },
-  { loc: "/faq", changefreq: "monthly", priority: "0.8" },
-  { loc: "/services", changefreq: "monthly", priority: "0.8" },
-  { loc: "/blog", changefreq: "weekly", priority: "0.8" },
-  { loc: "/terms", changefreq: "yearly", priority: "0.3" },
-  { loc: "/privacy", changefreq: "yearly", priority: "0.3" },
+const STATIC_URLS: { loc: string; changefreq: string; priority: string; lastmod: string }[] = [
+  { loc: "/", changefreq: "weekly", priority: "1.0", lastmod: LAST_UPDATED },
+  { loc: "/pricing", changefreq: "monthly", priority: "0.9", lastmod: LAST_UPDATED },
+  { loc: "/analyze", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
+  { loc: "/faq", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
+  { loc: "/services", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
+  { loc: "/blog", changefreq: "weekly", priority: "0.8", lastmod: LAST_UPDATED },
+  { loc: "/terms", changefreq: "yearly", priority: "0.3", lastmod: LAST_UPDATED },
+  { loc: "/privacy", changefreq: "yearly", priority: "0.3", lastmod: LAST_UPDATED },
 ];
 
 function escapeXml(str: string): string {
@@ -46,11 +48,11 @@ export function registerSitemapRoute(app: Express): void {
       const urls: string[] = [];
 
       for (const s of STATIC_URLS) {
-        urls.push(urlEntry(s.loc, s.changefreq, s.priority));
+        urls.push(urlEntry(s.loc, s.changefreq, s.priority, s.lastmod));
       }
 
       for (const slug of SERVICE_SLUGS) {
-        urls.push(urlEntry(`/services/${slug}`, "monthly", "0.7"));
+        urls.push(urlEntry(`/services/${slug}`, "monthly", "0.7", LAST_UPDATED));
       }
 
       for (const post of blogPosts) {

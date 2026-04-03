@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import { Helmet } from "react-helmet-async";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -422,11 +423,29 @@ function Router() {
   );
 }
 
+const ORGANIZATION_JSONLD = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Talk to My Lawyer",
+  "url": "https://www.talk-to-my-lawyer.com",
+  "logo": "https://www.talk-to-my-lawyer.com/logo-main.png",
+  "sameAs": [],
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "email": "support@talk-to-my-lawyer.com",
+    "contactType": "customer service",
+  },
+  "description": "Professional attorney-reviewed legal letters. Demand letters, cease and desist, breach of contract, and more — drafted by AI, reviewed by licensed attorneys.",
+});
+
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
+          <Helmet>
+            <script type="application/ld+json">{ORGANIZATION_JSONLD}</script>
+          </Helmet>
           <Toaster richColors position="top-right" />
           <Router />
         </TooltipProvider>
