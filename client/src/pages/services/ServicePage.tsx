@@ -125,11 +125,11 @@ export default function ServicePage({ service }: { service: ServiceData }) {
           <div className="pt-[80px] md:pt-[88px] bg-gradient-to-b from-slate-50 to-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
               <nav className="flex items-center gap-2 text-sm text-slate-400 py-4" aria-label="Breadcrumb" data-testid="breadcrumbs">
-                <Link href="/" className="hover:text-slate-600 transition-colors">Home</Link>
+                <Link href="/" className="hover:text-slate-600 transition-colors" data-testid="breadcrumb-home">Home</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/services" className="hover:text-slate-600 transition-colors">Services</Link>
+                <Link href="/services" className="hover:text-slate-600 transition-colors" data-testid="breadcrumb-services">Services</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-slate-700 font-medium">{service.title}</span>
+                <span className="text-slate-700 font-medium" data-testid="breadcrumb-current">{service.title}</span>
               </nav>
             </div>
           </div>
@@ -375,12 +375,12 @@ export default function ServicePage({ service }: { service: ServiceData }) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
             <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <div className="flex flex-wrap gap-6 text-sm">
-              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+              <Link href="/services" className="hover:text-white transition-colors" data-testid="footer-services">Services</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors" data-testid="footer-pricing">Pricing</Link>
+              <Link href="/faq" className="hover:text-white transition-colors" data-testid="footer-faq">FAQ</Link>
+              <Link href="/blog" className="hover:text-white transition-colors" data-testid="footer-blog">Blog</Link>
+              <Link href="/terms" className="hover:text-white transition-colors" data-testid="footer-terms">Terms</Link>
+              <Link href="/privacy" className="hover:text-white transition-colors" data-testid="footer-privacy">Privacy</Link>
             </div>
             <div className="text-sm">&copy; {new Date().getFullYear()} Talk to My Lawyer. All rights reserved.</div>
           </div>

@@ -175,12 +175,12 @@ export default function ServicesIndex() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
             <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <div className="flex flex-wrap gap-6 text-sm">
-              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
+              <Link href="/services" className="hover:text-white transition-colors" data-testid="footer-services">Services</Link>
+              <Link href="/pricing" className="hover:text-white transition-colors" data-testid="footer-pricing">Pricing</Link>
+              <Link href="/faq" className="hover:text-white transition-colors" data-testid="footer-faq">FAQ</Link>
+              <Link href="/blog" className="hover:text-white transition-colors" data-testid="footer-blog">Blog</Link>
+              <Link href="/terms" className="hover:text-white transition-colors" data-testid="footer-terms">Terms</Link>
+              <Link href="/privacy" className="hover:text-white transition-colors" data-testid="footer-privacy">Privacy</Link>
             </div>
             <div className="text-sm">&copy; {new Date().getFullYear()} Talk to My Lawyer. All rights reserved.</div>
           </div>

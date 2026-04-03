@@ -105,7 +105,9 @@ export const SERVICES: ServiceData[] = [
       { q: "Do I need a lawyer to get my security deposit back?", a: "Not necessarily. A professionally drafted demand letter is often enough to prompt a landlord to return the deposit. Our service provides an attorney-reviewed letter that cites relevant California law, which adds significant weight to your demand." },
       { q: "What if my landlord still won't return my deposit after the letter?", a: "If the landlord does not comply, you can file a claim in California Small Claims Court for amounts up to $10,000. Your demand letter serves as evidence that you attempted to resolve the matter before going to court." },
     ],
-    relatedArticles: [],
+    relatedArticles: [
+      { slug: "how-to-get-your-security-deposit-back", title: "How to Get Your Security Deposit Back", description: "Learn about California tenant rights and the process for recovering your security deposit." },
+    ],
     blogCategory: "demand-letters",
   },
   {
@@ -130,7 +132,9 @@ export const SERVICES: ServiceData[] = [
       { q: "What remedies can I demand for a breach of contract?", a: "Common remedies include specific performance (demanding the other party fulfill their obligations), compensatory damages (monetary compensation for losses), and in some cases, consequential damages for foreseeable losses resulting from the breach." },
       { q: "How is a breach of contract letter different from a demand letter?", a: "A breach of contract letter specifically addresses the violation of contractual terms and demands compliance or remedy. A demand letter is broader and can address any dispute. Our service tailors the letter type to your specific situation." },
     ],
-    relatedArticles: [],
+    relatedArticles: [
+      { slug: "breach-of-contract-what-to-do", title: "Breach of Contract: What to Do Next", description: "A step-by-step guide to handling a breach of contract in California." },
+    ],
     blogCategory: "contract-disputes",
   },
   {
@@ -155,7 +159,9 @@ export const SERVICES: ServiceData[] = [
       { q: "Do I need to file a complaint with a government agency first?", a: "It depends on the type of claim. For discrimination and harassment claims, you typically need to file with the California Civil Rights Department (CRD) or the EEOC first. For wage claims, you can file with the Labor Commissioner or pursue direct legal action. A demand letter can be sent at any time." },
       { q: "How can a demand letter help with an employment dispute?", a: "A demand letter formally notifies your employer of the violation, creates a documented paper trail, and often prompts resolution without the need for costly litigation. Many employers take formal legal correspondence seriously and prefer to settle rather than face a lawsuit." },
     ],
-    relatedArticles: [],
+    relatedArticles: [
+      { slug: "california-employment-rights", title: "California Employment Rights: What You Need to Know", description: "An overview of employee protections under California labor law." },
+    ],
     blogCategory: "demand-letters",
   },
 ];
