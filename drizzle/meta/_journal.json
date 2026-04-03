@@ -267,6 +267,13 @@
       "when": 1775125579963,
       "tag": "0037_smart_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1775204730761,
+      "tag": "0038_letter_templates",
+      "breakpoints": true
     }
   ]
 }

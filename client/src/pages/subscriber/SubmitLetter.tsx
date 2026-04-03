@@ -115,8 +115,50 @@ export default function SubmitLetter() {
   }, [user?.id]);
   const [step, setStep] = useState(1);
 
+  const templateIdParam = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const tid = params.get("templateId");
+    return tid ? parseInt(tid, 10) : null;
+  }, [search]);
+
+  const [activeTemplateId, setActiveTemplateId] = useState<number | null>(templateIdParam);
+
+  const cachedTemplate = useMemo(() => {
+    if (!templateIdParam) return null;
+    try {
+      const raw = sessionStorage.getItem(`template_prefill_${templateIdParam}`);
+      if (raw) {
+        sessionStorage.removeItem(`template_prefill_${templateIdParam}`);
+        return JSON.parse(raw) as {
+          templateId: number;
+          templateTitle: string;
+          prefillData: Record<string, string | undefined>;
+        };
+      }
+    } catch {}
+    return null;
+  }, [templateIdParam]);
+
+  const { data: templateData, isError: templateFetchError } = trpc.templates.getById.useQuery(
+    { id: templateIdParam! },
+    { enabled: !!templateIdParam && !cachedTemplate, retry: false }
+  );
+
+  const resolvedPrefill = useMemo(() => {
+    if (cachedTemplate) return cachedTemplate.prefillData;
+    if (templateData) return templateData.prefillData as Record<string, string | undefined>;
+    return null;
+  }, [cachedTemplate, templateData]);
+
+  useEffect(() => {
+    if (templateFetchError && !cachedTemplate) {
+      setActiveTemplateId(null);
+    }
+  }, [templateFetchError, cachedTemplate]);
+
   const prefillApplied = useRef(false);
   const prefillFromAnalyzer = useRef(false);
+  const templatePrefillApplied = useRef(false);
   const [form, setForm] = useState<FormData>(() => {
     const { prefill, found } = readAndClearPrefill();
     if (found && prefill) {
@@ -124,7 +166,6 @@ export default function SubmitLetter() {
       prefillFromAnalyzer.current = true;
       return buildInitialFormFromPrefill(prefill);
     }
-    // Check for ?type= URL param from template gallery
     const params = new URLSearchParams(search);
     const typeParam = params.get("type");
     if (typeParam && LETTER_TYPE_CONFIG[typeParam]) {
@@ -134,16 +175,37 @@ export default function SubmitLetter() {
     return INITIAL;
   });
 
+  useEffect(() => {
+    if (resolvedPrefill && !templatePrefillApplied.current) {
+      templatePrefillApplied.current = true;
+      prefillApplied.current = true;
+      const pf = resolvedPrefill;
+      setForm(prev => ({
+        ...prev,
+        ...(pf.letterType && { letterType: pf.letterType }),
+        ...(pf.subject && { subject: pf.subject.slice(0, 500) }),
+        ...(pf.description && { description: pf.description }),
+        ...(pf.desiredOutcome && { desiredOutcome: pf.desiredOutcome }),
+        ...(pf.tonePreference && { tonePreference: pf.tonePreference as FormData["tonePreference"] }),
+        ...(pf.amountOwed && { amountOwed: pf.amountOwed }),
+        ...(pf.jurisdictionState && { jurisdictionState: pf.jurisdictionState }),
+        ...(pf.jurisdictionCity && { jurisdictionCity: pf.jurisdictionCity }),
+        ...(pf.additionalContext && { additionalContext: pf.additionalContext }),
+      }));
+      setShowTemplateBanner(true);
+    }
+  }, [resolvedPrefill]);
+
   const [exhibits, setExhibits] = useState<ExhibitRow[]>([
     { id: "exhibit-0", description: "", file: null },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
+  const [showTemplateBanner, setShowTemplateBanner] = useState(false);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
-  // ── Show prefill banner on mount only when prefill came from document analyzer ──
   useEffect(() => {
     if (prefillFromAnalyzer.current) {
       setShowPrefillBanner(true);
@@ -374,6 +436,7 @@ export default function SubmitLetter() {
         jurisdictionState: form.jurisdictionState,
         jurisdictionCity: form.jurisdictionCity || undefined,
         intakeJson,
+        ...(activeTemplateId ? { templateId: activeTemplateId } : {}),
       });
       const letterId = result.letterId;
       const exhibitFiles = exhibits
@@ -475,6 +538,33 @@ export default function SubmitLetter() {
               onClick={() => setShowPrefillBanner(false)}
               className="shrink-0 border-green-300 text-green-700 hover:bg-green-100"
               data-testid="button-dismiss-prefill-banner"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+        )}
+
+        {/* Template Pre-fill Banner */}
+        {showTemplateBanner && (cachedTemplate || templateData) && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-indigo-600 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-indigo-900" data-testid="text-template-banner-title">
+                  Pre-filled from template: {cachedTemplate?.templateTitle ?? templateData?.title ?? "Template"}
+                </p>
+                <p className="text-xs text-indigo-700">
+                  We've populated the form with scenario data. Review each step and customize as needed.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTemplateBanner(false)}
+              className="shrink-0 border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+              data-testid="button-dismiss-template-banner"
             >
               <X className="w-3.5 h-3.5 mr-1" />
               Dismiss

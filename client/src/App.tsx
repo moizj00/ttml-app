@@ -100,6 +100,7 @@ const AdminLearning = lazyRetry(() => import("./pages/admin/Learning"));
 const AdminBlogEditor = lazyRetry(() => import("./pages/admin/BlogEditor"));
 const AdminPipelineAnalytics = lazyRetry(() => import("./pages/admin/PipelineAnalytics"));
 const AdminQualityDashboard = lazyRetry(() => import("./pages/admin/QualityDashboard"));
+const AdminTemplates = lazyRetry(() => import("./pages/admin/Templates"));
 
 const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
@@ -191,7 +192,7 @@ function Router() {
           </SuspenseFade>
         </ProtectedRoute>
       </Route>
-      <Route path="/templates">
+      <Route path="/library">
         <ProtectedRoute allowedRoles={["subscriber"]}>
           <SuspenseFade fallback={<TemplateGallerySkeleton />}>
             <TemplateGallery />
@@ -390,6 +391,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["admin"]}>
           <SuspenseFade fallback={<AdminDashboardSkeleton />}>
             <AdminQualityDashboard />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/templates">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SuspenseFade fallback={<AdminDashboardSkeleton />}>
+            <AdminTemplates />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

@@ -286,6 +286,7 @@ export const lettersRouter = router({
           priority: z
             .enum(["low", "normal", "high", "urgent"])
             .default("normal"),
+          templateId: z.number().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -338,6 +339,7 @@ export const lettersRouter = router({
             jurisdictionCity: input.jurisdictionCity,
             intakeJson: input.intakeJson,
             priority: input.priority,
+            templateId: input.templateId,
           });
         } catch (createErr) {
           // Usage was already claimed — roll it back before re-throwing

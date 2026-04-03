@@ -68,6 +68,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Deployment**: Railway.
 
 ### Feature Specifications
+- **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with 8 seed scenarios across categories (Unpaid Money, Property Damage, Services Not Rendered). Subscribers browse templates at `/library`, click "Use This Template" to navigate to `/submit?templateId=<id>` which pre-fills the intake form via sessionStorage (no extra API round-trip). Admins manage templates via `/admin/templates` CRUD panel. `templateId` is saved on `letter_requests` for outcome tracking.
 - **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction (California), parties, incident details, desired outcome, and exhibit uploads.
 - **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
 - **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).

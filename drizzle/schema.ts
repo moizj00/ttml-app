@@ -217,6 +217,7 @@ export const letterRequests = pgTable("letter_requests", {
   researchUnverified: boolean("research_unverified").default(false).notNull(),
   qualityDegraded: boolean("quality_degraded").default(false).notNull(),
   pipelineLockedAt: timestamp("pipeline_locked_at", { withTimezone: true }),
+  templateId: integer("template_id").references(() => letterTemplates.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -695,3 +696,28 @@ export const fineTuneRuns = pgTable("fine_tune_runs", {
 
 export type FineTuneRun = typeof fineTuneRuns.$inferSelect;
 export type InsertFineTuneRun = typeof fineTuneRuns.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: letter_templates
+// ═══════════════════════════════════════════════════════
+export const letterTemplates = pgTable("letter_templates", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 200 }).notNull(),
+  scenarioDescription: text("scenario_description").notNull(),
+  category: varchar("category", { length: 100 }).notNull(),
+  tags: text("tags").array().default([]).notNull(),
+  letterType: letterTypeEnum("letter_type").notNull(),
+  prefillData: jsonb("prefill_data").notNull(),
+  active: boolean("active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  contextualNotes: text("contextual_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_letter_templates_active").on(t.active),
+  index("idx_letter_templates_letter_type").on(t.letterType),
+  index("idx_letter_templates_sort_order").on(t.sortOrder),
+]);
+
+export type LetterTemplate = typeof letterTemplates.$inferSelect;
+export type InsertLetterTemplate = typeof letterTemplates.$inferInsert;

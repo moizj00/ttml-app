@@ -1,4 +1,5 @@
 import AppLayout from "@/components/shared/AppLayout";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
@@ -26,6 +27,7 @@ import {
   Search,
   Mic,
   X,
+  Loader2,
 } from "lucide-react";
 
 const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
@@ -146,79 +148,85 @@ const COLOR_MAP: Record<string, { bg: string; icon: string; badge: string; dot: 
   },
 };
 
-const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
-  {
-    label: "Money & Contracts",
-    keys: ["demand-letter", "contract-breach", "debt-collection", "pre-litigation-settlement"],
-  },
-  {
-    label: "Property & Housing",
-    keys: ["eviction-notice", "landlord-tenant", "neighbor-hoa"],
-  },
-  {
-    label: "Workplace & Consumer",
-    keys: ["employment-dispute", "consumer-complaint", "cease-and-desist"],
-  },
-  {
-    label: "Personal & Family",
-    keys: ["personal-injury-demand", "family-law", "estate-probate", "insurance-dispute"],
-  },
-  {
-    label: "Business & IP",
-    keys: ["intellectual-property"],
-  },
-  {
-    label: "Other",
-    keys: ["general-legal"],
-  },
-];
-
-function matchesVoiceQuery(query: string, key: string, config: { label: string; description: string; tip: string }): boolean {
-  const q = query.toLowerCase();
-  const fields = [key, config.label, config.description, config.tip].join(" ").toLowerCase();
-  const words = q.split(/\s+/).filter(Boolean);
-  return words.some(w => fields.includes(w));
-}
-
 export default function TemplateGallery() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [voiceQuery, setVoiceQuery] = useState("");
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
 
-  const handleUseTemplate = (letterType: string) => {
-    navigate(`/submit?type=${encodeURIComponent(letterType)}`);
+  const { data: templates, isLoading } = trpc.templates.listActive.useQuery();
+
+  const categories = useMemo(() => {
+    if (!templates) return [];
+    const cats = Array.from(new Set(templates.map((t) => t.category)));
+    return cats.sort();
+  }, [templates]);
+
+  const allTags = useMemo(() => {
+    if (!templates) return [];
+    const tagSet = new Set<string>();
+    for (const t of templates) {
+      for (const tag of t.tags) tagSet.add(tag);
+    }
+    return Array.from(tagSet).sort();
+  }, [templates]);
+
+  const toggleTag = (tag: string) => {
+    setActiveTags(prev => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
   };
 
-  const allEntries = Object.entries(LETTER_TYPE_CONFIG);
-
   const filtered = useMemo(() => {
-    let entries = allEntries;
+    if (!templates) return [];
+    let items = [...templates];
 
-    if (activeGroup) {
-      const group = CATEGORY_GROUPS.find(g => g.label === activeGroup);
-      if (group) {
-        entries = entries.filter(([key]) => group.keys.includes(key));
-      }
+    if (activeCategory) {
+      items = items.filter(t => t.category === activeCategory);
+    }
+
+    if (activeTags.size > 0) {
+      items = items.filter(t => t.tags.some(tag => activeTags.has(tag)));
     }
 
     const q = search.trim().toLowerCase();
     if (q) {
-      entries = entries.filter(([key, config]) => {
-        const fields = [key, config.label, config.description, config.tip].join(" ").toLowerCase();
+      items = items.filter(t => {
+        const fields = [t.title, t.scenarioDescription, t.category, ...t.tags, t.letterType].join(" ").toLowerCase();
         return fields.includes(q);
       });
     }
 
-    return entries;
-  }, [search, activeGroup]);
+    return items;
+  }, [templates, search, activeCategory, activeTags]);
 
   const voiceMatches = useMemo(() => {
-    if (!voiceQuery.trim()) return [];
-    return allEntries
-      .filter(([key, config]) => matchesVoiceQuery(voiceQuery, key, config as any))
-      .map(([key]) => key);
-  }, [voiceQuery]);
+    if (!voiceQuery.trim() || !templates) return [];
+    const q = voiceQuery.toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+    return templates
+      .filter(t => {
+        const fields = [t.title, t.scenarioDescription, t.category, ...t.tags].join(" ").toLowerCase();
+        return words.some(w => fields.includes(w));
+      })
+      .map(t => t.id);
+  }, [voiceQuery, templates]);
+
+  const handleUseTemplate = (template: typeof filtered[number]) => {
+    sessionStorage.setItem(
+      `template_prefill_${template.id}`,
+      JSON.stringify({
+        templateId: template.id,
+        templateTitle: template.title,
+        prefillData: template.prefillData,
+      })
+    );
+    navigate(`/submit?templateId=${template.id}`);
+  };
 
   const handleVoiceTranscript = (transcript: string) => {
     setVoiceQuery(transcript);
@@ -230,30 +238,38 @@ export default function TemplateGallery() {
     setSearch("");
   };
 
+  const groupedByCategory = useMemo(() => {
+    if (!filtered.length) return [];
+    const groups: Record<string, typeof filtered> = {};
+    for (const t of filtered) {
+      if (!groups[t.category]) groups[t.category] = [];
+      groups[t.category].push(t);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
+
   return (
     <AppLayout
       breadcrumb={[
         { label: "Dashboard", href: "/dashboard" },
-        { label: "Template Gallery" },
+        { label: "Template Library" },
       ]}
     >
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-foreground">Template Gallery</h1>
+          <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">Template Library</h1>
           <p className="text-muted-foreground text-sm">
-            Browse {allEntries.length} letter templates across all major legal conflict types. Search or use voice to find the right one.
+            Browse demand letter templates for common legal scenarios. Select one to pre-fill your intake form.
           </p>
         </div>
 
-        {/* Search + Voice Input Bar */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={e => { setSearch(e.target.value); setVoiceQuery(""); }}
-              placeholder="Search templates — e.g., eviction, unpaid invoice, trademark..."
+              placeholder="Search templates — e.g., unpaid invoice, security deposit, defective product..."
               className="pl-9 pr-8"
               data-testid="input-template-search"
             />
@@ -278,7 +294,6 @@ export default function TemplateGallery() {
           </div>
         </div>
 
-        {/* Voice match banner */}
         {voiceQuery && voiceMatches.length > 0 && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3" data-testid="voice-match-banner">
             <Mic className="w-4 h-4 text-primary mt-0.5 shrink-0" />
@@ -294,108 +309,134 @@ export default function TemplateGallery() {
           </div>
         )}
 
-        {/* Category filter pills */}
         <div className="flex flex-wrap gap-2" data-testid="category-filter-pills">
           <button
-            onClick={() => setActiveGroup(null)}
+            onClick={() => setActiveCategory(null)}
             data-testid="filter-pill-all"
             className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-              activeGroup === null
+              activeCategory === null
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
             }`}
           >
-            All ({allEntries.length})
+            All{templates ? ` (${templates.length})` : ""}
           </button>
-          {CATEGORY_GROUPS.map(group => (
-            <button
-              key={group.label}
-              onClick={() => setActiveGroup(activeGroup === group.label ? null : group.label)}
-              data-testid={`filter-pill-${group.label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`}
-              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                activeGroup === group.label
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {group.label} ({group.keys.length})
-            </button>
-          ))}
+          {categories.map(cat => {
+            const count = templates ? templates.filter(t => t.category === cat).length : 0;
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                data-testid={`filter-pill-${cat.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`}
+                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                  activeCategory === cat
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                }`}
+              >
+                {cat} ({count})
+              </button>
+            );
+          })}
         </div>
 
-        {/* Results count */}
-        {(search || activeGroup) && (
+        {allTags.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Filter by tag</p>
+            <div className="flex flex-wrap gap-1.5" data-testid="tag-filter-pills">
+              {allTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  data-testid={`filter-tag-${tag.replace(/\s+/g, "-")}`}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                    activeTags.has(tag)
+                      ? "bg-primary/10 text-primary border-primary/40"
+                      : "bg-background border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+              {activeTags.size > 0 && (
+                <button
+                  onClick={() => setActiveTags(new Set())}
+                  data-testid="button-clear-tags"
+                  className="text-[11px] px-2 py-1 text-muted-foreground hover:text-foreground underline"
+                >
+                  Clear tags
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(search || activeCategory || activeTags.size > 0) && templates && (
           <p className="text-xs text-muted-foreground" data-testid="text-results-count">
-            Showing {filtered.length} of {allEntries.length} templates
-            {activeGroup ? ` in "${activeGroup}"` : ""}
+            Showing {filtered.length} of {templates?.length ?? 0} templates
+            {activeCategory ? ` in "${activeCategory}"` : ""}
+            {activeTags.size > 0 ? ` tagged "${Array.from(activeTags).join(", ")}"` : ""}
             {search ? ` matching "${search}"` : ""}
           </p>
         )}
 
-        {/* Template grid */}
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16" data-testid="loading-state">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading templates...</span>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-border bg-muted/20 p-10 text-center space-y-2" data-testid="no-results-state">
             <FileText className="w-8 h-8 text-muted-foreground mx-auto" />
             <p className="text-sm font-medium text-foreground">No templates match your search</p>
             <p className="text-xs text-muted-foreground">Try different keywords or clear filters</p>
-            <Button size="sm" variant="outline" onClick={() => { setSearch(""); setVoiceQuery(""); setActiveGroup(null); }} data-testid="button-clear-filters">
+            <Button size="sm" variant="outline" onClick={() => { setSearch(""); setVoiceQuery(""); setActiveCategory(null); setActiveTags(new Set()); }} data-testid="button-clear-filters">
               Clear filters
             </Button>
           </div>
-        ) : activeGroup || search ? (
-          // Flat grid when filtered
+        ) : activeCategory || search ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(([key, config]) => (
+            {filtered.map(t => (
               <TemplateCard
-                key={key}
-                letterKey={key}
-                config={config as any}
+                key={t.id}
+                template={t}
                 onUse={handleUseTemplate}
-                highlighted={voiceMatches.includes(key)}
+                highlighted={voiceMatches.includes(t.id)}
               />
             ))}
           </div>
         ) : (
-          // Grouped view when not filtered
           <div className="space-y-8">
-            {CATEGORY_GROUPS.map(group => {
-              const groupEntries = group.keys
-                .map(k => [k, LETTER_TYPE_CONFIG[k]] as [string, typeof LETTER_TYPE_CONFIG[string]])
-                .filter(([, c]) => c != null);
-              if (groupEntries.length === 0) return null;
-              return (
-                <div key={group.label}>
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-                    <span>{group.label}</span>
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-                      {groupEntries.length}
-                    </span>
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {groupEntries.map(([key, config]) => (
-                      <TemplateCard
-                        key={key}
-                        letterKey={key}
-                        config={config as any}
-                        onUse={handleUseTemplate}
-                        highlighted={voiceMatches.includes(key)}
-                      />
-                    ))}
-                  </div>
+            {groupedByCategory.map(([category, items]) => (
+              <div key={category}>
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                  <span>{category}</span>
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                    {items.length}
+                  </span>
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {items.map(t => (
+                    <TemplateCard
+                      key={t.id}
+                      template={t}
+                      onUse={handleUseTemplate}
+                      highlighted={voiceMatches.includes(t.id)}
+                    />
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Start blank CTA */}
         <div className="rounded-xl border border-border bg-muted/30 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1 space-y-1">
             <p className="text-sm font-semibold text-foreground">
               Prefer to start blank?
             </p>
             <p className="text-xs text-muted-foreground">
-              Skip the gallery and fill out the form from scratch — you can still select a letter type in Step 1.
+              Skip the library and fill out the form from scratch — you can still select a letter type in Step 1.
             </p>
           </div>
           <Button
@@ -412,25 +453,18 @@ export default function TemplateGallery() {
   );
 }
 
-interface TemplateCardProps {
-  letterKey: string;
-  config: {
-    label: string;
-    description: string;
-    targetWordCount: number;
-    tip: string;
-  };
-  onUse: (key: string) => void;
+function TemplateCard<T extends { id: number; title: string; scenarioDescription: string; category: string; tags: string[]; letterType: string; prefillData: unknown; sortOrder: number }>({ template, onUse, highlighted }: {
+  template: T;
+  onUse: (template: T) => void;
   highlighted?: boolean;
-}
-
-function TemplateCard({ letterKey, config, onUse, highlighted }: TemplateCardProps) {
-  const colors = COLOR_MAP[letterKey] ?? COLOR_MAP["general-legal"];
-  const icon = TEMPLATE_ICONS[letterKey] ?? <FileText className="w-6 h-6" />;
+}) {
+  const colors = COLOR_MAP[template.letterType] ?? COLOR_MAP["general-legal"];
+  const icon = TEMPLATE_ICONS[template.letterType] ?? <FileText className="w-6 h-6" />;
+  const typeConfig = LETTER_TYPE_CONFIG[template.letterType];
 
   return (
     <div
-      data-testid={`template-card-${letterKey}`}
+      data-testid={`template-card-${template.id}`}
       className={`group relative flex flex-col rounded-2xl border bg-card transition-all duration-200 overflow-hidden cursor-default
         ${highlighted
           ? "border-primary shadow-md shadow-primary/10 ring-1 ring-primary/20"
@@ -446,41 +480,51 @@ function TemplateCard({ letterKey, config, onUse, highlighted }: TemplateCardPro
         </div>
       )}
 
-      {/* Card header with color bg */}
       <div className={`px-5 pt-5 pb-3 ${colors.bg}`}>
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 ${colors.icon} bg-white/60 dark:bg-black/20 border border-white/40 dark:border-white/10`}>
           {icon}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${colors.badge}`}>
-            {config.label}
+            {template.category}
           </span>
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-            <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
-            ~{config.targetWordCount}w
-          </span>
+          {typeConfig && (
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+              <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+              {typeConfig.label}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Card body */}
       <div className="flex flex-col flex-1 px-5 py-4 space-y-3">
         <div className="space-y-1.5 flex-1">
           <p className="text-sm font-medium text-foreground leading-snug">
-            {config.description}
+            {template.title}
           </p>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {config.tip}
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+            {template.scenarioDescription}
           </p>
         </div>
 
+        {template.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {template.tags.slice(0, 4).map(tag => (
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         <Button
           size="sm"
-          onClick={() => onUse(letterKey)}
-          data-testid={`button-use-template-${letterKey}`}
+          onClick={() => onUse(template)}
+          data-testid={`button-use-template-${template.id}`}
           className="w-full gap-1.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
           variant="outline"
         >
-          Use Template
+          Use This Template
           <ArrowRight className="w-3.5 h-3.5" />
         </Button>
       </div>

@@ -50,7 +50,7 @@ function getNavItems(role: string): NavItem[] {
       },
       {
         label: "Template Gallery",
-        href: "/templates",
+        href: "/library",
         icon: <Library className="w-4 h-4" />,
       },
       {
@@ -169,6 +169,11 @@ function getNavItems(role: string): NavItem[] {
         label: "Learning",
         href: "/admin/learning",
         icon: <Brain className="w-4 h-4" />,
+      },
+      {
+        label: "Template Library",
+        href: "/admin/templates",
+        icon: <Library className="w-4 h-4" />,
       },
       {
         label: "Blog",

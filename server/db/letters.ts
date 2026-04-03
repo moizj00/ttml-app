@@ -37,6 +37,7 @@ export async function createLetterRequest(data: {
   jurisdictionCity?: string;
   intakeJson?: unknown;
   priority?: "low" | "normal" | "high" | "urgent";
+  templateId?: number;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -66,6 +67,7 @@ export async function createLetterRequest(data: {
       priority: data.priority ?? "normal",
       lastStatusChangedAt: new Date(),
       submitterRoleId,
+      templateId: data.templateId ?? null,
     })
     .returning({ insertId: letterRequests.id });
   return result[0];

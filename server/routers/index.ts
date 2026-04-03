@@ -11,6 +11,7 @@ import { affiliateRouter } from "./affiliate";
 import { profileRouter } from "./profile";
 import { documentsRouter } from "./documents";
 import { blogRouter } from "./blog";
+import { templatesRouter } from "./templates";
 
 export const appRouter = router({
   system: systemRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   profile: profileRouter,
   documents: documentsRouter,
   blog: blogRouter,
+  templates: templatesRouter,
 });
 
 export type AppRouter = typeof appRouter;
