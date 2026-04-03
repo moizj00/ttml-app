@@ -3,6 +3,12 @@ Allow: /
 Allow: /blog
 Allow: /blog/
 Allow: /blog/*
+Allow: /services
+Allow: /services/
+Allow: /services/*
+Allow: /pricing
+Allow: /analyze
+Allow: /faq
 
 Disallow: /admin
 Disallow: /admin/

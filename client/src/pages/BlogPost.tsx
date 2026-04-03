@@ -112,16 +112,29 @@ export default function BlogPost() {
             "@type": "Article",
             "headline": post.title,
             "description": post.metaDescription ?? post.excerpt,
-            "author": { "@type": "Organization", "name": post.authorName },
+            "author": { "@type": "Organization", "name": "Talk to My Lawyer Legal Team" },
             "publisher": {
               "@type": "Organization",
               "name": "Talk to My Lawyer",
               "url": "https://www.talk-to-my-lawyer.com",
+              "logo": {
+                "@type": "ImageObject",
+                "url": "https://www.talk-to-my-lawyer.com/logo-main.png",
+              },
             },
             "datePublished": post.publishedAt,
             "dateModified": post.updatedAt,
             "url": `https://www.talk-to-my-lawyer.com/blog/${post.slug}`,
             "mainEntityOfPage": `https://www.talk-to-my-lawyer.com/blog/${post.slug}`,
+          })}</script>
+          <script type="application/ld+json">{JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.talk-to-my-lawyer.com/" },
+              { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.talk-to-my-lawyer.com/blog" },
+              { "@type": "ListItem", "position": 3, "name": post.title, "item": `https://www.talk-to-my-lawyer.com/blog/${post.slug}` },
+            ],
           })}</script>
         </Helmet>
       )}

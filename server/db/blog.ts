@@ -1,6 +1,16 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { blogPosts } from "../../drizzle/schema";
 import { getDb, getReadDb } from "./core";
+
+export async function getPublishedBlogSlugs(): Promise<{ slug: string; updatedAt: Date | null; publishedAt: Date | null }[]> {
+  const db = await getReadDb();
+  if (!db) return [];
+  return db
+    .select({ slug: blogPosts.slug, updatedAt: blogPosts.updatedAt, publishedAt: blogPosts.publishedAt })
+    .from(blogPosts)
+    .where(eq(blogPosts.status, "published"))
+    .orderBy(asc(blogPosts.slug));
+}
 
 export async function getPublishedBlogPosts(options: { category?: string; limit?: number; offset?: number } = {}) {
   const db = await getReadDb();
