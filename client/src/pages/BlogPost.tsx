@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText, Shield } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
 import Footer from "@/components/shared/Footer";
+import BlogNewsletter from "@/components/BlogNewsletter";
 import { SERVICES } from "./services/serviceData";
 import type { ServiceData } from "./services/serviceData";
 
@@ -197,7 +198,7 @@ export default function BlogPost() {
                       <Shield className="w-4 h-4 text-blue-300" />
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-800 text-sm">{post.authorName || "Talk to My Lawyer Legal Team"}</div>
+                      <div className="font-semibold text-slate-800 text-sm">Talk to My Lawyer Legal Team</div>
                       <div className="text-xs text-slate-500">Reviewed by licensed attorneys</div>
                     </div>
                   </div>
@@ -205,6 +206,11 @@ export default function BlogPost() {
                     <Calendar className="w-3.5 h-3.5" />
                     {formatDate(post.publishedAt)}
                   </span>
+                  {post.updatedAt && post.updatedAt !== post.publishedAt && (
+                    <span className="flex items-center gap-1 text-xs text-slate-400" data-testid="text-last-updated">
+                      Last updated: {formatDate(post.updatedAt)}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
                     {post.readingTimeMinutes} min read
@@ -232,6 +238,8 @@ export default function BlogPost() {
                     {cta.text}
                   </Link>
                 </div>
+
+                <BlogNewsletter />
 
                 {/* Related Services */}
                 {(() => {
