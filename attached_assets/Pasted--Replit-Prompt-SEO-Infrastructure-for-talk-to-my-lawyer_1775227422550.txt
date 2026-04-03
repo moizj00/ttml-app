@@ -1,0 +1,264 @@
+# Replit Prompt: SEO Infrastructure for talk-to-my-lawyer.com
+
+## CONTEXT
+This is a Next.js application for Talk to My Lawyer (TTML) — a legal letter drafting service deployed on Vercel. The site currently has: a homepage with hero/features/pricing/FAQ sections, a /blog page with 2 short posts ("What Is a Demand Letter" and "Cease and Desist Letters Explained"), /pricing, /faq, /analyze, /terms, /privacy pages. The site uses Supabase for the database and Stripe for payments.
+
+We are launching an SEO and content marketing campaign. The site needs the following changes to support organic search traffic and conversions. Do ALL of the following:
+
+---
+
+## 1. CREATE DEDICATED SERVICE LANDING PAGES
+
+Create individual, SEO-optimized landing pages for each letter type. Each page should follow this structure: hero section with H1 targeting the primary keyword, 3-step process explanation (Submit Details → Attorney Reviews → Letter Delivered), common situations/use cases section, pricing comparison vs traditional attorneys ($200 vs $500+/hr), FAQ section specific to that letter type, strong CTA button linking to the signup/intake flow, and breadcrumb navigation.
+
+Create these pages:
+
+- `/services/demand-letter` — Primary keyword: "demand letter service"
+  - H1: "Professional Demand Letter Service — Attorney-Reviewed"
+  - Use cases: unpaid debts, contractor disputes, security deposits, unpaid invoices, personal loans
+
+- `/services/cease-and-desist` — Primary keyword: "cease and desist letter service"
+  - H1: "Cease and Desist Letter Service — Stop Harmful Activity"
+  - Use cases: IP theft, harassment, defamation, unauthorized use of content, trademark infringement
+
+- `/services/security-deposit-letter` — Primary keyword: "security deposit demand letter"
+  - H1: "Security Deposit Demand Letter — Get Your Deposit Back"
+  - Use cases: landlord won't return deposit, wrongful deductions, missed return deadline
+
+- `/services/breach-of-contract-letter` — Primary keyword: "breach of contract letter"
+  - H1: "Breach of Contract Letter — Enforce Your Agreement"
+  - Use cases: vendor non-performance, service agreement violations, partnership breaches
+
+- `/services/employment-dispute-letter` — Primary keyword: "employment dispute letter"
+  - H1: "Employment Dispute Letter — Protect Your Workplace Rights"
+  - Use cases: unpaid wages, wrongful termination, hostile work environment, retaliation
+
+- `/services` — Index page listing all letter types as cards linking to individual pages
+
+Add a "Services" link to the main navigation between "Features" and "Pricing."
+
+Each service page should reuse the site's existing design system (same nav, footer, button styles, color scheme). Include the same trust badges from the homepage (SOC 2 Compliant, Enterprise Security, End-to-End Encrypted).
+
+---
+
+## 2. ADD SCHEMA MARKUP (JSON-LD)
+
+Add JSON-LD structured data to the following pages:
+
+**Every page (in the root layout):**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Talk to My Lawyer",
+  "url": "https://www.talk-to-my-lawyer.com",
+  "logo": "[use the existing logo URL]",
+  "description": "Professional attorney-reviewed legal letters delivered in minutes.",
+  "sameAs": []
+}
+```
+
+**Each service landing page:**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "LegalService",
+  "name": "Demand Letter Service",
+  "description": "Professional, attorney-reviewed demand letters starting at $200.",
+  "url": "https://www.talk-to-my-lawyer.com/services/demand-letter",
+  "provider": {
+    "@type": "Organization",
+    "name": "Talk to My Lawyer"
+  },
+  "areaServed": "US",
+  "serviceType": "Legal Letter Drafting"
+}
+```
+
+**The /faq page and any page with FAQ sections:**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is Talk to My Lawyer?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "[use the existing FAQ answer text]"
+      }
+    }
+  ]
+}
+```
+
+**Each blog post:**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "[post title]",
+  "datePublished": "[post date]",
+  "dateModified": "[post date]",
+  "author": {
+    "@type": "Organization",
+    "name": "Talk to My Lawyer Legal Team"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Talk to My Lawyer"
+  }
+}
+```
+
+**Blog post pages with FAQ sections — add BreadcrumbList:**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.talk-to-my-lawyer.com"},
+    {"@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.talk-to-my-lawyer.com/blog"},
+    {"@type": "ListItem", "position": 3, "name": "[Post Title]"}
+  ]
+}
+```
+
+---
+
+## 3. ADD EMAIL CAPTURE / NEWSLETTER SIGNUP
+
+Add a newsletter signup component that appears in two places:
+
+**A. Blog sidebar or bottom-of-post CTA:**
+- Heading: "Free Legal Tips in Your Inbox"
+- Subtext: "Get weekly insights on protecting your rights — plus a free Demand Letter Checklist."
+- Email input field + "Subscribe" button
+- Small text: "No spam. Unsubscribe anytime."
+
+**B. Site-wide footer (above the copyright line):**
+- Compact version: email input + "Get Legal Tips" button in a single row
+
+For now, store email signups in a new Supabase table called `newsletter_subscribers` with columns: `id` (uuid), `email` (text, unique), `source` (text — e.g., "blog_sidebar", "footer"), `created_at` (timestamptz). If you cannot access Supabase directly, create the signup form UI and have it POST to an API route at `/api/newsletter/subscribe` that validates the email and returns success. We will connect the database later.
+
+---
+
+## 4. ADD SOCIAL MEDIA LINKS TO FOOTER
+
+Add social media icon links to the footer. Use simple SVG icons or lucide-react icons. Add these platforms with placeholder `#` hrefs for now (we will fill in real URLs later):
+
+- LinkedIn
+- Instagram
+- X (Twitter)
+- TikTok
+- YouTube
+
+Place them in a row in the footer, between the nav links and the copyright line.
+
+---
+
+## 5. UPDATE THE SITEMAP
+
+Update `/sitemap.xml` (or the sitemap generation logic) to include all new pages:
+
+- https://www.talk-to-my-lawyer.com/
+- https://www.talk-to-my-lawyer.com/pricing
+- https://www.talk-to-my-lawyer.com/analyze
+- https://www.talk-to-my-lawyer.com/faq
+- https://www.talk-to-my-lawyer.com/terms
+- https://www.talk-to-my-lawyer.com/privacy
+- https://www.talk-to-my-lawyer.com/blog
+- https://www.talk-to-my-lawyer.com/blog/what-is-a-demand-letter
+- https://www.talk-to-my-lawyer.com/blog/cease-and-desist-letters-explained
+- https://www.talk-to-my-lawyer.com/services
+- https://www.talk-to-my-lawyer.com/services/demand-letter
+- https://www.talk-to-my-lawyer.com/services/cease-and-desist
+- https://www.talk-to-my-lawyer.com/services/security-deposit-letter
+- https://www.talk-to-my-lawyer.com/services/breach-of-contract-letter
+- https://www.talk-to-my-lawyer.com/services/employment-dispute-letter
+
+Make the sitemap dynamic so it automatically includes new blog posts as they are added. Each URL should include `<lastmod>` with the current date.
+
+---
+
+## 6. ADD META TAGS TO ALL PAGES
+
+Ensure every page has proper meta tags using Next.js metadata API. Each page needs:
+
+- `<title>` — under 60 characters, includes primary keyword
+- `<meta name="description">` — under 155 characters, includes keyword + CTA
+- Open Graph tags: `og:title`, `og:description`, `og:url`, `og:type`, `og:image`
+- Twitter card tags: `twitter:card` (summary_large_image), `twitter:title`, `twitter:description`
+
+Example for the demand letter service page:
+- Title: "Demand Letter Service — Attorney-Reviewed | Talk to My Lawyer"
+- Description: "Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at $200. Delivered in minutes, not weeks."
+
+Example for the blog index:
+- Title: "Legal Blog — Talk to My Lawyer | Expert Legal Insights"
+- Description: "Expert insights on demand letters, cease & desist, dispute resolution, and protecting your rights. Written in plain English."
+
+---
+
+## 7. ADD TESTIMONIALS SECTION TO HOMEPAGE
+
+Add a testimonials/social proof section to the homepage between the Features section and the Pricing section. Include these testimonials:
+
+Testimonial 1:
+- Quote: "I was owed $4,200 by a contractor who kept dodging my calls. Within a week of sending my demand letter through Talk to My Lawyer, I had a check in hand."
+- Name: Sarah M.
+- Location: Austin, TX
+- Use case: Contractor Payment Dispute
+
+Testimonial 2:
+- Quote: "I tried writing my own cease and desist letter but it didn't work. The attorney-reviewed version from TTML got the other party to stop within days."
+- Name: Marcus T.
+- Location: Los Angeles, CA
+- Use case: Intellectual Property
+
+Testimonial 3:
+- Quote: "My landlord kept my entire $2,800 security deposit for 'cleaning fees.' One demand letter later, I got every cent back."
+- Name: Priya K.
+- Location: San Francisco, CA
+- Use case: Security Deposit Recovery
+
+Style these as cards with a quote icon, the quote text, the person's name, location, and use case tag. Use the existing site color scheme (navy, blue, gold accents).
+
+---
+
+## 8. ADD AUTHOR BYLINES TO BLOG POSTS
+
+Update the blog post template to show an author section. Instead of just "Talk to My Lawyer", display:
+
+- Author name: "Talk to My Lawyer Legal Team"
+- Subtext: "Reviewed by licensed attorneys"
+- A small shield/verified icon next to the author name
+
+This is important for Google's E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness) requirements for legal content.
+
+Also add a "Last updated: [date]" line below the publish date on each blog post.
+
+---
+
+## 9. ADD INTERNAL LINKING BETWEEN PAGES
+
+Add a "Related Services" section at the bottom of each blog post (above the CTA) that links to relevant service pages. For example:
+
+- On the demand letter blog post → link to /services/demand-letter
+- On the cease and desist blog post → link to /services/cease-and-desist
+
+Add a "Related Articles" section at the bottom of each service landing page that links to relevant blog posts.
+
+Add the service pages to the main navigation under a "Services" dropdown.
+
+---
+
+## IMPORTANT NOTES
+
+- Match the existing design system exactly — same fonts, colors, spacing, components
+- All new pages must be server-side rendered (not client-only) for SEO crawlability
+- Do not break any existing functionality
+- All new pages should be responsive / mobile-friendly
+- Use the existing nav and footer components — just add new links to them
+- The site's brand colors are: Navy (#1B2A4A), Blue (#2C4A7C), Gold (#D4A853), Light Background (#F4F4F7)
