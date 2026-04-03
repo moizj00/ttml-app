@@ -85,6 +85,7 @@ export default function BlogIndex() {
             <BrandLogo href="/" size="lg" hideWordmarkOnMobile />
             <div className="hidden md:flex items-center gap-7">
               <Link href="/" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-home">Home</Link>
+              <Link href="/services" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-services">Services</Link>
               <Link href="/pricing" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-pricing">Pricing</Link>
               <Link href="/analyze" className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors" data-testid="nav-analyze">Doc Analyzer</Link>
               <Link href="/blog" className="text-[13px] font-semibold text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-blog">Blog</Link>
@@ -216,6 +217,7 @@ export default function BlogIndex() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
             <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <div className="flex flex-wrap gap-6 text-sm">
+              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
               <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>

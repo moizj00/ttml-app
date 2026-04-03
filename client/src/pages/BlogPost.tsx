@@ -1,8 +1,10 @@
 import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Clock, Calendar, ArrowLeft, Share2, ChevronRight } from "lucide-react";
+import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import { SERVICES } from "./services/serviceData";
+import type { ServiceData } from "./services/serviceData";
 
 const CATEGORY_LABELS: Record<string, string> = {
   "demand-letters": "Demand Letters",
@@ -129,15 +131,16 @@ export default function BlogPost() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 h-[64px] md:h-[72px] flex items-center justify-between">
             <BrandLogo href="/" size="lg" hideWordmarkOnMobile />
             <div className="hidden md:flex items-center gap-7">
-              <Link href="/" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors">Home</Link>
-              <Link href="/pricing" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors">Pricing</Link>
-              <Link href="/analyze" className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors">Doc Analyzer</Link>
-              <Link href="/blog" className="text-[13px] font-semibold text-slate-900 tracking-wide uppercase transition-colors">Blog</Link>
+              <Link href="/" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-home">Home</Link>
+              <Link href="/services" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-services">Services</Link>
+              <Link href="/pricing" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-pricing">Pricing</Link>
+              <Link href="/analyze" className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors" data-testid="nav-analyze">Doc Analyzer</Link>
+              <Link href="/blog" className="text-[13px] font-semibold text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-blog">Blog</Link>
               <div className="w-px h-4 bg-slate-200" />
-              <button onClick={goToLogin} className="text-[13px] font-semibold text-slate-600 hover:text-slate-900 transition-colors">Sign In</button>
-              <button onClick={goToLogin} className="bg-[#0c2340] text-white text-[13px] font-semibold px-5 py-2 rounded-lg hover:bg-[#163a5f] transition-colors shadow-sm">Get Started</button>
+              <button onClick={goToLogin} className="text-[13px] font-semibold text-slate-600 hover:text-slate-900 transition-colors" data-testid="nav-signin">Sign In</button>
+              <button onClick={goToLogin} className="bg-[#0c2340] text-white text-[13px] font-semibold px-5 py-2 rounded-lg hover:bg-[#163a5f] transition-colors shadow-sm" data-testid="nav-getstarted">Get Started</button>
             </div>
-            <button onClick={goToLogin} className="md:hidden bg-[#0c2340] text-white text-[13px] font-semibold px-4 py-2 rounded-lg">Get Started</button>
+            <button onClick={goToLogin} className="md:hidden bg-[#0c2340] text-white text-[13px] font-semibold px-4 py-2 rounded-lg" data-testid="nav-mobile-getstarted">Get Started</button>
           </div>
         </nav>
 
@@ -208,6 +211,38 @@ export default function BlogPost() {
                   </Link>
                 </div>
 
+                {/* Related Services */}
+                {(() => {
+                  const related: ServiceData[] = SERVICES.filter(
+                    (s) => s.blogCategory === post.category
+                  );
+                  if (related.length === 0) return null;
+                  return (
+                    <div className="mt-12 p-6 bg-slate-50 rounded-xl border border-slate-200" data-testid="related-services">
+                      <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                        Related Services
+                      </h3>
+                      <div className="space-y-3">
+                        {related.map((s) => (
+                          <Link
+                            key={s.slug}
+                            href={`/services/${s.slug}`}
+                            className="flex items-center justify-between p-4 bg-white rounded-lg border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all group"
+                            data-testid={`related-service-${s.slug}`}
+                          >
+                            <div>
+                              <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors text-sm">{s.title}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">{s.metaDescription.slice(0, 80)}...</div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-blue-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="mt-8 pt-6 border-t border-slate-100">
                   <Link href="/blog" className="text-blue-600 hover:underline font-medium text-sm" data-testid="link-back-to-blog">
                     <ArrowLeft className="w-4 h-4 inline mr-1" />
@@ -223,6 +258,7 @@ export default function BlogPost() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4">
             <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <div className="flex flex-wrap gap-6 text-sm">
+              <Link href="/services" className="hover:text-white transition-colors">Services</Link>
               <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
               <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link href="/blog" className="hover:text-white transition-colors">Blog</Link>

@@ -171,6 +171,13 @@ export default function Home() {
             >
               Features
             </button>
+            <Link
+              href="/services"
+              className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors"
+              data-testid="nav-services"
+            >
+              Services
+            </Link>
             <button
               onClick={() => scrollTo("pricing")}
               className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors"
@@ -243,6 +250,14 @@ export default function Home() {
               >
                 Features
               </button>
+              <Link
+                href="/services"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-semibold text-slate-700 py-2 uppercase tracking-wide text-left"
+                data-testid="mobile-services"
+              >
+                Services
+              </Link>
               <button
                 onClick={() => {
                   scrollTo("pricing");

@@ -105,6 +105,9 @@ const AdminTemplates = lazyRetry(() => import("./pages/admin/Templates"));
 const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
 
+const ServicesIndex = lazyRetry(() => import("./pages/services/ServicesIndex"));
+const ServiceRoute = lazyRetry(() => import("./pages/services/ServiceRoute"));
+
 function Router() {
   return (
     <Switch>
@@ -143,6 +146,16 @@ function Router() {
       <Route path="/blog/:slug">
         <SuspenseFade fallback={<PublicPageSkeleton />}>
           <BlogPost />
+        </SuspenseFade>
+      </Route>
+      <Route path="/services">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <ServicesIndex />
+        </SuspenseFade>
+      </Route>
+      <Route path="/services/:slug">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <ServiceRoute />
         </SuspenseFade>
       </Route>
 
