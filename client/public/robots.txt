@@ -22,5 +22,11 @@ Disallow: /employee
 Disallow: /subscriber
 Disallow: /profile
 Disallow: /onboarding
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /verify-email
+Disallow: /reset-password
+Disallow: /accept-invitation
 
 Sitemap: https://www.talk-to-my-lawyer.com/sitemap.xml

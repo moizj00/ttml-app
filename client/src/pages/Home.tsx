@@ -137,24 +137,106 @@ export default function Home() {
         "query-input": "required name=search_term_string",
       },
     },
+    {
+      "@context": "https://schema.org",
+      "@type": "LegalService",
+      name: "Talk to My Lawyer",
+      url: "https://www.talk-to-my-lawyer.com",
+      description: "Attorney-drafted legal letters at a flat fee — demand letters, cease and desist, breach of contract, and more. Your first letter is completely free.",
+      areaServed: "California",
+      serviceType: [
+        "Demand Letter",
+        "Cease and Desist Letter",
+        "Breach of Contract Letter",
+        "Debt Collection Letter",
+        "Security Deposit Demand Letter",
+        "Harassment Cease and Desist Letter",
+        "Defamation Cease and Desist Letter",
+        "Insurance Claim Demand Letter",
+      ],
+      hasOfferCatalog: {
+        "@type": "OfferCatalog",
+        name: "Legal Letter Plans",
+        itemListElement: [
+          {
+            "@type": "Offer",
+            name: "Single Letter",
+            description: "One attorney-drafted legal letter",
+            price: "200",
+            priceCurrency: "USD",
+            eligibleQuantity: {
+              "@type": "QuantitativeValue",
+              value: 1,
+              unitText: "letter",
+            },
+          },
+          {
+            "@type": "Offer",
+            name: "Monthly Subscription",
+            description: "Ongoing legal letter service billed monthly",
+            price: "200",
+            priceCurrency: "USD",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "200",
+              priceCurrency: "USD",
+              referenceQuantity: {
+                "@type": "QuantitativeValue",
+                value: 1,
+                unitCode: "MON",
+              },
+            },
+          },
+          {
+            "@type": "Offer",
+            name: "Annual Subscription",
+            description: "Ongoing legal letter service billed annually",
+            price: "2000",
+            priceCurrency: "USD",
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: "2000",
+              priceCurrency: "USD",
+              referenceQuantity: {
+                "@type": "QuantitativeValue",
+                value: 1,
+                unitCode: "ANN",
+              },
+            },
+          },
+        ],
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: "https://www.talk-to-my-lawyer.com/",
+        },
+      ],
+    },
   ];
 
   return (
     <>
     <Helmet>
-      <title>Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters</title>
-      <meta name="description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is completely free." />
+      <title>Attorney-Drafted Legal Letters — Demand Letters &amp; Cease and Desist | Talk to My Lawyer</title>
+      <meta name="description" content="Get attorney-drafted legal letters in minutes — flat fee, no hourly billing. Demand letters, cease and desist, breach of contract, and more. Your first letter is completely free." />
       <link rel="canonical" href="https://www.talk-to-my-lawyer.com/" />
-      <meta property="og:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
-      <meta property="og:description" content="Get professional, attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract, and more — your first letter is free." />
+      <meta property="og:title" content="Attorney-Drafted Legal Letters — Demand Letters &amp; Cease and Desist | Talk to My Lawyer" />
+      <meta property="og:description" content="Get attorney-drafted legal letters in minutes — flat fee, no hourly billing. Demand letters, cease and desist, breach of contract, and more. Your first letter is completely free." />
       <meta property="og:type" content="website" />
       <meta property="og:url" content="https://www.talk-to-my-lawyer.com/" />
       <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content="Talk to My Lawyer — Professional Attorney-Reviewed Legal Letters" />
-      <meta name="twitter:description" content="Professional attorney-reviewed legal letters in minutes. Demand letters, cease and desist, breach of contract — your first letter is free." />
+      <meta name="twitter:title" content="Attorney-Drafted Legal Letters — Demand Letters &amp; Cease and Desist | Talk to My Lawyer" />
+      <meta name="twitter:description" content="Attorney-drafted legal letters at a flat fee — demand letters, cease and desist, breach of contract, and more. Your first letter is completely free." />
       <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
       <script type="application/ld+json">{JSON.stringify(homeJsonLd)}</script>
     </Helmet>
