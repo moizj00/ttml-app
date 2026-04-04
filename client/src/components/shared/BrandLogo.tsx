@@ -68,7 +68,7 @@ function BrandLogoContent({
           height={config.h}
           style={{ height: config.h }}
           loading={loading}
-          className="object-contain flex-shrink-0 hidden md:block"
+          className="object-contain flex-shrink-0 hidden md:block pt-[1px] pb-[1px]"
         />
       </>
     );
