@@ -5,22 +5,30 @@ import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText,
 import BrandLogo from "@/components/shared/BrandLogo";
 import Footer from "@/components/shared/Footer";
 import BlogNewsletter from "@/components/BlogNewsletter";
-import { SERVICES } from "./services/serviceData";
+import { SERVICES, CATEGORY_TO_SERVICES } from "./services/serviceData";
 import type { ServiceData } from "./services/serviceData";
 
 const CATEGORY_LABELS: Record<string, string> = {
   "demand-letters": "Demand Letters",
   "cease-and-desist": "Cease & Desist",
   "contract-disputes": "Contract Disputes",
+  "employment-disputes": "Employment",
+  "landlord-tenant": "Landlord-Tenant",
+  "personal-injury": "Personal Injury",
+  "intellectual-property": "IP & Trademark",
   "document-analysis": "Document Analysis",
   "pricing-and-roi": "Pricing & ROI",
   "general": "General",
 };
 
 const CATEGORY_CTA: Record<string, { text: string; href: string }> = {
-  "demand-letters": { text: "Get Your Demand Letter", href: "/" },
-  "cease-and-desist": { text: "Send a Cease & Desist", href: "/" },
-  "contract-disputes": { text: "Draft a Breach of Contract Letter", href: "/" },
+  "demand-letters": { text: "Get Your Demand Letter", href: "/services/demand-letter" },
+  "cease-and-desist": { text: "Send a Cease & Desist", href: "/services/cease-and-desist" },
+  "contract-disputes": { text: "Draft a Breach of Contract Letter", href: "/services/breach-of-contract-letter" },
+  "employment-disputes": { text: "File an Employment Dispute Letter", href: "/services/employment-dispute-letter" },
+  "landlord-tenant": { text: "Get Your Security Deposit Back", href: "/services/security-deposit-letter" },
+  "personal-injury": { text: "Send a Personal Injury Demand Letter", href: "/services/personal-injury-demand-letter" },
+  "intellectual-property": { text: "Protect Your IP Rights", href: "/services/intellectual-property-infringement-letter" },
   "document-analysis": { text: "Try the Free Document Analyzer", href: "/analyze" },
   "pricing-and-roi": { text: "View Our Plans", href: "/pricing" },
   "general": { text: "Get Your First Letter Free", href: "/" },
@@ -241,9 +249,7 @@ export default function BlogPost() {
 
                 {/* Related Services */}
                 {(() => {
-                  const related: ServiceData[] = SERVICES.filter(
-                    (s) => s.blogCategory === post.category
-                  );
+                  const related: ServiceData[] = CATEGORY_TO_SERVICES[post.category] ?? [];
                   if (related.length === 0) return null;
                   return (
                     <div className="mt-12 p-6 bg-slate-50 rounded-xl border border-slate-200" data-testid="related-services">

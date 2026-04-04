@@ -907,6 +907,1342 @@ At [Talk to My Lawyer](/), your first attorney-reviewed demand letter is free. O
 
 [Start your free demand letter](/) — the fastest, most cost-effective path to resolving your dispute.`,
   },
+  {
+    slug: "how-to-collect-unpaid-invoices-california",
+    title: "How to Collect Unpaid Invoices in California: A Step-by-Step Guide",
+    excerpt:
+      "Chasing unpaid invoices is one of the most frustrating parts of running a business. This guide walks you through every legal option available to California freelancers, contractors, and small business owners — from demand letters to small claims court.",
+    category: "demand-letters" as const,
+    metaDescription:
+      "Step-by-step guide to collecting unpaid invoices in California. Learn when to send a demand letter, how to file in small claims court, and your legal rights as a creditor.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## The Unpaid Invoice Problem
+
+If you are a freelancer, contractor, or small business owner in California, you have almost certainly dealt with a client who will not pay. According to industry surveys, the average small business has roughly $84,000 in unpaid invoices at any given time. For many businesses, that is the difference between growth and closure.
+
+The good news: California law gives you multiple tools to recover money owed to you. The bad news: most people do not know what those tools are or when to use them.
+
+This guide walks you through the entire process — from initial follow-up to legal action — so you can get paid what you are owed.
+
+## Step 1: Send a Professional Follow-Up
+
+Before going legal, make one final professional attempt to collect. Send a clear, written follow-up (email is fine at this stage) that includes:
+
+- The invoice number and original due date
+- The total amount owed including any applicable late fees
+- A firm but polite request for immediate payment
+- A deadline (typically 7–10 days)
+
+Keep this communication factual and professional. Avoid emotional language. Save a copy of everything you send — it may become evidence later.
+
+## Step 2: Send a Formal Demand Letter
+
+If the follow-up does not produce payment, your next step is a formal demand letter. This is where things get serious. A demand letter is a legally significant document that:
+
+- Puts the debtor on formal notice that you intend to pursue legal remedies
+- Creates a documented paper trail that courts require
+- Cites specific California legal provisions (such as Cal. Civ. Code § 1719 for dishonored checks, or contract-specific statutes)
+- Sets a firm deadline for payment, typically 15–30 days
+- States the consequences of non-payment (small claims filing, collections, credit reporting)
+
+**Why demand letters work:** Studies show that professionally drafted demand letters resolve 30–40% of payment disputes without any further legal action. When the letter is reviewed by an attorney, that number goes even higher — debtors know you are serious.
+
+See also: [What Is a Demand Letter and When Should You Send One?](/blog/what-is-a-demand-letter)
+
+## Step 3: Evaluate Your Legal Options
+
+If the demand letter does not produce payment within the deadline, you have several legal options in California:
+
+### Small Claims Court (Up to $12,500)
+
+California Small Claims Court is designed for exactly these disputes. Key details:
+
+- **Individuals** can sue for up to $12,500
+- **Businesses** can sue for up to $6,250
+- Filing fees range from $30 to $75 depending on the claim amount
+- No attorneys are allowed to represent parties (you represent yourself)
+- Cases are typically heard within 30–70 days of filing
+- The process is intentionally informal and accessible
+
+### Superior Court — Limited Civil ($12,501–$25,000)
+
+For invoices between $12,501 and $25,000, you file a limited civil case in California Superior Court. You can (and should) have legal representation, and the process is more formal than small claims.
+
+### Superior Court — Unlimited Civil (Over $25,000)
+
+For larger amounts, you file an unlimited civil case. This involves full litigation procedures including discovery, motions, and potentially a trial.
+
+## Step 4: Understand California-Specific Protections
+
+California provides several statutory protections for creditors:
+
+**Prejudgment Interest:** Under California Civil Code § 3287, you are entitled to interest on unpaid debts at 10% per year from the date the amount became due (for liquidated claims like invoices).
+
+**Attorney's Fees Clauses:** If your contract includes an attorney's fees provision, the prevailing party can recover legal costs. Even without such a clause, certain California statutes allow fee recovery.
+
+**Mechanic's Liens:** Contractors and subcontractors in California can file a mechanic's lien against a property if they performed work and were not paid. This is governed by Civil Code § 8400 et seq.
+
+**Late Payment Penalties:** If your contract or invoice specifies late payment penalties, California courts generally enforce reasonable penalty provisions.
+
+## Step 5: Enforce Your Judgment
+
+Winning in court is only half the battle — you still need to collect. California provides several enforcement mechanisms:
+
+- **Wage garnishment** — Up to 25% of the debtor's disposable earnings
+- **Bank levy** — Seize funds directly from the debtor's bank account
+- **Property lien** — File a lien against the debtor's real property
+- **Till tap order** — For business debtors, seize cash from daily register
+
+## Prevention: Protect Yourself Going Forward
+
+The best way to deal with unpaid invoices is to prevent them:
+
+- Always use written contracts that specify payment terms, late fees, and dispute resolution
+- Require deposits or milestone payments for large projects
+- Invoice promptly and consistently
+- Run credit checks on new clients for large engagements
+- Include an attorney's fees clause in your standard contracts
+
+## Take Action Now
+
+If you are currently dealing with an unpaid invoice, the most effective first step is a professional demand letter. At [Talk to My Lawyer](/), your first attorney-reviewed demand letter is free.
+
+Our California-licensed attorneys draft letters that cite relevant statutes, set firm deadlines, and make it clear you are prepared to take legal action. Most clients see results within 30 days.
+
+[Get your free demand letter today](/) — stop waiting and start collecting.
+
+## Related Resources
+
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Complete guide to demand letters
+- [How Much Does a Demand Letter Cost?](/blog/how-much-does-a-demand-letter-cost) — Cost breakdown
+- [Demand Letter vs. Lawsuit](/blog/demand-letter-vs-lawsuit) — When a letter is enough`,
+  },
+  {
+    slug: "how-to-get-your-security-deposit-back",
+    title: "How to Get Your Security Deposit Back in California: The Complete Guide",
+    excerpt:
+      "California tenants have some of the strongest security deposit protections in the country. This comprehensive guide explains your rights under Civil Code § 1950.5, what landlords can and cannot deduct, and exactly how to recover your deposit if it has been wrongfully withheld.",
+    category: "landlord-tenant" as const,
+    metaDescription:
+      "Complete guide to getting your security deposit back in California. Know your rights under Civil Code § 1950.5, what landlords can deduct, and how to send a demand letter.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## Your Rights Under California Law
+
+California Civil Code § 1950.5 is the primary statute governing security deposits for residential tenancies. It is one of the most tenant-friendly security deposit laws in the country, and understanding it is the key to getting your money back.
+
+Here are the core rules every California tenant should know:
+
+### The 21-Day Rule
+
+After you vacate the property, your landlord has exactly **21 calendar days** to either:
+
+1. Return your full security deposit, or
+2. Provide you with an itemized written statement explaining each deduction, along with receipts for any repairs costing more than $126, and refund the remaining balance
+
+If the landlord misses this deadline, you may be entitled to the full deposit amount regardless of any legitimate deductions.
+
+### What Landlords Can Deduct
+
+California law limits security deposit deductions to four categories:
+
+1. **Unpaid rent** — Any rent that was due and unpaid at the time of move-out
+2. **Cleaning** — Only to restore the unit to the same level of cleanliness as when you moved in (not "professionally cleaned" unless it was professionally cleaned when you moved in)
+3. **Repair of damages beyond normal wear and tear** — This is the most contested category. Normal wear and tear is never deductible
+4. **Restoration of alterations** — If you made unauthorized alterations to the unit
+
+### What Counts as Normal Wear and Tear
+
+This is where most landlord-tenant disputes occur. California courts have consistently ruled that the following are normal wear and tear:
+
+- Faded paint or minor scuff marks on walls
+- Worn carpet from everyday foot traffic
+- Minor nail holes from hanging pictures
+- Slightly worn kitchen countertops
+- Faded window coverings or blinds
+- Minor plumbing wear (dripping faucets, running toilets)
+
+The following are typically NOT normal wear and tear:
+
+- Large holes in walls
+- Pet damage (stains, scratches, odors)
+- Broken windows or fixtures
+- Burns or stains on countertops
+- Unauthorized paint colors
+
+## Step-by-Step: Getting Your Deposit Back
+
+### Step 1: Document Everything Before and During Move-Out
+
+Before you even give notice, start documenting:
+
+- **Take date-stamped photos and video** of every room, surface, appliance, and fixture
+- **Review your move-in checklist** — compare current condition to move-in condition
+- **Clean the unit thoroughly** — matching or exceeding the condition at move-in
+- **Make minor repairs** — patch small nail holes, replace burned-out light bulbs
+- **Do a final walkthrough** — California law (Civil Code § 1950.5(f)) gives you the right to request an initial inspection before move-out. The landlord must give you an itemized statement of proposed deductions so you can address them before the final move-out date
+
+### Step 2: Wait 21 Days
+
+After you return the keys and vacate the unit, the clock starts. Wait 21 calendar days. If you receive your full deposit back, you are done.
+
+### Step 3: Review the Itemized Statement
+
+If you receive a partial refund with an itemized statement, review each deduction carefully:
+
+- Are the deductions limited to the four allowable categories?
+- Did the landlord provide receipts for repairs over $126?
+- Are the charges reasonable? (Compare to market rates)
+- Are they deducting for normal wear and tear? (This is illegal)
+- Did the landlord use the cheapest reasonable method of repair?
+
+### Step 4: Send a Formal Demand Letter
+
+If you believe deductions are improper or if the landlord missed the 21-day deadline entirely, send a formal demand letter. This letter should:
+
+- Cite California Civil Code § 1950.5 specifically
+- Identify each improper deduction with your reasoning
+- Demand return of the disputed amount within 15 days
+- State that you will pursue legal action including statutory penalties if they do not comply
+
+A professionally drafted demand letter is significantly more effective than a personal email. Our [security deposit demand letter service](/services/security-deposit-letter) creates attorney-reviewed letters that cite the specific statutes and case law applicable to your situation.
+
+### Step 5: File in Small Claims Court
+
+If the demand letter does not produce results, file in California Small Claims Court. Key information:
+
+- **Filing fee:** $30–$75
+- **Maximum claim:** $12,500 for individuals
+- **Bad faith penalties:** If the landlord withheld the deposit in bad faith, you can recover up to **2x the deposit amount** in addition to actual damages (Civil Code § 1950.5(l))
+- **No attorney needed:** Small Claims Court does not allow attorneys to represent parties
+
+## Common Landlord Tactics (and How to Counter Them)
+
+**Tactic: "We need to repaint the entire unit."**
+Counter: If you lived there more than 2–3 years, repainting is considered normal maintenance, not your responsibility.
+
+**Tactic: "The carpets need to be replaced."**
+Counter: Carpet has a useful life of 8–10 years under California Department of Consumer Affairs guidelines. If the carpet was old when you moved in, replacement is the landlord's responsibility.
+
+**Tactic: "We never received your forwarding address."**
+Counter: California law requires landlords to use your last known address if you did not provide a forwarding address. Send your forwarding address in writing (certified mail) before or at move-out.
+
+**Tactic: Ghost — landlord simply does not respond.**
+Counter: This strengthens your case. The 21-day deadline is strict, and failure to comply creates a presumption of bad faith.
+
+## How Much Can You Recover?
+
+If you win in court, you may recover:
+
+- The full amount of your wrongfully withheld deposit
+- Up to 2x your deposit amount as a penalty for bad faith withholding
+- Court filing fees and service costs
+- Interest at the legal rate from the date the deposit was due
+
+## Take Action Today
+
+If your landlord is withholding your security deposit, do not wait. The sooner you act, the stronger your position. At [Talk to My Lawyer](/services/security-deposit-letter), we specialize in California security deposit demand letters that cite the specific statutes, set firm deadlines, and make clear you know your rights.
+
+Your first attorney-reviewed letter is free — [get started now](/).
+
+## Related Resources
+
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Understanding demand letters
+- [Demand Letter vs. Lawsuit](/blog/demand-letter-vs-lawsuit) — When a letter is enough
+- [California Landlord-Tenant Rights Guide](/blog/california-landlord-tenant-rights-guide) — Full tenant rights overview`,
+  },
+  {
+    slug: "how-to-stop-online-harassment-legally",
+    title: "How to Stop Online Harassment Legally: California Guide to Cease & Desist Letters",
+    excerpt:
+      "Online harassment, cyberbullying, and digital defamation are on the rise. California law provides multiple legal tools to stop it — starting with a cease and desist letter. This guide explains your options, the relevant statutes, and how to take action.",
+    category: "cease-and-desist" as const,
+    metaDescription:
+      "Learn how to legally stop online harassment in California with a cease and desist letter. Covers cyberbullying, defamation, doxxing, and revenge porn laws.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## The Growing Problem of Online Harassment
+
+Online harassment takes many forms — cyberbullying, defamatory posts, doxxing, revenge porn, impersonation, and organized harassment campaigns. California has responded with some of the strongest anti-harassment laws in the country, but most victims do not know their legal options.
+
+This guide explains how to use California law to stop online harassment, starting with the most effective first step: a formal cease and desist letter.
+
+## Types of Online Harassment and Applicable California Laws
+
+### Cyberbullying and Cyberstalking
+
+California Penal Code § 646.9 makes it a crime to willfully, maliciously, and repeatedly follow or harass another person and make a credible threat. This applies to electronic communications including social media, email, and text messages.
+
+**Civil remedies:** You can obtain a civil harassment restraining order under Code of Civil Procedure § 527.6 and pursue damages in a civil lawsuit.
+
+### Defamation (Libel and Slander)
+
+When someone posts false statements of fact about you online that damage your reputation, that is defamation. In California:
+
+- **Libel** (written defamation) is governed by Civil Code § 45
+- **Slander** (spoken defamation) is governed by Civil Code § 46
+- **Defamation per se** — certain statements are presumed harmful (false claims of criminal conduct, professional incompetence, loathsome disease, or sexual misconduct)
+
+### Revenge Porn (Non-Consensual Pornography)
+
+California was one of the first states to criminalize revenge porn under Penal Code § 647(j)(4). It is a misdemeanor punishable by up to 6 months in jail and a $1,000 fine. Victims can also sue for damages under Civil Code § 1708.85, which provides for actual damages, punitive damages, and attorney's fees.
+
+### Doxxing
+
+Publishing someone's private information (home address, phone number, workplace) with intent to harass is addressed by Penal Code § 653.2 (electronic harassment) and can support a civil harassment restraining order.
+
+### Impersonation
+
+California Penal Code § 528.5 makes it a crime to knowingly impersonate someone online to harm, intimidate, threaten, or defraud them.
+
+## Step 1: Document Everything
+
+Before taking any legal action, create a comprehensive evidence file:
+
+- **Screenshots with timestamps** — Capture every harassing post, message, or comment
+- **URL preservation** — Save full URLs as some content may be deleted
+- **Web archive** — Use the Wayback Machine or similar services to archive pages
+- **Witness statements** — If others have seen the harassment, document their accounts
+- **Communication logs** — Save all emails, texts, and messages related to the harassment
+- **Impact documentation** — Record how the harassment has affected your personal life, mental health, employment, or business
+
+## Step 2: Send a Cease and Desist Letter
+
+A cease and desist letter is often the single most effective step you can take. Here is why:
+
+**It creates a legal paper trail.** If the harassment continues after the letter, you have documented evidence that the harasser was put on formal notice and chose to continue — this can support criminal charges, restraining orders, and civil damages.
+
+**It demonstrates seriousness.** Many online harassers believe there are no real-world consequences for their actions. An attorney-reviewed cease and desist letter shatters that assumption.
+
+**It identifies specific violations.** The letter cites the specific California statutes being violated, making it clear that the harasser's conduct is not just unpleasant — it is illegal.
+
+**It sets a deadline.** The letter demands that the harassing conduct stop immediately and sets a clear deadline for compliance.
+
+Our [cease and desist letter service](/services/cease-and-desist) drafts letters specifically tailored to online harassment situations, citing the relevant California statutes and creating the documentation you need for further legal action if necessary.
+
+## Step 3: Report to Platforms
+
+Most social media platforms have policies against harassment. File formal reports with:
+
+- The platform where the harassment is occurring (Facebook, Instagram, X, TikTok, Reddit, etc.)
+- Google (for defamatory content appearing in search results)
+- Your internet service provider (for email-based harassment)
+- The harasser's employer (if the harassment relates to professional conduct)
+
+## Step 4: File for a Restraining Order
+
+If the harassment continues after the cease and desist letter, you can file for a civil harassment restraining order under CCP § 527.6. This:
+
+- Is a court order that prohibits the harasser from contacting you
+- Can include orders to take down online content
+- Can be obtained on a temporary basis (same day) in emergencies
+- Violation is a criminal offense (Penal Code § 273.6)
+
+## Step 5: Consider Criminal Charges
+
+For severe harassment, file a report with:
+
+- Your local police department
+- The California Attorney General's office
+- The FBI's Internet Crime Complaint Center (IC3) for interstate harassment
+
+## Special Considerations for Businesses
+
+If your business is being targeted with fake reviews, defamatory posts, or organized harassment:
+
+- Document the business impact (lost revenue, customer complaints)
+- Send cease and desist letters to the individuals responsible
+- Report fake reviews to the platform (Google, Yelp, etc.)
+- Consider a defamation lawsuit if damages are significant
+- Consult with an attorney about Lanham Act claims for commercial defamation
+
+## Take Action Now
+
+Online harassment thrives on inaction. The sooner you respond with a formal legal communication, the more likely the harassment will stop. At [Talk to My Lawyer](/services/cease-and-desist), your first attorney-reviewed cease and desist letter is free.
+
+[Send your cease and desist letter today](/) — put the harasser on notice that their conduct has legal consequences.
+
+## Related Resources
+
+- [Cease and Desist Letters Explained](/blog/cease-and-desist-letters-explained) — Complete guide to C&D letters
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — When you need a demand letter instead
+- [Trademark Infringement: Cease & Desist Guide](/blog/trademark-infringement-cease-desist-guide) — For IP-related harassment`,
+  },
+  {
+    slug: "california-landlord-tenant-rights-guide",
+    title: "California Landlord-Tenant Rights: A Comprehensive Guide for 2026",
+    excerpt:
+      "California has some of the most extensive tenant protections in the country. This guide covers everything from security deposits to rent control, habitability standards, and your legal options when a landlord violates your rights.",
+    category: "landlord-tenant" as const,
+    metaDescription:
+      "Comprehensive guide to California landlord-tenant rights in 2026. Covers rent control, security deposits, habitability, eviction protections, and legal remedies.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## Overview of California Tenant Protections
+
+California tenants benefit from one of the most robust frameworks of renter protections in the United States. Between the California Tenant Protection Act (AB 1482), local rent control ordinances, the implied warranty of habitability, and strong anti-retaliation statutes, tenants have significant legal tools at their disposal.
+
+This guide provides a comprehensive overview of your rights as a California tenant in 2026.
+
+## Rent Control and Rent Increase Limits
+
+### The California Tenant Protection Act (AB 1482)
+
+AB 1482, which took effect January 1, 2020, provides statewide rent control and eviction protections for most California tenants. Key provisions:
+
+**Rent Increase Cap:** Landlords cannot raise rent more than 5% plus the local Consumer Price Index (CPI), or 10%, whichever is lower. This applies on an annual basis.
+
+**Just Cause Eviction:** After a tenant has occupied a unit for 12 months, the landlord can only evict for specific "at-fault" reasons (non-payment of rent, breach of lease, nuisance) or "no-fault" reasons (owner move-in, substantial renovation, withdrawal from rental market).
+
+**Exemptions:** AB 1482 does not apply to single-family homes owned by an individual (not a corporation), units built in the last 15 years, or units already covered by stricter local rent control ordinances.
+
+### Local Rent Control
+
+Many California cities have their own rent control ordinances that may be stricter than AB 1482. Major cities with local rent control include San Francisco, Los Angeles, Oakland, Berkeley, and San Jose. If you live in one of these cities, check your local ordinance for additional protections.
+
+## Security Deposits
+
+California Civil Code § 1950.5 governs security deposits. Key rules:
+
+- **Maximum deposit:** 2 months' rent for unfurnished units, 3 months' for furnished (with a planned reduction to 1 month under recent amendments)
+- **Return deadline:** 21 calendar days after move-out
+- **Allowable deductions:** Unpaid rent, cleaning (beyond normal wear and tear), and damage repair (beyond normal wear and tear)
+- **Itemized statement required:** Landlords must provide a written itemized statement of all deductions with receipts for repairs over $126
+- **Bad faith penalties:** Landlords who wrongfully withhold deposits may owe up to 2x the deposit amount
+
+For a detailed guide on recovering your deposit, see: [How to Get Your Security Deposit Back](/blog/how-to-get-your-security-deposit-back)
+
+## Habitability Standards
+
+Under California law, every residential rental unit must meet minimum habitability standards. The implied warranty of habitability (Green v. Superior Court, 1974) requires landlords to maintain:
+
+- Effective waterproofing and weather protection
+- Plumbing and gas facilities in good working order
+- Hot and cold running water
+- Heating facilities in good working order
+- Working electrical lighting and wiring
+- Clean and sanitary buildings and grounds
+- Adequate trash receptacles
+- Floors, stairways, and railings in good repair
+- Locks on doors and windows
+- Freedom from pest infestations
+
+If your landlord fails to maintain these standards, you have several legal options:
+
+1. **Report to local housing code enforcement** — They can inspect and require repairs
+2. **Repair and deduct** — For repairs under one month's rent (Civil Code § 1942)
+3. **Withhold rent** — In serious cases, after proper notice
+4. **Sue for damages** — Including rent reduction for the period the unit was substandard
+
+## Landlord Entry Rules
+
+California Civil Code § 1954 strictly limits when and how a landlord can enter your unit:
+
+- **24-hour written notice** required for most entries
+- **Entry only during normal business hours** (generally 8 AM to 5 PM)
+- **Permitted reasons:** Necessary repairs, agreed-upon repairs, showing the unit to prospective tenants/buyers, in case of emergency
+- **No entry for harassment purposes**
+
+Violations of entry rules can support a harassment claim. See our [landlord harassment cease and desist service](/services/landlord-harassment-cease-desist).
+
+## Eviction Protections
+
+California provides significant eviction protections:
+
+### The Eviction Process
+
+1. **Notice** — The landlord must serve the correct notice (3-day for non-payment, 30-day or 60-day for other reasons)
+2. **Unlawful detainer lawsuit** — If you do not vacate after the notice period, the landlord must file a court case
+3. **Court hearing** — You have the right to defend yourself in court
+4. **Only a sheriff can physically remove you** — Self-help evictions (changing locks, removing belongings, shutting off utilities) are illegal
+
+### Illegal Eviction Tactics
+
+The following are illegal in California:
+
+- Locking you out of your unit
+- Shutting off utilities
+- Removing your belongings
+- Threatening you to force you to leave
+- Raising rent in retaliation for complaints
+
+If your landlord engages in any of these tactics, you may be entitled to significant damages. A formal [demand letter](/services/demand-letter) or [cease and desist letter](/services/landlord-harassment-cease-desist) is often the first step.
+
+## Anti-Retaliation Protections
+
+California Civil Code § 1942.5 prohibits landlords from retaliating against tenants who:
+
+- Complain to a government agency about habitability
+- Exercise their rights under the law
+- Organize with other tenants
+- Request repairs or maintenance
+
+Retaliation within 180 days of a protected activity creates a rebuttable presumption that the landlord's action was retaliatory.
+
+## Your Legal Options
+
+When a landlord violates your rights, you have multiple legal tools:
+
+1. **Formal demand letter** — Creates a paper trail and often resolves the issue
+2. **Cease and desist letter** — For ongoing harassment or illegal conduct
+3. **Small claims court** — For monetary claims up to $12,500
+4. **Civil lawsuit** — For larger claims or injunctive relief
+5. **Government complaints** — File with local housing authority, HUD, or the California Department of Fair Employment and Housing
+
+## Take Action Today
+
+If your landlord is violating your rights, do not wait. California law is on your side, but you must take the first step. At [Talk to My Lawyer](/), your first attorney-reviewed letter is free.
+
+- [Security Deposit Demand Letter](/services/security-deposit-letter) — Get your deposit back
+- [Landlord Harassment Cease & Desist](/services/landlord-harassment-cease-desist) — Stop illegal landlord conduct
+- [General Demand Letter](/services/demand-letter) — For all other tenant disputes
+
+## Related Resources
+
+- [How to Get Your Security Deposit Back](/blog/how-to-get-your-security-deposit-back) — Detailed deposit recovery guide
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Understanding demand letters`,
+  },
+  {
+    slug: "non-compete-agreement-california-guide",
+    title: "Non-Compete Agreements in California: What You Need to Know in 2026",
+    excerpt:
+      "California is one of the most employee-friendly states when it comes to non-compete agreements — most are completely unenforceable. This guide explains the law, recent changes, and what to do if a former employer is threatening you with a non-compete clause.",
+    category: "contract-disputes" as const,
+    metaDescription:
+      "Complete guide to non-compete agreements in California. Learn why most are unenforceable under Business and Professions Code § 16600 and what to do if threatened.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## California's Strong Anti-Non-Compete Stance
+
+California has long been one of the most hostile states toward non-compete agreements. Business and Professions Code § 16600 declares that "every contract by which anyone is restrained from engaging in a lawful profession, trade, or business of any kind is to that extent void."
+
+This means that in most cases, if you signed a non-compete agreement — whether with a California employer or an out-of-state employer — and you are working in California, that agreement is likely unenforceable.
+
+## The Legal Framework
+
+### Business and Professions Code § 16600
+
+This is the foundational statute. It has been interpreted broadly by California courts to mean that non-compete agreements are void as a matter of public policy. Unlike other states that use a "reasonableness" test (evaluating scope, geography, and duration), California takes a near-categorical approach: non-competes are void, period.
+
+### Recent Legislative Changes (AB 1076 and SB 699)
+
+In 2024, California strengthened its anti-non-compete laws further:
+
+**AB 1076** codified existing case law by adding Labor Code § 16600.5, which explicitly confirms that non-compete clauses are void regardless of where the contract was signed or where the employment was based.
+
+**SB 699** (Labor Code § 16600.5) went further by:
+
+- Making it unlawful for any employer to enter into or attempt to enforce a non-compete against a California employee
+- Giving employees the right to sue employers who attempt to enforce void non-competes
+- Allowing recovery of actual damages, attorney's fees, and costs
+- Applying to non-competes signed in other states if the employee works in California
+
+### Narrow Exceptions
+
+California courts have recognized only a few narrow exceptions to the non-compete ban:
+
+1. **Sale of a business** — A non-compete can be enforced when given as part of the sale of a business or partnership interest (B&P Code §§ 16601–16602)
+2. **Dissolution of a partnership or LLC** — Similar to the sale of a business exception
+3. **Trade secret protection** — While you cannot prevent someone from working for a competitor, you can prevent them from using or disclosing actual trade secrets (Cal. Civ. Code § 3426 et seq., the California Uniform Trade Secrets Act)
+
+Note: Non-solicitation agreements that effectively function as non-competes have also been struck down by California courts (AMN Healthcare v. Aya Healthcare, 2020).
+
+## What to Do If Your Former Employer Threatens You
+
+### Step 1: Do Not Panic
+
+Most non-compete threats from former employers are exactly that — threats. They are counting on your fear and uncertainty to control your behavior. Under California law, you almost certainly have the right to work for any employer in any industry.
+
+### Step 2: Review the Agreement
+
+Pull out the actual agreement you signed. Look for:
+
+- Is it actually a non-compete, or is it a non-disclosure agreement (NDA)? NDAs protecting legitimate trade secrets may be enforceable.
+- Where was the agreement signed? If signed in California, it is almost certainly void.
+- Where are you currently working? If you are in California, California law applies.
+- Does the agreement include a choice-of-law provision? Under SB 699, California law overrides out-of-state choice-of-law provisions for employees working in California.
+
+### Step 3: Send a Non-Compete Dispute Letter
+
+If your former employer has sent you a threat letter or contacted your new employer, a formal response is critical. A [non-compete dispute letter](/services/non-compete-dispute-letter) should:
+
+- Cite Business and Professions Code § 16600 and Labor Code § 16600.5
+- Reference AB 1076 and SB 699 if the non-compete was signed in another state
+- State that the non-compete agreement is void and unenforceable
+- Demand that the employer cease all enforcement efforts
+- Warn that continued enforcement attempts may give rise to a claim for damages and attorney's fees under Labor Code § 16600.5
+
+### Step 4: Protect Your New Employment
+
+If your former employer has contacted your new employer:
+
+- Inform your new employer about California's non-compete laws
+- Provide them with a copy of your dispute letter
+- Assure them that you are not violating any enforceable legal obligation
+- If your new employer has concerns, suggest they consult with California employment counsel
+
+## Distinguishing Non-Competes from Trade Secret Protections
+
+It is important to understand the difference:
+
+**Non-Compete:** "You cannot work for a competitor for 2 years." — VOID in California.
+
+**Trade Secret Protection:** "You cannot take our customer lists, pricing algorithms, or product formulas to a competitor." — POTENTIALLY ENFORCEABLE.
+
+If your former employer's concern is actually about trade secrets rather than competition, you should:
+
+- Ensure you have not taken any proprietary documents, files, or data
+- Return any company property and documents
+- Avoid using specific proprietary knowledge (as opposed to general skills and experience)
+- Document your compliance
+
+## Take Action
+
+If you are being threatened over a non-compete agreement, do not let fear prevent you from pursuing your career. California law is firmly on your side. At [Talk to My Lawyer](/services/non-compete-dispute-letter), our attorneys draft dispute letters that cite the specific statutes and shut down non-compete threats quickly.
+
+Your first attorney-reviewed letter is free — [take action now](/).
+
+## Related Resources
+
+- [How to Write a Breach of Contract Letter](/blog/how-to-write-breach-of-contract-letter) — For contract-related disputes
+- [Cease and Desist Letters Explained](/blog/cease-and-desist-letters-explained) — When you need a C&D instead
+- [California Employment Rights Guide](/blog/california-employment-rights-guide) — Full employment law overview`,
+  },
+  {
+    slug: "california-employment-rights-guide",
+    title: "California Employment Rights Guide: Know Your Workplace Protections in 2026",
+    excerpt:
+      "California employees enjoy some of the strongest workplace protections in the United States. This guide covers minimum wage, overtime, meal and rest breaks, anti-discrimination, wrongful termination, and how to enforce your rights with a formal demand letter.",
+    category: "employment-disputes" as const,
+    metaDescription:
+      "Complete guide to California employment rights in 2026. Covers minimum wage, overtime, meal breaks, discrimination, wrongful termination, and how to take legal action.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## Why California Employment Law Matters
+
+California employment law goes far beyond federal protections. In many cases, California provides higher minimum wages, more generous overtime rules, mandatory meal and rest breaks, stronger anti-discrimination protections, and broader whistleblower safeguards than federal law requires.
+
+Understanding these rights is the first step toward protecting yourself. Enforcing them — often starting with a formal demand letter — is the second.
+
+## Wage and Hour Rights
+
+### Minimum Wage
+
+As of 2026, California's statewide minimum wage is $16.50 per hour for all employers. However, many cities and counties have higher local minimum wages:
+
+- San Francisco: $18.67/hour
+- Los Angeles: $17.28/hour
+- San Jose: $17.55/hour
+- Oakland: $16.50/hour
+
+If both state and local minimum wage laws apply, you are entitled to the higher rate.
+
+### Overtime
+
+California overtime rules are more generous than federal law:
+
+- **Daily overtime:** 1.5x pay after 8 hours in a single workday
+- **Double time:** 2x pay after 12 hours in a single workday
+- **Weekly overtime:** 1.5x pay after 40 hours in a workweek
+- **Seventh consecutive day:** 1.5x for the first 8 hours, 2x after 8 hours
+
+Note: Federal law only requires overtime after 40 hours per week. California's daily overtime provision gives you additional protections.
+
+### Meal and Rest Breaks
+
+California Labor Code requires:
+
+**Meal breaks:**
+- 30-minute unpaid meal break before the 5th hour of work
+- Second 30-minute meal break before the 10th hour
+- If the employer fails to provide the meal break, you are owed one additional hour of pay at your regular rate
+
+**Rest breaks:**
+- Paid 10-minute rest break for every 4 hours worked (or major fraction thereof)
+- If the employer fails to provide the rest break, you are owed one additional hour of pay
+
+### Final Paychecks
+
+Under Labor Code § 201–203:
+
+- **If you are fired:** Your employer must pay all final wages immediately at the time of termination
+- **If you quit with 72+ hours notice:** Final wages due on your last day
+- **If you quit without notice:** Final wages due within 72 hours
+- **Penalty for late payment:** Waiting time penalties of up to 30 days' wages
+
+## Anti-Discrimination Protections
+
+### The Fair Employment and Housing Act (FEHA)
+
+California's FEHA (Government Code § 12900 et seq.) prohibits employment discrimination based on:
+
+- Race, color, national origin, ancestry
+- Sex, gender, gender identity, gender expression
+- Sexual orientation
+- Religion, creed
+- Age (40+)
+- Disability (physical and mental)
+- Medical condition (including cancer and genetic characteristics)
+- Marital status
+- Military or veteran status
+- Reproductive health decision-making
+
+FEHA applies to employers with 5 or more employees — significantly broader than federal Title VII, which only applies to employers with 15+.
+
+### What Constitutes Discrimination?
+
+Discrimination can take many forms:
+
+- Refusing to hire based on a protected characteristic
+- Terminating or demoting based on a protected characteristic
+- Paying unequal wages for substantially similar work
+- Failing to provide reasonable accommodations for disability or religion
+- Harassment creating a hostile work environment
+- Retaliation for complaining about discrimination
+
+## Wrongful Termination
+
+California is an "at-will" employment state, meaning employers can generally terminate employees for any reason. However, there are significant exceptions:
+
+**You cannot be fired for:**
+
+- Discriminatory reasons (any protected characteristic under FEHA)
+- Retaliation for reporting legal violations (whistleblowing)
+- Retaliation for filing a workers' compensation claim
+- Exercising your legal rights (taking FMLA/CFRA leave, reporting safety violations)
+- Refusing to violate the law
+- Violation of an implied contract (if the employer made promises of continued employment)
+
+For more details, see: [Wrongful Termination in California](/blog/wrongful-termination-california-what-to-know)
+
+## How to Enforce Your Rights
+
+### Step 1: Document Everything
+
+Keep records of:
+
+- Pay stubs showing hours worked and wages paid
+- Schedules showing missed meal or rest breaks
+- Written communications (emails, texts) that demonstrate discrimination or retaliation
+- Names and contact information for witnesses
+- Dates and descriptions of incidents
+
+### Step 2: Send a Formal Demand Letter
+
+A formal [employment dispute letter](/services/employment-dispute-letter) puts your employer on notice and creates a critical paper trail. The letter should:
+
+- Identify the specific violation (unpaid wages, discrimination, retaliation, etc.)
+- Cite the applicable California Labor Code or FEHA section
+- Demand specific remedy (back pay, reinstatement, damages)
+- Set a reasonable deadline for response
+
+### Step 3: File a Government Complaint
+
+Depending on the violation:
+
+- **Wage claims:** File with the California Labor Commissioner (DLSE)
+- **Discrimination/harassment:** File with the California Civil Rights Department (CRD)
+- **Safety violations:** File with Cal/OSHA
+- **Whistleblower retaliation:** File with the Labor Commissioner
+
+### Step 4: Consider Legal Action
+
+If administrative remedies do not resolve the issue, you may file a civil lawsuit. California employment lawsuits can recover:
+
+- Back pay and front pay
+- Compensatory damages (emotional distress)
+- Punitive damages (for malicious or egregious conduct)
+- Attorney's fees and costs
+- Injunctive relief (reinstatement, policy changes)
+
+## Take Action
+
+If your employer is violating your rights, time matters. Statutes of limitations apply to all employment claims, and evidence becomes harder to preserve over time.
+
+At [Talk to My Lawyer](/services/employment-dispute-letter), your first attorney-reviewed employment dispute letter is free. Our California-licensed attorneys draft letters that cite the specific statutes applicable to your situation.
+
+[Get your free letter today](/) — protect your rights before it is too late.
+
+## Related Resources
+
+- [Wrongful Termination in California](/blog/wrongful-termination-california-what-to-know) — Detailed termination guide
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Understanding demand letters
+- [Non-Compete Agreements in California](/blog/non-compete-agreement-california-guide) — Your rights regarding non-competes`,
+  },
+  {
+    slug: "wrongful-termination-california-what-to-know",
+    title: "Wrongful Termination in California: What You Need to Know",
+    excerpt:
+      "Being fired is stressful — but if you were terminated for illegal reasons, you may have a wrongful termination claim. This guide explains what counts as wrongful termination in California, how to build your case, and how a demand letter can be your strongest first move.",
+    category: "employment-disputes" as const,
+    metaDescription:
+      "Guide to wrongful termination in California. Learn what counts as illegal firing, how to document your case, and how to send a demand letter to your former employer.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## What Is Wrongful Termination?
+
+California is an "at-will" employment state, which means your employer can generally fire you at any time, for any reason, or no reason at all. However, there are critical exceptions. If you were fired for an illegal reason, you may have a wrongful termination claim that could entitle you to significant damages.
+
+Wrongful termination occurs when an employer fires an employee in violation of federal or state law, public policy, or the terms of an employment agreement.
+
+## Common Grounds for Wrongful Termination Claims
+
+### 1. Discrimination
+
+It is illegal to fire someone based on a protected characteristic under California's Fair Employment and Housing Act (FEHA). Protected characteristics include:
+
+- Race, color, national origin, ethnicity
+- Sex, gender, gender identity, gender expression, sexual orientation
+- Age (40 and older)
+- Disability (physical or mental)
+- Religion, creed
+- Marital status
+- Pregnancy, childbirth, or related medical conditions
+- Military or veteran status
+- Medical condition (including genetic characteristics)
+
+**Example:** You are a 55-year-old employee who has received positive performance reviews for years. After a new, younger manager takes over, you are suddenly placed on a performance improvement plan and terminated within 60 days. This pattern may indicate age discrimination.
+
+### 2. Retaliation
+
+California law prohibits employers from retaliating against employees who engage in protected activities:
+
+- **Whistleblowing** — Reporting illegal activity to a government agency (Labor Code § 1102.5)
+- **Safety complaints** — Reporting unsafe working conditions to Cal/OSHA (Labor Code § 6310)
+- **Wage complaints** — Filing a claim with the Labor Commissioner (Labor Code § 98.6)
+- **FEHA complaints** — Filing a discrimination or harassment complaint
+- **Workers' compensation claims** — Filing a claim after a workplace injury (Labor Code § 132a)
+- **Jury duty** — Taking time off for jury service (Labor Code § 230)
+- **Domestic violence leave** — Using legally protected leave (Labor Code § 230.1)
+
+**Example:** You report to HR that your manager is sexually harassing a coworker. Two weeks later, you are fired for "performance issues" that were never previously documented. This timing suggests retaliation.
+
+### 3. Violation of Public Policy
+
+You cannot be fired for:
+
+- Refusing to break the law (e.g., refusing to falsify financial records)
+- Exercising a legal right (e.g., taking family leave under CFRA)
+- Performing a legal obligation (e.g., serving on a jury)
+- Reporting a violation of law (whistleblowing)
+
+### 4. Breach of Contract
+
+If you have a written employment contract with specific terms about when and how you can be terminated, firing you in violation of those terms is a breach of contract. This also applies to implied contracts — for example, if your employee handbook states that employees will only be fired "for cause."
+
+### 5. Constructive Termination
+
+Sometimes employers do not fire you directly — instead, they make your working conditions so intolerable that you have no reasonable choice but to resign. Under California law, this is treated the same as a wrongful termination if:
+
+- The employer deliberately created or knowingly permitted intolerable conditions
+- The conditions were so severe that a reasonable person would have felt compelled to resign
+- The employee actually resigned because of those conditions
+
+## How to Build Your Case
+
+### Document Everything
+
+The strength of your wrongful termination claim depends on evidence. Start documenting from the moment you sense something is wrong:
+
+- Save copies of performance reviews, emails, and written communications
+- Note dates, times, and details of incidents
+- Keep a personal log of conversations with managers and HR
+- Save text messages and voicemails
+- Identify witnesses who can corroborate your account
+- Preserve your employee handbook and any written policies
+
+### Timeline Is Critical
+
+One of the most powerful pieces of evidence is timing. If you engaged in a protected activity (complained about discrimination, filed a safety report, took medical leave) and were terminated shortly after, that temporal proximity creates a strong inference of retaliation.
+
+## Your Legal Options
+
+### Step 1: Send a Demand Letter
+
+A formal demand letter to your former employer is often the most effective first step. It:
+
+- Puts the employer on formal notice of your legal claims
+- Creates a documented record that can be used in litigation
+- Often prompts a settlement discussion before expensive litigation
+- Demonstrates that you understand your legal rights
+
+Our [employment dispute letter service](/services/employment-dispute-letter) drafts attorney-reviewed letters tailored to wrongful termination claims under California law.
+
+### Step 2: File an Administrative Complaint
+
+Depending on the basis of your claim:
+
+- **Discrimination/Harassment:** File with the California Civil Rights Department (CRD). You generally have 3 years from the date of termination.
+- **Whistleblower Retaliation:** File with the California Labor Commissioner. Deadlines vary by statute.
+- **OSHA Retaliation:** File with Cal/OSHA within 180 days.
+
+### Step 3: File a Lawsuit
+
+If administrative remedies do not resolve the issue, you can file a civil lawsuit. California wrongful termination lawsuits can recover:
+
+- **Lost wages and benefits** (back pay and front pay)
+- **Emotional distress damages** — Often significant in wrongful termination cases
+- **Punitive damages** — For malicious, fraudulent, or oppressive conduct
+- **Attorney's fees** — In discrimination and retaliation cases
+- **Reinstatement** — In some cases, a court can order your employer to rehire you
+
+## Statutes of Limitations
+
+Do not delay. California imposes deadlines on wrongful termination claims:
+
+- FEHA discrimination claims: 3 years to file with the CRD
+- Breach of written contract: 4 years
+- Breach of oral contract: 2 years
+- Whistleblower retaliation: Varies (often 1–3 years)
+
+## Take Action Now
+
+If you believe you were wrongfully terminated, the most important thing you can do is act quickly. Evidence fades, witnesses forget, and deadlines pass.
+
+At [Talk to My Lawyer](/services/employment-dispute-letter), your first attorney-reviewed employment dispute letter is free. Our attorneys draft demand letters that cite the specific California statutes applicable to your termination and put your former employer on formal notice.
+
+[Get your free letter today](/) — your rights have an expiration date.
+
+## Related Resources
+
+- [California Employment Rights Guide](/blog/california-employment-rights-guide) — Full employment law overview
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Understanding demand letters
+- [Demand Letter vs. Lawsuit](/blog/demand-letter-vs-lawsuit) — When to send a letter vs. go to court`,
+  },
+  {
+    slug: "trademark-infringement-cease-desist-guide",
+    title: "Trademark Infringement: How to Write and Send a Cease & Desist Letter",
+    excerpt:
+      "If someone is using your trademark — or a confusingly similar mark — without permission, a cease and desist letter is the standard first step to protect your brand. This guide covers what constitutes infringement, how to draft an effective letter, and when to escalate.",
+    category: "intellectual-property" as const,
+    metaDescription:
+      "Guide to trademark infringement cease and desist letters. Learn what constitutes infringement, how to send a C&D letter, and when to take legal action to protect your brand.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## What Is Trademark Infringement?
+
+Trademark infringement occurs when someone uses a mark that is identical or confusingly similar to your registered (or unregistered) trademark in a way that is likely to cause consumer confusion about the source of goods or services.
+
+Under the federal Lanham Act (15 U.S.C. § 1114 for registered marks, § 1125(a) for unregistered marks) and California Business and Professions Code § 14245, trademark owners have the right to prevent others from using confusingly similar marks.
+
+## When Is a Cease and Desist Letter Appropriate?
+
+A cease and desist letter is the standard first step in most trademark disputes. You should send one when:
+
+- Another business is using a name similar to yours in the same industry
+- Someone is using your logo, tagline, or brand imagery without permission
+- A competitor is advertising using your trademark in their marketing
+- A domain squatter has registered a domain using your trademark
+- Someone is selling counterfeit goods bearing your trademark
+- A social media account is impersonating your brand
+
+## Elements of an Effective Trademark C&D Letter
+
+A strong trademark cease and desist letter should include:
+
+### 1. Identification of Your Trademark Rights
+
+Clearly establish your ownership of the mark. Include:
+
+- Your trademark registration number (if registered with the USPTO)
+- The date of first use in commerce
+- The goods or services associated with your mark
+- Geographic areas where you use the mark
+- Evidence of secondary meaning (brand recognition, advertising investment) if the mark is not registered
+
+### 2. Description of the Infringing Activity
+
+Document the specific infringement with evidence:
+
+- Screenshots or photos of the infringing use
+- URLs where the infringement appears
+- Dates when you first discovered the infringement
+- Description of how the infringing mark is confusingly similar to yours
+- Evidence of actual consumer confusion (if available)
+
+### 3. Legal Basis for Your Claim
+
+Cite the applicable legal provisions:
+
+- Lanham Act § 32 (15 U.S.C. § 1114) for registered trademark infringement
+- Lanham Act § 43(a) (15 U.S.C. § 1125(a)) for unregistered marks and trade dress
+- California Business and Professions Code § 14245 for state law claims
+- Anti-Cybersquatting Consumer Protection Act (15 U.S.C. § 1125(d)) for domain disputes
+
+### 4. Specific Demands
+
+State clearly what you require:
+
+- Immediate cessation of all use of the infringing mark
+- Removal of all infringing materials (signs, packaging, websites, social media)
+- Transfer or cancellation of infringing domain names
+- Destruction of infringing inventory or materials
+- Written confirmation of compliance within a specified deadline (typically 10–15 days)
+- In some cases, an accounting of profits derived from the infringement
+
+### 5. Consequences of Non-Compliance
+
+Clearly state what will happen if the infringer does not comply:
+
+- Filing of a federal trademark infringement lawsuit
+- Seeking injunctive relief (court order to stop the infringement)
+- Pursuing statutory damages (up to $200,000 per mark, or $2,000,000 for willful infringement under the Lanham Act)
+- Recovery of the infringer's profits
+- Recovery of your attorney's fees and costs
+
+## The Likelihood of Confusion Test
+
+Courts evaluate trademark infringement using a multi-factor "likelihood of confusion" test. The factors include:
+
+1. **Similarity of the marks** — How similar do the marks look, sound, and convey meaning?
+2. **Relatedness of goods/services** — Are the products or services similar enough that consumers might be confused?
+3. **Strength of the plaintiff's mark** — Stronger (more distinctive) marks get broader protection
+4. **Evidence of actual confusion** — Have consumers actually been confused?
+5. **Marketing channels** — Do the parties sell through similar channels?
+6. **Consumer sophistication** — How careful are the typical consumers of these products?
+7. **Intent of the infringer** — Did the infringer intend to trade on the goodwill of your mark?
+
+## Special Situations
+
+### Domain Name Disputes
+
+If someone has registered a domain name using your trademark, you have additional options:
+
+- **UDRP proceeding** — File a complaint through ICANN's Uniform Domain-Name Dispute-Resolution Policy (faster and cheaper than litigation)
+- **ACPA claim** — Sue under the Anti-Cybersquatting Consumer Protection Act
+
+### Social Media Impersonation
+
+Most social media platforms have trademark reporting processes:
+
+- File a trademark report with the platform
+- Include your trademark registration details
+- Provide evidence of the infringing use
+- Request removal of the infringing account or content
+
+### Amazon and E-Commerce
+
+If counterfeit or infringing goods are being sold on Amazon or similar platforms:
+
+- Enroll in Amazon Brand Registry
+- File an infringement report through the platform's reporting system
+- Send a cease and desist to the seller directly
+- Consider filing a complaint with U.S. Customs and Border Protection for counterfeit imports
+
+## Take Action
+
+If your trademark is being infringed, time is critical. Delay can weaken your legal position and may be interpreted as acquiescence to the infringement.
+
+At [Talk to My Lawyer](/services/intellectual-property-infringement-letter), our attorneys draft IP infringement letters that cite the specific legal provisions applicable to your situation. Your first attorney-reviewed letter is free.
+
+[Protect your brand today](/) — send a cease and desist letter before the infringement causes more damage.
+
+## Related Resources
+
+- [Cease and Desist Letters Explained](/blog/cease-and-desist-letters-explained) — General C&D guide
+- [How to Stop Online Harassment Legally](/blog/how-to-stop-online-harassment-legally) — For online IP theft and harassment
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — When a demand letter is more appropriate`,
+  },
+  {
+    slug: "small-claims-court-california-complete-guide",
+    title: "Small Claims Court in California: The Complete Guide for 2026",
+    excerpt:
+      "California Small Claims Court handles disputes up to $12,500 without needing a lawyer. This guide covers everything — from filing your claim to enforcing your judgment — with a focus on how a demand letter can resolve your case before you ever set foot in court.",
+    category: "demand-letters" as const,
+    metaDescription:
+      "Complete guide to California Small Claims Court in 2026. Filing requirements, claim limits, what to expect, and how to win your case. Demand letter tips included.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## What Is Small Claims Court?
+
+California Small Claims Court is a division of the Superior Court designed to resolve disputes quickly, informally, and affordably — without the need for an attorney. It is the court of the people, and it handles everything from unpaid debts and security deposit disputes to property damage and breach of contract claims.
+
+## Claim Limits
+
+As of 2026, the following limits apply:
+
+- **Individuals:** Can sue for up to $12,500
+- **Businesses and other entities:** Can sue for up to $6,250 (with some exceptions)
+- **Guarantor against a business:** Up to $6,500
+- **No limit on the number of claims**, but only 2 claims per year can exceed $2,500
+
+If your claim exceeds these limits, you can either:
+
+1. **Waive the excess** — Sue for the maximum and give up the rest
+2. **File in Superior Court** — For a more formal (and expensive) process
+
+## Before You File: Send a Demand Letter
+
+Before filing in Small Claims Court, you should almost always send a formal demand letter first. Here is why:
+
+**Judges expect it.** While not technically required in most cases, California Small Claims judges look favorably on parties who demonstrate they attempted to resolve the dispute before coming to court. A demand letter is the clearest evidence of that attempt.
+
+**It often resolves the dispute.** A professionally drafted, attorney-reviewed demand letter resolves 30–40% of disputes without any court filing. The cost of a $200 demand letter is a fraction of the time, stress, and filing fees involved in a court case.
+
+**It strengthens your case.** If the case does go to trial, the demand letter and the other party's failure to respond becomes powerful evidence in your favor.
+
+Our [small claims demand letter service](/services/small-claims-demand-letter) creates letters specifically designed for pre-filing disputes.
+
+## How to File a Small Claims Case
+
+### Step 1: Determine the Right Court
+
+File in the county where:
+
+- The defendant lives or does business
+- The contract was signed or was to be performed
+- The injury or property damage occurred
+
+### Step 2: Fill Out the Required Forms
+
+You will need:
+
+- **SC-100** — Plaintiff's Claim and ORDER to Go to Small Claims Court
+- **SC-104** — Declaration for Subpoena (if you need witnesses)
+
+Forms are available at the court clerk's office or online at courts.ca.gov.
+
+### Step 3: File and Pay the Fee
+
+Filing fees depend on the amount of your claim:
+
+- $30 for claims up to $1,500
+- $50 for claims from $1,501 to $5,000
+- $75 for claims from $5,001 to $12,500
+
+### Step 4: Serve the Defendant
+
+You must have someone other than yourself serve the claim on the defendant. Options include:
+
+- A friend or family member over age 18
+- A registered process server
+- The sheriff's department (for a fee)
+- Certified mail with return receipt (in some cases)
+
+Service must be completed at least 15 days before the hearing (if served in the same county) or 20 days before (if served outside the county).
+
+## Preparing for Your Hearing
+
+### Organize Your Evidence
+
+Bring three copies of everything (one for you, one for the judge, one for the other party):
+
+- Contracts, invoices, or agreements
+- Your demand letter and proof it was sent
+- Photos or videos documenting damage
+- Text messages, emails, and written communications
+- Receipts for expenses or repairs
+- Witness statements or live witnesses
+- A clear timeline of events
+
+### Practice Your Presentation
+
+You will have approximately 10–15 minutes to present your case. Be prepared to:
+
+- State the facts clearly and chronologically
+- Explain the legal basis for your claim
+- Show how you calculated the amount you are owed
+- Present your evidence in an organized manner
+- Remain calm and professional, even if the other party becomes agitated
+
+### What the Judge Is Looking For
+
+Small Claims judges evaluate:
+
+1. **Is there a valid claim?** (Did the defendant owe you something?)
+2. **Has the claim been proven?** (Do you have evidence?)
+3. **What is the proper amount?** (How did you calculate damages?)
+4. **Is there a defense?** (Does the defendant have a valid reason for non-payment?)
+
+## After the Hearing
+
+### If You Win
+
+The judge will issue a judgment in your favor. The defendant has 30 days to pay. If they do not pay voluntarily, you can enforce the judgment through:
+
+- **Wage garnishment** — Seize up to 25% of the debtor's disposable earnings
+- **Bank levy** — Freeze and seize funds from the debtor's bank account
+- **Property lien** — File a lien against the debtor's real property
+- **Till tap** — For business debtors, seize cash from daily operations
+- **Vehicle lien** — File a lien against the debtor's vehicle
+
+### If You Lose
+
+As the plaintiff, you can appeal to Superior Court within 30 days. The appeal results in a new trial (trial de novo).
+
+## Common Mistakes to Avoid
+
+1. **Not sending a demand letter first** — This is the single most common mistake
+2. **Suing the wrong party** — Make sure you have the correct legal name of the defendant
+3. **Not bringing enough evidence** — The burden of proof is on you
+4. **Being emotional or aggressive** — Judges respond to facts, not feelings
+5. **Not calculating damages correctly** — Include all damages but only amounts you can document
+6. **Missing the hearing** — If you do not show up, your case is dismissed
+
+## Take Action
+
+If you are considering Small Claims Court, start with a demand letter. It may resolve your case without ever going to court.
+
+At [Talk to My Lawyer](/services/small-claims-demand-letter), your first attorney-reviewed demand letter is free. Our attorneys draft letters that demonstrate your seriousness and create the paper trail judges expect to see.
+
+[Get your free demand letter](/) — the smartest first step before Small Claims Court.
+
+## Related Resources
+
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — Complete demand letter guide
+- [Demand Letter vs. Lawsuit](/blog/demand-letter-vs-lawsuit) — When a letter is enough
+- [How to Collect Unpaid Invoices in California](/blog/how-to-collect-unpaid-invoices-california) — Invoice collection guide`,
+  },
+  {
+    slug: "breach-of-contract-what-to-do",
+    title: "Breach of Contract in California: What to Do When the Other Party Breaks the Deal",
+    excerpt:
+      "When someone breaks a contract, knowing your legal options is critical. This California-focused guide walks through the types of breach, available remedies, and why a breach of contract letter is often the most effective first step.",
+    category: "contract-disputes" as const,
+    metaDescription:
+      "What to do when someone breaches a contract in California. Types of breach, legal remedies, statutes of limitations, and how to send an effective breach of contract letter.",
+    authorName: "Talk to My Lawyer",
+    status: "published" as const,
+    content: `## Understanding Breach of Contract in California
+
+A breach of contract occurs when one party fails to perform a promise or obligation under a valid contract without a legitimate legal excuse. In California, contract law is primarily governed by the California Civil Code (Divisions 3 and 4) and extensive case law.
+
+To have a valid breach of contract claim, you must establish four elements:
+
+1. A valid contract existed (written, oral, or implied)
+2. You performed your obligations (or were excused from performing)
+3. The other party failed to perform their obligations
+4. You suffered damages as a result
+
+## Types of Breach
+
+### Material Breach
+
+A material breach goes to the heart of the contract — it is so significant that it essentially defeats the purpose of the agreement. Examples:
+
+- A contractor completes only 20% of a construction project and abandons the job
+- A vendor delivers products that are fundamentally different from what was ordered
+- A landlord fails to provide a habitable unit after promising renovations
+
+With a material breach, the non-breaching party is entitled to stop performing their own obligations, sue for damages, and potentially terminate the contract.
+
+### Minor (Partial) Breach
+
+A minor breach occurs when the breaching party substantially performed but fell short in some way. Examples:
+
+- A contractor completes a project but uses a slightly different paint color than specified
+- A vendor delivers goods one day late
+- A service provider meets most requirements but misses a minor specification
+
+With a minor breach, the non-breaching party must still perform their obligations but can sue for damages resulting from the deviation.
+
+### Anticipatory Breach
+
+An anticipatory breach occurs when one party clearly communicates — through words or actions — that they will not perform their contractual obligations before the performance is due. This allows the non-breaching party to treat the contract as breached immediately without waiting for the performance date.
+
+## Available Remedies
+
+### Compensatory Damages
+
+The most common remedy. Compensatory damages are designed to put the non-breaching party in the position they would have been in had the contract been performed. This includes:
+
+- **Expectation damages** — The benefit you expected to receive from the contract
+- **Consequential damages** — Additional losses that were foreseeable at the time the contract was formed
+- **Incidental damages** — Costs incurred in responding to the breach (finding a replacement vendor, hiring a new contractor, etc.)
+
+### Specific Performance
+
+In some cases, money damages are inadequate, and a court may order the breaching party to actually perform their obligations. This is most common in contracts involving unique goods or real property.
+
+### Rescission and Restitution
+
+The non-breaching party may choose to cancel the contract and recover any benefits they conferred on the breaching party. This restores both parties to their pre-contract positions.
+
+### Liquidated Damages
+
+If the contract includes a liquidated damages clause (a pre-agreed amount for breach), that amount may be recoverable — provided it was a reasonable estimate of anticipated damages at the time the contract was formed.
+
+## California-Specific Rules
+
+### Statute of Limitations
+
+- **Written contracts:** 4 years (California Code of Civil Procedure § 337)
+- **Oral contracts:** 2 years (CCP § 339)
+- **Breach of warranty (UCC):** 4 years from tender of delivery (Cal. Com. Code § 2725)
+
+### Oral Contracts
+
+California recognizes oral contracts, but proving them is harder. Certain contracts must be in writing under the Statute of Frauds (Civil Code § 1624):
+
+- Contracts that cannot be performed within one year
+- Real estate contracts
+- Contracts for the sale of goods over $500
+- Promises to pay another's debt
+- Contracts in consideration of marriage
+
+### Mitigation of Damages
+
+California law requires the non-breaching party to take reasonable steps to minimize their damages. You cannot sit idle while losses accumulate and then blame the breaching party for all of them.
+
+## How to Respond to a Breach of Contract
+
+### Step 1: Review the Contract
+
+Before taking any action:
+
+- Read the entire contract carefully
+- Identify the specific provisions that were breached
+- Check for dispute resolution clauses (arbitration, mediation requirements)
+- Note any notice requirements (many contracts require written notice before claiming breach)
+- Look for attorney's fees provisions
+
+### Step 2: Document the Breach
+
+Create a clear record:
+
+- Save all communications related to the breach
+- Document the specific obligations that were not met
+- Calculate your damages with supporting evidence
+- Note the date you discovered the breach (for statute of limitations purposes)
+
+### Step 3: Send a Breach of Contract Letter
+
+A formal [breach of contract letter](/services/breach-of-contract-letter) is critical because:
+
+- Many contracts require written notice before a breach claim is valid
+- It creates a documented record of your claim
+- It gives the other party an opportunity to cure the breach
+- It demonstrates good faith — courts require this
+- It often resolves the dispute without litigation
+
+The letter should identify the contract, describe the breach, cite the applicable legal provisions, state your demanded remedy, and set a deadline for compliance.
+
+### Step 4: Evaluate Dispute Resolution Options
+
+Depending on the contract and the amount at issue:
+
+- **Negotiation** — Direct communication to reach a resolution
+- **Mediation** — A neutral third party facilitates resolution
+- **Arbitration** — A private decision-maker issues a binding decision
+- **Small Claims Court** — For claims up to $12,500
+- **Superior Court** — For larger claims
+
+## Take Action
+
+If someone has breached a contract with you, the clock is ticking. Statutes of limitations are strict in California, and evidence becomes harder to preserve over time.
+
+At [Talk to My Lawyer](/services/breach-of-contract-letter), your first attorney-reviewed breach of contract letter is free. Our attorneys draft letters that cite the specific California contract law provisions applicable to your situation and put the breaching party on formal notice.
+
+[Send your breach of contract letter today](/) — the most effective first step toward enforcing your agreement.
+
+## Related Resources
+
+- [How to Write a Breach of Contract Letter](/blog/how-to-write-breach-of-contract-letter) — Step-by-step writing guide
+- [What Is a Demand Letter?](/blog/what-is-a-demand-letter) — General demand letter overview
+- [Non-Compete Agreements in California](/blog/non-compete-agreement-california-guide) — For non-compete breaches
+- [Demand Letter vs. Lawsuit](/blog/demand-letter-vs-lawsuit) — When to escalate`,
+  },
 ];
 
 async function seedBlogPosts() {

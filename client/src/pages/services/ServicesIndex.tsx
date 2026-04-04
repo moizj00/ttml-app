@@ -11,6 +11,10 @@ import {
   Scale,
   Menu,
   X,
+  Gavel,
+  ShieldCheck,
+  Copyright,
+  AlertTriangle,
 } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
 import { SERVICES } from "./serviceData";
@@ -21,6 +25,11 @@ const SERVICE_ICONS: Record<string, typeof FileText> = {
   "security-deposit-letter": HomeIcon,
   "breach-of-contract-letter": Briefcase,
   "employment-dispute-letter": UserCheck,
+  "personal-injury-demand-letter": AlertTriangle,
+  "landlord-harassment-cease-desist": ShieldCheck,
+  "non-compete-dispute-letter": Scale,
+  "intellectual-property-infringement-letter": Copyright,
+  "small-claims-demand-letter": Gavel,
 };
 
 function ServicesNav() {

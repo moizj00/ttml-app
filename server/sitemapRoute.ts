@@ -11,6 +11,11 @@ const SERVICE_SLUGS = [
   "security-deposit-letter",
   "breach-of-contract-letter",
   "employment-dispute-letter",
+  "personal-injury-demand-letter",
+  "landlord-harassment-cease-desist",
+  "non-compete-dispute-letter",
+  "intellectual-property-infringement-letter",
+  "small-claims-demand-letter",
 ];
 
 const STATIC_URLS: { loc: string; changefreq: string; priority: string; lastmod: string }[] = [

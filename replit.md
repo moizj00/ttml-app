@@ -62,6 +62,75 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Affiliate Program**: Single-use rotating discount codes with commission settlement.
 - **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
 
+## SEO Architecture & Conventions
+
+Future agents working on SEO for this project should follow these established patterns:
+
+### Content Structure
+- **Service Pages**: Defined in `client/src/pages/services/serviceData.ts` as a `SERVICES` array. Each entry includes: slug, title, h1, keyword, metaTitle, metaDescription, heroDescription, useCases[], faqs[], relatedArticles[], and blogCategory.
+- **Blog Posts**: Stored in the `blog_posts` PostgreSQL table. Seeded via `scripts/seed-blog-posts.ts`. Each post has: slug, title, excerpt, content (markdown), category, metaDescription, ogImageUrl, authorName, status, readingTimeMinutes, publishedAt, updatedAt.
+- **Blog Categories**: Defined in `drizzle/schema.ts` as `BLOG_CATEGORIES`. Labels are mapped in `BlogIndex.tsx` and `BlogPost.tsx` via `CATEGORY_LABELS` and `CATEGORIES` constants. New categories must be added to both files.
+
+### Content Cluster Strategy (Hub & Spoke)
+- Each **service page** is a "hub" that links to 3–5 related blog posts via `relatedArticles[]`.
+- Each **blog post** links back to related services via the `CATEGORY_TO_SERVICES` mapping (automatically shown as "Related Services" sidebar in `BlogPost.tsx`).
+- Blog posts include inline links to other blog posts and service pages within their markdown content (e.g., `[link text](/blog/slug)` or `[link text](/services/slug)`).
+- CTAs in blog posts are category-specific, defined in `CATEGORY_CTA` in `BlogPost.tsx`, linking to the most relevant service page.
+
+### SEO Meta Tags Pattern
+Every public page must include (via `react-helmet-async`):
+- `<title>` — Unique, keyword-rich, format: "Topic — Talk to My Lawyer"
+- `<meta name="description">` — Concise, compelling, 150-160 chars
+- `<link rel="canonical">` — Full canonical URL
+- `<meta property="og:title/description/type/url/image">` — Complete Open Graph tags
+- `<meta name="twitter:card/title/description/image">` — Twitter Card tags
+
+### Structured Data (JSON-LD)
+- **Homepage** (`Home.tsx`): Organization, LocalBusiness, WebApplication, WebSite (with SearchAction), LegalService (with OfferCatalog), BreadcrumbList
+- **Service Pages** (`ServicePage.tsx`): LegalService, FAQPage, BreadcrumbList
+- **Blog Posts** (`BlogPost.tsx`): Article (with publisher, dates), BreadcrumbList
+- **Blog Index** (`BlogIndex.tsx`): Blog schema
+- **App-wide** (`App.tsx`): Organization (global)
+
+### Local SEO
+- Geo-meta tags in `client/index.html`: `geo.region=US-CA`, `geo.placename=California`, `ICBM` coordinates
+- LocalBusiness JSON-LD on homepage with `areaServed: California`, `address: { addressRegion: "CA" }`
+- All services reference "California" jurisdiction in their content and legal citations
+
+### Sitemap
+- Dynamic sitemap at `server/sitemapRoute.ts` — automatically includes all static pages, service slugs, and published blog posts from the database.
+- New service slugs must be added to the `SERVICE_SLUGS` array in `sitemapRoute.ts` (and to `serviceData.ts`).
+- Blog posts are automatically included when their status is "published".
+- `robots.txt` at `client/public/robots.txt` references the sitemap.
+
+### Adding New Content (Checklist)
+When adding a **new service page**:
+1. Add to `SERVICES` array in `client/src/pages/services/serviceData.ts`
+2. Add icon mapping in `client/src/pages/services/ServicesIndex.tsx` (`SERVICE_ICONS`)
+3. Add slug to `SERVICE_SLUGS` in `server/sitemapRoute.ts`
+4. Add footer link in `client/src/components/shared/Footer.tsx`
+5. Routing is automatic via `/services/:slug` in `App.tsx`
+
+When adding a **new blog post**:
+1. Add to `posts` array in `scripts/seed-blog-posts.ts` with all required fields
+2. Run `npx tsx scripts/seed-blog-posts.ts` to seed
+3. If new category: add to `CATEGORIES`, `CATEGORY_LABELS`, and `CATEGORY_CTA` in both `BlogIndex.tsx` and `BlogPost.tsx`
+4. Include internal links to related service pages and blog posts in content
+5. Blog post automatically appears in sitemap when status is "published"
+
+When adding a **new blog category**:
+1. Add to `BLOG_CATEGORIES` in `drizzle/schema.ts`
+2. Add label in `BlogIndex.tsx` → `CATEGORIES` array and `CATEGORY_LABELS`
+3. Add label in `BlogPost.tsx` → `CATEGORY_LABELS`
+4. Add CTA in `BlogPost.tsx` → `CATEGORY_CTA` linking to the most relevant service page
+
+### Performance & Technical SEO
+- Preconnect hints for Google Fonts in `client/index.html`
+- `font-display: swap` already applied via Google Fonts `display=swap` parameter
+- DNS prefetch for external resources
+- Images should use `loading="lazy"` for below-fold content and `alt` attributes
+- All page components use lazy loading via `lazyRetry()` in `App.tsx`
+
 ## External Dependencies
 - **Supabase**: PostgreSQL database (primary + read replica), authentication services.
 - **Drizzle ORM**: Object-relational mapping.

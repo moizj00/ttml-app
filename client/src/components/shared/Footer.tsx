@@ -100,6 +100,9 @@ export default function Footer() {
               <li><Link href="/services/breach-of-contract-letter" className="hover:text-white transition-colors" data-testid="footer-link-breach">Breach of Contract</Link></li>
               <li><Link href="/services/security-deposit-letter" className="hover:text-white transition-colors" data-testid="footer-link-deposit">Security Deposit</Link></li>
               <li><Link href="/services/employment-dispute-letter" className="hover:text-white transition-colors" data-testid="footer-link-employment">Employment Disputes</Link></li>
+              <li><Link href="/services/personal-injury-demand-letter" className="hover:text-white transition-colors" data-testid="footer-link-injury">Personal Injury</Link></li>
+              <li><Link href="/services/small-claims-demand-letter" className="hover:text-white transition-colors" data-testid="footer-link-smallclaims">Small Claims</Link></li>
+              <li><Link href="/services/intellectual-property-infringement-letter" className="hover:text-white transition-colors" data-testid="footer-link-ip">IP Infringement</Link></li>
             </ul>
           </div>
 
