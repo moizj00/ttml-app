@@ -17,8 +17,6 @@ import {
   Target,
   Paperclip,
   X,
-  MessageSquare,
-  ListChecks,
 } from "lucide-react";
 import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
 import type { AnalysisPrefill } from "../../../../shared/types";
@@ -30,8 +28,6 @@ import { Step3Parties } from "./intake-steps/Step3Parties";
 import { Step4Details } from "./intake-steps/Step4Details";
 import { Step5Outcome } from "./intake-steps/Step5Outcome";
 import { Step6Exhibits } from "./intake-steps/Step6Exhibits";
-import { ConversationalIntake } from "./intake-steps/ConversationalIntake";
-import { CaseStrengthScore } from "./intake-steps/CaseStrengthScore";
 import type { FormData, ExhibitRow, PendingFile } from "./intake-steps/types";
 
 const STEPS = [
@@ -163,13 +159,11 @@ export default function SubmitLetter() {
   const prefillApplied = useRef(false);
   const prefillFromAnalyzer = useRef(false);
   const templatePrefillApplied = useRef(false);
-  const analysisPrefillData = useRef<AnalysisPrefill | null>(null);
   const [form, setForm] = useState<FormData>(() => {
     const { prefill, found } = readAndClearPrefill();
     if (found && prefill) {
       prefillApplied.current = true;
       prefillFromAnalyzer.current = true;
-      analysisPrefillData.current = prefill;
       return buildInitialFormFromPrefill(prefill);
     }
     const params = new URLSearchParams(search);
@@ -210,7 +204,6 @@ export default function SubmitLetter() {
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
-  const [intakeMode, setIntakeMode] = useState<"conversational" | "form">("conversational");
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -604,173 +597,112 @@ export default function SubmitLetter() {
           </div>
         )}
 
-        {/* Intake Mode Toggle */}
-        <div className="flex items-center justify-center gap-1 p-1 bg-muted rounded-lg w-fit mx-auto" data-testid="intake-mode-toggle">
-          <button
-            onClick={() => setIntakeMode("conversational")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              intakeMode === "conversational"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid="button-mode-conversational"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            AI-Guided
-          </button>
-          <button
-            onClick={() => setIntakeMode("form")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              intakeMode === "form"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid="button-mode-form"
-          >
-            <ListChecks className="w-3.5 h-3.5" />
-            Step-by-Step Form
-          </button>
-        </div>
-
-        {intakeMode === "conversational" ? (
-          <Card>
-            <CardContent className="pt-6">
-              <ConversationalIntake
-                onFieldsExtracted={(fields) => {
-                  setForm(prev => ({ ...prev, ...fields }));
-                }}
-                onSwitchToForm={() => {
-                  setIntakeMode("form");
-                  setStep(1);
-                }}
-                onReviewAndSubmit={() => {
-                  setIntakeMode("form");
-                  setStep(6);
-                }}
-                prefillContext={analysisPrefillData.current}
-                currentForm={form}
-                hasExhibits={exhibits.some(e => e.file && e.file.status === "ready")}
-              />
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {/* Step Progress */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
-              {STEPS.map((s, i) => (
-                <div key={s.id} className="flex items-center flex-1 min-w-0">
-                  <div
-                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
-                      step === s.id
-                        ? "bg-primary text-primary-foreground"
-                        : step > s.id
-                          ? "bg-green-100 text-green-700"
-                          : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {step > s.id ? <CheckCircle className="w-3.5 h-3.5" /> : s.icon}
-                    <span className="hidden sm:inline">{s.label}</span>
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div
-                      className={`flex-1 h-0.5 mx-1 ${step > s.id ? "bg-green-300" : "bg-muted"}`}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  {STEPS[step - 1].icon}
-                  {STEPS[step - 1].label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
-                {step === 1 && (
-                  <Step1LetterType
-                    form={form}
-                    stepErrors={stepErrors}
-                    update={update}
-                  />
-                )}
-                {step === 2 && (
-                  <Step2Jurisdiction
-                    form={form}
-                    stepErrors={stepErrors}
-                    update={update}
-                  />
-                )}
-                {step === 3 && (
-                  <Step3Parties
-                    form={form}
-                    stepErrors={stepErrors}
-                    update={update}
-                  />
-                )}
-                {step === 4 && (
-                  <Step4Details
-                    form={form}
-                    stepErrors={stepErrors}
-                    update={update}
-                  />
-                )}
-                {step === 5 && (
-                  <Step5Outcome
-                    form={form}
-                    stepErrors={stepErrors}
-                    update={update}
-                  />
-                )}
-                {step === 6 && (
-                  <Step6Exhibits
-                    exhibits={exhibits}
-                    setExhibits={setExhibits}
-                  />
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Case Strength Score — shown on step 6 before submission */}
-            {step === 6 && form.letterType && form.jurisdictionState && form.description.length >= 10 && (
-              <CaseStrengthScore
-                form={form}
-                hasExhibits={exhibits.some(e => e.file && e.file.status === "ready")}
-              />
-            )}
-
-            {/* Navigation */}
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={() => { setStepErrors({}); setStep(s => s - 1); }}
-                disabled={step === 1}
-                className="bg-background"
+        {/* Step Progress */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
+          {STEPS.map((s, i) => (
+            <div key={s.id} className="flex items-center flex-1 min-w-0">
+              <div
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
+                  step === s.id
+                    ? "bg-primary text-primary-foreground"
+                    : step > s.id
+                      ? "bg-green-100 text-green-700"
+                      : "bg-muted text-muted-foreground"
+                }`}
               >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Back
-              </Button>
-              {step < 6 ? (
-                <Button
-                  onClick={() => {
-                    if (validateStep()) {
-                      setStep(s => s + 1);
-                    }
-                  }}
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              ) : (
-                <Button onClick={handleSubmit} disabled={isSubmitting}>
-                  {isSubmitting ? "Submitting..." : "Submit Letter"}
-                  <CheckCircle className="w-4 h-4 ml-1" />
-                </Button>
+                {step > s.id ? <CheckCircle className="w-3.5 h-3.5" /> : s.icon}
+                <span className="hidden sm:inline">{s.label}</span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  className={`flex-1 h-0.5 mx-1 ${step > s.id ? "bg-green-300" : "bg-muted"}`}
+                />
               )}
             </div>
-          </>
-        )}
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              {STEPS[step - 1].icon}
+              {STEPS[step - 1].label}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
+            {step === 1 && (
+              <Step1LetterType
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
+            )}
+            {step === 2 && (
+              <Step2Jurisdiction
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
+            )}
+            {step === 3 && (
+              <Step3Parties
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
+            )}
+            {step === 4 && (
+              <Step4Details
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
+            )}
+            {step === 5 && (
+              <Step5Outcome
+                form={form}
+                stepErrors={stepErrors}
+                update={update}
+              />
+            )}
+            {step === 6 && (
+              <Step6Exhibits
+                exhibits={exhibits}
+                setExhibits={setExhibits}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            onClick={() => { setStepErrors({}); setStep(s => s - 1); }}
+            disabled={step === 1}
+            className="bg-background"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+          {step < 6 ? (
+            <Button
+              onClick={() => {
+                if (validateStep()) {
+                  setStep(s => s + 1);
+                }
+              }}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? "Submitting..." : "Submit Letter"}
+              <CheckCircle className="w-4 h-4 ml-1" />
+            </Button>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

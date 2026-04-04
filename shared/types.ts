@@ -761,10 +761,6 @@ export interface AnalysisPrefill {
   senderName?: string;
   recipientName?: string;
   description?: string;
-  detectedDeadline?: string;
-  urgencyLevel?: "low" | "medium" | "high";
-  emotionalTone?: string;
-  actionItems?: string[];
 }
 
 // ─── Pipeline Error Codes ───

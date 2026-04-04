@@ -311,22 +311,6 @@ export default function DocumentAnalyzer() {
       prefill.description = result.summary.slice(0, 600);
     }
 
-    if (result.detectedDeadline) {
-      prefill.detectedDeadline = result.detectedDeadline;
-    }
-
-    if (result.urgencyLevel) {
-      prefill.urgencyLevel = result.urgencyLevel;
-    }
-
-    if (result.emotionalIntelligence?.overallTone) {
-      prefill.emotionalTone = result.emotionalIntelligence.overallTone;
-    }
-
-    if (result.actionItems && result.actionItems.length > 0) {
-      prefill.actionItems = result.actionItems.slice(0, 5);
-    }
-
     try {
       sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill));
     } catch {

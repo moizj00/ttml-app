@@ -62,8 +62,6 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 ### Feature Specifications
 - **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with seed scenarios. Users can browse templates, pre-fill intake forms, and admins manage templates via CRUD panel.
 - **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction, parties, incident details, desired outcome, and exhibit uploads.
-- **Conversational Smart Intake**: AI-guided chat interface (default mode) that extracts structured intake fields from natural language. Users describe their situation conversationally and the AI asks targeted follow-ups based on letter type and jurisdiction. Toggle between AI-guided and step-by-step form views. Connected to Document Analyzer "Draft Response" flow for pre-filled context.
-- **Case Strength Scoring**: AI-powered 1-10 case strength assessment shown before submission (Step 6). Evaluates evidence completeness, legal basis, jurisdiction requirements, damages documentation, and communication trail. Includes visual gauge, factor breakdown, strengths/weaknesses, and improvement tips.
 - **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
 - **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
 - **Affiliate Program**: Single-use rotating discount codes with commission settlement.
