@@ -439,6 +439,7 @@ export async function runDraftingStage(
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
         reviewNotes: draft.reviewNotes,
+        counterArguments: draft.counterArguments,
         citationRegistrySize: pipelineCtx?.citationRegistry?.length ?? 0,
         researchUnverified: pipelineCtx?.researchUnverified ?? false,
         webGrounded: pipelineCtx?.webGrounded ?? true,

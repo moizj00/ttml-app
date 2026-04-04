@@ -66,6 +66,8 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
 - **Affiliate Program**: Single-use rotating discount codes with commission settlement.
 - **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
+- **Counter-Argument Anticipation**: Stage 2 drafting generates 3–5 likely opposing arguments with strength ratings and preemptive addressing strategies. Stage 4 vetting validates counter-argument coverage and flags gaps. Counter-arguments are displayed in a dedicated "Counter" tab in the attorney review panel (`CounterArgumentPanel.tsx`).
+- **Evidence Intelligence**: Document Analyzer extracts structured evidence items (dates, amounts, parties, clauses, deadlines, obligations) with confidence levels. Evidence is displayed in the analysis results and carried through to the letter submission form via `AnalysisPrefill` to enrich research context.
 
 ## SEO Architecture & Conventions
 

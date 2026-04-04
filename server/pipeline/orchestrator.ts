@@ -274,6 +274,7 @@ export async function runFullPipeline(
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
     // Capture the initial draft for best-effort fallback (both in-context and registry)
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
+    pipelineCtx.counterArguments = draft.counterArguments;
     _intermediateContentRegistry.set(letterId, { content: draft.draftLetter, qualityWarnings: pipelineCtx.qualityWarnings ?? [] });
 
     const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
@@ -314,6 +315,7 @@ export async function runFullPipeline(
         groundingReport: pipelineCtx.groundingReport,
         consistencyReport: pipelineCtx.consistencyReport,
         vettingReport: vettingResult.vettingReport,
+        counterArguments: pipelineCtx.counterArguments,
         assemblyRetries,
         ragExampleCount: pipelineCtx.ragExampleCount ?? 0,
         ragSimilarityScores: pipelineCtx.ragSimilarityScores ?? [],
@@ -741,14 +743,13 @@ export async function retryPipelineFromStage(
     research: ResearchPacket,
     draft: DraftOutput,
   ) => {
-    // Capture draft content for best-effort fallback
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
+    pipelineCtx.counterArguments = draft.counterArguments;
     _intermediateContentRegistry.set(letterId, { content: draft.draftLetter, qualityWarnings: pipelineCtx.qualityWarnings ?? [] });
 
     const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
       letterId, intake, research, draft, pipelineCtx
     );
-    // Assembly/vetting produced a higher-quality version — prefer it
     pipelineCtx._intermediateDraftContent = vettingResult.vettedLetter;
     _intermediateContentRegistry.set(letterId, { content: vettingResult.vettedLetter, qualityWarnings: pipelineCtx.qualityWarnings ?? [] });
 

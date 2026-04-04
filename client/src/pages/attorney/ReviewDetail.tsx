@@ -13,17 +13,19 @@ import {
   AlertCircle,
   Loader2,
   ShieldAlert,
+  Shield,
   ClipboardList,
   Scale,
 } from "lucide-react";
 import { useParams } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { LETTER_TYPE_CONFIG, type CitationAuditReport } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG, type CitationAuditReport, type CounterArgument } from "../../../../shared/types";
 import { IntakePanel } from "./review/IntakePanel";
 import { ResearchPanel } from "./review/ResearchPanel";
 import { CitationAuditPanel } from "./review/CitationAuditPanel";
 import { HistoryPanel } from "./review/HistoryPanel";
+import { CounterArgumentPanel } from "./review/CounterArgumentPanel";
 import { ApproveDialog } from "./review/ApproveDialog";
 import { RejectDialog } from "./review/RejectDialog";
 import { ChangesDialog } from "./review/ChangesDialog";
@@ -33,6 +35,11 @@ interface AssemblyVersionMeta {
   stage?: string;
   researchUnverified?: boolean;
   citationAuditReport?: CitationAuditReport;
+  counterArguments?: CounterArgument[];
+  vettingReport?: {
+    counterArgumentGaps?: string[];
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
@@ -246,6 +253,13 @@ export default function ReviewDetail() {
   const citationAuditReport: CitationAuditReport | null = assemblyMeta?.citationAuditReport ?? null;
   const isResearchUnverified = letter.researchUnverified === true || assemblyMeta?.researchUnverified === true;
   const isQualityDegraded = letter.qualityDegraded === true;
+
+  const draftVersion = versions?.find(v => v.versionType === "ai_draft" && (v.metadataJson as AssemblyVersionMeta | null)?.stage === "draft_generation");
+  const draftMeta = draftVersion?.metadataJson as AssemblyVersionMeta | null;
+  const vettedVersion = versions?.find(v => v.versionType === "ai_draft" && (v.metadataJson as AssemblyVersionMeta | null)?.stage === "vetted_final");
+  const vettedMeta = vettedVersion?.metadataJson as AssemblyVersionMeta | null;
+  const counterArguments: CounterArgument[] = (draftMeta?.counterArguments ?? assemblyMeta?.counterArguments ?? vettedMeta?.counterArguments ?? []) as CounterArgument[];
+  const counterArgumentGaps: string[] = (vettedMeta?.vettingReport?.counterArgumentGaps ?? assemblyMeta?.vettingReport?.counterArgumentGaps ?? []) as string[];
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const enterEditMode = () => {
@@ -494,6 +508,10 @@ export default function ReviewDetail() {
                   <Scale className="w-3 h-3 mr-1" />
                   Citations
                 </TabsTrigger>
+                <TabsTrigger value="counter-args" className="flex-1 text-xs" data-testid="tab-counter-args">
+                  <Shield className="w-3 h-3 mr-1" />
+                  Counter
+                </TabsTrigger>
                 <TabsTrigger value="history" className="flex-1 text-xs" data-testid="tab-history">
                   <History className="w-3 h-3 mr-1" />
                   History
@@ -513,6 +531,13 @@ export default function ReviewDetail() {
 
               <TabsContent value="citations" className="flex-1 overflow-auto mt-2">
                 <CitationAuditPanel citationAuditReport={citationAuditReport} />
+              </TabsContent>
+
+              <TabsContent value="counter-args" className="flex-1 overflow-auto mt-2">
+                <CounterArgumentPanel
+                  counterArguments={counterArguments}
+                  counterArgumentGaps={counterArgumentGaps}
+                />
               </TabsContent>
 
               <TabsContent value="history" className="flex-1 overflow-auto mt-2">

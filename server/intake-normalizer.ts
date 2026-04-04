@@ -163,7 +163,7 @@ export function buildNormalizedPromptInput(
       "certified_mail"
     ),
     timeline: safeArray((intake as any).timeline),
-    evidenceSummary: trimOrNull((intake as any).evidenceSummary),
+    evidenceSummary: trimOrNull(intake.evidenceSummary),
     userStatements: trimOrNull((intake as any).userStatements),
   };
 }

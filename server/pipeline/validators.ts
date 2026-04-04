@@ -142,7 +142,17 @@ export function parseAndValidateDraftLlmOutput(raw: string): {
   if (!Array.isArray(d.riskFlags)) errors.push("riskFlags must be an array");
 
   if (errors.length > 0) return { valid: false, errors };
-  return { valid: true, data: parsed as DraftOutput, errors: [] };
+
+  const draft = parsed as DraftOutput;
+  if (Array.isArray(d.counterArguments)) {
+    draft.counterArguments = (d.counterArguments as Array<Record<string, unknown>>).map(ca => ({
+      argument: typeof ca.argument === "string" ? ca.argument : "",
+      howAddressed: typeof ca.howAddressed === "string" ? ca.howAddressed : "",
+      strength: (ca.strength === "strong" || ca.strength === "moderate" || ca.strength === "weak") ? ca.strength : "moderate",
+    }));
+  }
+
+  return { valid: true, data: draft, errors: [] };
 }
 
 export function validateFinalLetter(text: string): {

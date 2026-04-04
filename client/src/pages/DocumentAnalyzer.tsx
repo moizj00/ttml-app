@@ -311,6 +311,13 @@ export default function DocumentAnalyzer() {
       prefill.description = result.summary.slice(0, 600);
     }
 
+    if (result.extractedEvidence && result.extractedEvidence.length > 0) {
+      prefill.evidenceItems = result.extractedEvidence;
+      prefill.evidenceSummary = result.extractedEvidence
+        .map(e => `${e.type}: ${e.value} — ${e.context}`)
+        .join("; ");
+    }
+
     try {
       sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill));
     } catch {
@@ -994,6 +1001,52 @@ export default function DocumentAnalyzer() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Extracted Evidence Section ─── */}
+            {result.extractedEvidence && result.extractedEvidence.length > 0 && (
+              <div className="rounded-2xl border overflow-hidden" data-testid="evidence-section">
+                <div className="bg-gradient-to-r from-emerald-700 to-teal-700 px-4 sm:px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight">Extracted Evidence</h2>
+                      <p className="text-emerald-100 text-xs">{result.extractedEvidence.length} items identified</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-6 space-y-3 bg-emerald-50/30">
+                  {result.extractedEvidence.map((item, i) => {
+                    const typeIcons: Record<string, typeof Calendar> = {
+                      date: Calendar,
+                      amount: Scale,
+                      party: Users,
+                      clause: FileText,
+                      deadline: Clock,
+                      obligation: ClipboardList,
+                    };
+                    const TypeIcon = typeIcons[item.type] || FileText;
+                    const confidenceColor = item.confidence === "high" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                      item.confidence === "medium" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                      "bg-gray-100 text-gray-600 border-gray-200";
+                    return (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-white border" data-testid={`evidence-item-${i}`}>
+                        <TypeIcon className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{item.type}</Badge>
+                            <span className="text-sm font-semibold">{item.value}</span>
+                            <Badge className={`text-[10px] ${confidenceColor} border`}>{item.confidence}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{item.context}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -85,6 +85,8 @@ export interface VettingReport {
   changesApplied: string[];
   overallAssessment: string;
   riskLevel: "low" | "medium" | "high";
+  counterArgumentsAddressed?: number;
+  counterArgumentGaps?: string[];
 }
 
 export function buildVettingSystemPrompt(
@@ -152,6 +154,12 @@ ${bloatSection}
 - Flag any instance where the sender appears as the recipient or vice versa.
 - Ensure the letter's demands match the desired outcome stated in the intake.
 
+### 7. COUNTER-ARGUMENT COVERAGE
+- Review whether the letter preemptively addresses likely opposing arguments.
+- The recipient will likely raise defenses — does the letter neutralize them?
+- Count how many of the top anticipated counter-arguments are addressed.
+- If major counter-arguments are unaddressed, flag this as a medium-risk issue.
+
 ## Output Format
 
 Return ONLY a valid JSON object with these exact fields:
@@ -166,7 +174,9 @@ Return ONLY a valid JSON object with these exact fields:
     "factualIssuesFound": ["list of factual errors or inconsistencies found"],
     "changesApplied": ["summary of each change made to the letter"],
     "overallAssessment": "Brief assessment of the letter quality after vetting",
-    "riskLevel": "low|medium|high"
+    "riskLevel": "low|medium|high",
+    "counterArgumentsAddressed": <number of anticipated counter-arguments the letter preemptively addresses>,
+    "counterArgumentGaps": ["list of major counter-arguments NOT addressed in the letter that the attorney should consider adding"]
   }
 }
 
@@ -274,6 +284,13 @@ export function validateVettingOutput(
 
   if (report.riskLevel === "medium" && report.factualIssuesFound.length > 3) {
     errors.push(`Warning: ${report.factualIssuesFound.length} factual issues reported (some may have been fixed by vetting)`);
+  }
+
+  if (report.counterArgumentGaps && report.counterArgumentGaps.length >= 2) {
+    errors.push(`COUNTER-ARGUMENT GAPS: ${report.counterArgumentGaps.length} major counter-arguments are not addressed in the letter. Attorney should consider strengthening preemptive language.`);
+    if (report.riskLevel !== "high") {
+      report.riskLevel = "medium";
+    }
   }
 
   return { valid: errors.length === 0, errors, critical };
@@ -481,6 +498,8 @@ export async function runVettingStage(
           changesApplied: parsed.vettingReport?.changesApplied ?? [],
           overallAssessment: parsed.vettingReport?.overallAssessment ?? "No assessment provided",
           riskLevel: parsed.vettingReport?.riskLevel ?? "medium",
+          counterArgumentsAddressed: typeof parsed.vettingReport?.counterArgumentsAddressed === "number" ? parsed.vettingReport.counterArgumentsAddressed : undefined,
+          counterArgumentGaps: Array.isArray(parsed.vettingReport?.counterArgumentGaps) ? parsed.vettingReport.counterArgumentGaps : undefined,
         },
       };
     } catch (parseErr) {
@@ -872,6 +891,7 @@ export async function finalizeLetterAfterVetting(
       ),
       stage: "vetted_final",
       vettingReport,
+      counterArguments: pipelineCtx?.counterArguments,
       researchUnverified: pipelineCtx?.researchUnverified ?? false,
       webGrounded: pipelineCtx?.webGrounded ?? true,
       citationRegistry: pipelineCtx?.citationRegistry ?? [],

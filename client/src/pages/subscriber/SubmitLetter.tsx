@@ -159,11 +159,15 @@ export default function SubmitLetter() {
   const prefillApplied = useRef(false);
   const prefillFromAnalyzer = useRef(false);
   const templatePrefillApplied = useRef(false);
+  const analyzerEvidenceSummary = useRef<string | null>(null);
   const [form, setForm] = useState<FormData>(() => {
     const { prefill, found } = readAndClearPrefill();
     if (found && prefill) {
       prefillApplied.current = true;
       prefillFromAnalyzer.current = true;
+      if (prefill.evidenceSummary) {
+        analyzerEvidenceSummary.current = prefill.evidenceSummary;
+      }
       return buildInitialFormFromPrefill(prefill);
     }
     const params = new URLSearchParams(search);
@@ -391,6 +395,7 @@ export default function SubmitLetter() {
         desiredOutcome: form.desiredOutcome,
         deadlineDate: form.deadlineDate || undefined,
         additionalContext: form.additionalContext || undefined,
+        evidenceSummary: analyzerEvidenceSummary.current || undefined,
         tonePreference: form.tonePreference,
         language: form.language,
         priorCommunication: form.priorCommunication || undefined,

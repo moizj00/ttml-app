@@ -438,6 +438,7 @@ export interface IntakeJson {
     description?: string;
     hasAttachment?: boolean;
   }[];
+  evidenceSummary?: string;
 }
 
 // ─── Research Packet Shape ───
@@ -622,6 +623,14 @@ export interface PipelineContext {
    * Ladder (latest wins): draft → assembled → vetted
    */
   _intermediateDraftContent?: string;
+  counterArguments?: CounterArgument[];
+}
+
+// ─── Counter-Argument Analysis ───
+export interface CounterArgument {
+  argument: string;
+  howAddressed: string;
+  strength: "strong" | "moderate" | "weak";
 }
 
 // ─── Draft Output Shape ───
@@ -632,6 +641,7 @@ export interface DraftOutput {
   riskFlags: string[];
   reviewNotes?: string;
   groundingWarnings?: string[];
+  counterArguments?: CounterArgument[];
 }
 
 // ─── Document Analysis Result ───
@@ -690,6 +700,21 @@ export const emotionalIntelligenceSchema = z.object({
 });
 export type EmotionalIntelligence = z.infer<typeof emotionalIntelligenceSchema>;
 
+// ─── Evidence Item (extracted from Document Analyzer) ───
+export interface EvidenceItem {
+  type: "date" | "amount" | "party" | "clause" | "deadline" | "obligation";
+  value: string;
+  context: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export const evidenceItemSchema = z.object({
+  type: z.enum(["date", "amount", "party", "clause", "deadline", "obligation"]),
+  value: z.string(),
+  context: z.string(),
+  confidence: z.enum(["high", "medium", "low"]),
+});
+
 // Canonical (strict) result schema — use for return types and DB storage
 export const documentAnalysisResultSchema = z.object({
   summary: z.string(),
@@ -705,6 +730,7 @@ export const documentAnalysisResultSchema = z.object({
   }),
   recommendedResponseSummary: z.string(),
   emotionalIntelligence: emotionalIntelligenceSchema.nullable(),
+  extractedEvidence: z.array(evidenceItemSchema).optional(),
 });
 export type DocumentAnalysisResult = z.infer<typeof documentAnalysisResultSchema>;
 
@@ -747,6 +773,14 @@ export const documentAnalysisResultLenientSchema = z.object({
     manipulationTactics: z.array(z.string()).default([]),
     trueIntentSummary: z.string().default(""),
   }).nullable().default(null),
+  extractedEvidence: z.array(
+    z.object({
+      type: z.enum(["date", "amount", "party", "clause", "deadline", "obligation"]).default("clause"),
+      value: z.string().default(""),
+      context: z.string().default(""),
+      confidence: z.enum(["high", "medium", "low"]).default("medium"),
+    })
+  ).optional().default([]),
 });
 
 // Zod insert schema for the document_analyses table
@@ -766,6 +800,8 @@ export interface AnalysisPrefill {
   senderName?: string;
   recipientName?: string;
   description?: string;
+  evidenceItems?: EvidenceItem[];
+  evidenceSummary?: string;
 }
 
 // ─── Pipeline Error Codes ───

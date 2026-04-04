@@ -212,6 +212,7 @@ const intakeJsonSchema = z.object({
       })
     )
     .optional(),
+  evidenceSummary: z.string().optional(),
 });
 
 

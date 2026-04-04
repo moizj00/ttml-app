@@ -692,8 +692,23 @@ Return this exact structure:
   "riskFlags": [
     "Specific legal risk — e.g. '${research.statuteOfLimitations?.urgencyFlag ? `SOL urgency: ${research.statuteOfLimitations.period} from ${research.statuteOfLimitations.clockStartsOn}` : "Verify all factual claims are documented before sending"}'",
     "..."
+  ],
+
+  "counterArguments": [
+    {
+      "argument": "The specific argument the recipient is likely to raise — e.g. 'Recipient will claim the statute of limitations has expired'",
+      "howAddressed": "How this letter preemptively addresses or neutralizes this argument — e.g. 'The letter explicitly cites the discovery rule tolling under [statute], which extends the deadline'",
+      "strength": "strong"
+    },
+    {
+      "argument": "Second likely opposing argument",
+      "howAddressed": "How the letter handles it",
+      "strength": "moderate"
+    }
   ]
-} `;
+}
+
+IMPORTANT: The counterArguments array must contain 3–5 entries. Each entry identifies a likely argument the recipient will make and explains how the letter preemptively addresses it. strength must be "strong", "moderate", or "weak" — indicating how well the letter neutralizes that argument. If a counter-argument is only weakly addressed, note what the reviewing attorney should strengthen. `;
 }
 
 export function buildAssemblySystemPrompt(): string {
@@ -830,6 +845,12 @@ export function buildAssemblyUserPrompt(
     draft.attorneyReviewSummary + "\n\n" +
     "Open Questions: " + (draft.openQuestions.join("; ") || "None") + "\n" +
     "Risk Flags: " + (draft.riskFlags.join("; ") || "None") + "\n\n" +
+    (draft.counterArguments && draft.counterArguments.length > 0
+      ? "## Counter-Arguments Identified in Stage 2\nThe letter should preemptively address these anticipated opposing arguments:\n" +
+        draft.counterArguments.map((ca, i) =>
+          `${i + 1}. ${ca.argument} (strength: ${ca.strength})\n   How addressed: ${ca.howAddressed}`
+        ).join("\n") + "\n\nENSURE all counter-arguments marked 'weak' are strengthened in the final letter.\n\n"
+      : "") +
     "## Assembly Instructions\n\n" +
     "Take the Stage 2 draft above and produce the FINAL letter. Your specific tasks:\n\n" +
     "1. PRESERVE all legal citations and case references from the draft — do not remove any\n" +

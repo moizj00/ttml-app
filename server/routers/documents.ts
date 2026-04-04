@@ -371,7 +371,27 @@ export const documentsRouter = router({
       "False urgency — creates artificial time pressure to prevent careful consideration"
     ],
     "trueIntentSummary": "Plain-English paragraph explaining what this document is really saying beneath all the formality."
-  }
+  },
+  "extractedEvidence": [
+    {
+      "type": "date",
+      "value": "March 15, 2024",
+      "context": "Date the original agreement was signed",
+      "confidence": "high"
+    },
+    {
+      "type": "amount",
+      "value": "$5,000",
+      "context": "Claimed damages for breach of contract",
+      "confidence": "high"
+    },
+    {
+      "type": "party",
+      "value": "Acme Corp",
+      "context": "The sending party making the legal claim",
+      "confidence": "high"
+    }
+  ]
 }
 
 Field rules:
@@ -393,6 +413,14 @@ Emotional Intelligence field rules:
 - redFlags: Array of 1-5 specific passages where language wraps threats, pressure, or unfavorable terms in friendly/neutral/humorous tone. Quote the actual passage and explain what's really being said. Look for: polite language disguising demands, humor masking serious consequences, casual framing of significant obligations, and professional language softening harsh realities.
 - manipulationTactics: Array of 1-5 identified persuasion or manipulation techniques. Look for: false urgency, appeal to authority, guilt-tripping, minimization of the recipient's rights, anchoring bias, social proof manipulation, fear of loss framing, and false dichotomies.
 - trueIntentSummary: A plain-English paragraph (2-4 sentences) explaining what this document is REALLY saying when you strip away all the formality, politeness, and legal language. Be direct and honest about the sender's true motivations and goals.
+
+Evidence extraction rules:
+- extractedEvidence: Array of 3-10 structured evidence items found in the document. Each item has:
+  - type: One of "date", "amount", "party", "clause", "deadline", "obligation"
+  - value: The specific value (e.g., "March 15, 2024", "$5,000", "ABC Corp", "Section 12.3")
+  - context: A brief sentence explaining the significance of this evidence
+  - confidence: "high", "medium", or "low" based on how clearly this appears in the document
+- Look for: specific dates and timelines, monetary amounts (damages, fees, penalties), named parties and their roles, important contract clauses or legal provisions, deadlines for action, and stated obligations or requirements.
 
 - Return ONLY valid JSON, no markdown fences, no explanation outside the JSON object.
 
