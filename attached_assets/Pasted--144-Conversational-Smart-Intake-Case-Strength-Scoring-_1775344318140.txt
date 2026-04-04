@@ -1,0 +1,36 @@
+#144 - Conversational Smart Intake & Case Strength Scoring
+What & Why
+Replace the static 6-step intake form with an AI-guided conversational questionnaire that asks intelligent follow-up questions based on user answers, and add real-time case strength scoring before payment. Research shows conversational AI intake increases conversion by up to 40% and "follow-up within 5 minutes" makes prospects 21x more likely to convert. DocDraft (our closest competitor at $209.99/letter with attorney review) uses a static form — this leapfrogs them. Case strength scoring ("Your position is strong — 8/10") builds trust and increases willingness to pay.
+
+Done looks like
+New conversational intake flow: user describes their situation in natural language, AI parses it and asks targeted follow-ups ("You mentioned a contractor dispute — did you have a written contract? When was the last payment?")
+AI auto-extracts structured data from the conversation (parties, dates, amounts, jurisdiction, letter type) and pre-fills the intake JSON
+Dynamic follow-up questions adapt by letter type and jurisdiction (e.g., California security deposit → "Did your landlord provide an itemized statement within 21 days?")
+Case strength score displayed before payment: 1–10 scale with plain-English explanation of strengths and weaknesses
+Score factors: completeness of evidence, clarity of legal basis, jurisdiction-specific requirements met, statute of limitations status
+Fallback: users can still use the traditional step-by-step form if they prefer
+The Document Analyzer "Draft Response" button feeds directly into the conversational intake with pre-filled context
+Out of scope
+Outcome prediction percentages ("73% chance of resolution") — requires historical outcome data we don't have yet
+Audio/voice intake — text only for now
+Real-time attorney chat during intake
+Tasks
+Build the conversational intake engine — Create an AI-powered intake endpoint that accepts a natural-language description and returns structured follow-up questions. Use GPT-4o with a system prompt that understands all 10 letter types and their required fields. The engine should extract entities (names, dates, amounts, addresses) from free text and generate targeted follow-ups.
+
+Build the conversational intake UI — Replace or augment the current 6-step form with a chat-like interface. User types their situation, sees AI follow-up questions, answers them, and watches the intake fields auto-populate in real-time. Include a "Switch to form view" toggle for users who prefer the traditional approach.
+
+Build the case strength scoring engine — Create an endpoint that takes the completed intake data and returns a 1–10 score with factor breakdown. Score based on: evidence completeness, legal basis clarity, jurisdiction-specific requirements (e.g., California demand letter prerequisites), statute of limitations, amount documentation, and communication trail.
+
+Display case strength score pre-payment — Show the score on the review/payment page with a visual gauge and plain-English explanation. Include specific improvement suggestions ("Upload your contract to strengthen your case from 6 to 8").
+
+Connect Document Analyzer to conversational intake — When a user clicks "Draft Response" from the Document Analyzer, carry all extracted metadata (parties, jurisdiction, dates, summary, emotional analysis) into the conversational intake as pre-filled context.
+
+Relevant files
+client/src/pages/subscriber/SubmitLetter.tsx
+client/src/pages/subscriber/intake-steps/
+client/src/pages/DocumentAnalyzer.tsx
+server/routers/documents.ts
+server/intake-normalizer.ts
+server/pipeline/research.ts
+shared/types.ts
+drizzle/schema.ts
