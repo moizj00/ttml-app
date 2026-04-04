@@ -433,9 +433,9 @@ export default function Home() {
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-[2.8rem] lg:text-[3.2rem] xl:text-[3.6rem] font-extrabold leading-[1.12] tracking-tight mb-6 sm:mb-8">
-              California-focused{" "}
+              AI drafting +{" "}
               <span className="text-blue-600 relative inline-block">
-                legal letter drafting
+                attorney review
                 <svg
                   className="absolute w-full h-3 -bottom-1 left-0 text-blue-200"
                   viewBox="0 0 100 10"
@@ -449,13 +449,11 @@ export default function Home() {
                   />
                 </svg>
               </span>
-              {", built for speed."}
+              {", delivered in hours."}
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              Turn your facts into structured legal-letter drafts using a system
-              designed around California legal language and repeatable letter
-              workflows.
+              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines AI drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks, starting at $200.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -479,15 +477,15 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-3 mb-8 sm:mb-10">
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
-                California-focused workflows
+                AI-drafted, attorney-reviewed
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
-                Structured drafting, not blank-page guessing
+                Web-grounded legal research included
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
-                Built for attorney review or self-organized first drafts
+                Delivered in hours, not weeks
               </div>
             </div>
 
@@ -569,6 +567,53 @@ export default function Home() {
 
       <Testimonials />
 
+      {/* By the Numbers — Trust Section */}
+      <section id="trust" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-12 bg-gradient-to-b from-white to-slate-50" data-testid="trust-section">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
+            <div className="inline-flex items-center gap-2 text-blue-600 font-semibold mb-4 text-sm tracking-wide uppercase">
+              <Shield className="w-4 h-4" /> By the Numbers
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+              Results You Can Trust
+            </h2>
+            <p className="text-lg text-slate-600">
+              Our service is built on data-driven outcomes and professional legal standards.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            <div className="text-center p-6 sm:p-8 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow" data-testid="trust-stat-settlement">
+              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">60%</div>
+              <div className="text-base font-semibold text-slate-900 mb-1">Settlement Rate</div>
+              <p className="text-sm text-slate-500">Demand letters result in settlement 60% of the time vs. 36% without one.</p>
+              <p className="text-xs text-slate-400 mt-2 italic">Source: American Bar Association research on pre-litigation correspondence</p>
+            </div>
+
+            <div className="text-center p-6 sm:p-8 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow" data-testid="trust-stat-review">
+              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">24hr</div>
+              <div className="text-base font-semibold text-slate-900 mb-1">Attorney-Reviewed</div>
+              <p className="text-sm text-slate-500">Every letter is reviewed by a licensed attorney within 24 hours.</p>
+              <p className="text-xs text-slate-400 mt-2 italic">Average turnaround during business days</p>
+            </div>
+
+            <div className="text-center p-6 sm:p-8 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow" data-testid="trust-stat-price">
+              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">$200</div>
+              <div className="text-base font-semibold text-slate-900 mb-1">Starting Price</div>
+              <p className="text-sm text-slate-500">Flat-fee pricing with no hourly billing surprises. First letter free.</p>
+              <p className="text-xs text-slate-400 mt-2 italic">Compare to $500–$2,000+ for traditional attorney letters</p>
+            </div>
+
+            <div className="text-center p-6 sm:p-8 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow" data-testid="trust-stat-types">
+              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">10+</div>
+              <div className="text-base font-semibold text-slate-900 mb-1">Letter Types</div>
+              <p className="text-sm text-slate-500">Demand letters, cease & desist, breach of contract, employment disputes, and more.</p>
+              <p className="text-xs text-slate-400 mt-2 italic">California-focused legal language and workflows</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing - Horizontal Stacked Cards */}
       <section
         id="pricing"
@@ -577,10 +622,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
-              Reduce drafting time for repetitive letters
+              AI Drafting + Attorney Review — Starting at $200
             </h2>
             <p className="text-lg text-slate-400">
-              Get a polished draft before attorney review. All plans include California-focused drafting and PDF delivery.
+              The only service that combines AI drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
             </p>
           </div>
 

@@ -105,6 +105,31 @@ const FAQ_CATEGORIES = [
     ],
   },
   {
+    category: "Why Talk to My Lawyer",
+    items: [
+      {
+        q: "Why not use a free template?",
+        a: "Free legal letter templates are generic and one-size-fits-all — they don't account for your specific facts, your jurisdiction's legal requirements, or the nuances of your situation. A generic template can actually weaken your position by using incorrect legal language or missing critical elements. Our service drafts each letter using AI trained on legal patterns, incorporates jurisdiction-specific research, and then has a licensed attorney review every letter before it reaches you. The result is a letter that's tailored, legally sound, and far more effective than a fill-in-the-blank template.",
+      },
+      {
+        q: "Why is attorney review important?",
+        a: "AI can draft quickly and accurately, but legal letters carry real consequences. An attorney review ensures your letter uses the correct legal standards, cites the right statutes, makes appropriate demands, and doesn't inadvertently harm your position. Without attorney review, you risk sending a letter that's legally inaccurate, overly aggressive, or missing key elements — any of which could undermine your case. Research shows that demand letters result in settlement approximately 60% of the time, but only when they're professionally crafted and legally sound.",
+      },
+      {
+        q: "How is this different from a form-based legal service?",
+        a: "Form-based services give you a questionnaire and plug your answers into a pre-written template. There's no legal research, no AI-powered drafting that adapts to your specific situation, and typically no attorney review. Talk to My Lawyer uses AI to draft a custom letter based on your unique facts, conducts web-grounded legal research relevant to your jurisdiction, and then routes every letter through a licensed attorney for review and approval. It's the difference between a form letter and a professionally crafted legal document.",
+      },
+      {
+        q: "What makes AI-drafted letters effective?",
+        a: "AI-drafted letters combine the speed of technology with the structure of professional legal writing. Our AI is trained on thousands of successful legal letter patterns and can quickly identify the most effective approach for your situation. It structures your facts into a compelling narrative, includes appropriate legal citations, and produces a polished draft in minutes — not days. Combined with attorney review, this means you get a letter that's both professionally written and legally vetted, at a fraction of the cost and time of traditional legal services.",
+      },
+      {
+        q: "Why do I need jurisdiction-specific research?",
+        a: "Legal requirements vary dramatically from state to state. A demand letter that's effective in California may be missing critical elements required in New York, or may cite statutes that don't apply in Texas. Our platform conducts web-grounded research specific to your jurisdiction, ensuring your letter references the correct laws, follows the appropriate procedures, and meets all local requirements. This jurisdiction-specific approach is what separates a truly effective legal letter from a generic one.",
+      },
+    ],
+  },
+  {
     category: "Account & Technical",
     items: [
       {

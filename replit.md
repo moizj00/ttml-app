@@ -35,6 +35,11 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Blog Author Bylines**: `BlogPost.tsx` shows "Reviewed by licensed attorneys" under author name.
 - **Newsletter Signup**: Footer form posts to `POST /api/newsletter/subscribe` storing in `newsletter_subscribers` table.
 - **Pipeline Analytics Dashboard**: Admin-only observability dashboard for pipeline performance metrics.
+- **Competitive Positioning**: Homepage hero, pricing page, and homepage pricing section all use the unified positioning: "AI drafting + attorney review, delivered in hours, starting at $200."
+- **Trust Section**: Homepage "By the Numbers" section with 4 stat-driven trust badges (60% settlement rate, 24hr attorney review, $200 starting price, 10+ letter types).
+- **Competitive FAQ**: FAQ page has a "Why Talk to My Lawyer" category with 5 competitive comparison entries.
+- **Content Calendar**: Internal `/content-calendar` page (noindex) with 12 blog topic briefs across 3 months, including keyword targets, outlines, internal links, CTAs, and social media repurposing waterfall.
+- **Newsletter Template**: Internal `/newsletter-template` page (noindex) with reusable newsletter structure (hook headline, key insight, stat of the week, service spotlight, CTA) and sample preview.
 
 ### Technical Implementations
 - **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.

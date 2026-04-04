@@ -106,6 +106,8 @@ const AdminSubmitLetter = lazyRetry(() => import("./pages/admin/AdminSubmitLette
 
 const BlogIndex = lazyRetry(() => import("./pages/BlogIndex"));
 const BlogPost = lazyRetry(() => import("./pages/BlogPost"));
+const ContentCalendar = lazyRetry(() => import("./pages/ContentCalendar"));
+const NewsletterTemplate = lazyRetry(() => import("./pages/NewsletterTemplate"));
 
 const ServicesIndex = lazyRetry(() => import("./pages/services/ServicesIndex"));
 const ServiceRoute = lazyRetry(() => import("./pages/services/ServiceRoute"));
@@ -148,6 +150,16 @@ function Router() {
       <Route path="/blog/:slug">
         <SuspenseFade fallback={<PublicPageSkeleton />}>
           <BlogPost />
+        </SuspenseFade>
+      </Route>
+      <Route path="/content-calendar">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <ContentCalendar />
+        </SuspenseFade>
+      </Route>
+      <Route path="/newsletter-template">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <NewsletterTemplate />
         </SuspenseFade>
       </Route>
       <Route path="/services">
