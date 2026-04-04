@@ -81,7 +81,46 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">4. Disclosure of Your Information</h2>
+            <h2 className="text-2xl font-bold mb-4">4. AI &amp; Machine Learning Technology</h2>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Talk To My Lawyer employs proprietary artificial intelligence and machine learning systems purpose-built for legal letter generation. We believe in full transparency about how these technologies work and how your data interacts with them.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">4.1 Proprietary Language Models</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Our platform is powered by proprietary large language models (LLMs) that are specifically trained and fine-tuned for legal letter drafting. Unlike general-purpose AI tools, our models are trained on legal precedents, local court rules, jurisdiction-specific procedures, formatting conventions, and the structural requirements of formal legal correspondence. These models do not simply generate letter content — they produce complete, properly formatted legal letters that adhere to jurisdiction-specific citation styles, procedural conventions, and court-specific quirks.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">4.2 Retrieval-Augmented Generation (RAG)</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              We employ a Retrieval-Augmented Generation (RAG) architecture that grounds every letter in real, verifiable legal research and case law. When drafting your letter, our system retrieves relevant statutes, regulations, and legal precedents specific to your jurisdiction and legal matter before generating content. This ensures that legal citations and references are grounded in actual legal authority rather than synthesized from training data alone.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">4.3 Reinforcement Learning &amp; Continuous Improvement</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Our models continuously improve through a reinforcement learning pipeline driven by attorney review outcomes. When licensed attorneys review, edit, and approve letters on our platform, those review patterns are used to improve model quality over time. This feedback loop ensures our system learns from real attorney expertise, producing increasingly accurate and effective legal letters. Quality scores, edit distances, and approval rates are tracked and analyzed to measure and drive improvement.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">4.4 How Your Data Interacts With Our Models</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              When you submit a letter request, the case details you provide (such as the description of your legal matter, parties involved, jurisdiction, and desired outcome) are processed by our AI systems to generate your draft letter. We want you to understand the following:
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
+              <li>Your personal identifying information (name, email, contact details) is not used to train models serving other users</li>
+              <li>Case details are processed in isolated pipelines to generate your specific letter</li>
+              <li>Aggregated, de-identified patterns from attorney reviews may be used to improve overall system quality</li>
+              <li>All AI-generated output is reviewed by a licensed attorney before it is delivered to you</li>
+              <li>You may request deletion of your case data at any time, subject to our data retention obligations</li>
+            </ul>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">4.5 Data Retention for AI Processing</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Letter drafts, research results, and pipeline processing data are retained for the duration of your account and for a reasonable period thereafter to support quality assurance, legal compliance, and system improvement. De-identified training data derived from attorney review patterns may be retained indefinitely to maintain model quality. You may contact us at <a href="mailto:privacy@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">privacy@talk-to-my-lawyer.com</a> to request information about or deletion of your data.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-bold mb-4">5. Disclosure of Your Information</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               We may share your information in the following situations:
             </p>
@@ -94,14 +133,14 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">5. Security of Your Information</h2>
+            <h2 className="text-2xl font-bold mb-4">6. Security of Your Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               We use administrative, technical, and physical security measures to protect your personal information. However, perfect security does not exist on the Internet. While we strive to protect your personal information, we cannot guarantee its absolute security.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">6. Contact Us</h2>
+            <h2 className="text-2xl font-bold mb-4">7. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               If you have questions or comments about this Privacy Policy, please contact us at:
             </p>
@@ -113,14 +152,14 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">7. Changes to This Privacy Policy</h2>
+            <h2 className="text-2xl font-bold mb-4">8. Changes to This Privacy Policy</h2>
             <p className="text-muted-foreground leading-relaxed">
               We may update this Privacy Policy from time to time in order to reflect, for example, changes to our practices or for other operational, legal, or regulatory reasons. We will notify you of any changes by updating the "Last updated" date of this Privacy Policy.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">8. Your Rights</h2>
+            <h2 className="text-2xl font-bold mb-4">9. Your Rights</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               Depending on your location, you may have certain rights regarding your personal information, including:
             </p>
@@ -137,14 +176,14 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">9. Cookies and Tracking Technologies</h2>
+            <h2 className="text-2xl font-bold mb-4">10. Cookies and Tracking Technologies</h2>
             <p className="text-muted-foreground leading-relaxed">
               We use cookies and similar tracking technologies to track activity on our Site and hold certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you do not accept cookies, you may not be able to use some portions of our Site.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">10. CCPA Privacy Rights</h2>
+            <h2 className="text-2xl font-bold mb-4">11. CCPA Privacy Rights</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               If you are a California resident, you are entitled to learn about what data we collect, use, share, and sell. Under the CCPA, you have the following rights:
             </p>

@@ -449,11 +449,11 @@ export default function Home() {
                   />
                 </svg>
               </span>
-              {", delivered in hours."}
+              {", delivered in instant."}
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks, starting at $200.
+              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in an instant, not weeks, starting at $200.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -485,7 +485,7 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
-                Delivered in hours, not weeks
+                Delivered in an instant
               </div>
             </div>
 

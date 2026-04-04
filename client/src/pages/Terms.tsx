@@ -63,28 +63,68 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">3. Disclaimer</h2>
+            <h2 className="text-2xl font-bold mb-4">3. Technology &amp; Automated Systems</h2>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Talk To My Lawyer uses proprietary artificial intelligence and machine learning technologies to assist in the preparation of legal letters. By using our Service, you acknowledge and agree to the following:
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.1 AI-Powered Drafting Pipeline</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Our Service employs proprietary large language models (LLMs) that are purpose-built and specifically trained for legal letter generation. These models are not general-purpose AI — they are trained on legal precedents, local court rules, jurisdiction-specific procedures, California legal conventions, and the structural requirements of formal legal correspondence. Our system generates complete legal letters, including proper formatting, citation styles, and structural conventions specific to the relevant jurisdiction.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Additionally, our platform uses a Retrieval-Augmented Generation (RAG) architecture that retrieves relevant statutes, regulations, case law, and legal precedents before generating content. This ensures that your letter references real legal authority specific to your jurisdiction and legal matter.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.2 Attorney Review Guarantee</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              All AI-generated letter drafts are reviewed, edited as necessary, and approved by a licensed attorney before delivery to you. No letter is sent or made available in final form without attorney review and approval. The AI system serves as a drafting tool for the reviewing attorney — it does not replace attorney judgment.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.3 Jurisdiction-Specific Training</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Our models are trained on and optimized for California and jurisdiction-specific legal materials, including local court rules, procedural quirks, filing conventions, and precedent patterns. While we strive for accuracy and completeness, the automated systems may not capture every nuance of rapidly evolving law. The attorney review process is designed to catch and correct any such gaps.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.4 Continuous Learning</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              Our AI systems improve over time through reinforcement learning from attorney review outcomes. Aggregated and de-identified patterns from attorney edits and approvals are used to improve drafting quality. Your personal identifying information is not shared with other users or used to train models that serve other users' specific matters.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.5 Not Legal Advice</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              While our letters are drafted by AI and reviewed by licensed attorneys, the Service does not establish an attorney-client relationship between you and any reviewing attorney. The letters produced are tools designed to assist you in your legal matters. They do not constitute independent legal advice, and you should consult with your own attorney for matters requiring personalized legal counsel.
+            </p>
+
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.6 Consent to Automated Processing</h3>
+            <p className="text-muted-foreground leading-relaxed mb-3">
+              By submitting a letter request, you consent to having your case information — including the description of your legal matter, parties involved, jurisdiction, desired outcome, and any uploaded documents — processed by our automated AI systems as described above. If you do not consent to such processing, you should not use the Service.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-bold mb-4">4. Disclaimer</h2>
             <p className="text-muted-foreground leading-relaxed">
               The materials on Talk To My Lawyer are provided on an "as is" basis. Talk To My Lawyer makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">4. Limitations</h2>
+            <h2 className="text-2xl font-bold mb-4">5. Limitations</h2>
             <p className="text-muted-foreground leading-relaxed">
               In no event shall Talk To My Lawyer or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on Talk To My Lawyer, even if Talk To My Lawyer or an authorized representative has been notified orally or in writing of the possibility of such damage.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">5. Accuracy of Materials</h2>
+            <h2 className="text-2xl font-bold mb-4">6. Accuracy of Materials</h2>
             <p className="text-muted-foreground leading-relaxed">
               The materials appearing on Talk To My Lawyer could include technical, typographical, or photographic errors. Talk To My Lawyer does not warrant that any of the materials on the Service are accurate, complete, or current. Talk To My Lawyer may make changes to the materials contained on the Service at any time without notice.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">6. Materials and Content</h2>
+            <h2 className="text-2xl font-bold mb-4">7. Materials and Content</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
               Talk To My Lawyer has not reviewed all of the sites linked to its website and is not responsible for the contents of any such linked site. The inclusion of any link does not imply endorsement by Talk To My Lawyer of the site. Use of any such linked website is at the user's own risk.
             </p>
@@ -94,35 +134,35 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">7. Limitations of Liability</h2>
+            <h2 className="text-2xl font-bold mb-4">8. Limitations of Liability</h2>
             <p className="text-muted-foreground leading-relaxed">
               In no case shall Talk To My Lawyer, its directors, officers, or agents be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the Service or materials, even if Talk To My Lawyer has been advised of the possibility of such damages.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">8. Revisions and Errata</h2>
+            <h2 className="text-2xl font-bold mb-4">9. Revisions and Errata</h2>
             <p className="text-muted-foreground leading-relaxed">
               The materials appearing on Talk To My Lawyer may include errors or inaccuracies. Talk To My Lawyer does not commit to updating such materials. Talk To My Lawyer may make changes to the materials contained on the Service at any time without notice.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">9. Modifications</h2>
+            <h2 className="text-2xl font-bold mb-4">10. Modifications</h2>
             <p className="text-muted-foreground leading-relaxed">
               Talk To My Lawyer may revise these terms of service at any time without notice. By using this website, you are agreeing to be bound by the then current version of these terms of service.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">10. Governing Law</h2>
+            <h2 className="text-2xl font-bold mb-4">11. Governing Law</h2>
             <p className="text-muted-foreground leading-relaxed">
               These terms and conditions are governed by and construed in accordance with the laws of the jurisdiction in which Talk To My Lawyer operates, and you irrevocably submit to the exclusive jurisdiction of the courts in that location.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold mb-4">11. Contact Information</h2>
+            <h2 className="text-2xl font-bold mb-4">12. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have any questions about these Terms of Service, please contact us at <a href="mailto:support@talk-to-my-lawyer.com" className="text-blue-600 hover:underline">support@talk-to-my-lawyer.com</a>.
             </p>
