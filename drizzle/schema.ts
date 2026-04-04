@@ -217,6 +217,7 @@ export const letterRequests = pgTable("letter_requests", {
   researchUnverified: boolean("research_unverified").default(false).notNull(),
   qualityDegraded: boolean("quality_degraded").default(false).notNull(),
   pipelineLockedAt: timestamp("pipeline_locked_at", { withTimezone: true }),
+  submittedByAdmin: boolean("submitted_by_admin").default(false).notNull(),
   templateId: integer("template_id").references(() => letterTemplates.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

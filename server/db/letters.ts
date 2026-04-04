@@ -38,6 +38,7 @@ export async function createLetterRequest(data: {
   intakeJson?: unknown;
   priority?: "low" | "normal" | "high" | "urgent";
   templateId?: number;
+  submittedByAdmin?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -68,6 +69,7 @@ export async function createLetterRequest(data: {
       lastStatusChangedAt: new Date(),
       submitterRoleId,
       templateId: data.templateId ?? null,
+      submittedByAdmin: data.submittedByAdmin ?? false,
     })
     .returning({ insertId: letterRequests.id });
   return result[0];
@@ -118,6 +120,7 @@ export async function getLetterRequestSafeForSubscriber(
       currentFinalVersionId: letterRequests.currentFinalVersionId,
       pdfUrl: letterRequests.pdfUrl,
       qualityDegraded: letterRequests.qualityDegraded,
+      submittedByAdmin: letterRequests.submittedByAdmin,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,
       createdAt: letterRequests.createdAt,
       updatedAt: letterRequests.updatedAt,

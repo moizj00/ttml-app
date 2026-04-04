@@ -937,19 +937,22 @@ export async function finalizeLetterAfterVetting(
     })();
   }
 
-  const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
-  if (!wasAlreadyUnlocked) {
-    // The initial paywall notification email (10–15 min delay) is handled by
-    // the paywallEmailCron job (POST /api/cron/paywall-emails).
-    // We do NOT send an immediate email here — the cron picks up the letter
-    // once lastStatusChangedAt falls in the 10–15 minute window.
+  const letterForPaywall = await getLetterById(letterId);
+  if (letterForPaywall?.submittedByAdmin) {
     console.log(
-      `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+      `[Pipeline] Skipping paywall email for #${letterId} — admin-submitted letter`
     );
   } else {
-    console.log(
-      `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
-    );
+    const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
+    if (!wasAlreadyUnlocked) {
+      console.log(
+        `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+      );
+    } else {
+      console.log(
+        `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
+      );
+    }
   }
 }
 

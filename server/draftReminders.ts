@@ -13,7 +13,7 @@
  * cron service hitting POST /api/cron/draft-reminders with the correct secret.
  */
 
-import { inArray, and, isNull, lt } from "drizzle-orm";
+import { inArray, and, isNull, lt, eq } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -78,6 +78,7 @@ export async function processDraftReminders(): Promise<ReminderResult> {
       and(
         inArray(letterRequests.status, ["generated_locked", "generated_unlocked"]),
         isNull(letterRequests.draftReminderSentAt),
+        eq(letterRequests.submittedByAdmin, false),
         lt(letterRequests.updatedAt, thresholdDate)
       )
     );

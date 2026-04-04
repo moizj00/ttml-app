@@ -673,7 +673,8 @@ export default function LetterDetail() {
   const userVisibleActions = actions?.filter((a) => a.noteVisibility === "user_visible" && a.noteText);
   const isPolling = POLLING_STATUSES.includes(letter.status);
   // generated_unlocked is a legacy status (Phase ≤68) treated identically to generated_locked
-  const isGeneratedLocked = letter.status === "generated_locked" || letter.status === "generated_unlocked";
+  // Admin-submitted letters bypass paywall entirely — never show paywall UI
+  const isGeneratedLocked = (letter.status === "generated_locked" || letter.status === "generated_unlocked") && !(letter as any).submittedByAdmin;
 
   return (
     <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: letter.subject }]}>

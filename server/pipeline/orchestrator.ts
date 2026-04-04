@@ -609,6 +609,25 @@ export async function bestEffortFallback(opts: {
 export async function autoAdvanceIfPreviouslyUnlocked(
   letterId: number
 ): Promise<boolean> {
+  const letterRecord = await getLetterById(letterId);
+  if (letterRecord?.submittedByAdmin) {
+    console.log(
+      `[Pipeline] Letter #${letterId} was submitted by admin — auto-advancing to pending_review (bypass paywall)`
+    );
+    await updateLetterStatus(letterId, "pending_review");
+    await logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "auto_unlock",
+      noteText:
+        "Admin-submitted letter — automatically advanced to pending_review (billing bypassed).",
+      noteVisibility: "internal",
+      fromStatus: "generated_locked",
+      toStatus: "pending_review",
+    });
+    return true;
+  }
+
   const wasUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
   if (!wasUnlocked) {
     console.log(
@@ -632,7 +651,6 @@ export async function autoAdvanceIfPreviouslyUnlocked(
     toStatus: "pending_review",
   });
 
-  const letterRecord = await getLetterById(letterId);
   if (letterRecord) {
     const appBaseUrl =
       process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";

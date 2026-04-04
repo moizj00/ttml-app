@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Clock,
   CalendarDays,
+  PenLine,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
@@ -393,6 +394,13 @@ export default function AdminDashboard() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
+            {
+              label: "Generate Letter",
+              desc: "Submit a letter (bypass billing)",
+              href: "/admin/submit",
+              icon: <PenLine className="w-5 h-5 text-emerald-600" />,
+              bg: "bg-emerald-50",
+            },
             {
               label: "Manage Users",
               desc: "View and update user roles",

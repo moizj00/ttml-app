@@ -22,7 +22,7 @@
  * to fire as a follow-up for subscribers who still haven't acted.
  */
 
-import { inArray, and, isNull, lt, gte } from "drizzle-orm";
+import { inArray, and, isNull, lt, gte, eq } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -104,6 +104,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
       and(
         inArray(letterRequests.status, ["generated_locked", "generated_unlocked"]),
         isNull(letterRequests.initialPaywallEmailSentAt),
+        eq(letterRequests.submittedByAdmin, false),
         gte(letterRequests.lastStatusChangedAt, minThresholdDate),
         lt(letterRequests.lastStatusChangedAt, maxThresholdDate)
       )

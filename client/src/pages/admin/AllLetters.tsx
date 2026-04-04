@@ -16,7 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FileText, Search, ArrowRight, ClipboardList, Eye } from "lucide-react";
+import { FileText, Search, ArrowRight, ClipboardList, Eye, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -198,6 +198,12 @@ export default function AdminAllLetters() {
                         ) : (
                           <span className="text-xs text-muted-foreground">
                             User #{letter.userId}
+                          </span>
+                        )}
+                        {(letter as any).submittedByAdmin && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300" data-testid={`badge-admin-submitted-${letter.id}`}>
+                            <ShieldCheck className="w-3 h-3" />
+                            Admin
                           </span>
                         )}
                         {letter.reviewerRoleId && (
