@@ -9,7 +9,7 @@ const SAMPLE_NEWSLETTER = {
   hookHeadline: "Demand Letters Settle 60% of Disputes — Here's How to Make Yours Work",
   keyInsight: {
     title: "This Week's Key Insight",
-    content: "A well-drafted demand letter is the single most cost-effective legal tool available to individuals. Research shows a 60% settlement rate for disputes where a formal demand letter is sent, compared to just 36% without one. The difference? Professional language, correct legal citations, and a clear statement of facts — all elements that our AI drafting + attorney review process delivers automatically.",
+    content: "A well-drafted demand letter is the single most cost-effective legal tool available to individuals. Research shows a 60% settlement rate for disputes where a formal demand letter is sent, compared to just 36% without one. The difference? Professional language, correct legal citations, and a clear statement of facts — all elements that our structured drafting + attorney review process delivers automatically.",
     blogLink: "/blog",
     blogTitle: "Read the full article: Why Demand Letters Have a 60% Settlement Rate",
   },
@@ -26,7 +26,7 @@ const SAMPLE_NEWSLETTER = {
   },
   cta: {
     headline: "Your First Letter Is Free",
-    description: "Experience AI-drafted, attorney-reviewed legal letters — no credit card required.",
+    description: "Experience professionally drafted, attorney-reviewed legal letters — no credit card required.",
     buttonText: "Start Your Free Letter",
     link: "/login",
   },

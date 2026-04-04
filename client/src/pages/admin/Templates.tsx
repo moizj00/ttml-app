@@ -433,7 +433,7 @@ export default function AdminTemplates() {
                     <Textarea
                       value={form.additionalContext}
                       onChange={e => setForm(p => ({ ...p, additionalContext: e.target.value }))}
-                      placeholder="Additional context or instructions for the AI pipeline..."
+                      placeholder="Additional context or instructions for the drafting engine..."
                       rows={2}
                       data-testid="input-template-additional-context"
                     />

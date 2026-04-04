@@ -743,7 +743,7 @@ export default function SubscriberDashboard() {
                   <div>
                     <p className="text-sm font-medium text-slate-600">No analyses yet</p>
                     <p className="text-xs text-slate-400 mt-1">
-                      Upload a legal document to get an instant AI analysis and recommended action.
+                      Upload a legal document to get an instant analysis and recommended action.
                     </p>
                   </div>
                   <Link href="/analyze">

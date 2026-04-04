@@ -181,10 +181,10 @@ export default function Pricing() {
             <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            AI Drafting + Attorney Review — Starting at $200
+            Structured Drafting + Attorney Review — Starting at $200
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            The only service that combines AI drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
+            The only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
           </p>
         </div>
       </header>

@@ -429,11 +429,11 @@ export default function Home() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-6 sm:mb-8 text-xs sm:text-sm text-blue-700 font-medium">
               <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse flex-shrink-0"></span>
-              View Your First Draft For Free
+              View Your First Letter Free
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-[2.8rem] lg:text-[3.2rem] xl:text-[3.6rem] font-extrabold leading-[1.12] tracking-tight mb-6 sm:mb-8">
-              AI drafting +{" "}
+              California-focused drafting +{" "}
               <span className="text-blue-600 relative inline-block">
                 attorney review
                 <svg
@@ -453,7 +453,7 @@ export default function Home() {
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines AI drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks, starting at $200.
+              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks, starting at $200.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -477,7 +477,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-3 mb-8 sm:mb-10">
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
-                AI-drafted, attorney-reviewed
+                California-focused workflows
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <span className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0"></span>
@@ -622,10 +622,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
-              AI Drafting + Attorney Review — Starting at $200
+              Structured Drafting + Attorney Review — Starting at $200
             </h2>
             <p className="text-lg text-slate-400">
-              The only service that combines AI drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
+              The only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
             </p>
           </div>
 

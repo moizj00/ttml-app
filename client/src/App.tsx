@@ -455,7 +455,7 @@ const ORGANIZATION_JSONLD = JSON.stringify({
     "email": "support@talk-to-my-lawyer.com",
     "contactType": "customer service",
   },
-  "description": "Professional attorney-reviewed legal letters. Demand letters, cease and desist, breach of contract, and more — drafted by AI, reviewed by licensed attorneys.",
+  "description": "Professional attorney-reviewed legal letters. Demand letters, cease and desist, breach of contract, and more — structured drafting, reviewed by licensed attorneys.",
 });
 
 function App() {

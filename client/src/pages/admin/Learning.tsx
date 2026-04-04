@@ -132,7 +132,7 @@ export default function AdminLearning() {
             Recursive Learning System
           </h1>
           <p className="text-muted-foreground mt-1">
-            AI pipeline lessons extracted from attorney feedback and quality metrics.
+            System pipeline lessons extracted from attorney feedback and quality metrics.
           </p>
         </div>
 
@@ -349,7 +349,7 @@ function LessonsTab({
                       onChange={(e) =>
                         setNewLesson({ ...newLesson, lessonText: e.target.value })
                       }
-                      placeholder="Describe the lesson the AI should learn..."
+                      placeholder="Describe the lesson the system should learn..."
                       rows={3}
                       data-testid="input-lesson-text"
                     />
@@ -484,7 +484,7 @@ function LessonsTab({
                     <DialogTitle>Consolidate Lessons</DialogTitle>
                   </DialogHeader>
                   <p className="text-sm text-muted-foreground">
-                    Select a letter type / jurisdiction group to merge similar lessons using AI.
+                    Select a letter type / jurisdiction group to merge similar lessons automatically.
                   </p>
                   <div className="space-y-2 pt-2 max-h-64 overflow-y-auto">
                     {scopeGroups.map((g) => (

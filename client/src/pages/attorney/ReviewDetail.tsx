@@ -85,7 +85,7 @@ export default function ReviewDetail() {
   const claimMutation = trpc.review.claim.useMutation({
     onSuccess: () => {
       toast.success("Letter claimed", {
-        description: "The AI draft has been loaded into the editor.",
+        description: "The draft has been loaded into the editor.",
       });
       invalidate();
       autoEnteredRef.current = false;
@@ -401,7 +401,7 @@ export default function ReviewDetail() {
                 <span className="text-xs text-muted-foreground ml-auto">
                   {latestDraft.versionType === "attorney_edit"
                     ? "Attorney edit"
-                    : "AI draft"}{" "}
+                    : "System draft"}{" "}
                   · {new Date(latestDraft.createdAt).toLocaleDateString()}
                 </span>
               )}
@@ -421,7 +421,7 @@ export default function ReviewDetail() {
                       <p className="text-sm text-muted-foreground">
                         {letter.status === "client_revision_requested"
                           ? "Client requested revisions. Claim to review their notes and update the letter."
-                          : "Claim this letter to load the AI draft into the editor."}
+                          : "Claim this letter to load the draft into the editor."}
                       </p>
                       {letter.status === "client_revision_requested" && (() => {
                         const revisionAction = [...(actions ?? [])].reverse().find(
@@ -446,7 +446,7 @@ export default function ReviewDetail() {
                     <>
                       <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
                       <p className="text-sm text-muted-foreground">
-                        AI pipeline is running — draft will appear here shortly.
+                        Drafting pipeline is running — draft will appear here shortly.
                       </p>
                     </>
                   )}

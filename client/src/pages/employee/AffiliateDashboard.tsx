@@ -531,7 +531,7 @@ export default function AffiliateDashboard() {
                     {[
                       "I found a faster way to draft legal-style letters.",
                       "This tool helps organize your facts into a stronger first draft.",
-                      "For California-specific letters, this is way more focused than generic AI.",
+                      "For California-specific letters, this is way more focused than generic tools.",
                       "Useful for first drafts before legal review.",
                       "This is a drafting tool — it helps create a structured first draft.",
                       "This organizes your facts into a legal-style letter.",
