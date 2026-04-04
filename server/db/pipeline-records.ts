@@ -28,7 +28,7 @@ import { getDb } from "./core";
 
 export async function createWorkflowJob(data: {
   letterRequestId: number;
-  jobType: "research" | "draft_generation" | "generation_pipeline" | "retry" | "vetting";
+  jobType: "research" | "draft_generation" | "generation_pipeline" | "retry" | "vetting" | "assembly";
   provider?: string;
   requestPayloadJson?: unknown;
 }) {

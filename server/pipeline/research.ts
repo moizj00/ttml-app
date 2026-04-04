@@ -63,6 +63,19 @@ function synthesizeResearchFromIntake(intake: IntakeJson): ResearchPacket {
     statuteOfLimitations: {
       notes: `[UNVERIFIED] Attorney must independently determine applicable statute of limitations for ${state}.`,
     },
+    factualDataNeeded: [
+      `[UNVERIFIED] Attorney must assess what additional factual information is required for ${state}.`,
+    ],
+    openQuestions: [
+      `[UNVERIFIED] No external research was available. Attorney must identify all open legal questions for this ${letterType} matter.`,
+    ],
+    riskFlags: [
+      `SYNTHETIC_RESEARCH: All research was synthesized from intake data — no external legal research was performed. Independent verification required.`,
+    ],
+    draftingConstraints: [
+      `Must clearly indicate unverified research status in letter where appropriate.`,
+      `Attorney must verify all procedural requirements for ${state} before approving.`,
+    ],
   };
 }
 
@@ -255,7 +268,7 @@ export async function runResearchStage(
         );
         pipelineCtx.researchUnverified = true;
       }
-    } else if (initialProvider === "openai-stored-prompt") {
+    } else if (initialProvider === "openai-failover" && activeProvider === "openai-stored-prompt") {
       console.warn(
         `[Pipeline] Stage 1: OpenAI stored prompt (web search) used for letter #${letterId} — Perplexity was unavailable.`
       );

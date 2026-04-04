@@ -203,6 +203,15 @@ const intakeJsonSchema = z.object({
         .optional(),
     })
     .optional(),
+  exhibits: z
+    .array(
+      z.object({
+        label: z.string(),
+        description: z.string().optional(),
+        hasAttachment: z.boolean().optional(),
+      })
+    )
+    .optional(),
 });
 
 

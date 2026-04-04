@@ -324,7 +324,7 @@ export default function AdminSubmitLetter() {
             {step === 3 && <Step3Parties form={form} stepErrors={stepErrors} update={update} />}
             {step === 4 && <Step4Details form={form} stepErrors={stepErrors} update={update} />}
             {step === 5 && <Step5Outcome form={form} stepErrors={stepErrors} update={update} />}
-            {step === 6 && <Step6Exhibits exhibits={exhibits} setExhibits={setExhibits} />}
+            {step === 6 && <Step6Exhibits exhibits={exhibits} setExhibits={setExhibits} form={form} />}
           </CardContent>
         </Card>
 

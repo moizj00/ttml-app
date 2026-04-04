@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LETTER_TYPE_CONFIG } from "../../../../../shared/types";
 import type { FormData } from "./types";
 
 interface Props {
@@ -113,35 +112,6 @@ export function Step5Outcome({ form, stepErrors, update }: Props) {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="bg-muted/50 rounded-xl p-4 space-y-2">
-        <h4 className="text-sm font-semibold text-foreground">
-          Submission Summary
-        </h4>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          <span className="text-muted-foreground">Type:</span>
-          <span className="text-foreground font-medium">
-            {LETTER_TYPE_CONFIG[form.letterType]?.label}
-          </span>
-          <span className="text-muted-foreground">Jurisdiction:</span>
-          <span className="text-foreground font-medium">
-            {form.jurisdictionState}
-            {form.jurisdictionCity ? `, ${form.jurisdictionCity}` : ""}
-          </span>
-          <span className="text-muted-foreground">Sender:</span>
-          <span className="text-foreground font-medium">{form.senderName}</span>
-          <span className="text-muted-foreground">Recipient:</span>
-          <span className="text-foreground font-medium">{form.recipientName}</span>
-          <span className="text-muted-foreground">Tone:</span>
-          <span className="text-foreground font-medium capitalize">{form.tonePreference}</span>
-          <span className="text-muted-foreground">Language:</span>
-          <span className="text-foreground font-medium capitalize">{form.language}</span>
-          <span className="text-muted-foreground">Delivery:</span>
-          <span className="text-foreground font-medium capitalize">
-            {form.deliveryMethod.replace(/_/g, " ")}
-          </span>
-        </div>
-      </div>
     </>
   );
 }

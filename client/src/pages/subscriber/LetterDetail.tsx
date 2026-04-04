@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 
 // Statuses that require active polling (pipeline in progress or awaiting action)
-const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending"];
+const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested"];
 
 function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onApprove: () => void }) {
   const [showRevisionForm, setShowRevisionForm] = useState(false);

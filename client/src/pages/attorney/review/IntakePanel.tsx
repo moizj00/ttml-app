@@ -4,10 +4,18 @@ interface IntakeJson {
   sender?: { name?: string; address?: string; email?: string; phone?: string };
   recipient?: { name?: string; address?: string; company?: string; email?: string };
   jurisdiction?: string | { state?: string; country?: string; city?: string };
-  matter?: { description?: string; [key: string]: unknown };
+  matter?: { description?: string; incidentDate?: string; [key: string]: unknown };
   description?: string;
   desiredOutcome?: string;
+  deadlineDate?: string;
+  additionalContext?: string;
   financials?: { amountOwed?: string | number; currency?: string };
+  tonePreference?: string;
+  language?: string;
+  priorCommunication?: string;
+  deliveryMethod?: string;
+  communications?: { summary?: string; lastContactDate?: string; method?: string };
+  exhibits?: { label: string; description?: string; hasAttachment?: boolean }[];
   timeline?: string;
   [key: string]: unknown;
 }
@@ -128,6 +136,73 @@ export function IntakePanel({ intakeJson, jurisdictionState }: Props) {
                       ${Number(intake.financials.amountOwed).toLocaleString()}{" "}
                       {intake.financials.currency ?? "USD"}
                     </p>
+                  </div>
+                )}
+
+                {/* Incident date */}
+                {intake.matter?.incidentDate && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Incident Date
+                    </p>
+                    <p className="text-xs text-foreground">
+                      {new Date(intake.matter.incidentDate + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Deadline */}
+                {intake.deadlineDate && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Response Deadline
+                    </p>
+                    <p className="text-xs text-foreground">
+                      {new Date(intake.deadlineDate + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Additional context */}
+                {intake.additionalContext && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Additional Context
+                    </p>
+                    <p className="text-xs text-foreground leading-relaxed">
+                      {intake.additionalContext}
+                    </p>
+                  </div>
+                )}
+
+                {/* Tone / Language / Delivery */}
+                {(intake.tonePreference || intake.language || intake.deliveryMethod || intake.priorCommunication) && (
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Preferences
+                    </p>
+                    {intake.tonePreference && <p className="text-xs text-foreground">Tone: <span className="capitalize">{intake.tonePreference}</span></p>}
+                    {intake.language && <p className="text-xs text-foreground">Language: <span className="capitalize">{intake.language}</span></p>}
+                    {intake.deliveryMethod && <p className="text-xs text-foreground">Delivery: <span className="capitalize">{String(intake.deliveryMethod).replace(/_/g, " ")}</span></p>}
+                    {intake.priorCommunication && intake.priorCommunication !== "none" && <p className="text-xs text-foreground">Prior Contact: <span className="capitalize">{intake.priorCommunication}</span></p>}
+                  </div>
+                )}
+
+                {/* Exhibits */}
+                {Array.isArray(intake.exhibits) && intake.exhibits.length > 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                      Exhibits ({intake.exhibits.length})
+                    </p>
+                    <div className="space-y-1.5">
+                      {intake.exhibits.map((ex, i) => (
+                        <div key={i} className="text-xs text-foreground">
+                          <span className="font-semibold">{ex.label}:</span>{" "}
+                          {ex.description || "(no description)"}
+                          {ex.hasAttachment && <span className="text-primary ml-1">· file attached</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </>

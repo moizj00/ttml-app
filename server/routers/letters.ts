@@ -203,6 +203,15 @@ const intakeJsonSchema = z.object({
         .optional(),
     })
     .optional(),
+  exhibits: z
+    .array(
+      z.object({
+        label: z.string(),
+        description: z.string().optional(),
+        hasAttachment: z.boolean().optional(),
+      })
+    )
+    .optional(),
 });
 
 
@@ -502,7 +511,6 @@ export const lettersRouter = router({
             userId: ctx.user.id,
             appUrl,
             label: "admin_submit",
-            usageContext: { shouldRefundOnFailure: false, isFreeTrialSubmission: false },
           });
         } catch (enqueueErr) {
           console.error("[Queue] Failed to enqueue admin pipeline job:", enqueueErr);

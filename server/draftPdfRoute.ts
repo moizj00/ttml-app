@@ -59,14 +59,18 @@ export function registerDraftPdfRoute(app: Express) {
         return;
       }
 
-      // ── Status gate: only allow post-payment statuses ──────────────────
+      // ── Status gate: only allow after letter has been generated and locked ──
+      // generated_locked = AI draft complete, subscriber has paid to unlock attorney review
+      // All downstream statuses (pending_review → approved → sent) also grant access
       const allowedStatuses = [
+        "generated_locked",
         "pending_review", "under_review", "needs_changes",
-        "client_approval_pending", "final_approved", "completed",
+        "client_approval_pending", "client_revision_requested",
+        "approved", "client_approved", "sent",
       ];
       if (!allowedStatuses.includes(letter.status)) {
         res.status(403).json({
-          error: "Draft PDF is only available after payment for attorney review",
+          error: "Draft PDF is only available after the AI draft has been generated",
         });
         return;
       }

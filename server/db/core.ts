@@ -105,6 +105,19 @@ export async function getDb() {
     } catch (migErr) {
       console.warn("[Database] Migration error (client approval statuses):", migErr);
     }
+    // Add 'assembly' to job_type enum if it doesn't exist (used by pipeline assembly stage logging)
+    try {
+      await _db.execute(sql`
+        DO $$ BEGIN
+          ALTER TYPE job_type ADD VALUE IF NOT EXISTS 'assembly';
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$
+      `);
+      console.log("[Database] Migration: ensured 'assembly' job_type enum value exists");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (assembly job_type enum):", migErr);
+    }
   }
   return _db;
 }

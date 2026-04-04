@@ -413,16 +413,34 @@ export default function ReviewDetail() {
               letter.status === "client_revision_requested" ||
               letter.status === "researching" ||
               letter.status === "drafting" ? (
-                <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+                <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
                   {letter.status === "pending_review" ||
                   letter.status === "client_revision_requested" ? (
                     <>
                       <ClipboardList className="w-10 h-10 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">
                         {letter.status === "client_revision_requested"
-                          ? "Client requested revisions. Claim to review their notes and make changes."
+                          ? "Client requested revisions. Claim to review their notes and update the letter."
                           : "Claim this letter to load the AI draft into the editor."}
                       </p>
+                      {letter.status === "client_revision_requested" && (() => {
+                        const revisionAction = [...(actions ?? [])].reverse().find(
+                          (a) => a.action === "client_revision_requested" && a.noteText
+                        );
+                        return revisionAction?.noteText ? (
+                          <div
+                            data-testid="client-revision-notes"
+                            className="w-full max-w-md text-left bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
+                          >
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1 uppercase tracking-wide">
+                              Client revision notes
+                            </p>
+                            <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap">
+                              {revisionAction.noteText}
+                            </p>
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   ) : (
                     <>

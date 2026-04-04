@@ -669,6 +669,7 @@ export default function SubmitLetter() {
               <Step6Exhibits
                 exhibits={exhibits}
                 setExhibits={setExhibits}
+                form={form}
               />
             )}
           </CardContent>

@@ -158,12 +158,20 @@ function buildTemplateData(opts: PdfGenerationOptions): LetterTemplateData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate a professional PDF from the approved letter content,
- * upload it to S3, and return the public URL.
+ * Generate a professional PDF from the approved letter content using Template 1
+ * (blue attorney stamp, no watermark), upload it to R2/S3, and return the public URL.
+ *
+ * Wiring: Template 1 (Approved) → buildApprovedLetterHtml → Cloudflare Worker (primary)
+ *         → local Puppeteer (fallback) → storagePut → pdfUrl returned to caller
  */
 export async function generateAndUploadApprovedPdf(
   opts: PdfGenerationOptions
 ): Promise<{ pdfUrl: string; pdfKey: string }> {
+  if (!opts.content || opts.content.trim().length === 0) {
+    throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate PDF`);
+  }
+
+  console.log(`[PDF] Generating approved PDF for letter #${opts.letterId} (template: Template-1-Approved)`);
   const pdfBuffer = await generatePdfBuffer(opts);
 
   const timestamp = Date.now();
@@ -176,7 +184,7 @@ export async function generateAndUploadApprovedPdf(
 
   const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
 
-  console.log(`[PDF] Generated and uploaded letter #${opts.letterId}: ${url}`);
+  console.log(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${fileKey} (${pdfBuffer.length} bytes) → ${url}`);
   return { pdfUrl: url, pdfKey: fileKey };
 }
 
@@ -208,11 +216,15 @@ async function generatePdfBuffer(opts: PdfGenerationOptions): Promise<Buffer> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate an Unreviewed (draft) PDF buffer.
+ * Generate an Unreviewed (draft) PDF buffer using Template 2 (DRAFT watermark).
  * Tries the Cloudflare Worker first, falls back to local Puppeteer.
  *
  * Used for the free draft download feature — letter must be in generated_locked status.
  * The PDF is returned as a Buffer so the server can stream it directly to the client.
+ * It is NOT uploaded to storage; it is streamed directly to avoid storing unreviewed drafts.
+ *
+ * Wiring: Template 2 (Draft) → buildDraftLetterHtml → Cloudflare Worker (primary)
+ *         → local Puppeteer (fallback) → Buffer returned to draftPdfRoute for streaming
  *
  * Footer has amber draft notice + DRAFT badge + dynamic page numbers.
  * Header has amber-bordered continuation bar visible on pages 2+ only.
@@ -226,6 +238,11 @@ export async function generateDraftPdfBuffer(opts: {
   jurisdictionCountry?: string | null;
   intakeJson?: IntakeData | null;
 }): Promise<Buffer> {
+  if (!opts.content || opts.content.trim().length === 0) {
+    throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate draft PDF`);
+  }
+
+  console.log(`[PDF] Generating draft PDF for letter #${opts.letterId} (template: Template-2-Draft)`);
   const data = buildTemplateData(opts);
   const html = buildDraftLetterHtml(data);
   const headerTemplate = buildDraftHeaderHtml(data);
@@ -241,5 +258,7 @@ export async function generateDraftPdfBuffer(opts: {
     },
     () => htmlToPdfBufferLocal(html, headerTemplate, footerTemplate)
   );
+
+  console.log(`[PDF] Draft PDF generated for letter #${opts.letterId}: ${buffer.length} bytes (not uploaded — streamed directly)`);
   return buffer;
 }

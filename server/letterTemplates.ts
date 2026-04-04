@@ -355,6 +355,7 @@ function assertNoUnreplacedPlaceholders(html: string, template: string): void {
         remaining.map((r) => r.source).join(", ")
     );
   }
+  // All placeholders successfully substituted — document is safe to render
 }
 
 export function buildApprovedLetterHtml(data: LetterTemplateData): string {

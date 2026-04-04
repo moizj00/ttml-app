@@ -433,6 +433,11 @@ export interface IntakeJson {
     tone: "firm" | "moderate" | "aggressive";
     deliveryMethod?: "email" | "certified-mail" | "hand-delivery";
   };
+  exhibits?: {
+    label: string;
+    description?: string;
+    hasAttachment?: boolean;
+  }[];
 }
 
 // ─── Research Packet Shape ───
