@@ -724,6 +724,26 @@ export type LetterTemplate = typeof letterTemplates.$inferSelect;
 export type InsertLetterTemplate = typeof letterTemplates.$inferInsert;
 
 // ═══════════════════════════════════════════════════════
+// TABLE: intake_form_templates
+// ═══════════════════════════════════════════════════════
+export const intakeFormTemplates = pgTable("intake_form_templates", {
+  id: serial("id").primaryKey(),
+  ownerUserId: integer("owner_user_id").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  baseLetterType: letterTypeEnum("base_letter_type").notNull(),
+  fieldConfig: jsonb("field_config").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_intake_form_templates_owner").on(t.ownerUserId),
+  index("idx_intake_form_templates_letter_type").on(t.baseLetterType),
+]);
+
+export type IntakeFormTemplate = typeof intakeFormTemplates.$inferSelect;
+export type InsertIntakeFormTemplate = typeof intakeFormTemplates.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
 // TABLE: newsletter_subscribers
 // ═══════════════════════════════════════════════════════
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {

@@ -203,6 +203,7 @@ const intakeJsonSchema = z.object({
         .optional(),
     })
     .optional(),
+  situationFields: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   exhibits: z
     .array(
       z.object({

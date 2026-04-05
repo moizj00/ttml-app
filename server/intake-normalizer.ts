@@ -64,6 +64,7 @@ interface NormalizedPromptInput {
   timeline: string[];
   evidenceSummary: string | null;
   userStatements: string | null;
+  situationFields: Record<string, string | number> | null;
 }
 
 function trimOrNull(val: unknown): string | null {
@@ -165,6 +166,15 @@ export function buildNormalizedPromptInput(
     timeline: safeArray((intake as any).timeline),
     evidenceSummary: trimOrNull(intake.evidenceSummary),
     userStatements: trimOrNull((intake as any).userStatements),
+    situationFields: intake.situationFields && typeof intake.situationFields === "object" && Object.keys(intake.situationFields).length > 0
+      ? Object.fromEntries(
+          Object.entries(intake.situationFields).filter(([, v]) => {
+            if (v === null || v === undefined) return false;
+            if (typeof v === "string" && v.trim().length === 0) return false;
+            return true;
+          })
+        )
+      : null,
   };
 }
 

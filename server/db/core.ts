@@ -118,6 +118,29 @@ export async function getDb() {
     } catch (migErr) {
       console.warn("[Database] Migration error (assembly job_type enum):", migErr);
     }
+    try {
+      await _db.execute(sql`
+        CREATE TABLE IF NOT EXISTS intake_form_templates (
+          id SERIAL PRIMARY KEY,
+          owner_user_id INTEGER NOT NULL,
+          title VARCHAR(200) NOT NULL,
+          base_letter_type letter_type NOT NULL,
+          field_config JSONB NOT NULL,
+          active BOOLEAN DEFAULT true NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+          updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+        )
+      `);
+      await _db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_intake_form_templates_owner ON intake_form_templates (owner_user_id)
+      `);
+      await _db.execute(sql`
+        CREATE INDEX IF NOT EXISTS idx_intake_form_templates_letter_type ON intake_form_templates (base_letter_type)
+      `);
+      console.log("[Database] Migration: ensured intake_form_templates table exists");
+    } catch (migErr) {
+      console.warn("[Database] Migration error (intake_form_templates):", migErr);
+    }
   }
   return _db;
 }

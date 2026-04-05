@@ -61,6 +61,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 
 ### Feature Specifications
 - **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with seed scenarios. Users can browse templates, pre-fill intake forms, and admins manage templates via CRUD panel.
+- **Dynamic Intake Forms**: `LETTER_TYPE_CONFIG` in `shared/types.ts` includes `situationFields` per letter type (e.g., Employment Dispute shows Employer Name, Position, HR Contact). Fields render dynamically in Step 4 based on selected letter type. Data flows through `IntakeJson.situationFields` as a `Record<string, string | number>`. Subscriber-created custom intake templates (`intake_form_templates` table) let users toggle default fields and add custom fields. Admin templates can also define `enabledSituationFields` and `customSituationFields` in their `prefillData`.
 - **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction, parties, incident details, desired outcome, and exhibit uploads.
 - **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
 - **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).

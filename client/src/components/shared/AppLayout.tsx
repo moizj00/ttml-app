@@ -26,6 +26,7 @@ import {
   BookOpen,
   BarChart3,
   Library,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
@@ -62,6 +63,11 @@ function getNavItems(role: string): NavItem[] {
         label: "My Letters",
         href: "/letters",
         icon: <FileText className="w-4 h-4" />,
+      },
+      {
+        label: "Intake Templates",
+        href: "/subscriber/intake-templates",
+        icon: <ClipboardCheck className="w-4 h-4" />,
       },
       {
         label: "Billing",

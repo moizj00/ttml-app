@@ -39,4 +39,5 @@ export interface FormData {
   communicationsSummary: string;
   communicationsLastContactDate: string;
   communicationsMethod: string;
+  situationFields: Record<string, string>;
 }

@@ -81,6 +81,7 @@ const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
 const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
 const Receipts = lazyRetry(() => import("./pages/subscriber/Receipts"));
 const Profile = lazyRetry(() => import("./pages/subscriber/Profile"));
+const IntakeFormTemplates = lazyRetry(() => import("./pages/subscriber/IntakeFormTemplates"));
 
 const AttorneyDashboard = lazyRetry(() => import("./pages/attorney/Dashboard"));
 const ReviewQueue = lazyRetry(() => import("./pages/attorney/ReviewQueue"));
@@ -251,6 +252,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["subscriber"]}>
           <SuspenseFade fallback={<ReceiptsSkeleton />}>
             <Receipts />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/subscriber/intake-templates">
+        <ProtectedRoute allowedRoles={["subscriber"]}>
+          <SuspenseFade fallback={<BillingSkeleton />}>
+            <IntakeFormTemplates />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

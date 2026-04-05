@@ -14,6 +14,15 @@ const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+const situationFieldDefSchema = z.object({
+  key: z.string().min(1).max(100),
+  label: z.string().min(1).max(200),
+  type: z.enum(["text", "textarea", "number", "date", "select"]),
+  placeholder: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  defaultEnabled: z.boolean().default(true),
+});
+
 const prefillDataSchema = z.object({
   subject: z.string().optional(),
   description: z.string().optional(),
@@ -24,6 +33,8 @@ const prefillDataSchema = z.object({
   jurisdictionState: z.string().optional(),
   jurisdictionCity: z.string().optional(),
   additionalContext: z.string().optional(),
+  enabledSituationFields: z.array(z.string()).optional(),
+  customSituationFields: z.array(situationFieldDefSchema).optional(),
 });
 
 const templateInputSchema = z.object({

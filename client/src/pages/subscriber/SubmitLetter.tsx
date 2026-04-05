@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY } from "../../../../shared/types";
-import type { AnalysisPrefill } from "../../../../shared/types";
+import type { AnalysisPrefill, SituationFieldDef, IntakeFormTemplateRecord, IntakeFieldConfig } from "../../../../shared/types";
 import { AlertCircle, Scale } from "lucide-react";
 import { Link } from "wouter";
 import { Step1LetterType } from "./intake-steps/Step1LetterType";
@@ -66,6 +66,7 @@ const INITIAL: FormData = {
   communicationsSummary: "",
   communicationsLastContactDate: "",
   communicationsMethod: "",
+  situationFields: {},
 };
 
 const DRAFT_KEY_PREFIX = "ttml_draft_letter";
@@ -282,6 +283,43 @@ export default function SubmitLetter() {
     }
   }, [form, step, DRAFT_KEY]);
 
+  const { data: intakeFormTemplatesList } = trpc.intakeFormTemplates.list.useQuery();
+
+  const intakeFormTemplatesForType = useMemo((): IntakeFormTemplateRecord[] => {
+    if (!intakeFormTemplatesList || !form.letterType) return [];
+    return (intakeFormTemplatesList as IntakeFormTemplateRecord[]).filter(t => t.baseLetterType === form.letterType);
+  }, [intakeFormTemplatesList, form.letterType]);
+
+  const [activeIntakeFormTemplateId, setActiveIntakeFormTemplateId] = useState<number | null>(null);
+  const prevLetterTypeRef = useRef(form.letterType);
+  useEffect(() => {
+    if (form.letterType !== prevLetterTypeRef.current) {
+      prevLetterTypeRef.current = form.letterType;
+      setActiveIntakeFormTemplateId(null);
+    }
+  }, [form.letterType]);
+
+  const activeIntakeFormTemplate = useMemo((): IntakeFormTemplateRecord | null => {
+    if (!activeIntakeFormTemplateId || !intakeFormTemplatesList) return null;
+    return (intakeFormTemplatesList as IntakeFormTemplateRecord[]).find(t => t.id === activeIntakeFormTemplateId) ?? null;
+  }, [activeIntakeFormTemplateId, intakeFormTemplatesList]);
+
+  const intakeFormTemplateFieldConfig = useMemo((): IntakeFieldConfig | null => {
+    if (activeIntakeFormTemplate) {
+      return activeIntakeFormTemplate.fieldConfig;
+    }
+    if (resolvedPrefill) {
+      const pf = resolvedPrefill as Record<string, string | string[] | SituationFieldDef[] | undefined>;
+      if (pf.enabledSituationFields || pf.customSituationFields) {
+        return {
+          enabledDefaultFields: (pf.enabledSituationFields as string[] | undefined) ?? [],
+          customFields: (pf.customSituationFields as SituationFieldDef[] | undefined) ?? [],
+        };
+      }
+    }
+    return null;
+  }, [activeIntakeFormTemplate, resolvedPrefill]);
+
   const { data: canSubmitData, isLoading: checkingSubscription } =
     trpc.billing.checkCanSubmit.useQuery();
 
@@ -297,6 +335,13 @@ export default function SubmitLetter() {
         return next;
       });
     }
+  };
+
+  const updateSituationField = (key: string, value: string) => {
+    setForm(prev => ({
+      ...prev,
+      situationFields: { ...prev.situationFields, [key]: value },
+    }));
   };
 
   const getStepErrors = (s: number): Record<string, string> => {
@@ -434,6 +479,13 @@ export default function SubmitLetter() {
             | "hand-delivery"
             | undefined,
         },
+        situationFields: Object.keys(form.situationFields).length > 0
+          ? Object.fromEntries(
+              Object.entries(form.situationFields)
+                .filter(([, v]) => v !== "")
+                .map(([k, v]) => [k, isNaN(Number(v)) ? v : Number(v)])
+            )
+          : undefined,
       };
       const result = await submit.mutateAsync({
         letterType: form.letterType as any,
@@ -640,6 +692,9 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
+                intakeTemplatesForType={intakeFormTemplatesForType}
+                activeIntakeFormTemplateId={activeIntakeFormTemplateId}
+                onSelectIntakeTemplate={setActiveIntakeFormTemplateId}
               />
             )}
             {step === 2 && (
@@ -661,6 +716,9 @@ export default function SubmitLetter() {
                 form={form}
                 stepErrors={stepErrors}
                 update={update}
+                updateSituationField={updateSituationField}
+                enabledSituationFields={intakeFormTemplateFieldConfig?.enabledDefaultFields}
+                customSituationFields={intakeFormTemplateFieldConfig?.customFields}
               />
             )}
             {step === 5 && (
