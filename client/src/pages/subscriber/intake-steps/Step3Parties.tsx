@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressAutocomplete } from "@/components/shared/AddressAutocomplete";
 import type { FormData } from "./types";
 
 interface Props {
@@ -47,11 +48,12 @@ export function Step3Parties({ form, stepErrors, update }: Props) {
           <Label htmlFor="senderAddress" className="text-xs mb-1 block">
             Address *
           </Label>
-          <Input
+          <AddressAutocomplete
             id="senderAddress"
             value={form.senderAddress}
-            onChange={e => update("senderAddress", e.target.value)}
-            placeholder="123 Main St, City, State 12345"
+            onChange={(val) => update("senderAddress", val)}
+            placeholder="Start typing an address..."
+            data-testid="input-senderAddress"
           />
           {stepErrors.senderAddress && (
             <p className="text-xs text-red-600 mt-1">{stepErrors.senderAddress}</p>
@@ -106,11 +108,12 @@ export function Step3Parties({ form, stepErrors, update }: Props) {
           <Label htmlFor="recipientAddress" className="text-xs mb-1 block">
             Address *
           </Label>
-          <Input
+          <AddressAutocomplete
             id="recipientAddress"
             value={form.recipientAddress}
-            onChange={e => update("recipientAddress", e.target.value)}
-            placeholder="456 Other St, City, State 67890"
+            onChange={(val) => update("recipientAddress", val)}
+            placeholder="Start typing an address..."
+            data-testid="input-recipientAddress"
           />
           {stepErrors.recipientAddress && (
             <p className="text-xs text-red-600 mt-1">{stepErrors.recipientAddress}</p>
