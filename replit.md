@@ -55,7 +55,8 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 ### Feature Specifications
 - **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with seed scenarios and admin CRUD panel.
 - **Dynamic Intake Forms**: `LETTER_TYPE_CONFIG` in `shared/types.ts` defines `situationFields` per letter type, rendering dynamically. Users can create custom intake templates.
-- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction, parties, incident details, desired outcome, and exhibit uploads.
+- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction, parties, incident details, desired outcome, and exhibit uploads. Address fields use Google Places Autocomplete for real-time suggestions.
+- **Google Places Autocomplete**: `AddressAutocomplete` component (`client/src/components/shared/AddressAutocomplete.tsx`) provides address auto-suggestions on sender and recipient address fields. Requires `VITE_GOOGLE_MAPS_API_KEY` secret. Restricted to US addresses. Gracefully degrades to plain text input if API key is missing or API fails.
 - **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
 - **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
 - **Affiliate Program**: Single-use rotating discount codes with commission settlement.
@@ -77,4 +78,5 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Cloudflare R2**: S3-compatible object storage.
 - **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data.
 - **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
+- **Google Maps JavaScript API + Places API**: Address autocomplete in letter submission forms.
 - **Railway**: Hosting and deployment.
