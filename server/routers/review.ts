@@ -586,7 +586,7 @@ export const reviewRouter = router({
               type: "letter_approved",
               title: "Your letter has been approved!",
               body: `Your letter "${letter.subject}" is ready to download.${pdfUrl ? " A PDF copy is available." : ""}`,
-              link: `/letters/${input.letterId}`,
+              link: `/dashboard?approved=${input.letterId}`,
             });
           }
         } catch (err) {

@@ -314,7 +314,7 @@ export async function sendLetterApprovedEmail(opts: {
   const dispatched = await dispatchToWorker({ type: "letter_approved", ...opts });
   if (dispatched) return;
 
-  const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
+  const ctaUrl = `${opts.appUrl}/dashboard?approved=${opts.letterId}`;
   const pdfLine = opts.pdfUrl
     ? `<p style="margin-top:12px;">📄 <a href="${opts.pdfUrl}" style="color:${BRAND_DARK};font-weight:bold;">Download your Reviewed PDF</a></p>`
     : "";

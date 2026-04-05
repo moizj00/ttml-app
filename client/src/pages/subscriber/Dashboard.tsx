@@ -26,12 +26,14 @@ import {
   Scale,
   Calendar,
 } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "../../../../shared/types";
+import ApprovedLetterPreviewModal from "@/components/ApprovedLetterPreviewModal";
 import type { AnalysisPrefill, DocumentAnalysisResult } from "../../../../shared/types";
 import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 
@@ -288,7 +290,22 @@ function PipelineStepper({ status }: { status: string }) {
 export default function SubscriberDashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const utils = trpc.useUtils();
+
+  const [approvedQueryParam, setApprovedQueryParam] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const val = params.get("approved");
+    if (val) {
+      const id = parseInt(val, 10);
+      if (!isNaN(id)) {
+        setApprovedQueryParam(id);
+        window.history.replaceState({}, "", "/dashboard");
+      }
+    }
+  }, [searchString]);
   const {
     data: subscription,
     error: subscriptionError,
@@ -370,6 +387,18 @@ export default function SubscriberDashboard() {
     <AppLayout breadcrumb={[{ label: "Dashboard" }]}>
       {/* Onboarding modal — shown once for new subscribers */}
       <OnboardingModal />
+      {/* Approved letter preview modal — auto-shown for newly approved letters */}
+      {letters && letters.length > 0 && (
+        <ApprovedLetterPreviewModal
+          letters={letters.map((l) => ({
+            id: l.id,
+            subject: l.subject,
+            pdfUrl: l.pdfUrl ?? null,
+            status: l.status,
+          }))}
+          forceLetterIds={approvedQueryParam ? [approvedQueryParam] : undefined}
+        />
+      )}
       <div className="space-y-6">
         {/* Welcome Banner */}
         <div className="rounded-2xl bg-linear-to-r from-primary to-primary/80 p-5 text-primary-foreground sm:p-6">
