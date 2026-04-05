@@ -209,7 +209,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       const discountCode = await getDiscountCodeByCode(discountCodeStr);
                       if (discountCode && discountCode.isActive) {
                         await incrementDiscountCodeUsage(discountCode.id);
-                        const saleAmount = session.amount_total ?? 20000; // cents (final price after discount)
+                        const saleAmount = session.amount_total ?? 29900; // cents (final price after discount)
                         const originalPrice = session.metadata?.original_price ? parseInt(session.metadata.original_price, 10) : saleAmount;
                         if (saleAmount > 0) {
                           const commissionRate = 500; // 5% = 500 basis points

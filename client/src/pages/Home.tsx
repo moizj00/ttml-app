@@ -132,7 +132,7 @@ export default function Home() {
         "@type": "State",
         name: "California",
       },
-      priceRange: "$200-$2000",
+      priceRange: "$299-$2400",
       openingHoursSpecification: {
         "@type": "OpeningHoursSpecification",
         dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
@@ -453,7 +453,7 @@ export default function Home() {
             </h1>
 
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-8 sm:mb-10 max-w-xl leading-relaxed">
-              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in an instant, not weeks, starting at $200.
+              For individuals who need a professional legal letter, Talk to My Lawyer is the only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in an instant, not weeks, starting at $299.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -598,7 +598,7 @@ export default function Home() {
             </div>
 
             <div className="text-center p-6 sm:p-8 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow" data-testid="trust-stat-price">
-              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">$200</div>
+              <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 mb-2">$299</div>
               <div className="text-base font-semibold text-slate-900 mb-1">Starting Price</div>
               <p className="text-sm text-slate-500">Flat-fee pricing with no hourly billing surprises. First letter free.</p>
               <p className="text-xs text-slate-400 mt-2 italic">Compare to $500–$2,000+ for traditional attorney letters</p>
@@ -622,7 +622,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 text-white">
-              Structured Drafting + Attorney Review — Starting at $200
+              Structured Drafting + Attorney Review — Starting at $299
             </h2>
             <p className="text-lg text-slate-400">
               The only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
@@ -642,7 +642,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$200</span>
+                  <span className="text-4xl font-bold">$299</span>
                   <span className="text-slate-400"> one-time</span>
                 </div>
               </div>
@@ -675,10 +675,10 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$200</span>
+                  <span className="text-4xl font-bold">$299</span>
                   <span className="text-blue-200">/mo</span>
                 </div>
-                <p className="text-blue-200 text-xs mt-1">$50 per letter</p>
+                <p className="text-blue-200 text-xs mt-1">$74.75 per letter</p>
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
@@ -696,20 +696,20 @@ export default function Home() {
               data-testid="pricing-yearly"
             >
               <div className="absolute -top-3 left-8 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                2 Months Free
+                Best Value
               </div>
               <div className="w-full md:w-1/3 mb-6 md:mb-0">
                 <h3 className="text-2xl font-bold mb-1">Yearly</h3>
                 <p className="text-slate-400 text-sm">
-                  Best value — save 2 months
+                  Best value for ongoing legal needs
                 </p>
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-slate-700/50 px-3 py-1 rounded-md text-xs font-medium text-slate-300">
-                  <FileText className="w-3 h-3" /> 4 letters per month included
+                  <FileText className="w-3 h-3" /> 8 letters per year included
                 </div>
               </div>
               <div className="w-full md:w-1/3 flex flex-col items-start md:items-center mb-6 md:mb-0">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">$2,000</span>
+                  <span className="text-4xl font-bold">$2,400</span>
                   <span className="text-slate-400">/yr</span>
                 </div>
               </div>

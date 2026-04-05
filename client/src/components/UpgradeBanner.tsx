@@ -5,9 +5,9 @@ import { X, Zap, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const YEARLY_BENEFITS = [
-  "2 months free vs monthly billing",
-  "4 letters/month included",
+  "8 letters per year included",
   "Priority attorney review queue",
+  "Best value plan",
 ];
 
 const MONTHLY_PLAN_IDS = ["monthly", "monthly_basic", "starter"];
@@ -66,7 +66,7 @@ export default function UpgradeBanner({ plan }: Props) {
             <span className="text-sm font-bold tracking-wide uppercase text-blue-100">Switch to Yearly & Save</span>
           </div>
           <p className="text-white/90 text-sm font-medium mb-2">
-            You're on Monthly — switch to Yearly for $2,000/yr and get 2 months free.
+            You're on Monthly — switch to Yearly for $2,400/yr and get 8 letters total.
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {YEARLY_BENEFITS.map((b) => (

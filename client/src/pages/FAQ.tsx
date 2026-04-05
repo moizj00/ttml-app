@@ -38,15 +38,15 @@ const FAQ_CATEGORIES = [
     items: [
       {
         q: "How much does a draft cost?",
-        a: "A single drafted letter costs $200 (one-time), or you can subscribe for $200/month (4 drafts) or $2,000/year (4 drafts/month, 2 months free) with attorney review included.",
+        a: "A single drafted letter costs $299 (one-time), or you can subscribe for $299/month (4 drafts) or $2,400/year (8 drafts total) with attorney review included.",
       },
       {
         q: "What is included with each draft?",
-        a: "Every draft includes a structured California-focused legal-letter draft, built from curated legal-letter patterns, licensed attorney review and approval, and a PDF download. The $200 single-draft fee covers the complete service including attorney review.",
+        a: "Every draft includes a structured California-focused legal-letter draft, built from curated legal-letter patterns, licensed attorney review and approval, and a PDF download. The $299 single-draft fee covers the complete service including attorney review.",
       },
       {
         q: "Do you offer subscription plans?",
-        a: "Yes. We offer two subscription plans: Monthly at $200/month (4 drafts with attorney review included) and Yearly at $2,000/year (4 drafts/month, equivalent to 2 months free). Subscribers bypass the per-draft paywall entirely. Visit our Pricing page for full details.",
+        a: "Yes. We offer two subscription plans: Monthly at $299/month (4 drafts with attorney review included) and Yearly at $2,400/year (8 drafts total). Subscribers bypass the per-draft paywall entirely. Visit our Pricing page for full details.",
       },
       {
         q: "What payment methods do you accept?",
@@ -71,7 +71,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Can I see the draft before paying?",
-        a: "Yes. For drafts without a subscription, the draft is partially blurred until you pay the $200 per-draft fee or subscribe to a monthly or yearly plan.",
+        a: "Yes. For drafts without a subscription, the draft is partially blurred until you pay the $299 per-draft fee or subscribe to a monthly or yearly plan.",
       },
       {
         q: "What if the attorney requests changes?",

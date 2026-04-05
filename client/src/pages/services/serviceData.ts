@@ -35,7 +35,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Professional Demand Letter Service — Attorney-Reviewed",
     keyword: "demand letter service",
     metaTitle: "Demand Letter Service — Attorney-Reviewed | Talk to My Lawyer",
-    metaDescription: "Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at $200. Delivered in minutes, not weeks.",
+    metaDescription: "Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at $299. Delivered in minutes, not weeks.",
     heroDescription: "Stop chasing payments with phone calls and emails. A professionally drafted, attorney-reviewed demand letter puts the other party on formal notice — and creates a clear paper trail if you need to escalate.",
     useCases: [
       { title: "Unpaid Debts", description: "Recover money owed to you from individuals or businesses who have failed to pay on time." },
@@ -46,7 +46,7 @@ export const SERVICES: ServiceData[] = [
     ],
     faqs: [
       { q: "What is a demand letter?", a: "A demand letter is a formal written notice sent to another party requesting specific action — usually payment of a debt or resolution of a dispute. It serves as a clear, documented record that you attempted to resolve the issue before pursuing legal action." },
-      { q: "How much does a demand letter cost?", a: "Our demand letter service starts at $200 for a single letter, which includes attorney review and approval. Compare this to traditional attorneys who charge $300–$500+ per hour." },
+      { q: "How much does a demand letter cost?", a: "Our demand letter service starts at $299 for a single letter, which includes attorney review and approval. Compare this to traditional attorneys who charge $300–$500+ per hour." },
       { q: "How long does it take to receive my demand letter?", a: "Most demand letters are drafted within minutes of submission. Attorney review typically completes within 24 hours during business days." },
       { q: "Is a demand letter legally binding?", a: "A demand letter itself is not legally binding, but it creates a formal paper trail and demonstrates that you made a good-faith effort to resolve the dispute. Courts look favorably on parties who attempted resolution before filing suit." },
       { q: "What happens if the other party ignores my demand letter?", a: "If the other party does not respond or comply, the demand letter serves as evidence of your attempt to resolve the matter. You may then choose to escalate to small claims court or formal litigation with the support of a licensed attorney." },
@@ -65,7 +65,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Cease and Desist Letter Service — Stop Harmful Activity",
     keyword: "cease and desist letter service",
     metaTitle: "Cease & Desist Letter Service | Talk to My Lawyer",
-    metaDescription: "Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at $200.",
+    metaDescription: "Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at $299.",
     heroDescription: "When someone is infringing on your rights, harassing you, or engaging in harmful activity, a formal cease and desist letter puts them on notice. Our attorney-reviewed letters carry weight and create a documented record.",
     useCases: [
       { title: "IP Theft", description: "Stop unauthorized use of your intellectual property, including copyrighted content, trade secrets, or proprietary materials." },
@@ -94,7 +94,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Security Deposit Demand Letter — Get Your Deposit Back",
     keyword: "security deposit demand letter",
     metaTitle: "Security Deposit Demand Letter | Talk to My Lawyer",
-    metaDescription: "Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at $200.",
+    metaDescription: "Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at $299.",
     heroDescription: "California law requires landlords to return security deposits within 21 days of move-out. If your landlord is withholding your deposit without proper justification, a formal demand letter is often the fastest way to get your money back.",
     useCases: [
       { title: "Landlord Won't Return Deposit", description: "Your landlord has not returned your security deposit within the legally required timeframe after you moved out." },
@@ -123,7 +123,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Breach of Contract Letter — Enforce Your Agreement",
     keyword: "breach of contract letter",
     metaTitle: "Breach of Contract Letter | Talk to My Lawyer",
-    metaDescription: "Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at $200.",
+    metaDescription: "Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at $299.",
     heroDescription: "When the other party fails to uphold their end of a contract, a formal breach of contract letter puts them on notice and demands compliance. Our attorney-reviewed letters cite relevant California contract law and clearly outline the breach and demanded remedy.",
     useCases: [
       { title: "Vendor Non-Performance", description: "A vendor or supplier failed to deliver goods or services as agreed upon in your contract." },
@@ -152,7 +152,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Employment Dispute Letter — Protect Your Workplace Rights",
     keyword: "employment dispute letter",
     metaTitle: "Employment Dispute Letter | Talk to My Lawyer",
-    metaDescription: "Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at $200.",
+    metaDescription: "Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at $299.",
     heroDescription: "California has some of the strongest employee protections in the country. If your employer has violated your rights — whether through unpaid wages, wrongful termination, or workplace harassment — a formal letter puts them on notice and creates a critical paper trail.",
     useCases: [
       { title: "Unpaid Wages", description: "Your employer owes you wages, overtime pay, commissions, or final paychecks that have not been paid as required by California law." },
@@ -210,7 +210,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Landlord Harassment Cease & Desist Letter — Protect Your Tenant Rights",
     keyword: "landlord harassment cease and desist letter",
     metaTitle: "Landlord Harassment Cease & Desist Letter | Talk to My Lawyer",
-    metaDescription: "Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at $200.",
+    metaDescription: "Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at $299.",
     heroDescription: "California tenants have strong legal protections against landlord harassment. If your landlord is engaging in illegal behavior to force you out — entering without notice, shutting off utilities, or threatening you — a formal cease and desist letter puts them on notice and creates evidence for legal action.",
     useCases: [
       { title: "Illegal Entry", description: "Your landlord enters your unit without providing the required 24-hour written notice or without a legitimate reason." },
@@ -297,7 +297,7 @@ export const SERVICES: ServiceData[] = [
     h1: "Small Claims Demand Letter — Resolve Disputes Before Court",
     keyword: "small claims demand letter",
     metaTitle: "Small Claims Demand Letter | Talk to My Lawyer",
-    metaDescription: "Send a professional demand letter before filing in California Small Claims Court. Attorney-reviewed, citing California CCP § 116.320. Starting at $200.",
+    metaDescription: "Send a professional demand letter before filing in California Small Claims Court. Attorney-reviewed, citing California CCP § 116.320. Starting at $299.",
     heroDescription: "Before filing in California Small Claims Court, sending a formal demand letter is not just smart — many judges expect it. A professionally drafted demand letter demonstrates good faith and often resolves the dispute entirely, saving you the time and stress of a court appearance.",
     useCases: [
       { title: "Pre-Filing Requirement", description: "Many California small claims judges look favorably on parties who attempted resolution before filing. A demand letter creates evidence of your good-faith effort." },

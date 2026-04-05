@@ -17,7 +17,7 @@ const CONTENT_BRIEFS = [
           "What Makes a Demand Letter Effective",
           "The Role of Attorney Review in Demand Letter Success",
           "Common Mistakes That Weaken Your Demand Letter",
-          "How to Get a Professional Demand Letter for $200",
+          "How to Get a Professional Demand Letter for $299",
         ],
         internalLinks: ["/services/demand-letter", "/pricing"],
         cta: "Get your attorney-reviewed demand letter today",
@@ -55,14 +55,14 @@ const CONTENT_BRIEFS = [
           "Online Legal Services: Pricing Comparison",
           "What You Should Expect to Pay in 2025",
           "Hidden Costs to Watch Out For",
-          "The $200 Attorney-Reviewed Alternative",
+          "The $299 Attorney-Reviewed Alternative",
         ],
         internalLinks: ["/pricing", "/services/demand-letter"],
         cta: "Get your first letter free — no credit card required",
         repurpose: {
           linkedin: "I surveyed legal letter costs across 10 services. Traditional attorneys: $500–$2,000. Online templates: free but risky. There's a third option most people don't know about.",
           twitter: "How much should a legal letter cost? I compared 10 services. Here's the honest breakdown 🧵",
-          newsletter: "Stat of the week: The average attorney charges $500–$2,000 for a single demand letter. Here's how to get the same quality for $200.",
+          newsletter: "Stat of the week: The average attorney charges $500–$2,000 for a single demand letter. Here's how to get the same quality for $299.",
         },
       },
       {
@@ -184,7 +184,7 @@ const CONTENT_BRIEFS = [
         internalLinks: ["/services/small-claims-demand-letter", "/services/demand-letter"],
         cta: "Start with a demand letter — it strengthens your case either way",
         repurpose: {
-          linkedin: "Small claims court costs $75+ in filing fees and takes months. A demand letter costs $200, takes 24 hours, and resolves 60% of disputes. Here's when to use each.",
+          linkedin: "Small claims court costs $75+ in filing fees and takes months. A demand letter costs $299, takes 24 hours, and resolves 60% of disputes. Here's when to use each.",
           twitter: "Small claims court vs. demand letter — which should you choose? Here's the decision framework I recommend 🧵",
           newsletter: "This week: Small claims court vs. demand letters — a cost and timeline comparison.",
         },
@@ -222,7 +222,7 @@ const CONTENT_BRIEFS = [
         internalLinks: ["/", "/pricing", "/faq"],
         cta: "Experience structured legal letter drafting with attorney review",
         repurpose: {
-          linkedin: "Traditional legal letters cost $500–$2,000 and take weeks. Structured drafting + attorney review delivers the same quality in 24 hours for $200. Here's how.",
+          linkedin: "Traditional legal letters cost $500–$2,000 and take weeks. Structured drafting + attorney review delivers the same quality in 24 hours for $299. Here's how.",
           twitter: "Technology is making legal services accessible to everyone. Here's how the industry is changing — and what it means for you 🧵",
           newsletter: "The future of legal services: How structured drafting + attorney review is making professional legal letters affordable for everyone.",
         },
@@ -239,7 +239,7 @@ const CONTENT_BRIEFS = [
           "DIY vs. Professional: Making the Right Choice",
         ],
         internalLinks: ["/services/demand-letter", "/blog"],
-        cta: "Get a professionally drafted demand letter for $200",
+        cta: "Get a professionally drafted demand letter for $299",
         repurpose: {
           linkedin: "I've reviewed hundreds of demand letters. The effective ones all have these 7 elements in common. The ineffective ones usually miss #3.",
           twitter: "Writing a demand letter? It needs these 7 elements to be effective. Most DIY letters miss at least 2 of them 🧵",

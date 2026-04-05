@@ -468,7 +468,7 @@ export async function createTrialReviewCheckout(params: {
 
 // ─── Create Letter Unlock Checkout (pay-to-unlock paywall) ───────────────────
 /**
- * Creates a one-time $200 Stripe Checkout session for unlocking a specific
+ * Creates a one-time $299 Stripe Checkout session for unlocking a specific
  * generated_locked letter. The letter_id is stored in session metadata so
  * the webhook can transition it to pending_review after payment.
  */
@@ -526,7 +526,7 @@ export async function createLetterUnlockCheckout(params: {
               "Unlock your AI-drafted letter and send it for licensed attorney review and approval.",
             metadata: { plan_id: "single_letter", letter_id: letterId.toString() },
           },
-          unit_amount: LETTER_UNLOCK_PRICE_CENTS, // $200
+          unit_amount: LETTER_UNLOCK_PRICE_CENTS, // $299
         },
         quantity: 1,
       },

@@ -5,18 +5,18 @@
  * Import from here — never hardcode prices in components or procedures.
  *
  * Pricing model:
- *  - Single Letter: $200 one-time (1 letter)
- *  - Monthly:       $200/month (4 letters/month)
- *  - Yearly:        $2,000/year (4 letters/month, 2 months free)
+ *  - Single Letter: $299 one-time (1 letter)
+ *  - Monthly:       $299/month (4 letters/month)
+ *  - Yearly:        $2,400/year (8 letters total)
  */
 
 export const PRICING = {
-  /** Single Letter — $200 one-time */
+  /** Single Letter — $299 one-time */
   singleLetter: {
     id: "single_letter",
     name: "Single Letter",
-    price: 200,
-    priceDisplay: "$200",
+    price: 299,
+    priceDisplay: "$299",
     period: "one-time",
     lettersIncluded: 1,
     description: "One California-focused legal-letter draft with optional attorney review. No subscription required.",
@@ -29,12 +29,12 @@ export const PRICING = {
     ],
   },
 
-  /** Monthly — $200/month for 4 letters */
+  /** Monthly — $299/month for 4 letters */
   monthly: {
     id: "monthly",
     name: "Monthly",
-    price: 200,
-    priceDisplay: "$200",
+    price: 299,
+    priceDisplay: "$299",
     period: "per month",
     lettersIncluded: 4,
     description: "4 California-focused drafts per month — reduce drafting time for repetitive letters.",
@@ -50,24 +50,23 @@ export const PRICING = {
     ],
   },
 
-  /** Yearly — $2,000/year for 4 letters/month */
+  /** Yearly — $2,400/year for 8 letters total */
   yearly: {
     id: "yearly",
     name: "Yearly",
-    price: 2000,
-    priceDisplay: "$2,000",
+    price: 2400,
+    priceDisplay: "$2,400",
     period: "per year",
-    lettersIncluded: 4,
-    description: "4 California-focused drafts per month, billed annually. Best value — 2 months free vs monthly.",
+    lettersIncluded: 8,
+    description: "8 California-focused drafts per year, billed annually. Best value.",
     features: [
-      "4 drafts per month",
+      "8 drafts per year",
       "California-focused drafting engine",
       "Structured from curated legal-letter patterns",
       "Licensed attorney review & approval",
       "PDF downloads of approved drafts",
       "Review-friendly outputs",
       "Priority support",
-      "2 months free vs monthly",
       "Cancel anytime",
     ],
   },

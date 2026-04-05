@@ -155,7 +155,7 @@ export default function ServicePage({ service }: { service: ServiceData }) {
                     data-testid="hero-cta"
                   >
                     <FileText className="w-5 h-5" />
-                    Get Started — $200
+                    Get Started — $299
                   </button>
                   <Link
                     href="/pricing"
@@ -221,7 +221,7 @@ export default function ServicePage({ service }: { service: ServiceData }) {
                     Talk to My Lawyer
                   </div>
                   <div className="flex items-baseline gap-2 mb-4 mt-2">
-                    <span className="text-4xl font-bold text-blue-600">$200</span>
+                    <span className="text-4xl font-bold text-blue-600">$299</span>
                     <span className="text-slate-500">per letter</span>
                   </div>
                   <ul className="space-y-3">

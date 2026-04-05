@@ -16,7 +16,7 @@ const SAMPLE_NEWSLETTER = {
   statOfTheWeek: {
     stat: "$500–$2,000+",
     label: "Average cost of a traditional attorney-drafted demand letter",
-    comparison: "Talk to My Lawyer delivers the same quality, attorney-reviewed letter for $200 — that's up to 90% less.",
+    comparison: "Talk to My Lawyer delivers the same quality, attorney-reviewed letter for $299 — that's up to 85% less.",
   },
   serviceSpotlight: {
     title: "Service Spotlight: Security Deposit Demand Letters",

@@ -229,7 +229,7 @@ All mounted at `/api/trpc`. Router defined in `server/routers.ts`.
 | `billing.checkPaywallStatus` | query | subscriber | Returns paywall state: `free_available`, `need_subscription`, `has_allowance` |
 | `billing.checkFirstLetterFree` | query | subscriber | Returns whether the user's first free letter is still available |
 | `billing.freeUnlock` | mutation | subscriber | Unlocks a `generated_locked` letter for free (first letter promotion), transitions to `pending_review` |
-| `billing.payToUnlock` | mutation | subscriber | Creates Stripe Checkout for per-letter unlock ($200 one-time) |
+| `billing.payToUnlock` | mutation | subscriber | Creates Stripe Checkout for per-letter unlock ($299 one-time) |
 | `billing.paymentHistory` | query | protected | Returns Stripe payment intents (charges history) |
 | `billing.receipts` | query | subscriber | Returns formatted receipt objects with invoice PDF URLs |
 
@@ -707,7 +707,7 @@ Defined in `server/cronScheduler.ts`.
 Files: `server/stripe.ts`, `server/stripeWebhook.ts`, `server/stripe-products.ts`
 
 ### Products & Plans
-- **Per-letter unlock**: $200 one-time (`LETTER_UNLOCK_PRICE_CENTS = 20000`)
+- **Per-letter unlock**: $299 one-time (`LETTER_UNLOCK_PRICE_CENTS = 29900`)
 - **Monthly Basic** (`monthly_basic` / legacy alias `starter`): recurring monthly
 - **Monthly Pro** (`monthly_pro` / legacy alias `professional`): recurring monthly
 - First letter is free (no payment required)

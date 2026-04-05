@@ -629,7 +629,7 @@ export const billingRouter = router({
         return { ok: true as const };
       }),
 
-    // ─── Pay-to-unlock: one-time $200 checkout for a specific locked letter ───
+    // ─── Pay-to-unlock: one-time $299 checkout for a specific locked letter ───
     payToUnlock: subscriberProcedure
       .input(
         z.object({ letterId: z.number(), discountCode: z.string().optional() })

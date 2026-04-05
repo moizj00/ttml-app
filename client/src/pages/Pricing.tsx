@@ -55,7 +55,7 @@ const PLANS = [
     period: PRICING.yearly.period,
     priceSub: null as string | null,
     description: PRICING.yearly.description,
-    badge: "2 Months Free" as string | null,
+    badge: "Best Value" as string | null,
     features: PRICING.yearly.features as readonly string[],
     cta: "Subscribe Yearly",
     highlight: false,
@@ -123,7 +123,7 @@ export default function Pricing() {
       name: "Talk to My Lawyer",
       url: "https://www.talk-to-my-lawyer.com",
     },
-    description: "Professional attorney-reviewed legal letters. Choose from single letter ($200), monthly subscription ($200/month for 4 letters), or yearly plan ($2,000/year).",
+    description: "Professional attorney-reviewed legal letters. Choose from single letter ($299), monthly subscription ($299/month for 4 letters), or yearly plan ($2,400/year for 8 letters).",
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
@@ -131,7 +131,7 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Single Letter",
-          price: "200",
+          price: "299",
           priceCurrency: "USD",
           description: "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
           eligibleQuantity: { "@type": "QuantitativeValue", value: 1 },
@@ -139,7 +139,7 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Monthly Plan",
-          price: "200",
+          price: "299",
           priceCurrency: "USD",
           priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1M" },
           description: "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
@@ -147,10 +147,10 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Yearly Plan",
-          price: "2000",
+          price: "2400",
           priceCurrency: "USD",
           priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1Y" },
-          description: "4 attorney-reviewed letters per month, billed annually. 2 months free vs monthly.",
+          description: "8 attorney-reviewed letters per year, billed annually.",
         },
       ],
     },
@@ -160,10 +160,10 @@ export default function Pricing() {
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My Lawyer</title>
-        <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $200, monthly $200/month (4 letters), or yearly $2,000. All plans include attorney review and PDF delivery." />
+        <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $299, monthly $299/month (4 letters), or yearly $2,400 (8 letters). All plans include attorney review and PDF delivery." />
         <link rel="canonical" href="https://www.talk-to-my-lawyer.com/pricing" />
         <meta property="og:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
-        <meta property="og:description" content="Choose the right plan for your legal needs. Single letter $200, monthly $200/month, or yearly $2,000. Attorney review included in every plan." />
+        <meta property="og:description" content="Choose the right plan for your legal needs. Single letter $299, monthly $299/month, or yearly $2,400. Attorney review included in every plan." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.talk-to-my-lawyer.com/pricing" />
         <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
@@ -181,7 +181,7 @@ export default function Pricing() {
             <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            Structured Drafting + Attorney Review — Starting at $200
+            Structured Drafting + Attorney Review — Starting at $299
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
             The only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
@@ -304,8 +304,8 @@ export default function Pricing() {
             Choose a plan and complete checkout to get started. Pay{" "}
             <strong>${PRICING.singleLetter.price}</strong> for a single draft,
             or subscribe for{" "}
-            <strong>${PRICING.monthly.price}/month</strong> (4 drafts, $50 per draft) or{" "}
-            <strong>${PRICING.yearly.price}/year</strong> (4 drafts/month, 2 months free). All
+            <strong>${PRICING.monthly.price}/month</strong> (4 drafts) or{" "}
+            <strong>${PRICING.yearly.price}/year</strong> (8 drafts total). All
             plans include California-focused drafting and PDF delivery.
           </p>
         </div>

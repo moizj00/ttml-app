@@ -99,16 +99,16 @@ export default function ServicesIndex() {
     <>
       <Helmet>
         <title>Legal Letter Services — Attorney-Reviewed | Talk to My Lawyer</title>
-        <meta name="description" content="Professional attorney-reviewed legal letters: demand letters, cease and desist, security deposit recovery, breach of contract, and employment disputes. Starting at $200." />
+        <meta name="description" content="Professional attorney-reviewed legal letters: demand letters, cease and desist, security deposit recovery, breach of contract, and employment disputes. Starting at $299." />
         <link rel="canonical" href="https://www.talk-to-my-lawyer.com/services" />
         <meta property="og:title" content="Legal Letter Services — Talk to My Lawyer" />
-        <meta property="og:description" content="Professional attorney-reviewed legal letters starting at $200. Demand letters, cease and desist, and more." />
+        <meta property="og:description" content="Professional attorney-reviewed legal letters starting at $299. Demand letters, cease and desist, and more." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.talk-to-my-lawyer.com/services" />
         <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Legal Letter Services — Talk to My Lawyer" />
-        <meta name="twitter:description" content="Professional attorney-reviewed legal letters starting at $200." />
+        <meta name="twitter:description" content="Professional attorney-reviewed legal letters starting at $299." />
         <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
@@ -152,7 +152,7 @@ export default function ServicesIndex() {
                     <h2 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-blue-700 transition-colors">{service.title}</h2>
                     <p className="text-sm text-slate-600 mb-4 flex-1 leading-relaxed">{service.heroDescription.slice(0, 150)}...</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-blue-600">Starting at $200</span>
+                      <span className="text-sm font-semibold text-blue-600">Starting at $299</span>
                       <ArrowRight className="w-4 h-4 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </Link>

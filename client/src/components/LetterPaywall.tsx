@@ -83,7 +83,7 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
 
   const hasDraft = !!draftContent && draftContent.length > 0;
 
-  const basePrice = 200;
+  const basePrice = 299;
   const discountedPrice = appliedDiscount
     ? Math.round(basePrice * (1 - appliedDiscount.discountPercent / 100))
     : null;

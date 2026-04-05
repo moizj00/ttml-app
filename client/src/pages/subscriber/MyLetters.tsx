@@ -32,7 +32,7 @@ function getQuickActions(letter: any) {
     actions.push({ label: "Download PDF", icon: Download, href: (letter as any).pdfUrl, variant: "default", color: "bg-green-600 hover:bg-green-700 text-white" });
   }
   if (letter.status === "generated_locked") {
-    actions.push({ label: "Pay to Unlock — $200", icon: CreditCard, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
+    actions.push({ label: "Pay to Unlock — $299", icon: CreditCard, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
   }
 
   if (letter.status === "approved" && !(letter as any).pdfUrl) {
