@@ -97,6 +97,7 @@ GCS_TRAINING_BUCKET = "ttml-training"
 R2_BUCKET_NAME = "talk-to-my-lawyer"
 SENTRY_ORG = "gnzsolutions"
 SENTRY_PROJECT = "node-express"
+GOOGLE_APPLICATION_CREDENTIALS = "/home/runner/workspace/server/gcp-credentials.json"
 
 [userenv.production]
 
