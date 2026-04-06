@@ -171,7 +171,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             category: "letters",
             title: `Pipeline failed for letter #${letterId}`,
             body: lastErr instanceof Error ? lastErr.message : String(lastErr),
-            link: `/admin/jobs`,
+            link: `/admin/letters/${letterId}`,
           });
         } catch (notifErr) {
           console.error("[Worker] Failed to create notification:", notifErr);

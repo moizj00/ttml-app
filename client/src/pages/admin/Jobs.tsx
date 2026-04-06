@@ -2,7 +2,7 @@ import AppLayout from "@/components/shared/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle, RefreshCw, CheckCircle, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, RefreshCw, CheckCircle, Loader2, Trash2, ExternalLink } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useState } from "react";
+import { Link } from "wouter";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
 import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
 
@@ -123,7 +124,16 @@ export default function AdminJobs() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          Letter #{job.letterRequestId} — {job.jobType.replace(/_/g, " ")}
+                          <Link
+                            href={`/admin/letters/${job.letterRequestId}`}
+                            className="text-primary hover:underline inline-flex items-center gap-1"
+                            onClick={e => e.stopPropagation()}
+                            data-testid={`link-letter-${job.letterRequestId}`}
+                          >
+                            Letter #{job.letterRequestId}
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+                          {" "} — {job.jobType.replace(/_/g, " ")}
                         </p>
                         {job.errorMessage && (() => {
                           const structured = parsePipelineError(job.errorMessage);

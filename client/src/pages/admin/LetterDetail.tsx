@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import AppLayout from "@/components/shared/AppLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { parsePipelineError, PIPELINE_ERROR_LABELS } from "../../../../shared/types";
@@ -122,37 +123,55 @@ export default function AdminLetterDetail() {
     onError: err => toast.error("Repair failed", { description: err.message }),
   });
 
+  if (!letterId || isNaN(letterId) || letterId <= 0) {
+    return (
+      <AppLayout breadcrumb={[{ label: "Admin", href: "/admin" }, { label: "All Letters", href: "/admin/letters" }, { label: "Invalid Letter" }]}>
+        <div className="text-center py-16">
+          <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
+          <h3 className="font-semibold text-foreground mb-2">Invalid letter ID</h3>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to All Letters</Link>
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (!letter) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading letter details...
-      </div>
+      <AppLayout breadcrumb={[{ label: "Admin", href: "/admin" }, { label: "All Letters", href: "/admin/letters" }, { label: `Letter #${letterId}` }]}>
+        <div className="p-8 text-center text-muted-foreground">
+          Loading letter details...
+        </div>
+      </AppLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
-        <Card className="border-destructive/50">
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <AlertCircle className="w-8 h-8 text-destructive mb-3" />
-            <p className="text-sm font-medium text-destructive">
-              Something went wrong
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {error.message}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => refetch()}
-            >
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <AppLayout breadcrumb={[{ label: "Admin", href: "/admin" }, { label: "All Letters", href: "/admin/letters" }, { label: `Letter #${letterId}` }]}>
+        <div className="max-w-5xl mx-auto p-6">
+          <Card className="border-destructive/50">
+            <CardContent className="flex flex-col items-center justify-center py-10">
+              <AlertCircle className="w-8 h-8 text-destructive mb-3" />
+              <p className="text-sm font-medium text-destructive">
+                Something went wrong
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {error.message}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => refetch()}
+              >
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
     );
   }
 
@@ -186,18 +205,19 @@ export default function AdminLetterDetail() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <AppLayout breadcrumb={[{ label: "Admin", href: "/admin" }, { label: "All Letters", href: "/admin/letters" }, { label: `Letter #${l.id} — ${l.subject}` }]}>
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/admin/letters">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" data-testid="button-back-admin-letters">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to All Letters
           </Button>
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{l.subject}</h1>
+            <h1 className="text-2xl font-bold" data-testid="text-letter-subject">{l.subject}</h1>
             <StatusBadge status={letterStatus} />
             {l.submittedByAdmin && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300" data-testid="badge-admin-submitted">
@@ -206,7 +226,7 @@ export default function AdminLetterDetail() {
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1" data-testid="text-letter-meta">
             Letter #{l.id} · {l.letterType} · Submitted{" "}
             {new Date(l.createdAt).toLocaleDateString()}
           </p>
@@ -683,5 +703,6 @@ export default function AdminLetterDetail() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </AppLayout>
   );
 }

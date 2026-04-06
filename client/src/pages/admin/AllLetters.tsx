@@ -57,7 +57,7 @@ export default function AdminAllLetters() {
     if (REVIEWABLE_STATUSES.includes(letter.status)) {
       setSelectedLetterId(letter.id);
     } else {
-      window.location.href = `/admin/letters/${letter.id}`;
+      navigate(`/admin/letters/${letter.id}`);
     }
   };
 

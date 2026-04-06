@@ -643,9 +643,23 @@ export default function LetterDetail() {
     setTimeout(() => { printWindow.print(); }, 600);
   };
 
+  if (!letterId || isNaN(letterId) || letterId <= 0) {
+    return (
+      <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: "Invalid Letter" }]}>
+        <div className="text-center py-16">
+          <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
+          <h3 className="font-semibold text-foreground mb-2">Invalid letter ID</h3>
+          <Button asChild variant="outline" size="sm" className="bg-background">
+            <Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link>
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (isLoading) {
     return (
-      <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: "Loading..." }]}>
+      <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: `Letter #${letterId}` }]}>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => <div key={i} className="h-32 bg-muted animate-pulse rounded-xl" />)}
         </div>
@@ -659,6 +673,7 @@ export default function LetterDetail() {
         <div className="text-center py-16">
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
           <h3 className="font-semibold text-foreground mb-2">Letter not found</h3>
+          <p className="text-sm text-muted-foreground mb-3">This letter doesn't exist or you don't have access to it.</p>
           <Button asChild variant="outline" size="sm" className="bg-background">
             <Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link>
           </Button>

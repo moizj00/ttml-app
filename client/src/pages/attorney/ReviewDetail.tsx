@@ -205,12 +205,29 @@ export default function ReviewDetail() {
   }, [editContent, editMode, hasUnsavedChanges]);
 
   // ── Loading / error states ────────────────────────────────────────────────
+  if (!letterId || isNaN(letterId) || letterId <= 0) {
+    return (
+      <AppLayout
+        breadcrumb={[
+          { label: "Review Center", href: "/review" },
+          { label: "Invalid Letter" },
+        ]}
+      >
+        <div className="text-center py-16">
+          <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
+          <h3 className="font-semibold text-foreground mb-2">Invalid letter ID</h3>
+          <p className="text-sm text-muted-foreground">The letter ID in the URL is not valid.</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (isLoading) {
     return (
       <AppLayout
         breadcrumb={[
           { label: "Review Center", href: "/review" },
-          { label: "Loading..." },
+          { label: `Letter #${letterId}` },
         ]}
       >
         <div className="flex items-center justify-center py-16">
@@ -225,13 +242,14 @@ export default function ReviewDetail() {
       <AppLayout
         breadcrumb={[
           { label: "Review Center", href: "/review" },
-          { label: "Error" },
+          { label: "Not Found" },
         ]}
       >
         <div className="text-center py-16">
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
+          <h3 className="font-semibold text-foreground mb-2">Letter not found</h3>
           <p className="text-sm text-muted-foreground">
-            Letter not found or access denied.
+            This letter doesn't exist or you don't have access to it.
           </p>
         </div>
       </AppLayout>
