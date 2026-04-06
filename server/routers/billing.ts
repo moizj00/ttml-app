@@ -6,6 +6,7 @@ import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
   adminProcedure,
+  emailVerifiedProcedure,
   protectedProcedure,
   publicProcedure,
   router,
@@ -238,6 +239,16 @@ const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+const verifiedSubscriberProcedure = emailVerifiedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "subscriber") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Subscriber access required",
+    });
+  }
+  return next({ ctx });
+});
+
 function getAppUrl(req: {
   protocol: string;
   headers: Record<string, string | string[] | undefined>;
@@ -262,7 +273,7 @@ export const billingRouter = router({
     checkCanSubmit: protectedProcedure.query(async ({ ctx }) => {
       return checkLetterSubmissionAllowed(ctx.user.id);
     }),
-    createCheckout: protectedProcedure
+    createCheckout: emailVerifiedProcedure
       .input(
         z.object({ planId: z.string(), discountCode: z.string().optional() })
       )
@@ -364,7 +375,7 @@ export const billingRouter = router({
     }),
 
     // ─── Free unlock: first letter goes directly to pending_review ───
-    freeUnlock: subscriberProcedure
+    freeUnlock: verifiedSubscriberProcedure
       .input(z.object({ letterId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const letter = await getLetterRequestSafeForSubscriber(
@@ -546,7 +557,7 @@ export const billingRouter = router({
     //   2. hasActiveRecurringSubscription — must have an active plan
     //   3. letter.status === "generated_locked" — only locked letters
     //   4. letter.userId === ctx.user.id — ownership check via getLetterRequestSafeForSubscriber
-    subscriptionSubmit: subscriberProcedure
+    subscriptionSubmit: verifiedSubscriberProcedure
       .input(z.object({ letterId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         // Guard: must have active recurring subscription
@@ -630,7 +641,7 @@ export const billingRouter = router({
       }),
 
     // ─── Pay-to-unlock: one-time $299 checkout for a specific locked letter ───
-    payToUnlock: subscriberProcedure
+    payToUnlock: verifiedSubscriberProcedure
       .input(
         z.object({ letterId: z.number(), discountCode: z.string().optional() })
       )

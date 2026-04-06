@@ -6,6 +6,7 @@ import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
   adminProcedure,
+  emailVerifiedProcedure,
   protectedProcedure,
   publicProcedure,
   router,
@@ -249,6 +250,16 @@ const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+const verifiedSubscriberProcedure = emailVerifiedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "subscriber") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Subscriber access required",
+    });
+  }
+  return next({ ctx });
+});
+
 function getAppUrl(req: {
   protocol: string;
   headers: Record<string, string | string[] | undefined>;
@@ -267,7 +278,7 @@ function getAppUrl(req: {
 
 
 export const lettersRouter = router({
-    submit: subscriberProcedure
+    submit: verifiedSubscriberProcedure
       .input(
         z.object({
           letterType: z.enum([

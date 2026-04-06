@@ -6,6 +6,7 @@ import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
   adminProcedure,
+  emailVerifiedProcedure,
   protectedProcedure,
   publicProcedure,
   router,
@@ -256,7 +257,7 @@ function getAppUrl(req: {
 
 
 export const documentsRouter = router({
-    analyze: publicProcedure
+    analyze: emailVerifiedProcedure
       .input(
         z.object({
           fileName: z.string().min(1).max(500),
@@ -266,13 +267,7 @@ export const documentsRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // Rate-limit: 3/hour for unauthenticated (by trusted IP), general limit for authenticated
-        if (!ctx.user) {
-          const clientIp = getClientIp(ctx.req);
-          await checkTrpcRateLimit("document", `ip:${clientIp}`);
-        } else {
-          await checkTrpcRateLimit("general", `user:${ctx.user.id}`);
-        }
+        await checkTrpcRateLimit("general", `user:${ctx.user.id}`);
 
         // Enforce binary size limit: 7.5MB decoded
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
@@ -468,7 +463,7 @@ ${truncatedText}
                 documentName: input.fileName,
                 fileType: input.fileType,
                 analysisJson: analysisResult,
-                userId: ctx.user?.id ?? null,
+                userId: ctx.user.id,
               });
             }
           } catch (dbErr) {

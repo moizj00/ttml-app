@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Mail, Send, Linkedin, Twitter, Instagram, Youtube } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 
 export default function Footer() {
@@ -38,58 +38,13 @@ export default function Footer() {
             <p className="mt-4 text-sm text-slate-400 leading-relaxed">
               Attorney-reviewed legal letters drafted around California legal language.
             </p>
-            <div className="flex items-center gap-3 mt-5">
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
-                aria-label="LinkedIn"
-                data-testid="social-linkedin"
-              >
-                <Linkedin className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
-                aria-label="X (Twitter)"
-                data-testid="social-x"
-              >
-                <Twitter className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
-                aria-label="Instagram"
-                data-testid="social-instagram"
-              >
-                <Instagram className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
-                aria-label="YouTube"
-                data-testid="social-youtube"
-              >
-                <Youtube className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href="#"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors"
-                aria-label="TikTok"
-                data-testid="social-tiktok"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9a6.27 6.27 0 0 0-.79-.05A6.34 6.34 0 0 0 3.15 15.3a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.87a8.16 8.16 0 0 0 4.76 1.52v-3.4a4.85 4.85 0 0 1-1-.3z"/></svg>
-              </a>
-            </div>
+            {/* TODO: Add social links here once TTML social profiles are created.
+                Example:
+                <div className="flex items-center gap-3 mt-5">
+                  <a href="https://linkedin.com/company/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="LinkedIn" data-testid="social-linkedin"><Linkedin className="w-3.5 h-3.5" /></a>
+                  <a href="https://x.com/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="X (Twitter)" data-testid="social-x"><Twitter className="w-3.5 h-3.5" /></a>
+                </div>
+            */}
           </div>
 
           <div>
