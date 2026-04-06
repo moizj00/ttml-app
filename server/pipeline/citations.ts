@@ -108,31 +108,38 @@ RULE: Use ONLY [REF-N] identifiers from the list above. Do NOT invent or add any
 `;
 }
 
-export async function revalidateCitationsWithPerplexity(
-  registry: CitationRegistryEntry[],
-  jurisdiction: string,
-  letterId: number,
-  tokenAcc?: TokenUsage
-): Promise<CitationRegistryEntry[]> {
-  const apiKey = process.env.PERPLEXITY_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    console.warn(
-      `[Pipeline] PERPLEXITY_API_KEY not set — skipping citation revalidation for letter #${letterId}`
-    );
-    return registry;
+function parseCitationRevalidationResponse(
+  text: string,
+  registry: CitationRegistryEntry[]
+): CitationRegistryEntry[] {
+  const updatedRegistry = registry.map(entry => ({ ...entry }));
+  const lines = text.split("\n").filter(l => l.trim().length > 0);
+  for (const line of lines) {
+    const match = line.match(/^(\d+)\.\s*(VALID|INVALID)/i);
+    if (match) {
+      const num = parseInt(match[1]);
+      const isValid = match[2].toUpperCase() === "VALID";
+      const regEntry = updatedRegistry.find(r => r.registryNumber === num);
+      if (regEntry) {
+        regEntry.revalidated = true;
+        if (!isValid) {
+          regEntry.confidence = "low";
+        }
+      }
+    }
   }
+  return updatedRegistry;
+}
 
-  const perplexity = createOpenAI({
-    apiKey,
-    baseURL: "https://api.perplexity.ai",
-    name: "perplexity",
-  });
-
+function buildCitationRevalidationPrompt(
+  registry: CitationRegistryEntry[],
+  jurisdiction: string
+): string {
   const citationList = registry
     .map(r => `${r.registryNumber}. "${r.citationText}" (${r.ruleType})`)
     .join("\n");
 
-  const prompt = `You are a legal citation verification engine. Verify whether each of the following legal citations is real and currently valid in ${jurisdiction}. For each citation, respond with the number and either "VALID" or "INVALID" and a brief reason.
+  return `You are a legal citation verification engine. Verify whether each of the following legal citations is real and currently valid in ${jurisdiction}. For each citation, respond with the number and either "VALID" or "INVALID" and a brief reason.
 
 Citations to verify:
 ${citationList}
@@ -141,39 +148,78 @@ Respond in this exact format, one per line:
 1. VALID - [brief reason]
 2. INVALID - [brief reason]
 ...`;
+}
+
+export async function revalidateCitationsWithPerplexity(
+  registry: CitationRegistryEntry[],
+  jurisdiction: string,
+  letterId: number,
+  tokenAcc?: TokenUsage,
+  options?: { skipReasons?: string[] }
+): Promise<CitationRegistryEntry[]> {
+  const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
+
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (groqApiKey && groqApiKey.trim().length > 0) {
+    try {
+      const groq = createOpenAI({
+        apiKey: groqApiKey,
+        baseURL: "https://api.groq.com/openai/v1",
+        name: "groq",
+      });
+      console.log(
+        `[Pipeline] Revalidating ${registry.length} citations with Groq (free) for letter #${letterId}`
+      );
+      const { text, usage: citationUsage } = await generateText({
+        model: groq("llama-3.3-70b-versatile"),
+        prompt,
+        maxOutputTokens: 1000,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+      if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
+
+      const updatedRegistry = parseCitationRevalidationResponse(text, registry);
+      console.log(
+        `[Pipeline] Citation revalidation complete (Groq) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+      );
+      return updatedRegistry;
+    } catch (groqErr) {
+      const groqMsg = groqErr instanceof Error ? groqErr.message : String(groqErr);
+      console.warn(
+        `[Pipeline] Groq citation revalidation failed for letter #${letterId}: ${groqMsg}. Falling back to Perplexity sonar.`
+      );
+    }
+  }
+
+  const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+  if (!perplexityApiKey || perplexityApiKey.trim().length === 0) {
+    console.warn(
+      `[Pipeline] No citation revalidation provider available (GROQ_API_KEY and PERPLEXITY_API_KEY both missing) — skipping for letter #${letterId}`
+    );
+    return registry;
+  }
+
+  const perplexity = createOpenAI({
+    apiKey: perplexityApiKey,
+    baseURL: "https://api.perplexity.ai",
+    name: "perplexity",
+  });
 
   try {
     console.log(
-      `[Pipeline] Revalidating ${registry.length} citations with Perplexity for letter #${letterId}`
+      `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar (fallback) for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
-      model: perplexity.chat("sonar-pro"),
+      model: perplexity.chat("sonar"),
       prompt,
-      maxOutputTokens: 2000,
+      maxOutputTokens: 1000,
       abortSignal: AbortSignal.timeout(60_000),
     });
     if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
 
-    const updatedRegistry = registry.map(entry => ({ ...entry }));
-
-    const lines = text.split("\n").filter(l => l.trim().length > 0);
-    for (const line of lines) {
-      const match = line.match(/^(\d+)\.\s*(VALID|INVALID)/i);
-      if (match) {
-        const num = parseInt(match[1]);
-        const isValid = match[2].toUpperCase() === "VALID";
-        const regEntry = updatedRegistry.find(r => r.registryNumber === num);
-        if (regEntry) {
-          regEntry.revalidated = true;
-          if (!isValid) {
-            regEntry.confidence = "low";
-          }
-        }
-      }
-    }
-
+    const updatedRegistry = parseCitationRevalidationResponse(text, registry);
     console.log(
-      `[Pipeline] Citation revalidation complete for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+      `[Pipeline] Citation revalidation complete (Perplexity fallback) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
     );
     return updatedRegistry;
   } catch (err) {

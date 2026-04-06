@@ -300,7 +300,26 @@ export async function runFullPipeline(
     );
 
     const citationTokens = createTokenAccumulator();
-    if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+    const researchFromCache = researchProvider === "kv-cache";
+    const allHighConfidence = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
+    const skipRevalidation =
+      pipelineCtx.researchUnverified ||
+      citationRegistry.length === 0 ||
+      citationRegistry.length < 3 ||
+      researchFromCache ||
+      allHighConfidence;
+
+    if (skipRevalidation) {
+      const reasons: string[] = [];
+      if (pipelineCtx.researchUnverified) reasons.push("research unverified");
+      if (citationRegistry.length === 0) reasons.push("no citations");
+      if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
+      if (researchFromCache) reasons.push("research served from KV cache (already validated)");
+      if (allHighConfidence) reasons.push("all citations already high confidence");
+      console.log(
+        `[Pipeline] Skipping citation revalidation for letter #${letterId}: ${reasons.join("; ")}`
+      );
+    } else {
       const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
       citationRegistry = await revalidateCitationsWithPerplexity(
         citationRegistry, jurisdiction, letterId, citationTokens
@@ -347,7 +366,7 @@ export async function runFullPipeline(
       promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
       completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
       estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost("sonar-pro", citationRevalidationTokens)
+        ? calculateCost("llama-3.3-70b-versatile", citationRevalidationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,

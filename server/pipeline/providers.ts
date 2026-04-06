@@ -140,6 +140,7 @@ export const ASSEMBLY_TIMEOUT_MS = 120_000; // 120s — Claude final assembly
 export const SONNET_PRICING = { inputPerMillion: 3, outputPerMillion: 15 };
 export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
+  "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
   // Support both full and short model IDs to avoid drift when model IDs change
   "claude-sonnet-4-20250514": SONNET_PRICING,

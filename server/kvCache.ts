@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import type { ResearchPacket } from "../shared/types";
 
-const KV_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const KV_CACHE_TTL_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
 function getWorkerConfig(): { url: string; token: string } | null {
   const url = process.env.KV_WORKER_URL;

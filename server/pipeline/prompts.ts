@@ -12,55 +12,21 @@ import { type NormalizedPromptInput } from "../intake-normalizer";
 // ═══════════════════════════════════════════════════════
 
 export function buildResearchSystemPrompt(): string {
-  return `You are an elite legal research engine with real-time web search access. 
-Your sole mission is to find REAL, CURRENT, VERIFIABLE legal information — not 
-summaries, not approximations, not hallucinated statutes.
+  return `You are an elite legal research engine with real-time web search access. Find REAL, CURRENT, VERIFIABLE legal information only — never hallucinate statutes or cases.
 
-## Your Research Standards
+## Standards
+- COURT DECISIONS: Real case names, docket numbers, courts, years. Format: "Smith v. Jones, 2022 WL 4839201 (Cal. App. 4th 2022)". If none found, say so — never invent.
+- STATUTES: Exact code sections with title, chapter, section. Verify still in effect.
+- LOCAL ORDINANCES: Search the specific city/county — local rules often provide stronger protections than state law.
+- ENFORCEMENT CONTEXT: Current AG activity, recent legislation (last 3 years), political control of regulatory bodies.
+- Research order: local ordinances → state statutes → federal law → appellate decisions.
+- Always find: (1) statute of limitations with exact deadline, (2) pre-suit requirements (demand letters, waiting periods, notice filings).
 
-REAL COURT DECISIONS: You must find actual case law with real case names, 
-docket numbers, courts, and years. Example format: 
-"Smith v. Jones, 2022 WL 4839201 (Cal. App. 4th 2022)" or 
-"Green v. ABC Corp., 187 F.3d 129 (9th Cir. 2021)". 
-If you cannot find a real case, say so — never invent citations.
-
-REAL STATUTES: Cite actual code sections with their exact title, chapter, 
-and section numbers. Example: "California Civil Code § 1950.5(b)" or 
-"Texas Property Code § 92.104". Verify the section is still in effect.
-
-LOCAL ORDINANCES: Search specifically for the city and county named. 
-Local ordinances often provide stronger protections or additional requirements 
-than state law and are frequently overlooked.
-
-POLITICAL & ENFORCEMENT CONTEXT: Report the current enforcement climate — 
-which party controls the relevant legislature, whether the state AG has 
-active enforcement campaigns in this area, and any recent legislative 
-changes (passed in the last 3 years) that affect this issue.
-
-RECENT EXAMPLES: Find 2–3 real reported cases from the specific state or 
-federal circuit covering this jurisdiction decided in the last 5 years. 
-Prioritize cases where the fact pattern is similar to the matter described.
-
-JURISDICTIONAL HIERARCHY: Always research in this order:
-1. Specific city/county ordinances and local rules
-2. State statutes and state administrative regulations  
-3. Federal law (if applicable)
-4. Relevant federal circuit and state appellate court decisions
-
-STATUTE OF LIMITATIONS: Always find the exact filing deadline for this 
-type of claim in this specific state. This is non-negotiable — missing 
-it could destroy the client's case.
-
-PRE-SUIT REQUIREMENTS: Many states require demand letters, waiting periods, 
-or notice filings before suit. Find the exact requirement for this 
-jurisdiction and claim type.
-
-## What You Must NEVER Do
-- Invent case names, docket numbers, or statute sections
-- Use placeholder citations like "see generally" without a real cite
-- Ignore local ordinances in favor of only state/federal law
-- Give national averages when jurisdiction-specific data exists
-- Use data older than 5 years without flagging it as potentially outdated`;
+## NEVER
+- Invent citations, docket numbers, or statute sections
+- Use "see generally" without a real cite
+- Skip local ordinances
+- Give national averages when jurisdiction-specific data exists`;
 }
 
 export function buildResearchUserPrompt(intake: NormalizedPromptInput): string {
@@ -170,127 +136,66 @@ type of matter? List the top 3–4 and note which are typically successful.
 
 ## Required Output Format
 
-Return ONLY a valid JSON object. No markdown outside the JSON. 
-No explanatory text before or after. Start with { and end with }.
+Return ONLY a valid JSON object. Start with { and end with }. No markdown wrapping.
 
 \`\`\`json
 {
-  "researchSummary": "3–4 paragraphs covering: (1) the legal landscape in ${intake.jurisdiction.state} for this matter type, (2) the strongest statutes and cases found, (3) the enforcement/political climate, (4) key risks and strategic observations. Minimum 300 words.",
-  
+  "researchSummary": "3-4 paragraphs: legal landscape, strongest authorities, enforcement climate, risks. Min 300 words.",
   "jurisdictionProfile": {
     "country": "${intake.jurisdiction.country}",
     "stateProvince": "${intake.jurisdiction.state}",
     "city": "${intake.jurisdiction.city ?? ""}",
-    "authorityHierarchy": ["Federal", "State — ${intake.jurisdiction.state}", "County", "City — ${intake.jurisdiction.city ?? "N/A"}"],
-    "politicalContext": "Who controls the legislature and AG office, enforcement climate, recent relevant legislation",
-    "localCourts": "Name of the specific trial court, small claims limit, and relevant local rules for ${intake.jurisdiction.city ?? intake.jurisdiction.state}"
+    "authorityHierarchy": ["Federal", "${intake.jurisdiction.state}", "${intake.jurisdiction.city ?? "Local"}"],
+    "politicalContext": "Legislature/AG control, enforcement climate, recent legislation",
+    "localCourts": "Trial court name, small claims limit, local rules"
   },
-  
-  "issuesIdentified": [
-    "Specific legal issue 1 — cite the statute or doctrine",
-    "Specific legal issue 2"
-  ],
-  
-  "applicableRules": [
-    {
-      "ruleTitle": "Exact name of statute, regulation, or case",
-      "ruleType": "statute | regulation | case_law | local_ordinance | common_law",
-      "jurisdiction": "${intake.jurisdiction.state} | Federal | ${intake.jurisdiction.city ?? "Local"}",
-      "citationText": "EXACT citation — e.g. Cal. Civ. Code § 1950.5 or Smith v. Jones, 156 F.3d 129 (9th Cir. 2023)",
-      "sectionOrRule": "Specific section or subsection number",
-      "summary": "Plain English: what this rule says and exactly how it applies to THIS case",
-      "sourceUrl": "Direct URL to official source, Westlaw, Lexis, or government website",
-      "sourceTitle": "Official source name — e.g. California Legislative Information, Cornell LII, Justia",
-      "relevance": "Specific sentence explaining how this rule supports or affects this exact matter",
-      "dateVerified": "YYYY-MM",
-      "confidence": "high | medium | low",
-      "caseOutcome": "For case_law only — what happened to the plaintiff and what damages/relief were awarded"
-    }
-  ],
-  
-  "recentCasePrecedents": [
-    {
-      "caseName": "Full case name",
-      "citation": "Full citation with court and year",
-      "court": "Exact court name",
-      "year": 2023,
-      "facts": "1–2 sentences on the relevant facts",
-      "holding": "What the court decided",
-      "relevance": "Why this case matters for this specific matter",
-      "damages": "Dollar amount or remedy awarded if reported",
-      "sourceUrl": "Justia, Google Scholar, or official court URL"
-    }
-  ],
-  
+  "issuesIdentified": ["Legal issue with statute/doctrine cite"],
+  "applicableRules": [{
+    "ruleTitle": "Name", "ruleType": "statute|regulation|case_law|local_ordinance|common_law",
+    "jurisdiction": "State|Federal|Local", "citationText": "Exact citation",
+    "sectionOrRule": "Section number", "summary": "What it says and how it applies",
+    "sourceUrl": "URL", "sourceTitle": "Source name",
+    "relevance": "How it affects this matter", "dateVerified": "YYYY-MM",
+    "confidence": "high|medium|low", "caseOutcome": "For case_law only"
+  }],
+  "recentCasePrecedents": [{
+    "caseName": "Name", "citation": "Full citation", "court": "Court",
+    "year": 2023, "facts": "Brief facts", "holding": "Decision",
+    "relevance": "Why it matters", "damages": "Amount awarded", "sourceUrl": "URL"
+  }],
   "statuteOfLimitations": {
-    "period": "e.g. 2 years",
-    "statute": "Exact code section",
-    "clockStartsOn": "Incident date | Discovery of harm | Last payment | etc.",
-    "deadlineEstimate": "Approximate deadline based on ${intake.matter.incidentDate ?? "incident date unknown"}",
-    "tollingExceptions": ["Exception 1", "Exception 2"],
-    "urgencyFlag": false,
-    "notes": "Any unusual SOL rules for this claim type in this state"
+    "period": "Duration", "statute": "Code section",
+    "clockStartsOn": "Trigger event",
+    "deadlineEstimate": "Based on ${intake.matter.incidentDate ?? "unknown date"}",
+    "tollingExceptions": ["Exceptions"], "urgencyFlag": false, "notes": "Special rules"
   },
-  
   "preSuitRequirements": {
-    "demandLetterRequired": false,
-    "statute": "Code section if required",
-    "waitingPeriodDays": 30,
-    "requiredContent": ["What the demand letter must include"],
-    "deliveryMethod": "Certified mail | Personal service | etc.",
-    "penaltyForNonCompliance": "What happens if you skip this step"
+    "demandLetterRequired": false, "statute": "Code section",
+    "waitingPeriodDays": 30, "requiredContent": ["Requirements"],
+    "deliveryMethod": "Method", "penaltyForNonCompliance": "Consequence"
   },
-  
   "availableRemedies": {
-    "actualDamages": "Description and formula",
-    "statutoryDamages": "Amount per violation if applicable",
-    "punitiveDamages": "Standard and likelihood in ${intake.jurisdiction.state}",
-    "attorneyFees": "One-way | Two-way | Not available — cite the statute",
-    "injunctiveRelief": "Available | Not applicable",
-    "multiplier": "2x | 3x | None — cite authority"
+    "actualDamages": "Formula", "statutoryDamages": "Per-violation amount",
+    "punitiveDamages": "Standard", "attorneyFees": "Fee-shifting type with cite",
+    "injunctiveRelief": "Available|N/A", "multiplier": "Multiplier with cite"
   },
-  
-  "localJurisdictionElements": [
-    {
-      "element": "Specific local rule, ordinance, or court practice",
-      "whyItMatters": "How this changes the strategy or strengthens the letter",
-      "sourceUrl": "URL to local government or court site",
-      "confidence": "high | medium | low"
-    }
-  ],
-  
+  "localJurisdictionElements": [{
+    "element": "Local rule", "whyItMatters": "Strategic impact",
+    "sourceUrl": "URL", "confidence": "high|medium|low"
+  }],
   "enforcementClimate": {
-    "agActivity": "Recent AG enforcement actions in this area",
-    "classActions": "Any active class actions in this jurisdiction on this issue",
-    "recentLegislation": "Laws passed since 2022 that affect this matter",
-    "politicalLeaning": "How the current political environment affects enforcement",
-    "courtReputations": "Anything notable about how local courts handle this type of case"
+    "agActivity": "Recent actions", "classActions": "Active cases",
+    "recentLegislation": "Since 2022", "politicalLeaning": "Impact on enforcement",
+    "courtReputations": "Local court tendencies"
   },
-  
-  "commonDefenses": [
-    {
-      "defense": "Defense name",
-      "description": "How the opposing party typically argues this",
-      "counterArgument": "How to pre-empt or rebut this in the demand letter",
-      "successRate": "Typically successful | Rarely successful | Depends on facts"
-    }
-  ],
-  
-  "factualDataNeeded": [
-    "Specific missing fact that would strengthen the legal position"
-  ],
-  
-  "openQuestions": [
-    "Unresolved legal question relevant to this matter"
-  ],
-  
-  "riskFlags": [
-    "Specific risk — e.g. SOL may have run, client may have waived rights, etc."
-  ],
-  
-  "draftingConstraints": [
-    "Specific requirement the letter draft must include — e.g. must reference Cal. Civ. Code § 1950.5, must demand response within 30 days per statutory requirement"
-  ]
+  "commonDefenses": [{
+    "defense": "Name", "description": "How argued",
+    "counterArgument": "How to rebut", "successRate": "Typical|Rare|Depends"
+  }],
+  "factualDataNeeded": ["Missing facts"],
+  "openQuestions": ["Unresolved questions"],
+  "riskFlags": ["Specific risks"],
+  "draftingConstraints": ["Requirements for the letter draft"]
 }
 \`\`\``;
 }

@@ -224,7 +224,7 @@ export async function runResearchStage(
         model: activeModel,
         system: systemPrompt,
         prompt,
-        maxOutputTokens: 6000,
+        maxOutputTokens: 4000,
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
     };
@@ -251,7 +251,7 @@ export async function runResearchStage(
           model: activeModel,
           system: systemPrompt,
           prompt: userPrompt,
-          maxOutputTokens: 6000,
+          maxOutputTokens: 4000,
           abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
         });
       }
@@ -308,7 +308,7 @@ export async function runResearchStage(
           tools: activeFallbackTools,
           system: systemPrompt,
           prompt,
-          maxOutputTokens: 6000,
+          maxOutputTokens: 4000,
           abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
         });
       }
@@ -316,7 +316,7 @@ export async function runResearchStage(
         model: activeModel,
         system: systemPrompt,
         prompt,
-        maxOutputTokens: 6000,
+        maxOutputTokens: 4000,
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
     };
@@ -344,7 +344,7 @@ export async function runResearchStage(
             model: activeModel,
             system: systemPrompt,
             prompt: promptWithFeedback,
-            maxOutputTokens: 6000,
+            maxOutputTokens: 4000,
             abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
           });
         }
