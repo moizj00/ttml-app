@@ -861,8 +861,9 @@ export async function retryPipelineFromStage(
       await updateLetterStatus(letterId, "submitted", { force: true });
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
       pipelineCtx.researchProvider = researchProvider;
-      pipelineCtx.researchUnverified = researchProvider === "anthropic-fallback";
-      pipelineCtx.webGrounded = researchProvider !== "anthropic-fallback";
+      const ungroundedRetryProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+      pipelineCtx.researchUnverified = ungroundedRetryProviders.has(researchProvider);
+      pipelineCtx.webGrounded = !ungroundedRetryProviders.has(researchProvider);
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       const citationTokensResearch = createTokenAccumulator();
@@ -887,7 +888,8 @@ export async function retryPipelineFromStage(
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;
       pipelineCtx.researchProvider = latestResearch.provider ?? "perplexity";
-      pipelineCtx.researchUnverified = latestResearch.provider === "anthropic-fallback";
+      const ungroundedDraftProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+      pipelineCtx.researchUnverified = ungroundedDraftProviders.has(latestResearch.provider ?? "");
       pipelineCtx.webGrounded = !pipelineCtx.researchUnverified;
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
