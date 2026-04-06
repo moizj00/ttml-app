@@ -892,7 +892,7 @@ export async function retryPipelineFromStage(
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       const citationTokensDrafting = createTokenAccumulator();
-      const researchFromCacheDraft = (latestResearch as any).cacheHit === true;
+      const researchFromCacheDraft = latestResearch.cacheHit === true;
       const allHighConfDraft = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
       const skipRevalDraft =
         pipelineCtx.researchUnverified || citationRegistry.length === 0 ||

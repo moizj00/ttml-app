@@ -159,8 +159,7 @@ export async function revalidateCitationsWithPerplexity(
   registry: CitationRegistryEntry[],
   jurisdiction: string,
   letterId: number,
-  tokenAcc?: TokenUsage,
-  options?: { skipReasons?: string[] }
+  tokenAcc?: TokenUsage
 ): Promise<CitationRevalidationResult> {
   const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
 
