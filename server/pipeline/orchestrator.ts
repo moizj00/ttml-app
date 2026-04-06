@@ -866,9 +866,16 @@ export async function retryPipelineFromStage(
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       const citationTokensResearch = createTokenAccumulator();
-      if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+      const researchFromCacheRetry = researchProvider === "kv-cache";
+      const allHighConfRetry = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
+      const skipRevalRetry =
+        pipelineCtx.researchUnverified || citationRegistry.length === 0 ||
+        citationRegistry.length < 3 || researchFromCacheRetry || allHighConfRetry;
+      if (!skipRevalRetry) {
         const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensResearch);
+        const revalResult = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensResearch);
+        citationRegistry = revalResult.registry;
+        pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
       }
       pipelineCtx.citationRegistry = citationRegistry;
       pipelineCtx.citationRevalidationTokens = citationTokensResearch;
@@ -885,9 +892,16 @@ export async function retryPipelineFromStage(
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
       let citationRegistry = buildCitationRegistry(research);
       const citationTokensDrafting = createTokenAccumulator();
-      if (!pipelineCtx.researchUnverified && citationRegistry.length > 0) {
+      const researchFromCacheDraft = (latestResearch as any).cacheHit === true;
+      const allHighConfDraft = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
+      const skipRevalDraft =
+        pipelineCtx.researchUnverified || citationRegistry.length === 0 ||
+        citationRegistry.length < 3 || researchFromCacheDraft || allHighConfDraft;
+      if (!skipRevalDraft) {
         const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        citationRegistry = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensDrafting);
+        const revalResult = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensDrafting);
+        citationRegistry = revalResult.registry;
+        pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
       }
       pipelineCtx.citationRegistry = citationRegistry;
       pipelineCtx.citationRevalidationTokens = citationTokensDrafting;
@@ -903,7 +917,7 @@ export async function retryPipelineFromStage(
       promptTokens: retryCitationTokens?.promptTokens ?? 0,
       completionTokens: retryCitationTokens?.completionTokens ?? 0,
       estimatedCostUsd: retryCitationTokens
-        ? calculateCost("sonar-pro", retryCitationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", retryCitationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
