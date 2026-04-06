@@ -10,10 +10,10 @@ import { getStripe, activateSubscription } from "./stripe";
 import { getPlanConfig } from "./stripe-products";
 import {
   getDb, updateLetterStatus, logReviewAction, getLetterRequestById,
-  getUserById, createNotification, notifyAdmins, getDiscountCodeByCode,
+  getUserById, createNotification, notifyAdmins, notifyAllAttorneys, getDiscountCodeByCode,
   incrementDiscountCodeUsage, createCommission,
 } from "./db";
-import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendNewReviewNeededEmail, sendPaymentFailedEmail } from "./email";
+import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendPaymentFailedEmail } from "./email";
 import { users, processedStripeEvents } from "../drizzle/schema";
 import { eq, lt, sql } from "drizzle-orm";
 import { captureServerException, addServerBreadcrumb } from "./sentry";
@@ -176,25 +176,18 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                     console.error("[notifyAdmins] payment_received:", err);
                   }
 
-                  // ─── Notify attorneys that a new letter is ready for review ───
+                  // ─── Notify all attorneys (email + in-app) that a new letter is ready ───
+                  console.log(`[StripeWebhook] Letter #${letterId} generated_locked → pending_review via payment`);
                   try {
-                    const { getAllUsers } = await import("./db");
-                    const attorneys = await getAllUsers("attorney");
                     const origin2 = session.success_url?.split('/letters')[0]
                       ?? "https://www.talk-to-my-lawyer.com";
-                    for (const attorney of attorneys) {
-                      if (attorney.email) {
-                        await sendNewReviewNeededEmail({
-                          to: attorney.email,
-                          name: attorney.name ?? "Attorney",
-                          letterSubject: letter.subject,
-                          letterId,
-                          letterType: letter.letterType,
-                          jurisdiction: letter.jurisdictionState ?? "Unknown",
-                          appUrl: origin2,
-                        });
-                      }
-                    }
+                    await notifyAllAttorneys({
+                      letterId,
+                      letterSubject: letter.subject,
+                      letterType: letter.letterType,
+                      jurisdiction: letter.jurisdictionState ?? "Unknown",
+                      appUrl: origin2,
+                    });
                   } catch (notifyErr) {
                     console.error(`[StripeWebhook] Failed to notify attorneys for letter #${letterId}:`, notifyErr);
                   }

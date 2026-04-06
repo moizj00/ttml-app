@@ -93,6 +93,61 @@ export async function notifyAdmins(opts: {
   }
 }
 
+/**
+ * Centralized helper — notify every attorney about a new letter entering the review queue.
+ * Sends both an email and an in-app notification to each attorney.
+ * Used by: pipeline orchestrator, Stripe webhook, billing (free unlock + subscription submit).
+ */
+export async function notifyAllAttorneys(opts: {
+  letterId: number;
+  letterSubject: string;
+  letterType: string;
+  jurisdiction: string;
+  appUrl: string;
+}) {
+  try {
+    const { sendNewReviewNeededEmail } = await import("../email");
+    const attorneys = await getAllUsers("attorney");
+    console.log(`[notifyAllAttorneys] Notifying ${attorneys.length} attorney(s) for letter #${opts.letterId}`);
+    for (const attorney of attorneys) {
+      // Email: attempt independently — failure does not block in-app notification
+      if (attorney.email) {
+        try {
+          await sendNewReviewNeededEmail({
+            to: attorney.email,
+            name: attorney.name ?? "Attorney",
+            letterSubject: opts.letterSubject,
+            letterId: opts.letterId,
+            letterType: opts.letterType,
+            jurisdiction: opts.jurisdiction,
+            appUrl: opts.appUrl,
+          });
+        } catch (emailErr) {
+          console.error(`[notifyAllAttorneys] Email failed for attorney #${attorney.id}:`, emailErr);
+          captureServerException(emailErr, { tags: { component: "notifications", error_type: "notify_attorney_email_failed" } });
+        }
+      }
+      // In-app notification: always attempted, even if email failed
+      try {
+        await createNotification({
+          userId: attorney.id,
+          type: "new_review_needed",
+          category: "letters",
+          title: "New letter ready for review",
+          body: `"${opts.letterSubject}" has been queued for attorney review.`,
+          link: `/attorney/queue`,
+        });
+      } catch (notifErr) {
+        console.error(`[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`, notifErr);
+        captureServerException(notifErr, { tags: { component: "notifications", error_type: "notify_attorney_inapp_failed" } });
+      }
+    }
+  } catch (err) {
+    console.error("[notifyAllAttorneys] Failed:", err);
+    captureServerException(err, { tags: { component: "notifications", error_type: "notify_all_attorneys_failed" } });
+  }
+}
+
 export async function getNotificationsByUserId(
   userId: number,
   unreadOnly = false

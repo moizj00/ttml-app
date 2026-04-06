@@ -347,6 +347,24 @@ export const adminRouter = router({
             console.error("[updateRole] Failed to send attorney promotion notification:", err);
             captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
           }
+          // Onboarding awareness: notify new attorney of any existing pending letters
+          try {
+            const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
+            if (pendingLetters.length > 0) {
+              console.log(`[updateRole] Attorney #${input.userId} onboarded — ${pendingLetters.length} pending_review letter(s) already in queue`);
+              await createNotification({
+                userId: input.userId,
+                type: "attorney_onboarding_queue",
+                category: "letters",
+                title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
+                body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
+                link: "/attorney/queue",
+              });
+            }
+          } catch (err) {
+            console.error("[updateRole] Failed to send attorney onboarding queue notification:", err);
+            captureServerException(err, { tags: { component: "admin", error_type: "attorney_onboarding_queue_notification_failed" } });
+          }
         }
         try {
           const targetUser = await getUserById(input.userId);
@@ -407,6 +425,23 @@ export const adminRouter = router({
           } catch (err) {
             console.error("[inviteAttorney] notification failed:", err);
           }
+          // Onboarding awareness: notify promoted attorney of existing pending letters
+          try {
+            const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
+            if (pendingLetters.length > 0) {
+              console.log(`[inviteAttorney] Existing user #${existingUser.id} promoted to attorney — ${pendingLetters.length} pending_review letter(s) in queue`);
+              await createNotification({
+                userId: existingUser.id,
+                type: "attorney_onboarding_queue",
+                category: "letters",
+                title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
+                body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
+                link: "/attorney/queue",
+              });
+            }
+          } catch (err) {
+            console.error("[inviteAttorney] Onboarding queue notification failed:", err);
+          }
           return { success: true, alreadyExisted: true, message: `${email} already had an account and has been promoted to attorney.` };
         }
 
@@ -465,6 +500,25 @@ export const adminRouter = router({
                   user_metadata: { name, invited_attorney: true },
                 });
                 await sendAttorneyInvitationEmail({ to: email, name, setPasswordUrl: linkData2.properties.action_link, invitedByName: ctx.user.name || undefined });
+                // Onboarding awareness: notify recovered attorney of existing pending letters
+                if (existingAppUser) {
+                  try {
+                    const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
+                    if (pendingLetters.length > 0) {
+                      console.log(`[inviteAttorney] Recovered auth user #${existingAppUser.id} set up as attorney — ${pendingLetters.length} pending_review letter(s) in queue`);
+                      await createNotification({
+                        userId: existingAppUser.id,
+                        type: "attorney_onboarding_queue",
+                        category: "letters",
+                        title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
+                        body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
+                        link: "/attorney/queue",
+                      });
+                    }
+                  } catch (err) {
+                    console.error("[inviteAttorney] Onboarding queue notification for recovered attorney failed:", err);
+                  }
+                }
                 return { success: true, alreadyExisted: true, message: `${email} had an auth account and has been set up as an attorney. Invitation sent.` };
               }
             } catch (recoveryErr) {
@@ -541,6 +595,26 @@ export const adminRouter = router({
           });
         } catch (err) {
           console.error("[notifyAdmins] attorney_invited:", err);
+        }
+
+        // Onboarding awareness: notify new attorney of existing pending letters (if any)
+        if (appUser) {
+          try {
+            const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
+            if (pendingLetters.length > 0) {
+              console.log(`[inviteAttorney] New attorney #${appUser.id} (${email}) created — ${pendingLetters.length} pending_review letter(s) already in queue`);
+              await createNotification({
+                userId: appUser.id,
+                type: "attorney_onboarding_queue",
+                category: "letters",
+                title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
+                body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
+                link: "/attorney/queue",
+              });
+            }
+          } catch (err) {
+            console.error("[inviteAttorney] Onboarding queue notification for new attorney failed:", err);
+          }
         }
 
         return { success: true, alreadyExisted: false, message: `Invitation sent to ${email}.` };

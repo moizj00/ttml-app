@@ -14,6 +14,7 @@ import {
   createLetterVersion,
   updateLetterVersionPointers,
   createNotification,
+  notifyAllAttorneys,
 } from "../db";
 import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, TokenUsage, PipelineErrorCode, ValidationResult } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
@@ -21,7 +22,7 @@ import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
 } from "../intake-normalizer";
-import { sendLetterReadyEmail, sendStatusUpdateEmail, sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
+import { sendLetterReadyEmail, sendStatusUpdateEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode } from "./shared";
 import { createTokenAccumulator, calculateCost } from "./providers";
@@ -614,7 +615,7 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   const letterRecord = await getLetterById(letterId);
   if (letterRecord?.submittedByAdmin) {
     console.log(
-      `[Pipeline] Letter #${letterId} was submitted by admin — auto-advancing to pending_review (bypass paywall)`
+      `[Pipeline] Letter #${letterId} generated_locked → pending_review (admin-submitted, billing bypassed)`
     );
     await updateLetterStatus(letterId, "pending_review");
     await logReviewAction({
@@ -627,6 +628,14 @@ export async function autoAdvanceIfPreviouslyUnlocked(
       fromStatus: "generated_locked",
       toStatus: "pending_review",
     });
+    const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+    notifyAllAttorneys({
+      letterId,
+      letterSubject: letterRecord.subject,
+      letterType: letterRecord.letterType,
+      jurisdiction: letterRecord.jurisdictionState ?? "Unknown",
+      appUrl: appBaseUrl,
+    }).catch(err => console.error(`[Pipeline] Failed to notify attorneys for admin-submitted letter #${letterId}:`, err));
     return true;
   }
 
@@ -639,7 +648,7 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   }
 
   console.log(
-    `[Pipeline] Letter #${letterId} was previously unlocked — auto-advancing to pending_review`
+    `[Pipeline] Letter #${letterId} generated_locked → pending_review (previously unlocked, auto-advance after re-pipeline)`
   );
   await updateLetterStatus(letterId, "pending_review");
   await logReviewAction({
@@ -672,25 +681,16 @@ export async function autoAdvanceIfPreviouslyUnlocked(
         )
       );
     }
-    const attorneys = await getAllUsers("attorney");
-    for (const attorney of attorneys) {
-      if (attorney.email) {
-        sendNewReviewNeededEmail({
-          to: attorney.email,
-          name: attorney.name ?? "Attorney",
-          letterSubject: letterRecord.subject,
-          letterId,
-          letterType: letterRecord.letterType,
-          jurisdiction: letterRecord.jurisdictionState ?? "Unknown",
-          appUrl: appBaseUrl,
-        }).catch(err =>
-          console.error(
-            `[Pipeline] Failed to notify attorney for #${letterId}:`,
-            err
-          )
-        );
-      }
-    }
+    // Notify all attorneys (email + in-app) via centralized helper
+    notifyAllAttorneys({
+      letterId,
+      letterSubject: letterRecord.subject,
+      letterType: letterRecord.letterType,
+      jurisdiction: letterRecord.jurisdictionState ?? "Unknown",
+      appUrl: appBaseUrl,
+    }).catch(err =>
+      console.error(`[Pipeline] Failed to notify attorneys for #${letterId}:`, err)
+    );
   }
 
   return true;

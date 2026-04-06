@@ -18,6 +18,7 @@ import {
   createLetterVersion,
   createNotification,
   notifyAdmins,
+  notifyAllAttorneys,
   getAllLetterRequests,
   getAllUsers,
   getAllUsersWithSubscription,
@@ -93,7 +94,6 @@ import {
   sendLetterApprovedEmail,
   sendLetterRejectedEmail,
   sendNeedsChangesEmail,
-  sendNewReviewNeededEmail,
   sendLetterSubmissionEmail,
   sendLetterUnlockedEmail,
   sendStatusUpdateEmail,
@@ -446,7 +446,7 @@ export const billingRouter = router({
         // Invalidate user cache so next request reflects the updated freeReviewUsedAt
         invalidateUserCache(ctx.user.openId);
 
-        // Send notification emails
+        // Send unlock confirmation to subscriber
         try {
           await sendLetterUnlockedEmail({
             to: ctx.user.email ?? "",
@@ -455,18 +455,23 @@ export const billingRouter = router({
             letterId: input.letterId,
             appUrl: getAppUrl(ctx.req),
           });
-          await sendNewReviewNeededEmail({
-            to: "", // Will use admin email from config
-            name: "Attorney Team",
-            letterSubject: letter.subject,
+        } catch (e) {
+          console.error("[freeUnlock] Subscriber email error:", e);
+          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_email_failed" } });
+        }
+        // Notify all attorneys (email + in-app) that a new letter is ready for review
+        console.log(`[freeUnlock] Letter #${input.letterId} transitioning generated_locked → pending_review via free unlock`);
+        try {
+          await notifyAllAttorneys({
             letterId: input.letterId,
+            letterSubject: letter.subject,
             letterType: letter.letterType,
             jurisdiction: letter.jurisdictionState ?? "Unknown",
             appUrl: getAppUrl(ctx.req),
           });
         } catch (e) {
-          console.error("[freeUnlock] Email error:", e);
-          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_email_failed" } });
+          console.error("[freeUnlock] Attorney notification error:", e);
+          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_attorney_notify_failed" } });
         }
 
         try {
@@ -602,24 +607,16 @@ export const billingRouter = router({
           console.error("[subscriptionSubmit] Email error:", e);
           captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
         }
-        // Notify all attorneys that a new letter is ready for review
+        // Notify all attorneys (email + in-app) that a new letter is ready for review
+        console.log(`[subscriptionSubmit] Letter #${input.letterId} transitioning generated_locked → pending_review via subscription submit`);
         try {
-          const { getAllUsers } = await import("../db");
-          const attorneys = await getAllUsers("attorney");
-          const appUrl = getAppUrl(ctx.req);
-          for (const attorney of attorneys) {
-            if (attorney.email) {
-              await sendNewReviewNeededEmail({
-                to: attorney.email,
-                name: attorney.name ?? "Attorney",
-                letterSubject: letter.subject,
-                letterId: input.letterId,
-                letterType: letter.letterType,
-                jurisdiction: letter.jurisdictionState ?? "Unknown",
-                appUrl,
-              });
-            }
-          }
+          await notifyAllAttorneys({
+            letterId: input.letterId,
+            letterSubject: letter.subject,
+            letterType: letter.letterType,
+            jurisdiction: letter.jurisdictionState ?? "Unknown",
+            appUrl: getAppUrl(ctx.req),
+          });
         } catch (notifyErr) {
           console.error("[subscriptionSubmit] Failed to notify attorneys:", notifyErr);
           captureServerException(notifyErr, { tags: { component: "billing", error_type: "subscription_submit_attorney_notify_failed" } });
