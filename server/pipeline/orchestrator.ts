@@ -52,6 +52,32 @@ export function consumeIntermediateContent(letterId: number): { content?: string
 // FULL PIPELINE ORCHESTRATOR
 // ═══════════════════════════════════════════════════════
 
+export function preflightApiKeyCheck(stage: "research" | "drafting" | "full"): {
+  ok: boolean;
+  missing: string[];
+  canResearch: boolean;
+  canDraft: boolean;
+} {
+  const missing: string[] = [];
+  const hasPerplexity = !!(process.env.PERPLEXITY_API_KEY?.trim());
+  const hasOpenAI = !!(process.env.OPENAI_API_KEY?.trim());
+  const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY?.trim());
+  const hasGroq = !!(process.env.GROQ_API_KEY?.trim());
+
+  const canResearch = hasPerplexity || hasOpenAI || hasAnthropic || hasGroq;
+  const canDraft = hasAnthropic || hasOpenAI || hasGroq;
+
+  if (!canResearch) {
+    missing.push("No research provider available (need PERPLEXITY_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY)");
+  }
+  if ((stage === "drafting" || stage === "full") && !canDraft) {
+    missing.push("No drafting provider available (need ANTHROPIC_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY)");
+  }
+
+  const ok = stage === "research" ? canResearch : stage === "drafting" ? canDraft : (canResearch && canDraft);
+  return { ok, missing, canResearch, canDraft };
+}
+
 export async function runFullPipeline(
   letterId: number,
   intake: IntakeJson,
@@ -200,6 +226,19 @@ export async function runFullPipeline(
   } else {
     console.log(
       `[Pipeline] N8N_PRIMARY not set — using direct 4-stage pipeline (primary path) for letter #${letterId}`
+    );
+  }
+
+  // ── API key preflight for direct pipeline (only when NOT routing through n8n) ──
+  const apiCheck = preflightApiKeyCheck("full");
+  if (!apiCheck.ok) {
+    const msg = `API key preflight failed: ${apiCheck.missing.join("; ")}`;
+    console.error(`[Pipeline] ${msg} for letter #${letterId}`);
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.API_KEY_MISSING,
+      msg,
+      "pipeline",
+      apiCheck.missing.join("; ")
     );
   }
 
@@ -706,6 +745,33 @@ export async function retryPipelineFromStage(
   stage: "research" | "drafting",
   userId?: number
 ): Promise<void> {
+  if (!intake || typeof intake !== "object") {
+    const letter = await getLetterById(letterId);
+    if (letter?.intakeJson && typeof letter.intakeJson === "object") {
+      intake = letter.intakeJson as IntakeJson;
+      console.warn(`[Pipeline] Retry for letter #${letterId}: intake was null/invalid in job data — recovered from database`);
+    } else {
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
+        `Intake data is missing or corrupted for letter #${letterId} and could not be recovered from the database`,
+        "pipeline",
+        "intake is null/undefined in both job data and database"
+      );
+    }
+  }
+
+  const apiCheck = preflightApiKeyCheck(stage);
+  if (!apiCheck.ok) {
+    const msg = `API key preflight failed for ${stage} retry: ${apiCheck.missing.join("; ")}`;
+    console.error(`[Pipeline] ${msg} for letter #${letterId}`);
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.API_KEY_MISSING,
+      msg,
+      "pipeline",
+      apiCheck.missing.join("; ")
+    );
+  }
+
   const intakeCheck = validateIntakeCompleteness(intake);
   if (!intakeCheck.valid) {
     throw new PipelineError(

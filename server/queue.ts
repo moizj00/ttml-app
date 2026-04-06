@@ -85,11 +85,37 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
 
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
   const queue = getPipelineQueue();
-  const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-    jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
-  });
-  console.log(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
-  return job.id!;
+  const dedupeId = `retry-${data.letterId}-${data.stage}`;
+  try {
+    const existing = await queue.getJob(dedupeId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "waiting" || state === "active" || state === "delayed") {
+        console.warn(`[Queue] Retry job already queued/active for letter #${data.letterId} stage=${data.stage} (state=${state}) — skipping duplicate`);
+        return existing.id!;
+      }
+      await existing.remove().catch(() => {});
+    }
+  } catch (checkErr) {
+    console.warn(`[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`, checkErr);
+    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
+      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
+    });
+    return job.id!;
+  }
+  try {
+    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
+      jobId: dedupeId,
+    });
+    console.log(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
+    return job.id!;
+  } catch (addErr) {
+    console.warn(`[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`, addErr);
+    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
+      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
+    });
+    return job.id!;
+  }
 }
 
 export { QUEUE_NAME, buildRedisConnection };

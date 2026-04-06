@@ -641,19 +641,37 @@ export const adminRouter = router({
         if (!letter.intakeJson)
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "No intake data found",
+            message: "No intake data found for this letter. Cannot retry.",
           });
-        enqueueRetryFromStageJob({
-          type: "retryPipelineFromStage",
-          letterId: input.letterId,
-          intake: letter.intakeJson,
-          stage: input.stage,
-          userId: letter.userId ?? undefined,
-        }).catch(console.error);
-        return {
-          success: true,
-          message: `Retry started for stage: ${input.stage}`,
-        };
+
+        const { preflightApiKeyCheck } = await import("../pipeline");
+        const apiCheck = preflightApiKeyCheck(input.stage);
+        if (!apiCheck.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Cannot retry: ${apiCheck.missing.join("; ")}. Please configure the required API keys first.`,
+          });
+        }
+
+        try {
+          const jobId = await enqueueRetryFromStageJob({
+            type: "retryPipelineFromStage",
+            letterId: input.letterId,
+            intake: letter.intakeJson,
+            stage: input.stage,
+            userId: letter.userId ?? undefined,
+          });
+          return {
+            success: true,
+            message: `Retry started for stage: ${input.stage} (job: ${jobId})`,
+          };
+        } catch (enqueueErr) {
+          console.error(`[Admin] Failed to enqueue retry for letter #${input.letterId}:`, enqueueErr);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to enqueue retry job: ${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}`,
+          });
+        }
       }),
 
     purgeFailedJobs: adminProcedure.mutation(async () => {

@@ -10,7 +10,7 @@ import {
   type RunPipelineJobData,
   type RetryFromStageJobData,
 } from "./queue";
-import { runFullPipeline, retryPipelineFromStage, bestEffortFallback, consumeIntermediateContent } from "./pipeline";
+import { runFullPipeline, retryPipelineFromStage, bestEffortFallback, consumeIntermediateContent, preflightApiKeyCheck } from "./pipeline";
 import { PipelineError } from "../shared/types";
 import {
   acquirePipelineLock,
@@ -37,6 +37,22 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
   if (!lockAcquired) {
     console.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping duplicate run (${label})`);
     return;
+  }
+
+  const apiCheck = preflightApiKeyCheck("full");
+  if (!apiCheck.ok) {
+    const msg = `[Worker] API key preflight failed for letter #${letterId}: ${apiCheck.missing.join("; ")}`;
+    console.error(msg);
+    try {
+      await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+    } catch { /* ignore */ }
+    await releasePipelineLock(letterId).catch(() => {});
+    throw new PipelineError(
+      "API_KEY_MISSING" as any,
+      apiCheck.missing.join("; "),
+      "pipeline",
+      "No retries attempted — API keys must be configured first"
+    );
   }
 
   let lastErr: unknown;
@@ -181,7 +197,22 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
 }
 
 export async function processRetryFromStage(data: RetryFromStageJobData): Promise<void> {
-  const { letterId, intake, stage, userId } = data;
+  const { letterId, stage, userId } = data;
+  let { intake } = data;
+
+  if (!intake || typeof intake !== "object") {
+    console.warn(`[Worker] Retry job for letter #${letterId}: intake is null/invalid — will attempt recovery from database`);
+    try {
+      const letter = await getLetterRequestById(letterId);
+      if (letter?.intakeJson && typeof letter.intakeJson === "object") {
+        intake = letter.intakeJson;
+        console.log(`[Worker] Recovered intake from database for letter #${letterId}`);
+      }
+    } catch (e) {
+      console.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
+    }
+  }
+
   await retryPipelineFromStage(letterId, intake as any, stage, userId);
 }
 
