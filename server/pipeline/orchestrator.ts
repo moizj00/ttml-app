@@ -321,9 +321,11 @@ export async function runFullPipeline(
       );
     } else {
       const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-      citationRegistry = await revalidateCitationsWithPerplexity(
+      const revalResult = await revalidateCitationsWithPerplexity(
         citationRegistry, jurisdiction, letterId, citationTokens
       );
+      citationRegistry = revalResult.registry;
+      pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
     }
     pipelineCtx.citationRegistry = citationRegistry;
     if (pipelineCtx) {
@@ -366,7 +368,7 @@ export async function runFullPipeline(
       promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
       completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
       estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost("llama-3.3-70b-versatile", citationRevalidationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", citationRevalidationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,

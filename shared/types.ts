@@ -738,6 +738,7 @@ export interface PipelineContext {
    */
   _intermediateDraftContent?: string;
   counterArguments?: CounterArgument[];
+  citationRevalidationModelKey?: string;
 }
 
 // ─── Counter-Argument Analysis ───

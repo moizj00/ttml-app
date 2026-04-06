@@ -150,13 +150,18 @@ Respond in this exact format, one per line:
 ...`;
 }
 
+export type CitationRevalidationResult = {
+  registry: CitationRegistryEntry[];
+  modelKey: string;
+};
+
 export async function revalidateCitationsWithPerplexity(
   registry: CitationRegistryEntry[],
   jurisdiction: string,
   letterId: number,
   tokenAcc?: TokenUsage,
   options?: { skipReasons?: string[] }
-): Promise<CitationRegistryEntry[]> {
+): Promise<CitationRevalidationResult> {
   const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
 
   const groqApiKey = process.env.GROQ_API_KEY;
@@ -182,7 +187,7 @@ export async function revalidateCitationsWithPerplexity(
       console.log(
         `[Pipeline] Citation revalidation complete (Groq) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
       );
-      return updatedRegistry;
+      return { registry: updatedRegistry, modelKey: "llama-3.3-70b-versatile" };
     } catch (groqErr) {
       const groqMsg = groqErr instanceof Error ? groqErr.message : String(groqErr);
       console.warn(
@@ -196,7 +201,7 @@ export async function revalidateCitationsWithPerplexity(
     console.warn(
       `[Pipeline] No citation revalidation provider available (GROQ_API_KEY and PERPLEXITY_API_KEY both missing) — skipping for letter #${letterId}`
     );
-    return registry;
+    return { registry, modelKey: "none" };
   }
 
   const perplexity = createOpenAI({
@@ -221,13 +226,13 @@ export async function revalidateCitationsWithPerplexity(
     console.log(
       `[Pipeline] Citation revalidation complete (Perplexity fallback) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
     );
-    return updatedRegistry;
+    return { registry: updatedRegistry, modelKey: "sonar" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(
       `[Pipeline] Citation revalidation failed for letter #${letterId}: ${msg}. Continuing with unvalidated registry.`
     );
-    return registry;
+    return { registry, modelKey: "none" };
   }
 }
 
