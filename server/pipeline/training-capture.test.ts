@@ -12,6 +12,11 @@ vi.mock("../sentry", () => ({
 }));
 vi.mock("../../drizzle/schema", () => ({
   trainingLog: Symbol("trainingLog"),
+  letterRequests: Symbol("letterRequests"),
+  users: Symbol("users"),
+}));
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn(),
 }));
 vi.mock("@google-cloud/storage", () => ({
   Storage: class MockStorage {
@@ -42,6 +47,26 @@ function makeIntake() {
   };
 }
 
+function makeConsentingDb(mockInsert: ReturnType<typeof vi.fn>) {
+  let selectCallCount = 0;
+  const mockSelect = vi.fn().mockImplementation(() => {
+    selectCallCount++;
+    const currentCall = selectCallCount;
+    return {
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue(
+            currentCall === 1
+              ? [{ userId: 1 }]
+              : [{ consentToTraining: true }]
+          ),
+        }),
+      }),
+    };
+  });
+  return { select: mockSelect, insert: mockInsert } as any;
+}
+
 describe("training-capture", () => {
   const originalEnv = process.env;
 
@@ -62,7 +87,7 @@ describe("training-capture", () => {
   describe("captureTrainingExample", () => {
     it("uploads to GCS and inserts DB record when GCS is configured", async () => {
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       await captureTrainingExample(
         42,
@@ -91,7 +116,7 @@ describe("training-capture", () => {
       delete process.env.GCP_PROJECT_ID;
 
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       await captureTrainingExample(42, "demand", "CA", makeIntake() as any, "content");
 
@@ -108,7 +133,7 @@ describe("training-capture", () => {
       mockSave.mockRejectedValueOnce(new Error("GCS down"));
 
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       await captureTrainingExample(42, "demand", "CA", makeIntake() as any, "content");
 
@@ -123,7 +148,7 @@ describe("training-capture", () => {
 
     it("handles null jurisdiction", async () => {
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       await captureTrainingExample(42, "cease_desist", null, makeIntake() as any, "content");
 
@@ -135,7 +160,7 @@ describe("training-capture", () => {
 
     it("estimates token count as ceil(length / 4)", async () => {
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       const content = "x".repeat(400);
       await captureTrainingExample(42, "demand", "CA", makeIntake() as any, content);
@@ -160,7 +185,7 @@ describe("training-capture", () => {
 
     it("builds training example with correct message structure", async () => {
       const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
-      mockGetDb.mockResolvedValue({ insert: mockInsert } as any);
+      mockGetDb.mockResolvedValue(makeConsentingDb(mockInsert));
 
       await captureTrainingExample(42, "demand", "CA", makeIntake() as any, "Final letter content");
 
