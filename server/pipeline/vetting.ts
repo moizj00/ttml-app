@@ -474,7 +474,7 @@ export async function runVettingStage(
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `VETTING_FAILOVER: Switched to OpenAI GPT-4o during vetting retry due to rate limit on primary model. Heightened attorney scrutiny recommended.`
+          `VETTING_FAILOVER: Switched to OpenAI GPT-4o-mini during vetting retry due to rate limit on primary model. Heightened attorney scrutiny recommended.`
         );
       }
     }
@@ -567,12 +567,12 @@ export async function runVettingStage(
       }
     } else if (vettingFailover) {
       console.warn(
-        `[Pipeline] Stage 4: Switched to OpenAI GPT-4o failover for letter #${letterId} (provider=${vettingProvider})`
+        `[Pipeline] Stage 4: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${vettingProvider})`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
+          `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o-mini. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
         );
       }
     }

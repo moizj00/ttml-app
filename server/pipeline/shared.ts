@@ -23,7 +23,7 @@ export function formatStructuredError(
 export function classifyErrorCode(err: unknown, failoverExhausted = false): PipelineErrorCode {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
-  // "All providers exhausted" is emitted by withModelFailover when both primary and GPT-4o fail.
+  // "All providers exhausted" is emitted by withModelFailover when both primary and GPT-4o-mini fail.
   // This is the authoritative signal that no more failover is possible.
   if (lower.includes("all providers exhausted")) return PIPELINE_ERROR_CODES.RATE_LIMITED;
   if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("abortcontroller") || lower.includes("econnreset")) return PIPELINE_ERROR_CODES.API_TIMEOUT;
@@ -105,12 +105,12 @@ export interface FailoverResult<T> {
 }
 
 /**
- * Wraps a primary AI generation function with an OpenAI GPT-4o fallback and an
+ * Wraps a primary AI generation function with an OpenAI GPT-4o-mini fallback and an
  * optional Groq Llama 3.3 70B OSS last-resort fallback.
  *
  * Three-tier failover:
  *   1. primaryFn — primary model (Perplexity / Claude Opus)
- *   2. fallbackFn — OpenAI GPT-4o (existing)
+ *   2. fallbackFn — OpenAI GPT-4o-mini (existing)
  *   3. ossLastResortFn (optional) — Groq Llama 3.3 70B (free OSS, last resort)
  *
  * On rate-limit, 429, credits-depleted, quota, billing, overloaded, or
@@ -126,7 +126,7 @@ export interface FailoverResult<T> {
  * @param stage - Pipeline stage name (used for logging)
  * @param letterId - Letter ID (used for logging)
  * @param primaryFn - The primary generation function to call first
- * @param fallbackFn - The OpenAI GPT-4o fallback function
+ * @param fallbackFn - The OpenAI GPT-4o-mini fallback function
  * @param ossLastResortFn - Optional Groq Llama 3.3 OSS last-resort function
  */
 export async function withModelFailover<T>(
@@ -153,19 +153,19 @@ export async function withModelFailover<T>(
       // Skip straight to OSS fallback if available
     } else {
       console.warn(
-        `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o failover. Original error: ${primaryMsg}`
+        `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o-mini failover. Original error: ${primaryMsg}`
       );
 
       try {
         const result = await fallbackFn();
         console.log(
-          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover succeeded (provider=openai-failover)`
+          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover succeeded (provider=openai-failover)`
         );
         return { result, provider: "openai-failover", failoverTriggered: true };
       } catch (fallbackErr) {
         const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
         console.error(
-          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
+          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
         );
 
         if (!ossLastResortFn) {
