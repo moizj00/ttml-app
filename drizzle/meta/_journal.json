@@ -302,6 +302,13 @@
       "when": 1775345613181,
       "tag": "0042_smiling_rhino",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1775597585354,
+      "tag": "0043_ordinary_juggernaut",
+      "breakpoints": true
     }
   ]
 }

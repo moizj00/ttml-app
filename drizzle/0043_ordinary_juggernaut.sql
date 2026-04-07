@@ -1,0 +1,12 @@
+ALTER TABLE "users" ADD COLUMN "consent_to_training" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_uploaded_by_user_id_users_id_fk" FOREIGN KEY ("uploaded_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "commission_ledger" ADD CONSTRAINT "commission_ledger_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "commission_ledger" ADD CONSTRAINT "commission_ledger_subscriber_id_users_id_fk" FOREIGN KEY ("subscriber_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intake_form_templates" ADD CONSTRAINT "intake_form_templates_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "letter_quality_scores" ADD CONSTRAINT "letter_quality_scores_letter_request_id_letter_requests_id_fk" FOREIGN KEY ("letter_request_id") REFERENCES "public"."letter_requests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payout_requests" ADD CONSTRAINT "payout_requests_processed_by_users_id_fk" FOREIGN KEY ("processed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "pipeline_lessons" ADD CONSTRAINT "pipeline_lessons_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_attachments_uploaded_by" ON "attachments" USING btree ("uploaded_by_user_id");--> statement-breakpoint
+CREATE INDEX "idx_letter_requests_status_reviewer" ON "letter_requests" USING btree ("status","assigned_reviewer_id");--> statement-breakpoint
+CREATE INDEX "idx_letter_versions_created_by" ON "letter_versions" USING btree ("created_by_user_id");--> statement-breakpoint
+CREATE INDEX "idx_workflow_jobs_created_at" ON "workflow_jobs" USING btree ("created_at");
