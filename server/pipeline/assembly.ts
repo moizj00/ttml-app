@@ -58,7 +58,7 @@ export async function runAssemblyStage(
 
   const assemblyTokens = createTokenAccumulator();
   let assemblyProvider = "anthropic";
-  let assemblyModelKey = "claude-opus-4-5";
+  let assemblyModelKey = "claude-sonnet-4";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
@@ -81,7 +81,7 @@ export async function runAssemblyStage(
       },
       async () => {
         assemblyProvider = "openai-failover";
-        assemblyModelKey = "gpt-4o";
+        assemblyModelKey = "gpt-4o-mini";
         const r = await generateText({
           model: getAssemblyModelFallback(),
           system: assemblySystem,
@@ -182,7 +182,7 @@ export async function runAssemblyStage(
       },
       () => {
         assemblyProvider = "openai-failover";
-        assemblyModelKey = "gpt-4o";
+        assemblyModelKey = "gpt-4o-mini";
         const model = getAssemblyModelFallback();
         return generateText({
           model,

@@ -137,7 +137,7 @@ export async function runDraftingStage(
 
   const draftTokens = createTokenAccumulator();
   let draftProvider = "anthropic";
-  let draftModelKey = "claude-opus-4-5";
+  let draftModelKey = "claude-sonnet-4";
 
   const callGenerateText = async (prompt: string) => {
     const result = await generateText({
@@ -183,7 +183,7 @@ export async function runDraftingStage(
       },
       async () => {
         draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o";
+        draftModelKey = "gpt-4o-mini";
         const r = await generateText({
           model: getDraftModelFallback(),
           system: draftSystemPrompt,
@@ -257,7 +257,7 @@ export async function runDraftingStage(
       () => callGenerateText(draftUserPrompt),
       () => {
         draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o";
+        draftModelKey = "gpt-4o-mini";
         return callGenerateTextFallback(draftUserPrompt);
       },
       async () => {

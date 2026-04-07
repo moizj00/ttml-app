@@ -45,7 +45,7 @@ export function getResearchModel() {
     );
     const anthropic = getAnthropicClient();
     return {
-      model: anthropic("claude-opus-4-5"),
+      model: anthropic("claude-sonnet-4"),
       provider: "anthropic-fallback",
     };
   }
@@ -79,34 +79,34 @@ export function getResearchModelFallback(): {
   };
 }
 
-/** Stage 2: Anthropic claude-opus-4-5 — initial legal draft (direct Anthropic API) */
+/** Stage 2: Anthropic claude-sonnet-4 — initial legal draft (direct Anthropic API) */
 export function getDraftModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-opus-4-5");
+  return anthropic("claude-sonnet-4");
 }
 
-/** Stage 2 failover: OpenAI gpt-4o */
+/** Stage 2 failover: OpenAI gpt-4o-mini */
 export function getDraftModelFallback() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o");
+  return openai("gpt-4o-mini");
 }
 
-/** Stage 3: Anthropic claude-opus-4-5 — final polished letter assembly (direct Anthropic API) */
+/** Stage 3: Anthropic claude-sonnet-4 — final polished letter assembly (direct Anthropic API) */
 export function getAssemblyModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-opus-4-5");
+  return anthropic("claude-sonnet-4");
 }
 
-/** Stage 3 failover: OpenAI gpt-4o */
+/** Stage 3 failover: OpenAI gpt-4o-mini */
 export function getAssemblyModelFallback() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o");
+  return openai("gpt-4o-mini");
 }
 
-/** Stage 4 vetting failover: OpenAI gpt-4o */
+/** Stage 4 vetting failover: OpenAI gpt-4o-mini */
 export function getVettingModelFallback() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o");
+  return openai("gpt-4o-mini");
 }
 
 // ── Groq — free OSS last-resort fallback for all stages ──
@@ -134,8 +134,8 @@ export function isGroqFallbackAvailable(): boolean {
 
 // Timeout constants (ms)
 export const RESEARCH_TIMEOUT_MS = 90_000; // 90s — Perplexity web search can be slow
-export const DRAFT_TIMEOUT_MS = 120_000; // 120s — Claude drafting a full legal letter
-export const ASSEMBLY_TIMEOUT_MS = 120_000; // 120s — Claude final assembly
+export const DRAFT_TIMEOUT_MS = 90_000; // 90s — Claude Sonnet drafting a full legal letter
+export const ASSEMBLY_TIMEOUT_MS = 90_000; // 90s — Claude Sonnet final assembly
 
 export const SONNET_PRICING = { inputPerMillion: 3, outputPerMillion: 15 };
 export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
@@ -146,6 +146,7 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "claude-sonnet-4-20250514": SONNET_PRICING,
   "claude-sonnet-4": SONNET_PRICING,
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
+  "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "llama-3.3-70b-versatile": { inputPerMillion: 0, outputPerMillion: 0 },
 };

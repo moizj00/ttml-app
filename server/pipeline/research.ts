@@ -207,7 +207,7 @@ export async function runResearchStage(
 
   // Declare provider-tracking variables at function scope so the catch block
   // can read the active model key for accurate cost reporting after failover.
-  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-opus-4-5";
+  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-sonnet-4";
 
   try {
     console.log(

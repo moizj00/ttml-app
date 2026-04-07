@@ -438,7 +438,7 @@ export async function runVettingStage(
       },
       async () => {
         vettingProvider = "openai-failover";
-        vettingModelKey = "gpt-4o";
+        vettingModelKey = "gpt-4o-mini";
         const { text, usage: vettingUsage } = await generateText({
           model: getVettingModelFallback(),
           system: systemPrompt,
@@ -531,7 +531,7 @@ export async function runVettingStage(
       },
       () => {
         vettingProvider = "openai-failover";
-        vettingModelKey = "gpt-4o";
+        vettingModelKey = "gpt-4o-mini";
         return generateText({
           model: getVettingModelFallback(),
           system: systemPrompt,
