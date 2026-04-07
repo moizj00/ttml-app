@@ -124,7 +124,10 @@ export function getStageForStatus(status: string): {
   subStageDescription?: string;
 } {
   if (TERMINAL_ERROR_STATUSES.includes(status)) {
-    return { stageIndex: LETTER_STAGES.length - 1, stage: null, isTerminalError: true };
+    // pipeline_failed occurs early (during research/drafting), so show failure at stage 1
+    // rejected/client_declined occur late (after attorney review), so show at last stage
+    const errorStageIndex = status === "pipeline_failed" ? 1 : LETTER_STAGES.length - 1;
+    return { stageIndex: errorStageIndex, stage: null, isTerminalError: true };
   }
 
   for (let i = 0; i < LETTER_STAGES.length; i++) {

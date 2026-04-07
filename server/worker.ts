@@ -73,13 +73,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             console.log(`[Worker] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
             return;
           }
-          // Only force-reset to "submitted" on the first attempt or if stuck in a non-retryable state.
+          // Only force-reset to "submitted" on the first attempt when needed.
           // On subsequent retries, the pipeline's own error handler (orchestrator.ts) already reverts
           // to "submitted", so forcing it again causes confusing status oscillation
           // (researching → submitted → researching) visible to the subscriber via Supabase realtime.
+          // If a retry sees a non-retryable state during backoff, we abort above instead of force-resetting.
           if (attempt === 0 && current && current.status !== "submitted") {
-            await updateLetterStatus(letterId, "submitted", { force: true });
-          } else if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
             await updateLetterStatus(letterId, "submitted", { force: true });
           }
         }

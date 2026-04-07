@@ -32,6 +32,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 
 // Statuses where the dashboard should auto-refresh
 const ACTIVE_STATUSES = [
@@ -43,8 +44,6 @@ const ACTIVE_STATUSES = [
   "client_approval_pending",
   "client_revision_requested",
 ];
-
-import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 
 // CTA config per status
 function getStatusCTA(status: string, letterId: number) {

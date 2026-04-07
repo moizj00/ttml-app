@@ -1,7 +1,6 @@
 import { CheckCircle } from "lucide-react";
 import {
   LETTER_STAGES,
-  TERMINAL_ERROR_STATUSES,
   TERMINAL_ERROR_CONFIG,
   getStageForStatus,
   isActiveProcessing,
@@ -202,7 +201,9 @@ function StandardTracker({
                 <span
                   className={`text-[10px] mt-1 text-center leading-tight ${labelColor}`}
                 >
-                  <span className="sm:hidden">{stage.shortLabel}</span>
+                  <span className="sm:hidden">
+                    {stepError && errorConfig ? errorConfig.label : stage.shortLabel}
+                  </span>
                   <span className="hidden sm:inline">
                     {stepError && errorConfig ? errorConfig.label : stage.label}
                   </span>

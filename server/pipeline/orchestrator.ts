@@ -272,17 +272,23 @@ export async function runFullPipeline(
     intake,
   };
 
-  // Set researching status for the direct pipeline path (n8n path sets it separately at line 147)
-  await updateLetterStatus(letterId, "researching");
-  await logReviewAction({
-    letterRequestId: letterId,
-    actorType: "system",
-    action: "pipeline_stage_started",
-    noteText: "Pipeline started: legal research in progress.",
-    noteVisibility: "user_visible",
-    fromStatus: "submitted",
-    toStatus: "researching",
-  });
+  // Set researching status for the direct pipeline path (n8n path sets it separately at line 147).
+  // Only set if coming from submitted/pipeline_failed — on retries the letter may already be
+  // at researching/drafting, and regressing would be inaccurate.
+  const currentLetterForStatus = await getLetterById(letterId);
+  const currentStatus = currentLetterForStatus?.status;
+  if (currentStatus === "submitted" || currentStatus === "pipeline_failed") {
+    await updateLetterStatus(letterId, "researching");
+    await logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "pipeline_stage_started",
+      noteText: "Pipeline started: legal research in progress.",
+      noteVisibility: "user_visible",
+      fromStatus: currentStatus,
+      toStatus: "researching",
+    });
+  }
 
   try {
     // Stage 1: Perplexity Research
@@ -583,6 +589,22 @@ export async function bestEffortFallback(opts: {
       return false;
     }
 
+    // Guard: if the letter has already progressed past generated_locked (e.g., subscriber paid
+    // during retry window), do NOT overwrite the draft pointer with degraded content or regress status.
+    // Check BEFORE inserting version/updating pointer to avoid corrupting an already-advanced letter.
+    const currentLetter = await getLetterById(letterId);
+    const postLockStatuses = [
+      "generated_locked", "generated_unlocked",
+      "pending_review", "under_review", "approved", "needs_changes",
+      "client_approval_pending", "client_revision_requested", "client_approved", "sent",
+    ];
+    if (currentLetter && postLockStatuses.includes(currentLetter.status)) {
+      console.log(
+        `[Pipeline] Letter #${letterId} already at "${currentLetter.status}" — skipping bestEffortFallback entirely`
+      );
+      return true;
+    }
+
     const degradationReasons = [
       `Pipeline failed after all retries with error: ${pipelineErrorCode} — ${errorMessage}`,
       ...(qualityWarnings ?? []),
@@ -610,20 +632,6 @@ export async function bestEffortFallback(opts: {
     });
     const versionId = (version as any)?.insertId ?? 0;
     await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
-
-    // Guard: if the letter has already progressed past generated_locked (e.g., subscriber paid
-    // during retry window), do NOT regress it back. The force update would bypass validation.
-    const currentLetter = await getLetterById(letterId);
-    const postLockStatuses = [
-      "pending_review", "under_review", "approved", "needs_changes",
-      "client_approval_pending", "client_revision_requested", "client_approved", "sent",
-    ];
-    if (currentLetter && postLockStatuses.includes(currentLetter.status)) {
-      console.log(
-        `[Pipeline] Letter #${letterId} already at "${currentLetter.status}" — skipping bestEffortFallback status update`
-      );
-      return true;
-    }
 
     await updateLetterStatus(letterId, "generated_locked", { force: true });
     await logReviewAction({
