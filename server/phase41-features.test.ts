@@ -72,9 +72,14 @@ vi.mock("./email-service", () => ({
 
 // ─── Test: Intake Normalizer ──────────────────────────────────────────────────
 describe("Intake Normalizer — structured fields", () => {
-  it("should include language, priorCommunication, deliveryMethod in normalized output", async () => {
-    const { buildNormalizedPromptInput: normalizeIntake } = await import("./intake-normalizer");
+  let normalizeIntake: any;
 
+  beforeEach(async () => {
+    const mod = await import("./intake-normalizer");
+    normalizeIntake = mod.buildNormalizedPromptInput;
+  }, 15_000);
+
+  it("should include language, priorCommunication, deliveryMethod in normalized output", () => {
     const dbFields = {
       letterType: "demand-letter",
       subject: "Test Subject",
@@ -109,9 +114,7 @@ describe("Intake Normalizer — structured fields", () => {
     expect(result.deliveryMethod).toBe("email");
   });
 
-  it("should default language to english and deliveryMethod to certified_mail", async () => {
-    const { buildNormalizedPromptInput: normalizeIntake } = await import("./intake-normalizer");
-
+  it("should default language to english and deliveryMethod to certified_mail", () => {
     const dbFields = {
       letterType: "cease-and-desist",
       subject: "Test",
