@@ -23,7 +23,7 @@ import {
   decrementLettersUsed,
   refundFreeTrialSlot,
 } from "./db";
-import { sendJobFailedAlertEmail } from "./email";
+import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { getDb } from "./db";
 
@@ -73,7 +73,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             console.log(`[Worker] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
             return;
           }
-          if (!current || current.status !== "submitted") {
+          // Only force-reset to "submitted" on the first attempt when needed.
+          // On subsequent retries, the pipeline's own error handler (orchestrator.ts) already reverts
+          // to "submitted", so forcing it again causes confusing status oscillation
+          // (researching → submitted → researching) visible to the subscriber via Supabase realtime.
+          // If a retry sees a non-retryable state during backoff, we abort above instead of force-resetting.
+          if (attempt === 0 && current && current.status !== "submitted") {
             await updateLetterStatus(letterId, "submitted", { force: true });
           }
         }
@@ -190,6 +195,31 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       captureServerException(statusErr, { tags: { component: "pipeline-worker", error_type: "status_update_failed" } });
     }
 
+    // ── Notify subscriber of complete pipeline failure ─────────────────────────
+    // Previously only admins were notified. The subscriber saw pipeline_failed
+    // status but got no email explaining what happened.
+    if (userId) {
+      try {
+        const { getUserById } = await import("./db");
+        const letter = await getLetterRequestById(letterId);
+        const subscriber = await getUserById(userId);
+        if (subscriber?.email && letter) {
+          sendStatusUpdateEmail({
+            to: subscriber.email,
+            name: subscriber.name ?? "Subscriber",
+            subject: letter.subject,
+            letterId,
+            newStatus: "pipeline_failed",
+            appUrl: appUrl ?? process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
+          }).catch(emailErr => {
+            console.error("[Worker] Failed to send subscriber failure email:", emailErr);
+          });
+        }
+      } catch (notifyUserErr) {
+        console.error("[Worker] Failed to notify subscriber of pipeline failure:", notifyUserErr);
+      }
+    }
+
     throw new Error(`Pipeline failed after ${PIPELINE_MAX_RETRIES + 1} attempts for letter #${letterId}`);
   } finally {
     await releasePipelineLock(letterId).catch(e => console.error("[Worker] Failed to release pipeline lock:", e));
@@ -200,20 +230,31 @@ export async function processRetryFromStage(data: RetryFromStageJobData): Promis
   const { letterId, stage, userId } = data;
   let { intake } = data;
 
-  if (!intake || typeof intake !== "object") {
-    console.warn(`[Worker] Retry job for letter #${letterId}: intake is null/invalid — will attempt recovery from database`);
-    try {
-      const letter = await getLetterRequestById(letterId);
-      if (letter?.intakeJson && typeof letter.intakeJson === "object") {
-        intake = letter.intakeJson;
-        console.log(`[Worker] Recovered intake from database for letter #${letterId}`);
-      }
-    } catch (e) {
-      console.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
-    }
+  // Acquire pipeline lock to prevent concurrent runs with full pipeline or other retries
+  const lockAcquired = await acquirePipelineLock(letterId);
+  if (!lockAcquired) {
+    console.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping retry from stage "${stage}"`);
+    return;
   }
 
-  await retryPipelineFromStage(letterId, intake as any, stage, userId);
+  try {
+    if (!intake || typeof intake !== "object") {
+      console.warn(`[Worker] Retry job for letter #${letterId}: intake is null/invalid — will attempt recovery from database`);
+      try {
+        const letter = await getLetterRequestById(letterId);
+        if (letter?.intakeJson && typeof letter.intakeJson === "object") {
+          intake = letter.intakeJson;
+          console.log(`[Worker] Recovered intake from database for letter #${letterId}`);
+        }
+      } catch (e) {
+        console.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
+      }
+    }
+
+    await retryPipelineFromStage(letterId, intake as any, stage, userId);
+  } finally {
+    await releasePipelineLock(letterId).catch(e => console.error("[Worker] Failed to release pipeline lock on retry:", e));
+  }
 }
 
 export async function processJob(job: Job<PipelineJobData>): Promise<void> {

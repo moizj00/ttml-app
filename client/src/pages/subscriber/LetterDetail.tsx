@@ -1,6 +1,6 @@
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
-import LetterProgressBar from "@/components/shared/LetterProgressBar";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -900,7 +900,7 @@ export default function LetterDetail() {
         {/* Status Timeline */}
         <Card>
           <CardContent className="p-5">
-            <LetterProgressBar status={letter.status} />
+            <LetterStatusTracker status={letter.status} size="expanded" />
           </CardContent>
         </Card>
 

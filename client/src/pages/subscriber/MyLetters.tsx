@@ -12,6 +12,9 @@ import {
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
+import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const ACTIVE_STATUSES = ["submitted", "researching", "drafting"];
 const NEEDS_APPROVAL_STATUSES = ["client_approval_pending"];
@@ -58,7 +61,17 @@ function getQuickActions(letter: any) {
 }
 
 export default function MyLetters() {
+  const { user } = useAuth();
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
+
+  // Supabase Realtime — instant updates when any letter changes for this user
+  useLetterListRealtime({
+    userId: user?.id ?? null,
+    onAnyChange: () => utils.letters.myLetters.invalidate(),
+    enabled: !!user?.id,
+  });
+
   const { data: letters, isLoading } = trpc.letters.myLetters.useQuery(undefined, {
     refetchInterval: (query) => {
       const list = query.state.data;
@@ -256,6 +269,11 @@ export default function MyLetters() {
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </span>
+                      </div>
+
+                      {/* Compact progress bar */}
+                      <div className="mt-1.5">
+                        <LetterStatusTracker status={letter.status} size="compact" />
                       </div>
 
                       {/* Quick-action buttons */}
