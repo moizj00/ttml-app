@@ -472,6 +472,25 @@ export async function bestEffortFallback(opts: {
     return false;
   }
 
+  // Guard: skip fallback entirely if the letter has already progressed past generated_locked
+  const postGeneratedStatuses = new Set([
+    "generated_unlocked",
+    "pending_review", "under_review", "approved", "needs_changes",
+    "client_approval_pending", "client_approved",
+    "client_revision_requested", "client_declined", "sent", "rejected",
+  ]);
+  try {
+    const currentLetter = await getLetterById(letterId);
+    if (currentLetter?.status && postGeneratedStatuses.has(currentLetter.status)) {
+      console.warn(
+        `[Pipeline] bestEffortFallback: letter #${letterId} is already at status "${currentLetter.status}" — skipping fallback entirely`
+      );
+      return true;
+    }
+  } catch (statusCheckErr) {
+    console.warn(`[Pipeline] bestEffortFallback: failed to check current status for letter #${letterId}, proceeding with fallback:`, statusCheckErr);
+  }
+
   console.warn(`[Pipeline] Attempting best-effort draft fallback for letter #${letterId} (error: ${pipelineErrorCode})`);
 
   try {
@@ -677,7 +696,13 @@ export async function autoAdvanceIfPreviouslyUnlocked(
     console.log(
       `[Pipeline] Letter #${letterId} generated_locked → pending_review (admin-submitted, billing bypassed)`
     );
-    await updateLetterStatus(letterId, "pending_review");
+    try {
+      await updateLetterStatus(letterId, "pending_review");
+    } catch (statusErr) {
+      const errMsg = statusErr instanceof Error ? statusErr.message : String(statusErr);
+      console.warn(`[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race for admin-submitted letter #${letterId} — ${errMsg}. Skipping.`);
+      return false;
+    }
     await logReviewAction({
       letterRequestId: letterId,
       actorType: "system",
@@ -710,7 +735,13 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   console.log(
     `[Pipeline] Letter #${letterId} generated_locked → pending_review (previously unlocked, auto-advance after re-pipeline)`
   );
-  await updateLetterStatus(letterId, "pending_review");
+  try {
+    await updateLetterStatus(letterId, "pending_review");
+  } catch (statusErr) {
+    const errMsg = statusErr instanceof Error ? statusErr.message : String(statusErr);
+    console.warn(`[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race for letter #${letterId} — ${errMsg}. Skipping.`);
+    return false;
+  }
   await logReviewAction({
     letterRequestId: letterId,
     actorType: "system",

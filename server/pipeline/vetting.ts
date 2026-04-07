@@ -10,13 +10,14 @@ import {
   getLetterRequestById as getLetterById,
   hasLetterBeenPreviouslyUnlocked,
   getAllUsers,
+  getUserById,
   createNotification,
   setLetterQualityDegraded,
 } from "../db";
 import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, PipelineContext, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
-import { sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
+import { sendNewReviewNeededEmail, sendAdminAlertEmail, sendLetterReadyEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
 import { getAnthropicClient, getVettingModelFallback, getFreeOSSModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
@@ -902,6 +903,14 @@ export async function finalizeLetterAfterVetting(
     },
   });
   const versionId = (version as any)?.insertId ?? 0;
+  if (!versionId) {
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.UNKNOWN_ERROR,
+      `createLetterVersion returned a null/zero ID for letter #${letterId} — cannot finalize without a valid version`,
+      "vetting",
+      "insertId was 0 or falsy"
+    );
+  }
 
   await updateLetterVersionPointers(letterId, {
     currentAiDraftVersionId: versionId,
@@ -958,6 +967,28 @@ export async function finalizeLetterAfterVetting(
   }
 
   const letterForPaywall = await getLetterById(letterId);
+
+  // ── Subscriber "letter ready" email (normal completion path) ─────────────────
+  try {
+    const wasAlreadyUnlocked = letterForPaywall ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
+    if (letterForPaywall && !letterForPaywall.submittedByAdmin && !wasAlreadyUnlocked && letterForPaywall.userId != null) {
+      const subscriber = await getUserById(letterForPaywall.userId);
+      if (subscriber?.email) {
+        sendLetterReadyEmail({
+          to: subscriber.email,
+          name: subscriber.name ?? "Subscriber",
+          subject: letterForPaywall.subject,
+          letterId,
+          appUrl: process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
+          letterType: letterForPaywall.letterType ?? undefined,
+          jurisdictionState: letterForPaywall.jurisdictionState ?? undefined,
+        }).catch(e => console.error(`[Pipeline] Failed to send letter-ready email for #${letterId}:`, e));
+      }
+    }
+  } catch (emailErr) {
+    console.error(`[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`, emailErr);
+  }
+
   if (letterForPaywall?.submittedByAdmin) {
     console.log(
       `[Pipeline] Skipping paywall email for #${letterId} — admin-submitted letter`

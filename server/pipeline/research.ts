@@ -5,6 +5,7 @@ import {
   updateResearchRun,
   updateWorkflowJob,
   updateLetterStatus,
+  logReviewAction,
 } from "../db";
 import type { IntakeJson, ResearchPacket, PipelineContext, TokenUsage, PipelineErrorCode, ValidationResult } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
@@ -113,6 +114,15 @@ export async function runResearchStage(
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
   await updateResearchRun(runId, { status: "running" });
   await updateLetterStatus(letterId, "researching", { force: true });
+  logReviewAction({
+    letterRequestId: letterId,
+    actorType: "system",
+    action: "status_changed",
+    noteText: "Pipeline started research stage.",
+    noteVisibility: "internal",
+    fromStatus: "submitted",
+    toStatus: "researching",
+  }).catch(e => console.error(`[Pipeline] Failed to log submitted→researching action for #${letterId}:`, e));
   try {
     const { notifyAdmins } = await import("../db");
     await notifyAdmins({
