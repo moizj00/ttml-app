@@ -39,6 +39,7 @@ import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { registerSitemapRoute } from "../sitemapRoute";
 import { registerNewsletterRoute } from "../newsletterRoute";
+import { registerConfigRoute } from "../configRoute";
 import { registerSentryDebugRoute } from "../sentryDebugRoute";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
@@ -178,11 +179,11 @@ async function startServer() {
         "Content-Security-Policy",
         [
           "default-src 'self'",
-          "script-src 'self' https://js.stripe.com https://static.cloudflareinsights.com",
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "script-src 'self' https://js.stripe.com https://static.cloudflareinsights.com https://maps.googleapis.com https://maps.gstatic.com",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com",
           "img-src 'self' data: https: blob:",
           "font-src 'self' data: https://fonts.gstatic.com",
-          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com",
+          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://maps.googleapis.com https://places.googleapis.com",
           "frame-src https://js.stripe.com https://hooks.stripe.com",
           "object-src 'none'",
           "base-uri 'self'",
@@ -259,6 +260,7 @@ async function startServer() {
   registerBlogInternalRoutes(app);
   registerSitemapRoute(app);
   registerNewsletterRoute(app);
+  registerConfigRoute(app);
 
   app.use(
     "/api/trpc",

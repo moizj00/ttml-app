@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { MapPin, Loader2 } from "lucide-react";
+import { MapPin, Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 declare global {
@@ -10,7 +10,7 @@ declare global {
         places: {
           AutocompleteService: new () => GoogleAutocompleteService;
           PlacesService: new (el: HTMLElement) => GooglePlacesService;
-          PlacesServiceStatus: { OK: string };
+          PlacesServiceStatus: { OK: string; ZERO_RESULTS: string; [key: string]: string };
         };
       };
     };
@@ -40,11 +40,23 @@ interface GooglePlacesService {
   ) => void;
 }
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
+const BUILD_TIME_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 let googleMapsPromise: Promise<void> | null = null;
 
-function loadGoogleMapsScript(): Promise<void> {
+async function resolveApiKey(): Promise<string> {
+  if (BUILD_TIME_API_KEY) return BUILD_TIME_API_KEY;
+  try {
+    const res = await fetch("/api/config/maps-key");
+    if (!res.ok) throw new Error("No key");
+    const data = await res.json();
+    return data.key as string;
+  } catch {
+    return "";
+  }
+}
+
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
   if (googleMapsPromise) return googleMapsPromise;
 
   if (window.google?.maps?.places) {
@@ -54,7 +66,7 @@ function loadGoogleMapsScript(): Promise<void> {
 
   googleMapsPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
@@ -96,6 +108,7 @@ export function AddressAutocomplete({
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mapsReady, setMapsReady] = useState(false);
+  const [mapsError, setMapsError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,18 +118,29 @@ export function AddressAutocomplete({
   const skipNextSearch = useRef(false);
 
   useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY) return;
     let cancelled = false;
-    loadGoogleMapsScript()
-      .then(() => {
+
+    async function init() {
+      try {
+        const apiKey = await resolveApiKey();
+        if (!apiKey) {
+          if (!cancelled) setMapsError(true);
+          return;
+        }
+        await loadGoogleMapsScript(apiKey);
         if (cancelled) return;
         const g = window.google!;
         autocompleteService.current = new g.maps.places.AutocompleteService();
         const dummyDiv = document.createElement("div");
         placesService.current = new g.maps.places.PlacesService(dummyDiv);
         setMapsReady(true);
-      })
-      .catch(() => {});
+      } catch {
+        if (!cancelled) setMapsError(true);
+      }
+    }
+
+    init();
+
     return () => {
       cancelled = true;
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -151,10 +175,8 @@ export function AddressAutocomplete({
         },
         (results: GoogleAutocompletePrediction[] | null, status: string) => {
           setIsLoading(false);
-          if (
-            status === window.google!.maps.places.PlacesServiceStatus.OK &&
-            results
-          ) {
+          const PlacesStatus = window.google?.maps?.places?.PlacesServiceStatus;
+          if (PlacesStatus && status === PlacesStatus.OK && results) {
             setPredictions(
               results.slice(0, 5).map((r: GoogleAutocompletePrediction) => ({
                 placeId: r.place_id,
@@ -168,6 +190,13 @@ export function AddressAutocomplete({
           } else {
             setPredictions([]);
             setShowDropdown(false);
+            if (
+              PlacesStatus &&
+              status !== PlacesStatus.ZERO_RESULTS &&
+              status !== PlacesStatus.OK
+            ) {
+              setMapsError(true);
+            }
           }
         }
       );
@@ -268,6 +297,13 @@ export function AddressAutocomplete({
           )}
         </div>
       </div>
+
+      {mapsError && (
+        <p className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground" data-testid={`${id}-maps-error`}>
+          <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+          Address suggestions unavailable — please type your full address manually.
+        </p>
+      )}
 
       {showDropdown && predictions.length > 0 && (
         <ul
