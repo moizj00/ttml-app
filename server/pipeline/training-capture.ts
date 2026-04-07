@@ -97,16 +97,18 @@ export async function captureTrainingExample(
         .where(eq(letterRequests.id, letterId))
         .limit(1);
       const userId = letter[0]?.userId;
-      if (userId) {
-        const user = await db
-          .select({ consentToTraining: users.consentToTraining })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-        if (!user[0]?.consentToTraining) {
-          console.log(`[TrainingCapture] Skipping letter #${letterId} — user has not consented to training data usage`);
-          return;
-        }
+      if (!userId) {
+        console.log(`[TrainingCapture] Skipping letter #${letterId} — letter not found or missing userId`);
+        return;
+      }
+      const user = await db
+        .select({ consentToTraining: users.consentToTraining })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user[0]?.consentToTraining) {
+        console.log(`[TrainingCapture] Skipping letter #${letterId} — user has not consented to training data usage`);
+        return;
       }
     }
     const example = buildTrainingExample(intake, approvedContent);

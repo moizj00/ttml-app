@@ -130,13 +130,18 @@ describe("Training Capture — Consent Gating", () => {
     consoleSpy.mockRestore();
   });
 
-  it("proceeds with capture when letter is not found (consent check bypassed)", async () => {
+  it("skips capture when letter is not found (no userId)", async () => {
     const { db, mockInsert } = makeMockDb({ userId: null });
     mockGetDb.mockResolvedValue(db);
 
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await captureTrainingExample(99, "demand", "CA", makeIntake() as any, "Letter content");
 
-    expect(mockInsert).toHaveBeenCalledOnce();
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("letter not found or missing userId")
+    );
+    consoleSpy.mockRestore();
   });
 
   it("skips gracefully when user record is not found", async () => {
