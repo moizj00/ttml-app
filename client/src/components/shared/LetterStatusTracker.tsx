@@ -92,7 +92,7 @@ function CompactTracker({
         const segmentComplete = isComplete || idx < stageIndex;
         const segmentActive = !isComplete && !isTerminalError && idx === stageIndex;
         const isPaywall = segmentActive && stage.key === "draft_ready";
-        const segmentError = isTerminalError && idx === LETTER_STAGES.length - 1;
+        const segmentError = isTerminalError && idx === stageIndex;
 
         return (
           <div
@@ -144,7 +144,7 @@ function StandardTracker({
         {LETTER_STAGES.map((stage, idx) => {
           const stepComplete = isComplete || idx < displayStep;
           const stepCurrent = !isComplete && !isTerminalError && idx === displayStep;
-          const stepError = isTerminalError && idx === LETTER_STAGES.length - 1;
+          const stepError = isTerminalError && idx === stageIndex;
           const isPaywall = stepCurrent && stage.key === "draft_ready";
           const stepActive = stepCurrent && isActive;
 
