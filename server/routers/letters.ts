@@ -836,10 +836,10 @@ export const lettersRouter = router({
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id)
           throw new TRPCError({ code: "NOT_FOUND" });
-        if (letter.status !== "approved" && letter.status !== "client_approved")
+        if (letter.status !== "approved" && letter.status !== "client_approved" && letter.status !== "sent")
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Only approved letters can be sent to recipients",
+            message: "Only approved or sent letters can be sent to recipients",
           });
 
         const versions = await getLetterVersionsByRequestId(input.letterId, false);
@@ -1061,18 +1061,61 @@ export const lettersRouter = router({
           }
         }
 
-        // Transition to sent
-        await updateLetterStatus(input.letterId, "sent", { force: true });
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "letter_sent",
-          noteText: `Letter approved and PDF generated${pdfUrl ? " — PDF available" : ""}.`,
-          noteVisibility: "user_visible",
-          fromStatus: "client_approved",
-          toStatus: "sent",
-        });
+        // If recipientEmail was provided, send the letter to the recipient in one step
+        let recipientSent = false;
+        let recipientSendError: string | undefined;
+        if (input.recipientEmail) {
+          try {
+            const versions = await getLetterVersionsByRequestId(input.letterId, false);
+            const finalVer = versions.find((v) => v.versionType === "final_approved");
+            await sendLetterToRecipient({
+              recipientEmail: input.recipientEmail,
+              letterSubject: letter.subject,
+              subjectOverride: input.subjectOverride?.trim() || undefined,
+              note: input.note?.trim() || undefined,
+              pdfUrl: pdfUrl ?? letter.pdfUrl ?? undefined,
+              htmlContent: finalVer?.content ?? finalContent ?? "",
+            });
+            recipientSent = true;
+            console.log(`[ClientApprove] Letter #${input.letterId} sent to ${input.recipientEmail}`);
+          } catch (sendErr) {
+            recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
+            captureServerException(sendErr, { tags: { component: "letters", error_type: "client_approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });
+            console.error(`[ClientApprove] Failed to send letter #${input.letterId} to recipient:`, sendErr);
+          }
+        }
+
+        // Transition to sent only if recipient delivery succeeded
+        // Approve Only (no recipient) stays at client_approved for download/manual send
+        // Approve & Send with failed delivery also stays at client_approved for retry
+        if (recipientSent) {
+          await updateLetterStatus(input.letterId, "sent", { force: true });
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: "subscriber",
+            action: recipientSent ? "letter_sent_to_recipient" : "letter_sent",
+            noteText: recipientSent
+              ? `Letter approved, PDF generated, and delivered to ${input.recipientEmail}.`
+              : `Letter approved and PDF generated${pdfUrl ? " — PDF available" : ""}.`,
+            noteVisibility: "user_visible",
+            fromStatus: "client_approved",
+            toStatus: "sent",
+          });
+        } else {
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: "subscriber",
+            action: "pdf_generated",
+            noteText: recipientSendError
+              ? `PDF generated${pdfUrl ? " — available for download" : ""}. Sending to recipient failed — you can retry from the letter page.`
+              : `PDF generated${pdfUrl ? " — available for download" : ""}.`,
+            noteVisibility: "user_visible",
+            fromStatus: "client_approved",
+            toStatus: "client_approved",
+          });
+        }
 
         // Notify subscriber with PDF link
         try {
@@ -1105,12 +1148,12 @@ export const lettersRouter = router({
             category: "letters",
             type: "client_approved",
             title: `Client approved letter #${input.letterId}`,
-            body: `${ctx.user.name ?? "A subscriber"} approved "${letter.subject}" — PDF generated and letter marked as sent.${pdfUrl ? " PDF available." : ""}`,
+            body: `${ctx.user.name ?? "A subscriber"} approved "${letter.subject}" — PDF generated.${recipientSent ? ` Letter sent to ${input.recipientEmail}.` : ""}${pdfUrl ? " PDF available." : ""}`,
             link: `/admin/letters/${input.letterId}`,
             emailOpts: {
               subject: `Client Approved Letter #${input.letterId}`,
               preheader: `Client approved letter "${letter.subject}"`,
-              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}". PDF has been generated and the letter is now marked as sent.</p>`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}". PDF has been generated.${recipientSent ? ` Letter was sent to ${input.recipientEmail}.` : ""}</p>`,
               ctaText: "View Letter",
               ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
             },
@@ -1119,7 +1162,7 @@ export const lettersRouter = router({
           console.error("[notifyAdmins] client_approved:", err);
           captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_approved" } });
         }
-        return { success: true, pdfUrl };
+        return { success: true, pdfUrl, recipientSent, recipientSendError };
       }),
 
     clientRequestRevision: subscriberProcedure
@@ -1132,12 +1175,15 @@ export const lettersRouter = router({
         if (!letter || letter.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
-        if (letter.status !== "client_approval_pending") {
+        const allowedStatuses = ["client_approval_pending", "client_approved", "sent"];
+        if (!allowedStatuses.includes(letter.status)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Letter is not awaiting client approval",
+            message: "Letter is not in a state that allows revision requests",
           });
         }
+
+        const isPostApproval = letter.status === "client_approved" || letter.status === "sent";
 
         // Revision limit guardrail
         const allActions = await getReviewActions(input.letterId);
@@ -1153,11 +1199,15 @@ export const lettersRouter = router({
           ? `This is revision ${revisionCount + 1} of 5. You have ${5 - revisionCount - 1} revision(s) remaining.`
           : undefined;
 
-        // ─── Paid revision gate: revisions 2+ cost $20 each ─────────────────
-        // The first revision (revisionCount === 0) is free.
-        // Subsequent revisions require a $20 Stripe checkout payment.
-        // The webhook will execute the actual revision after payment is confirmed.
-        if (revisionCount >= 1) {
+        // ─── Paid revision gate ─────────────────────────────────────────────
+        // Pre-approval: first revision (revisionCount === 0) is free, subsequent cost $20.
+        // Post-approval: first post-approval edit is free, second+ cost $20.
+        // We count post-approval edits separately for the fee trigger.
+        const postApprovalEditCount = isPostApproval
+          ? allActions.filter(a => a.action === "client_revision_requested" && (a.fromStatus === "client_approved" || a.fromStatus === "sent")).length
+          : 0;
+        const requiresPayment = isPostApproval ? postApprovalEditCount >= 1 : revisionCount >= 1;
+        if (requiresPayment) {
           const origin = getOriginUrl(ctx.req);
           const checkout = await createRevisionConsultationCheckout({
             userId: ctx.user.id,
@@ -1185,7 +1235,7 @@ export const lettersRouter = router({
           action: "client_revision_requested",
           noteText: input.revisionNotes,
           noteVisibility: "user_visible",
-          fromStatus: "client_approval_pending",
+          fromStatus: letter.status,
           toStatus: "client_revision_requested",
         });
 
@@ -1206,8 +1256,8 @@ export const lettersRouter = router({
             await createNotification({
               userId: letter.assignedReviewerId,
               type: "client_revision_requested",
-              title: "Client requested revisions",
-              body: `A subscriber requested revisions on "${letter.subject}". Please review their notes and update the letter.`,
+              title: isPostApproval ? "Client requested post-approval edits" : "Client requested revisions",
+              body: `A subscriber requested ${isPostApproval ? "post-approval edits" : "revisions"} on "${letter.subject}". Please review their notes and update the letter.`,
               link: `/review/${input.letterId}`,
             });
           }

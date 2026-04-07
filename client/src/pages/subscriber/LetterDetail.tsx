@@ -33,6 +33,10 @@ function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId:
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
+  const [showSendDialog, setShowSendDialog] = useState(false);
+  const [approveRecipientEmail, setApproveRecipientEmail] = useState("");
+  const [approveSubjectOverride, setApproveSubjectOverride] = useState("");
+  const [approveNote, setApproveNote] = useState("");
 
   const MAX_REVISIONS = 5;
   const WARN_REVISIONS = 3;
@@ -42,17 +46,36 @@ function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId:
   const revisionLimitWarning = revisionsUsed >= WARN_REVISIONS && !revisionLimitReached;
 
   const clientApprove = trpc.letters.clientApprove.useMutation({
-    onSuccess: () => {
-      toast.success("Letter approved!", { description: "Your PDF is being generated and will be available for download shortly." });
+    onSuccess: (res) => {
+      const result = res as { success: boolean; pdfUrl?: string; recipientSent?: boolean; recipientSendError?: string };
+      if (result.recipientSent) {
+        toast.success("Letter approved & sent!", { description: "Your PDF has been generated and the letter sent to the recipient." });
+      } else if (result.recipientSendError) {
+        toast.warning("Letter approved, but sending failed", { description: "Your PDF is ready for download. You can retry sending via the 'Send Via Lawyer's Email' button." });
+      } else {
+        toast.success("Letter approved!", { description: "Your PDF is being generated and will be available for download shortly." });
+      }
+      setShowSendDialog(false);
+      setApproveRecipientEmail("");
+      setApproveSubjectOverride("");
+      setApproveNote("");
       onApprove();
     },
     onError: (err) => toast.error("Approval failed", { description: err.message }),
   });
 
   const clientRequestRevision = trpc.letters.clientRequestRevision.useMutation({
-    onSuccess: (res: any) => {
-      if (res?.revisionWarning) {
-        toast.warning("Revision requested", { description: res.revisionWarning });
+    onSuccess: (res) => {
+      const result = res as { success: boolean; requiresPayment?: boolean; checkoutUrl?: string; revisionCount?: number; revisionWarning?: string };
+      if (result.requiresPayment && result.checkoutUrl) {
+        toast.info("Redirecting to payment", {
+          description: "A $20 revision consultation fee applies. You will be redirected to complete payment.",
+        });
+        setTimeout(() => { window.location.href = result.checkoutUrl!; }, 1500);
+        return;
+      }
+      if (result.revisionWarning) {
+        toast.warning("Revision requested", { description: result.revisionWarning });
       } else {
         toast.success("Revision requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
       }
@@ -97,16 +120,99 @@ function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId:
               </div>
             )}
 
+            <Dialog open={showSendDialog} onOpenChange={(open) => { setShowSendDialog(open); if (!open) { setApproveRecipientEmail(""); setApproveSubjectOverride(""); setApproveNote(""); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Approve & Send Letter</DialogTitle>
+                  <DialogDescription>
+                    Your letter will be approved, a PDF generated, and sent directly to the recipient's email — all in one step.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="approve-recipient-email">Recipient Email Address</Label>
+                    <Input
+                      id="approve-recipient-email"
+                      data-testid="input-approve-recipient-email"
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={approveRecipientEmail}
+                      onChange={(e) => setApproveRecipientEmail(e.target.value)}
+                      disabled={clientApprove.isPending}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="approve-subject-override">Subject Line (optional)</Label>
+                    <Input
+                      id="approve-subject-override"
+                      data-testid="input-approve-subject-override"
+                      type="text"
+                      placeholder="Leave blank to use the original subject"
+                      value={approveSubjectOverride}
+                      onChange={(e) => setApproveSubjectOverride(e.target.value)}
+                      disabled={clientApprove.isPending}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="approve-note">Note to Recipient (optional)</Label>
+                    <Textarea
+                      id="approve-note"
+                      data-testid="input-approve-note"
+                      placeholder="Add an optional note that will appear in the email..."
+                      value={approveNote}
+                      onChange={(e) => setApproveNote(e.target.value)}
+                      rows={3}
+                      disabled={clientApprove.isPending}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowSendDialog(false)} disabled={clientApprove.isPending} data-testid="button-cancel-approve-send">
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => clientApprove.mutate({
+                      letterId,
+                      recipientEmail: approveRecipientEmail.trim(),
+                      subjectOverride: approveSubjectOverride.trim() || undefined,
+                      note: approveNote.trim() || undefined,
+                    })}
+                    disabled={clientApprove.isPending || !approveRecipientEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(approveRecipientEmail.trim())}
+                    data-testid="button-confirm-approve-send"
+                  >
+                    {clientApprove.isPending ? "Processing..." : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Approve & Send
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <div className="flex flex-wrap gap-2">
               <Button
-                data-testid="button-client-approve"
+                data-testid="button-client-approve-send"
                 className="bg-green-600 hover:bg-green-700 text-white"
+                size="sm"
+                onClick={() => { setShowSendDialog(true); setShowRevisionForm(false); setShowDeclineConfirm(false); }}
+                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Approve & Send
+              </Button>
+              <Button
+                data-testid="button-client-approve"
+                variant="outline"
+                className="border-green-300 text-green-700 hover:bg-green-50"
                 size="sm"
                 onClick={() => clientApprove.mutate({ letterId })}
                 disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
-                {clientApprove.isPending ? "Processing..." : "Approve"}
+                {clientApprove.isPending ? "Processing..." : "Approve Only"}
               </Button>
               <Button
                 data-testid="button-client-request-revision"
@@ -134,7 +240,8 @@ function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId:
             </div>
 
             <div className="text-xs text-blue-600/70 space-y-0.5">
-              <p><strong>Approve</strong> — Generates your final PDF and confirms the letter is ready. You can then download or send it to the recipient.</p>
+              <p><strong>Approve & Send</strong> — Generates your final PDF and sends it directly to the recipient in one step.</p>
+              <p><strong>Approve Only</strong> — Generates your final PDF without sending. You can download or send it later.</p>
               <p><strong>Request Revisions</strong> — Sends your feedback to the attorney for further edits. The letter will return to you once revised.</p>
               <p><strong>Decline</strong> — Permanently declines this letter. This cannot be undone.</p>
             </div>
@@ -279,6 +386,8 @@ export default function LetterDetail() {
   const [recipientEmail, setRecipientEmail] = useState("");
   const [sendSubjectOverride, setSendSubjectOverride] = useState("");
   const [sendNote, setSendNote] = useState("");
+  const [showRequestEditForm, setShowRequestEditForm] = useState(false);
+  const [requestEditNotes, setRequestEditNotes] = useState("");
 
   // Show success toast after Stripe redirect
   useEffect(() => {
@@ -381,6 +490,28 @@ export default function LetterDetail() {
       setSendNote("");
     },
     onError: (err) => toast.error("Failed to send letter", { description: err.message }),
+  });
+
+  const requestEditMutation = trpc.letters.clientRequestRevision.useMutation({
+    onSuccess: (res) => {
+      const result = res as { success: boolean; requiresPayment?: boolean; checkoutUrl?: string; revisionCount?: number; revisionWarning?: string };
+      if (result.requiresPayment && result.checkoutUrl) {
+        toast.info("Redirecting to payment", {
+          description: "A $20 revision consultation fee applies. You will be redirected to complete payment.",
+        });
+        setTimeout(() => { window.location.href = result.checkoutUrl!; }, 1500);
+        return;
+      }
+      if (result.revisionWarning) {
+        toast.warning("Edit requested", { description: result.revisionWarning });
+      } else {
+        toast.success("Edit requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
+      }
+      setShowRequestEditForm(false);
+      setRequestEditNotes("");
+      utils.letters.detail.invalidate({ id: letterId });
+    },
+    onError: (err) => toast.error("Request failed", { description: err.message }),
   });
 
   const handleSubmitUpdate = () => {
@@ -1052,22 +1183,62 @@ export default function LetterDetail() {
                   Your Approved Letter
                 </CardTitle>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Button onClick={handleDownloadPdf} size="sm" className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-download-letter" disabled={!(data?.letter as any)?.pdfUrl}>
+                    <Download className="w-4 h-4 mr-1.5" />
+                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
+                  </Button>
                   <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-copy-letter">
                     <Copy className="w-3.5 h-3.5 mr-1.5" />
                     Copy
                   </Button>
-                  <Button onClick={handleDownloadPdf} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-download-letter" disabled={!(data?.letter as any)?.pdfUrl}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" />
-                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
-                  </Button>
-                  <Button onClick={() => setSendDialogOpen(true)} size="sm" className="bg-green-700 hover:bg-green-800 text-white" data-testid="button-send-via-lawyer-email" disabled={!(data?.letter as any)?.pdfUrl}>
+                  <Button onClick={() => setSendDialogOpen(true)} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-send-via-lawyer-email" disabled={!(data?.letter as any)?.pdfUrl}>
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     Send Via Lawyer's Email
+                  </Button>
+                  <Button
+                    onClick={() => setShowRequestEditForm(!showRequestEditForm)}
+                    size="sm"
+                    variant="outline"
+                    className="border-violet-300 text-violet-700 hover:bg-violet-50"
+                    data-testid="button-request-edit"
+                    disabled={requestEditMutation.isPending}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                    Request Edit
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
+              {showRequestEditForm && (
+                <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 space-y-3 mb-4">
+                  <p className="text-sm font-medium text-violet-800">What changes would you like?</p>
+                  <p className="text-xs text-violet-600">
+                    Your first post-approval edit request is free. Subsequent edit requests will require a $20 consultation fee.
+                  </p>
+                  <Textarea
+                    data-testid="input-request-edit-notes"
+                    value={requestEditNotes}
+                    onChange={(e) => setRequestEditNotes(e.target.value)}
+                    placeholder="Describe the changes you'd like the attorney to make (at least 10 characters)..."
+                    rows={3}
+                    className="border-violet-200"
+                    disabled={requestEditMutation.isPending}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      data-testid="button-submit-request-edit"
+                      size="sm"
+                      className="bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={() => requestEditMutation.mutate({ letterId, revisionNotes: requestEditNotes })}
+                      disabled={requestEditMutation.isPending || requestEditNotes.trim().length < 10}
+                    >
+                      {requestEditMutation.isPending ? "Submitting..." : "Submit Edit Request"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setShowRequestEditForm(false); setRequestEditNotes(""); }}>Cancel</Button>
+                  </div>
+                </div>
+              )}
               <div className="bg-white border border-green-200 rounded-lg p-5">
                 {/<[a-z][\s\S]*>/i.test(finalVersion.content) ? (
                   <div

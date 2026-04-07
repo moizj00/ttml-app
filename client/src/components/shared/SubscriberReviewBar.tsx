@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -10,6 +20,7 @@ import {
   ChevronUp,
   AlertCircle,
   ArrowUp,
+  Send,
 } from "lucide-react";
 
 interface SubscriberReviewBarProps {
@@ -31,36 +42,48 @@ export function SubscriberReviewBar({
   const [mode, setMode] = useState<"idle" | "revision" | "decline">("idle");
   const [revisionNotes, setRevisionNotes] = useState("");
   const [declineReason, setDeclineReason] = useState("");
+  const [showSendDialog, setShowSendDialog] = useState(false);
+  const [approveRecipientEmail, setApproveRecipientEmail] = useState("");
+  const [approveSubjectOverride, setApproveSubjectOverride] = useState("");
+  const [approveNote, setApproveNote] = useState("");
 
   const revisionsRemaining = MAX_REVISIONS - revisionCount;
   const revisionLimitReached = revisionCount >= MAX_REVISIONS;
   const revisionLimitWarning = revisionCount >= WARN_REVISIONS && !revisionLimitReached;
 
   const clientApprove = trpc.letters.clientApprove.useMutation({
-    onSuccess: () => {
-      toast.success("Letter approved!", {
-        description: "Your PDF is being generated and will be available for download shortly.",
-      });
+    onSuccess: (res) => {
+      const result = res as { success: boolean; pdfUrl?: string; recipientSent?: boolean; recipientSendError?: string };
+      if (result.recipientSent) {
+        toast.success("Letter approved & sent!", { description: "Your PDF has been generated and the letter sent to the recipient." });
+      } else if (result.recipientSendError) {
+        toast.warning("Letter approved, but sending failed", { description: "Your PDF is ready for download. You can retry sending via the 'Send Via Lawyer's Email' button." });
+      } else {
+        toast.success("Letter approved!", { description: "Your PDF is being generated and will be available for download shortly." });
+      }
+      setShowSendDialog(false);
+      setApproveRecipientEmail("");
+      setApproveSubjectOverride("");
+      setApproveNote("");
       onAction();
     },
     onError: (err) => toast.error("Approval failed", { description: err.message }),
   });
 
   const clientRequestRevision = trpc.letters.clientRequestRevision.useMutation({
-    onSuccess: (res: any) => {
-      // Paid revision gate: redirect to Stripe checkout
-      if (res?.requiresPayment && res?.checkoutUrl) {
+    onSuccess: (res) => {
+      const result = res as { success: boolean; requiresPayment?: boolean; checkoutUrl?: string; revisionCount?: number; revisionWarning?: string };
+      if (result.requiresPayment && result.checkoutUrl) {
         toast.info("Redirecting to payment", {
           description: "A $20 revision consultation fee applies. You will be redirected to complete payment.",
         });
-        // Short delay so the toast is visible before redirect
         setTimeout(() => {
-          window.location.href = res.checkoutUrl;
+          window.location.href = result.checkoutUrl!;
         }, 1500);
         return;
       }
-      if (res?.revisionWarning) {
-        toast.warning("Revision requested", { description: res.revisionWarning });
+      if (result.revisionWarning) {
+        toast.warning("Revision requested", { description: result.revisionWarning });
       } else {
         toast.success("Revision requested", {
           description: "Your feedback has been sent to the attorney.",
@@ -254,16 +277,100 @@ export function SubscriberReviewBar({
 
           <Button
             size="sm"
-            className="bg-green-600 hover:bg-green-700 text-white h-8"
+            variant="outline"
+            className="border-green-300 text-green-700 hover:bg-green-50 h-8"
             onClick={() => clientApprove.mutate({ letterId })}
             disabled={isBusy}
-            data-testid="button-sticky-approve"
+            data-testid="button-sticky-approve-only"
           >
             <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-            {clientApprove.isPending ? "Approving..." : "Approve"}
+            {clientApprove.isPending ? "Approving..." : "Approve Only"}
+          </Button>
+
+          <Button
+            size="sm"
+            className="bg-green-600 hover:bg-green-700 text-white h-8"
+            onClick={() => setShowSendDialog(true)}
+            disabled={isBusy}
+            data-testid="button-sticky-approve-send"
+          >
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            Approve & Send
           </Button>
         </div>
       </div>
+
+      <Dialog open={showSendDialog} onOpenChange={(open) => { setShowSendDialog(open); if (!open) { setApproveRecipientEmail(""); setApproveSubjectOverride(""); setApproveNote(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve & Send Letter</DialogTitle>
+            <DialogDescription>
+              Your letter will be approved, a PDF generated, and sent directly to the recipient's email — all in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="bar-recipient-email">Recipient Email Address</Label>
+              <Input
+                id="bar-recipient-email"
+                data-testid="input-bar-recipient-email"
+                type="email"
+                placeholder="recipient@example.com"
+                value={approveRecipientEmail}
+                onChange={(e) => setApproveRecipientEmail(e.target.value)}
+                disabled={clientApprove.isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bar-subject-override">Subject Line (optional)</Label>
+              <Input
+                id="bar-subject-override"
+                data-testid="input-bar-subject-override"
+                type="text"
+                placeholder="Leave blank to use the original subject"
+                value={approveSubjectOverride}
+                onChange={(e) => setApproveSubjectOverride(e.target.value)}
+                disabled={clientApprove.isPending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bar-note">Note to Recipient (optional)</Label>
+              <Textarea
+                id="bar-note"
+                data-testid="input-bar-note"
+                placeholder="Add an optional note that will appear in the email..."
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+                rows={3}
+                disabled={clientApprove.isPending}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendDialog(false)} disabled={clientApprove.isPending} data-testid="button-bar-cancel-send">
+              Cancel
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => clientApprove.mutate({
+                letterId,
+                recipientEmail: approveRecipientEmail.trim(),
+                subjectOverride: approveSubjectOverride.trim() || undefined,
+                note: approveNote.trim() || undefined,
+              })}
+              disabled={clientApprove.isPending || !approveRecipientEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(approveRecipientEmail.trim())}
+              data-testid="button-bar-confirm-send"
+            >
+              {clientApprove.isPending ? "Processing..." : (
+                <>
+                  <Send className="w-3.5 h-3.5 mr-1.5" />
+                  Approve & Send
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
