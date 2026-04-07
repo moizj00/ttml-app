@@ -13,6 +13,9 @@ interface EditorToolbarProps {
   isUnderReview: boolean;
   editMode: boolean;
   editContent: string;
+  hasUnsavedChanges: boolean;
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  lastSavedAt: Date | null;
   claimIsPending: boolean;
   saveIsPending: boolean;
   unclaimIsPending: boolean;
@@ -35,6 +38,9 @@ export function EditorToolbar({
   isUnderReview,
   editMode,
   editContent,
+  hasUnsavedChanges,
+  saveStatus,
+  lastSavedAt,
   claimIsPending,
   saveIsPending,
   unclaimIsPending,
@@ -84,12 +90,16 @@ export function EditorToolbar({
                 data-testid="button-save-edit"
                 size="sm"
                 onClick={onSave}
-                disabled={saveIsPending || editContent.length < 10}
-                className="bg-background border border-border text-foreground hover:bg-muted"
-                variant="outline"
+                disabled={saveIsPending || editContent.length < 10 || !hasUnsavedChanges}
+                variant={hasUnsavedChanges ? "default" : "outline"}
+                className={
+                  hasUnsavedChanges
+                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                    : "bg-background border border-border text-foreground hover:bg-muted"
+                }
               >
                 <Save className="w-4 h-4 mr-1.5" />
-                {saveIsPending ? "Saving..." : "Save"}
+                {saveIsPending ? "Saving..." : hasUnsavedChanges ? "Save" : "Saved"}
               </Button>
             </>
           ) : (

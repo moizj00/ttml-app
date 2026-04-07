@@ -19,7 +19,7 @@ import {
   GitCompare,
 } from "lucide-react";
 import { useParams } from "wouter";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { LETTER_TYPE_CONFIG, type CitationAuditReport, type CounterArgument } from "../../../../shared/types";
 import { IntakePanel } from "./review/IntakePanel";
@@ -54,7 +54,6 @@ export default function ReviewDetail() {
     { id: letterId },
     {
       enabled: !!letterId,
-      // Poll every 8s while letter is in active review statuses
       refetchInterval: query => {
         const status = query.state.data?.letter?.status;
         if (
@@ -69,12 +68,12 @@ export default function ReviewDetail() {
     }
   );
 
-  // ── Editor state ──────────────────────────────────────────────────────────
   const [editContent, setEditContent] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  // ── Dialog state ──────────────────────────────────────────────────────────
   const [approveDialog, setApproveDialog] = useState(false);
   const [rejectDialog, setRejectDialog] = useState(false);
   const [changesDialog, setChangesDialog] = useState(false);
@@ -86,6 +85,7 @@ export default function ReviewDetail() {
 
   const autoEnteredRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unsavedToastShownRef = useRef(false);
 
   const invalidate = () =>
     utils.review.letterDetail.invalidate({ id: letterId });
@@ -110,6 +110,7 @@ export default function ReviewDetail() {
       });
       setEditMode(false);
       setHasUnsavedChanges(false);
+      setSaveStatus("idle");
       invalidate();
     },
     onError: e =>
@@ -117,14 +118,21 @@ export default function ReviewDetail() {
   });
 
   const saveMutation = trpc.review.saveEdit.useMutation({
+    onMutate: () => {
+      setSaveStatus("saving");
+    },
     onSuccess: () => {
-      toast.success("Draft saved", {
-        description: "Your edits have been preserved.",
-      });
+      const now = new Date();
+      setLastSavedAt(now);
       setHasUnsavedChanges(false);
+      setSaveStatus("saved");
+      unsavedToastShownRef.current = false;
       invalidate();
     },
-    onError: e => toast.error("Save failed", { description: e.message }),
+    onError: e => {
+      setSaveStatus("error");
+      toast.error("Save failed", { description: e.message });
+    },
   });
 
   const approveMutation = trpc.review.approve.useMutation({
@@ -136,6 +144,7 @@ export default function ReviewDetail() {
       setApproveDialog(false);
       setEditMode(false);
       setHasUnsavedChanges(false);
+      setSaveStatus("idle");
       invalidate();
     },
     onError: e => toast.error("Submission failed", { description: e.message }),
@@ -174,6 +183,15 @@ export default function ReviewDetail() {
     onError: e => toast.error("Failed to request client approval", { description: e.message }),
   });
 
+  const handleManualSave = useCallback(() => {
+    if (!editMode || !editContent || editContent.length < 10) return;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    saveMutation.mutate({ letterId, content: editContent });
+  }, [editMode, editContent, letterId]);
+
   // ── Auto-enter edit mode when letter becomes under_review ─────────────────
   useEffect(() => {
     if (!data) return;
@@ -191,20 +209,70 @@ export default function ReviewDetail() {
       setEditContent(html);
       setEditMode(true);
       setHasUnsavedChanges(false);
+      setSaveStatus("idle");
     }
   }, [data]);
 
-  // ── Auto-save when editContent changes while in edit mode ─────────────────
+  // ── Auto-save with debounce ───────────────────────────────────────────────
   useEffect(() => {
     if (!editMode || !hasUnsavedChanges) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
-      saveMutation.mutate({ letterId, content: htmlToPlainText(editContent) });
-    }, 2000);
+      if (editContent && editContent.length >= 10) {
+        saveMutation.mutate({ letterId, content: editContent });
+      }
+    }, 3000);
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
   }, [editContent, editMode, hasUnsavedChanges]);
+
+  // ── Keyboard shortcut: Ctrl/Cmd+S to save ────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (editMode && hasUnsavedChanges) {
+          handleManualSave();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editMode, hasUnsavedChanges, handleManualSave]);
+
+  // ── Browser tab close / refresh guard ─────────────────────────────────────
+  useEffect(() => {
+    if (!editMode || !hasUnsavedChanges) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [editMode, hasUnsavedChanges]);
+
+  // ── Periodic unsaved changes reminder ─────────────────────────────────────
+  useEffect(() => {
+    if (!editMode || !hasUnsavedChanges) {
+      unsavedToastShownRef.current = false;
+      return;
+    }
+    const reminderTimer = setTimeout(() => {
+      if (hasUnsavedChanges && !unsavedToastShownRef.current) {
+        unsavedToastShownRef.current = true;
+        toast.warning("You have unsaved changes", {
+          description: "Click Save or press Ctrl+S to save your edits.",
+          duration: 5000,
+          action: {
+            label: "Save Now",
+            onClick: handleManualSave,
+          },
+        });
+      }
+    }, 30000);
+    return () => clearTimeout(reminderTimer);
+  }, [editMode, hasUnsavedChanges, handleManualSave]);
 
   // ── Loading / error states ────────────────────────────────────────────────
   if (!letterId || isNaN(letterId) || letterId <= 0) {
@@ -287,15 +355,17 @@ export default function ReviewDetail() {
     setEditContent(html);
     setEditMode(true);
     setHasUnsavedChanges(false);
+    setSaveStatus("idle");
     autoEnteredRef.current = true;
   };
 
   const cancelEdit = () => {
     if (hasUnsavedChanges) {
-      if (!window.confirm("Discard unsaved changes?")) return;
+      if (!window.confirm("You have unsaved changes. Discard them?")) return;
     }
     setEditMode(false);
     setHasUnsavedChanges(false);
+    setSaveStatus("idle");
   };
 
   const highlightCitationsInHtml = (html: string): string => {
@@ -319,6 +389,9 @@ export default function ReviewDetail() {
   };
 
   const openApproveDialog = () => {
+    if (hasUnsavedChanges) {
+      handleManualSave();
+    }
     const content = editMode
       ? editContent
       : plainTextToHtml(latestDraft?.content ?? "");
@@ -350,11 +423,6 @@ export default function ReviewDetail() {
                 {" · "}
                 Submitted {new Date(letter.createdAt).toLocaleDateString()}
               </span>
-              {hasUnsavedChanges && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                  Unsaved changes
-                </span>
-              )}
             </div>
           </div>
 
@@ -364,18 +432,22 @@ export default function ReviewDetail() {
             isUnderReview={isUnderReview}
             editMode={editMode}
             editContent={editContent}
+            hasUnsavedChanges={hasUnsavedChanges}
+            saveStatus={saveStatus}
+            lastSavedAt={lastSavedAt}
             claimIsPending={claimMutation.isPending}
             saveIsPending={saveMutation.isPending}
             unclaimIsPending={unclaimMutation.isPending}
             approvePending={approveMutation.isPending}
             onClaim={() => claimMutation.mutate({ letterId })}
             onCancelEdit={cancelEdit}
-            onSave={() => saveMutation.mutate({ letterId, content: htmlToPlainText(editContent) })}
+            onSave={handleManualSave}
             onEnterEditMode={enterEditMode}
             onRelease={() => {
-              if (window.confirm("Release this letter back to the review queue?")) {
-                unclaimMutation.mutate({ letterId });
+              if (hasUnsavedChanges) {
+                if (!window.confirm("You have unsaved changes. Release this letter anyway?")) return;
               }
+              unclaimMutation.mutate({ letterId });
             }}
             onRequestChanges={() => setChangesDialog(true)}
             onReject={() => setRejectDialog(true)}
@@ -430,14 +502,52 @@ export default function ReviewDetail() {
               <span className="text-sm font-medium text-foreground">
                 {editMode ? "Editing Draft" : "Initial Draft"}
               </span>
-              {latestDraft && (
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {latestDraft.versionType === "attorney_edit"
-                    ? "Attorney edit"
-                    : "System draft"}{" "}
-                  · {new Date(latestDraft.createdAt).toLocaleDateString()}
-                </span>
-              )}
+              <div className="ml-auto flex items-center gap-2">
+                {editMode && hasUnsavedChanges && (
+                  <span
+                    data-testid="indicator-unsaved"
+                    className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 py-1 rounded-full font-medium animate-pulse"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Unsaved changes
+                  </span>
+                )}
+                {editMode && saveStatus === "saving" && (
+                  <span
+                    data-testid="indicator-saving"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                  >
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Saving...
+                  </span>
+                )}
+                {editMode && saveStatus === "saved" && !hasUnsavedChanges && lastSavedAt && (
+                  <span
+                    data-testid="indicator-saved"
+                    className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    Saved {formatTimeAgo(lastSavedAt)}
+                  </span>
+                )}
+                {editMode && saveStatus === "error" && (
+                  <span
+                    data-testid="indicator-save-error"
+                    className="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400"
+                  >
+                    <AlertCircle className="w-3 h-3" />
+                    Save failed
+                  </span>
+                )}
+                {!editMode && latestDraft && (
+                  <span className="text-xs text-muted-foreground">
+                    {latestDraft.versionType === "attorney_edit"
+                      ? "Attorney edit"
+                      : "System draft"}{" "}
+                    · {new Date(latestDraft.createdAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Editor body */}
@@ -491,6 +601,9 @@ export default function ReviewDetail() {
                   onChange={html => {
                     setEditContent(html);
                     setHasUnsavedChanges(true);
+                    if (saveStatus === "saved" || saveStatus === "error") {
+                      setSaveStatus("idle");
+                    }
                   }}
                   editable={true}
                   placeholder="Edit the letter content..."
@@ -553,7 +666,7 @@ export default function ReviewDetail() {
               </TabsContent>
 
               <TabsContent value="citations" className="flex-1 overflow-auto mt-2">
-                <CitationAuditPanel citationAuditReport={citationAuditReport} />
+                <CitationAuditPanel report={citationAuditReport} />
               </TabsContent>
 
               <TabsContent value="counter-args" className="flex-1 overflow-auto mt-2">
@@ -590,7 +703,7 @@ export default function ReviewDetail() {
         onConfirm={() =>
           approveMutation.mutate({
             letterId,
-            finalContent: htmlToPlainText(approveContent),
+            finalContent: approveContent,
             ...(isResearchUnverified
               ? { acknowledgedUnverifiedResearch: acknowledgedUnverified }
               : {}),
@@ -625,4 +738,13 @@ export default function ReviewDetail() {
       />
     </AppLayout>
   );
+}
+
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
