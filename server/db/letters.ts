@@ -161,12 +161,13 @@ export async function getAllLetterRequests(filters?: {
 // ─── Valid Status Transitions (state machine) ───
 // Single source of truth: shared/types.ts — re-exported here for convenience
 import { ALLOWED_TRANSITIONS, isValidTransition } from "../../shared/types";
+import { logReviewAction } from "./review-actions";
 export { ALLOWED_TRANSITIONS as VALID_TRANSITIONS, isValidTransition };
 
 export async function updateLetterStatus(
   id: number,
   status: string,
-  options?: { assignedReviewerId?: number | null; force?: boolean }
+  options?: { assignedReviewerId?: number | null; force?: boolean; reason?: string }
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -180,6 +181,14 @@ export async function updateLetterStatus(
     updateData.assignedReviewerId = options.assignedReviewerId;
 
   if (options?.force) {
+    // Fetch current status before update for audit trail
+    const current = await db
+      .select({ status: letterRequests.status })
+      .from(letterRequests)
+      .where(eq(letterRequests.id, id))
+      .limit(1);
+    const fromStatus = current[0]?.status ?? "unknown";
+
     const result = await db
       .update(letterRequests)
       .set(updateData as any)
@@ -187,6 +196,21 @@ export async function updateLetterStatus(
       .returning({ id: letterRequests.id });
     if (result.length === 0) {
       throw new Error(`Letter ${id} not found`);
+    }
+
+    // Audit forced transitions so they appear in the review_actions trail
+    try {
+      await logReviewAction({
+        letterRequestId: id,
+        actorType: "system",
+        action: "force_transition",
+        fromStatus,
+        toStatus: status,
+        noteText: options.reason ?? `Forced transition: ${fromStatus} → ${status}`,
+        noteVisibility: "internal",
+      });
+    } catch {
+      // Non-blocking: audit failure should not break the status update
     }
     return;
   }

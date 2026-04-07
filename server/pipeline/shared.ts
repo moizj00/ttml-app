@@ -4,6 +4,91 @@ import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
 import { isOpenAIFailoverAvailable, isGroqFallbackAvailable } from "./providers";
 
+// ═══════════════════════════════════════════════════════
+// PROMPT INJECTION SANITIZATION
+// ═══════════════════════════════════════════════════════
+
+/** Max length per field injected into a prompt (prevents context overflow) */
+const MAX_FIELD_LENGTH = 10_000;
+
+/**
+ * Patterns that indicate prompt injection attempts.
+ * Matched case-insensitively against user-supplied text before prompt injection.
+ */
+const INJECTION_PATTERNS = [
+  /ignore\s+(all\s+)?previous\s+instructions/i,
+  /ignore\s+(all\s+)?above\s+instructions/i,
+  /disregard\s+(all\s+)?previous/i,
+  /you\s+are\s+now\s+(a|an)\s+/i,
+  /new\s+instructions?\s*:/i,
+  /system\s*:\s*/i,
+  /\[INST\]/i,
+  /\[\/INST\]/i,
+  /<\|im_start\|>/i,
+  /<\|im_end\|>/i,
+  /<\|system\|>/i,
+  /<\|user\|>/i,
+  /<\|assistant\|>/i,
+  /```\s*system\b/i,
+  /ASSISTANT:\s/i,
+  /HUMAN:\s/i,
+  /USER:\s/i,
+  /SYSTEM:\s/i,
+];
+
+/**
+ * Sanitize a user-supplied string before including it in an AI prompt.
+ * - Truncates to MAX_FIELD_LENGTH
+ * - Strips known prompt injection patterns
+ * - Logs a warning when suspicious content is detected
+ * Returns the sanitized string and whether any injection patterns were found.
+ */
+export function sanitizeForPrompt(
+  value: string,
+  fieldName?: string,
+  maxLength = MAX_FIELD_LENGTH
+): { sanitized: string; hadInjection: boolean } {
+  let sanitized = value.length > maxLength ? value.slice(0, maxLength) : value;
+  let hadInjection = false;
+
+  for (const pattern of INJECTION_PATTERNS) {
+    if (pattern.test(sanitized)) {
+      hadInjection = true;
+      sanitized = sanitized.replace(pattern, "[REDACTED]");
+    }
+  }
+
+  if (hadInjection) {
+    console.warn(
+      `[pipeline:sanitize] Prompt injection pattern detected in field "${fieldName ?? "unknown"}": input truncated/redacted`
+    );
+  }
+
+  return { sanitized, hadInjection };
+}
+
+/**
+ * Sanitize all string fields in an object (shallow) for prompt injection.
+ * Returns the sanitized object and whether any injection was detected.
+ */
+export function sanitizeObjectForPrompt<T extends Record<string, unknown>>(
+  obj: T,
+  prefix = ""
+): { sanitized: T; hadInjection: boolean } {
+  let hadInjection = false;
+  const sanitized = { ...obj };
+
+  for (const [key, value] of Object.entries(sanitized)) {
+    if (typeof value === "string") {
+      const result = sanitizeForPrompt(value, prefix ? `${prefix}.${key}` : key);
+      (sanitized as any)[key] = result.sanitized;
+      if (result.hadInjection) hadInjection = true;
+    }
+  }
+
+  return { sanitized, hadInjection };
+}
+
 export function formatStructuredError(
   code: PipelineErrorCode,
   message: string,

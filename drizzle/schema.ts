@@ -178,6 +178,7 @@ export const users = pgTable("users", {
   lastSignedIn: timestamp("last_signed_in", { withTimezone: true }).defaultNow().notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   freeReviewUsedAt: timestamp("free_review_used_at", { withTimezone: true }),
+  consentToTraining: boolean("consent_to_training").default(false).notNull(),
   subscriberId: varchar("subscriber_id", { length: 16 }).unique(),
   employeeId: varchar("employee_id", { length: 16 }).unique(),
   attorneyId: varchar("attorney_id", { length: 16 }).unique(),
@@ -226,6 +227,7 @@ export const letterRequests = pgTable("letter_requests", {
   index("idx_letter_requests_status").on(t.status),
   index("idx_letter_requests_assigned_reviewer_id").on(t.assignedReviewerId),
   index("idx_letter_requests_created_at").on(t.createdAt),
+  index("idx_letter_requests_status_reviewer").on(t.status, t.assignedReviewerId),
 ]);
 
 export type LetterRequest = typeof letterRequests.$inferSelect;
@@ -247,6 +249,7 @@ export const letterVersions = pgTable("letter_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_letter_versions_letter_request_id").on(t.letterRequestId),
+  index("idx_letter_versions_created_by").on(t.createdByUserId),
 ]);
 
 export type LetterVersion = typeof letterVersions.$inferSelect;
@@ -297,6 +300,7 @@ export const workflowJobs = pgTable("workflow_jobs", {
 }, (t) => [
   index("idx_workflow_jobs_letter_request_id").on(t.letterRequestId),
   index("idx_workflow_jobs_status").on(t.status),
+  index("idx_workflow_jobs_created_at").on(t.createdAt),
 ]);
 
 export type WorkflowJob = typeof workflowJobs.$inferSelect;
@@ -332,7 +336,7 @@ export type InsertResearchRun = typeof researchRuns.$inferInsert;
 export const attachments = pgTable("attachments", {
   id: serial("id").primaryKey(),
   letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
-  uploadedByUserId: integer("uploaded_by_user_id").notNull(),
+  uploadedByUserId: integer("uploaded_by_user_id").notNull().references(() => users.id, { onDelete: "set null" }),
   storagePath: varchar("storage_path", { length: 1000 }).notNull(),
   storageUrl: varchar("storage_url", { length: 2000 }),
   fileName: varchar("file_name", { length: 500 }).notNull(),
@@ -342,6 +346,7 @@ export const attachments = pgTable("attachments", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_attachments_letter_request_id").on(t.letterRequestId),
+  index("idx_attachments_uploaded_by").on(t.uploadedByUserId),
 ]);
 
 export type Attachment = typeof attachments.$inferSelect;
@@ -431,8 +436,8 @@ export type InsertDiscountCode = typeof discountCodes.$inferInsert;
 export const commissionLedger = pgTable("commission_ledger", {
   id: serial("id").primaryKey(),
   employeeId: integer("employee_id").references(() => users.id, { onDelete: "set null" }),
-  letterRequestId: integer("letter_request_id"),
-  subscriberId: integer("subscriber_id"),
+  letterRequestId: integer("letter_request_id").references(() => letterRequests.id, { onDelete: "set null" }),
+  subscriberId: integer("subscriber_id").references(() => users.id, { onDelete: "set null" }),
   discountCodeId: integer("discount_code_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
   saleAmount: integer("sale_amount").notNull(), // in cents
@@ -462,7 +467,7 @@ export const payoutRequests = pgTable("payout_requests", {
   paymentDetails: jsonb("payment_details"),
   status: payoutStatusEnum("status").default("pending").notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }),
-  processedBy: integer("processed_by"),
+  processedBy: integer("processed_by").references(() => users.id, { onDelete: "set null" }),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -507,7 +512,7 @@ export const pipelineLessons = pgTable("pipeline_lessons", {
   sourceAction: lessonSourceEnum("source_action").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   weight: integer("weight").default(50).notNull(),
-  createdByUserId: integer("created_by_user_id"),
+  createdByUserId: integer("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
   hitCount: integer("hit_count").default(1).notNull(),
   timesInjected: integer("times_injected").default(0).notNull(),
   consolidatedFromIds: integer("consolidated_from_ids").array(),
@@ -533,7 +538,7 @@ export type InsertPipelineLesson = typeof pipelineLessons.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const letterQualityScores = pgTable("letter_quality_scores", {
   id: serial("id").primaryKey(),
-  letterRequestId: integer("letter_request_id").notNull(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
   firstPassApproved: boolean("first_pass_approved").notNull(),
   revisionCount: integer("revision_count").default(0).notNull(),
   vettingPassCount: integer("vetting_pass_count").default(0).notNull(),
@@ -728,7 +733,7 @@ export type InsertLetterTemplate = typeof letterTemplates.$inferInsert;
 // ═══════════════════════════════════════════════════════
 export const intakeFormTemplates = pgTable("intake_form_templates", {
   id: serial("id").primaryKey(),
-  ownerUserId: integer("owner_user_id").notNull(),
+  ownerUserId: integer("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 200 }).notNull(),
   baseLetterType: letterTypeEnum("base_letter_type").notNull(),
   fieldConfig: jsonb("field_config").notNull(),

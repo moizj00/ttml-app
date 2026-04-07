@@ -140,7 +140,6 @@ media/
 
 # ── Test files & artifacts ──────────────────────────────────────────────────
 *_test.py
-*.test.ts
 test-*.mjs
 test-output-*
 test_reports/

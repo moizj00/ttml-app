@@ -13,6 +13,7 @@
  */
 
 import type { IntakeJson } from "../shared/types";
+import { sanitizeForPrompt } from "./pipeline/shared";
 
 interface LetterRequestDbFields {
   subject: string;
@@ -101,7 +102,7 @@ export function buildNormalizedPromptInput(
 ): NormalizedPromptInput {
   const intake = intakeJson ?? ({} as Partial<IntakeJson>);
 
-  return {
+  const result: NormalizedPromptInput = {
     schemaVersion: trimOrDefault((intake as any).schemaVersion, "1.0"),
     letterType: trimOrDefault(intake.letterType, dbFields.letterType),
     matterCategory: trimOrDefault(
@@ -176,6 +177,20 @@ export function buildNormalizedPromptInput(
         )
       : null,
   };
+
+  // Sanitize user-supplied free-text fields against prompt injection
+  const sanitize = (val: string, field: string) => sanitizeForPrompt(val, field).sanitized;
+
+  result.matter.subject = sanitize(result.matter.subject, "matter.subject");
+  result.matter.description = sanitize(result.matter.description, "matter.description");
+  result.desiredOutcome = sanitize(result.desiredOutcome, "desiredOutcome");
+  if (result.additionalContext) result.additionalContext = sanitize(result.additionalContext, "additionalContext");
+  if (result.evidenceSummary) result.evidenceSummary = sanitize(result.evidenceSummary, "evidenceSummary");
+  if (result.userStatements) result.userStatements = sanitize(result.userStatements, "userStatements");
+  if (result.priorCommunication) result.priorCommunication = sanitize(result.priorCommunication, "priorCommunication");
+  result.timeline = result.timeline.map((t, i) => sanitize(t, `timeline[${i}]`));
+
+  return result;
 }
 
 export type { NormalizedPromptInput };

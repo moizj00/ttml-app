@@ -1,5 +1,6 @@
+import { eq } from "drizzle-orm";
 import { getDb } from "../db/core";
-import { trainingLog } from "../../drizzle/schema";
+import { letterRequests, trainingLog, users } from "../../drizzle/schema";
 import { captureServerException } from "../sentry";
 import type { IntakeJson } from "../../shared/types";
 
@@ -87,6 +88,27 @@ export async function captureTrainingExample(
   approvedContent: string,
 ): Promise<void> {
   try {
+    // Check user consent before capturing training data
+    const db = await getDb();
+    if (db) {
+      const letter = await db
+        .select({ userId: letterRequests.userId })
+        .from(letterRequests)
+        .where(eq(letterRequests.id, letterId))
+        .limit(1);
+      const userId = letter[0]?.userId;
+      if (userId) {
+        const user = await db
+          .select({ consentToTraining: users.consentToTraining })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!user[0]?.consentToTraining) {
+          console.log(`[TrainingCapture] Skipping letter #${letterId} — user has not consented to training data usage`);
+          return;
+        }
+      }
+    }
     const example = buildTrainingExample(intake, approvedContent);
     const jsonlLine = JSON.stringify(example);
     const gcsPath = getPerExamplePath(letterId);
@@ -111,9 +133,9 @@ export async function captureTrainingExample(
       console.warn(`[TrainingCapture] GCS not configured — skipping upload for letter #${letterId}. Set GCS_TRAINING_BUCKET and GCP_PROJECT_ID.`);
     }
 
-    const db = await getDb();
-    if (db) {
-      await db.insert(trainingLog).values({
+    const dbForLog = await getDb();
+    if (dbForLog) {
+      await dbForLog.insert(trainingLog).values({
         letterRequestId: letterId,
         letterType,
         jurisdiction,

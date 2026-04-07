@@ -217,7 +217,8 @@ export function paymentRateLimitMiddleware(
   next: NextFunction
 ): void {
   const ip = getClientIp(req);
-  checkLimit(getPaymentLimiter(), ip, res).then((allowed) => {
+  // Fail-closed: deny payment requests when Redis is unavailable
+  checkLimit(getPaymentLimiter(), ip, res, false).then((allowed) => {
     if (allowed) next();
   }).catch(() => next());
 }
