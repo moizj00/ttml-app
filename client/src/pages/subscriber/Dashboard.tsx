@@ -1,5 +1,6 @@
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import OnboardingModal from "@/components/OnboardingModal";
 import UpgradeBanner from "@/components/UpgradeBanner";
 import { trpc } from "@/lib/trpc";
@@ -13,10 +14,8 @@ import {
   AlertCircle,
   ArrowRight,
   Search,
-  Pen,
   Lock,
   Eye,
-  ShieldCheck,
   XCircle,
   Download,
   CreditCard,
@@ -48,27 +47,6 @@ const ACTIVE_STATUSES = [
   "client_revision_requested",
 ];
 
-// Pipeline stages in order for the progress stepper
-const PIPELINE_STAGES = [
-  { key: "submitted", label: "Submitted", icon: FileText },
-  { key: "researching", label: "Research", icon: Search },
-  { key: "drafting", label: "Drafting", icon: Pen },
-  { key: "generated_locked", label: "Unlock", icon: Lock },
-  { key: "pending_review", label: "Review", icon: Eye },
-  { key: "under_review", label: "Attorney", icon: ShieldCheck },
-  { key: "approved", label: "Approved", icon: CheckCircle },
-] as const;
-
-// Map status to pipeline stage index
-function getStageIndex(status: string): number {
-  const idx = PIPELINE_STAGES.findIndex(s => s.key === status);
-  if (status === "needs_changes") return 5;
-  if (status === "rejected" || status === "client_declined") return 6;
-  if (status === "client_approval_pending") return 6;
-  if (status === "client_revision_requested") return 5;
-  if (status === "client_approved" || status === "sent") return 6;
-  return idx >= 0 ? idx : 0;
-}
 
 // CTA config per status
 function getStatusCTA(status: string, letterId: number) {
@@ -189,102 +167,6 @@ function timeAgo(dateStr: string | number): string {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
   return `${Math.floor(days / 7)}w ago`;
-}
-
-// Progress stepper component
-function PipelineStepper({ status }: { status: string }) {
-  const currentIdx = getStageIndex(status);
-  const isTerminalBad = status === "rejected" || status === "client_declined";
-  const isNeedsChanges = status === "needs_changes";
-
-  return (
-    <div className="flex min-w-136 items-center gap-0 sm:min-w-0 sm:w-full">
-      {PIPELINE_STAGES.map((stage, idx) => {
-        const isComplete = idx < currentIdx;
-        const isCurrent = idx === currentIdx;
-        const isActive =
-          isCurrent &&
-          [
-            "researching",
-            "drafting",
-            "pending_review",
-            "under_review",
-          ].includes(status);
-        const isPaywall = isCurrent && status === "generated_locked";
-        const isApproved = isCurrent && status === "approved";
-
-        const Icon = stage.icon;
-
-        return (
-          <div
-            key={stage.key}
-            className="flex items-center flex-1 last:flex-none"
-          >
-            {/* Step circle */}
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  isComplete
-                    ? "bg-emerald-500 text-white"
-                    : isApproved
-                      ? "bg-emerald-500 text-white ring-2 ring-emerald-200"
-                      : isTerminalBad && isCurrent
-                        ? "bg-red-500 text-white ring-2 ring-red-200"
-                        : isNeedsChanges && isCurrent
-                          ? "bg-amber-500 text-white ring-2 ring-amber-200"
-                          : isPaywall
-                            ? "bg-amber-500 text-white ring-2 ring-amber-200 animate-pulse"
-                            : isActive
-                              ? "bg-blue-500 text-white ring-2 ring-blue-200"
-                              : isCurrent
-                                ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
-                                : "bg-muted text-muted-foreground/40"
-                }`}
-              >
-                {isComplete ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : isActive ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Icon className="w-3.5 h-3.5" />
-                )}
-              </div>
-              {/* Label - hidden on mobile, shown on sm+ */}
-              <span
-                className={`hidden sm:block text-[10px] mt-1 text-center leading-tight ${
-                  isComplete
-                    ? "text-emerald-600 font-medium"
-                    : isCurrent
-                      ? isPaywall
-                        ? "text-amber-600 font-semibold"
-                        : isActive
-                          ? "text-blue-600 font-semibold"
-                          : isApproved
-                            ? "text-emerald-600 font-semibold"
-                            : isTerminalBad
-                              ? "text-red-600 font-semibold"
-                              : isNeedsChanges
-                                ? "text-amber-600 font-semibold"
-                                : "text-foreground font-medium"
-                      : "text-muted-foreground/40"
-                }`}
-              >
-                {stage.label}
-              </span>
-            </div>
-            {/* Connector line */}
-            {idx < PIPELINE_STAGES.length - 1 && (
-              <div
-                className={`flex-1 h-0.5 mx-1 rounded transition-all duration-300 ${
-                  idx < currentIdx ? "bg-emerald-500" : "bg-border"
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function SubscriberDashboard() {
@@ -711,8 +593,8 @@ export default function SubscriberDashboard() {
                       </div>
 
                       {/* Pipeline stepper */}
-                      <div className="overflow-x-auto px-4 py-3">
-                        <PipelineStepper status={letter.status} />
+                      <div className="px-4 py-3">
+                        <LetterStatusTracker status={letter.status} size="standard" />
                       </div>
 
                       {/* Bottom: CTA button */}

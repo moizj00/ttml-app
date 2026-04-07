@@ -1,6 +1,6 @@
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
-import LetterProgressBar from "@/components/shared/LetterProgressBar";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -900,30 +900,10 @@ export default function LetterDetail() {
         {/* Status Timeline */}
         <Card>
           <CardContent className="p-5">
-            <LetterProgressBar status={letter.status} />
+            <LetterStatusTracker status={letter.status} size="expanded" />
           </CardContent>
         </Card>
 
-        {/* ── In-progress: intake received, waiting for draft ── */}
-        {["submitted", "researching", "drafting"].includes(letter.status) && (
-          <Card className="border-blue-200 bg-blue-50/30">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <Clock className="w-4 h-4 text-blue-700" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-blue-800">
-                    Your intake has been received and is under review
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Our team will prepare your draft letter. You'll receive an email with a direct link when it's ready — typically within 24 hours.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* ── PAYWALL: generated_locked — blurred draft + $299 CTA ── */}
         {isGeneratedLocked && (
@@ -969,26 +949,6 @@ export default function LetterDetail() {
           </Card>
         )}
 
-        {/* ── Pending / Under Review ── */}
-        {["pending_review", "under_review"].includes(letter.status) && (
-          <Card className="border-amber-200 bg-amber-50/30">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-amber-800">
-                    {letter.status === "pending_review" ? "In the Attorney Review Queue" : "Attorney is Reviewing Your Letter"}
-                  </p>
-                  <p className="text-sm text-amber-700 mt-1">
-                    {letter.status === "pending_review"
-                      ? "Your letter is in the queue. A licensed attorney will pick it up shortly."
-                      : "A licensed attorney has claimed your letter and is currently reviewing and editing it. You'll be notified by email once it's approved."}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Attorney Notes (user-visible only) */}
         {!isGeneratedLocked && userVisibleActions && userVisibleActions.length > 0 && (

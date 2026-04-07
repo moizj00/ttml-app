@@ -1,5 +1,6 @@
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
+import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,8 @@ import {
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const ACTIVE_STATUSES = ["submitted", "researching", "drafting"];
 const NEEDS_APPROVAL_STATUSES = ["client_approval_pending"];
@@ -59,6 +62,8 @@ function getQuickActions(letter: any) {
 
 export default function MyLetters() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
   const { data: letters, isLoading } = trpc.letters.myLetters.useQuery(undefined, {
     refetchInterval: (query) => {
       const list = query.state.data;
@@ -69,6 +74,12 @@ export default function MyLetters() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sort, setSort] = useState<SortKey>("date_desc");
+
+  useLetterListRealtime({
+    userId: user?.id,
+    onAnyChange: () => utils.letters.myLetters.invalidate(),
+    enabled: !!user?.id,
+  });
 
   const filtered = sortLetters(
     (letters ?? []).filter((l) => {
@@ -286,6 +297,11 @@ export default function MyLetters() {
                           })}
                         </div>
                       )}
+
+                      {/* Compact progress tracker */}
+                      <div className="mt-2.5 w-full">
+                        <LetterStatusTracker status={letter.status} size="compact" />
+                      </div>
 
                       {/* No action — view link */}
                       {quickActions.length === 0 && (
