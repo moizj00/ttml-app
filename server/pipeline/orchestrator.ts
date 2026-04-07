@@ -3,6 +3,7 @@ import {
   updateWorkflowJob,
   updateLetterStatus,
   hasLetterBeenPreviouslyUnlocked,
+  isUserFirstLetterEligible,
   getLetterRequestById as getLetterById,
   getAllUsers,
   getUserById,
@@ -653,6 +654,7 @@ export async function bestEffortFallback(opts: {
       if (letterRecord && !wasAlreadyUnlocked && letterRecord.userId != null) {
         const subscriber = await getUserById(letterRecord.userId);
         if (subscriber?.email) {
+          const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterRecord.userId!);
           sendLetterReadyEmail({
             to: subscriber.email,
             name: subscriber.name ?? "Subscriber",
@@ -661,6 +663,7 @@ export async function bestEffortFallback(opts: {
             appUrl: process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
             letterType: letterRecord.letterType ?? undefined,
             jurisdictionState: letterRecord.jurisdictionState ?? undefined,
+            isFirstLetter,
           }).catch(e => console.error(`[Pipeline] Failed to send letter-ready email for fallback #${letterId}:`, e));
         }
       }

@@ -63,8 +63,8 @@ function getStatusCTA(status: string, letterId: number) {
       };
     case "generated_locked":
       return {
-        label: "Pay to Unlock \u2014 $299",
-        icon: CreditCard,
+        label: "View Draft",
+        icon: FileText,
         variant: "default" as const,
         href: `/letters/${letterId}`,
         animate: false,

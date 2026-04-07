@@ -118,6 +118,7 @@ import {
   createCheckoutSession,
   createBillingPortalSession,
   createLetterUnlockCheckout,
+  createFirstLetterReviewCheckout,
   createTrialReviewCheckout,
   getUserSubscription,
   checkLetterSubmissionAllowed,
@@ -308,12 +309,13 @@ export const billingRouter = router({
       });
       return { url };
     }),
-    // ─── Check paywall status: free | subscription_required | subscribed ───
+    // ─── Check paywall status: free_review_available | subscription_required | subscribed ───
     /**
      * Returns the paywall state for the current user:
-     *   - "free"                  — first letter, free trial not yet used
+     *   - "free_review_available" — first letter, eligible for $50 attorney review offer
      *   - "subscribed"            — active monthly/annual plan (bypass paywall entirely)
-     *   - "subscription_required" — free trial already used, no active recurring subscription
+     *   - "free_trial_used"       — first letter review already used/paid
+     *   - "subscription_required" — not subscribed and not first-letter eligible
      *   - "pay_per_letter"        — legacy fallback; same action as subscription_required
      */
     checkPaywallStatus: subscriberProcedure.query(async ({ ctx }) => {
@@ -321,10 +323,13 @@ export const billingRouter = router({
       const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
       if (isSubscribed)
         return { state: "subscribed" as const, eligible: false };
-      // 2. Explicit free-trial-used marker (fast path — no letter count query needed)
-      if (ctx.user.freeReviewUsedAt)
-        return { state: "free_trial_used" as const, eligible: false };
-      // 3. Derive from letter history for users created before the freeReviewUsedAt column
+      // 2. Derive first-letter eligibility from letter history.
+      //    A user is still eligible for the $50 first-letter review if NONE of their
+      //    letters have progressed past generated_locked (i.e., been paid for / unlocked).
+      //    NOTE: We do NOT use freeReviewUsedAt here because claimFreeTrialSlot sets it
+      //    at submission time (to prevent concurrent free submissions), before the user
+      //    has had a chance to see their draft and pay. The letter history query is the
+      //    authoritative check for paywall display.
       const db = await (await import("../db")).getDb();
       if (!db) return { state: "subscription_required" as const, eligible: false };
       const { letterRequests } = await import("../../drizzle/schema");
@@ -345,7 +350,7 @@ export const billingRouter = router({
           )
         );
       if (unlockedLetters.length === 0)
-        return { state: "free" as const, eligible: true };
+        return { state: "free_review_available" as const, eligible: true };
       return { state: "free_trial_used" as const, eligible: false };
     }),
     // ─── Legacy alias: kept for backward compat (LetterPaywall still calls this) ───
@@ -374,35 +379,47 @@ export const billingRouter = router({
       return { eligible: paidLetters.length === 0 };
     }),
 
-    // ─── Free unlock: first letter goes directly to pending_review ───
+    // ─── Free unlock: DEPRECATED — first letter now requires $50 or a subscription ───
+    // This mutation is kept for backward compatibility but always rejects.
+    // Use payFirstLetterReview (for $50 gate) or subscriptionSubmit (for subscribers).
     freeUnlock: verifiedSubscriberProcedure
       .input(z.object({ letterId: z.number() }))
+      .mutation(async () => {
+        return {
+          ok: false as const,
+          nextState: "payment_required" as const,
+          message:
+            "The free first letter offer has ended. Please pay $50 for attorney review or subscribe to a plan.",
+        };
+      }),
+
+    // ─── Pay $50 for first letter attorney review ───
+    payFirstLetterReview: verifiedSubscriberProcedure
+      .input(z.object({ letterId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const letter = await getLetterRequestSafeForSubscriber(
-          input.letterId,
-          ctx.user.id
-        );
-        if (!letter)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Letter not found",
-          });
-        if (letter.status !== "generated_locked")
+        // Rate limit: 10 payment attempts per hour per user
+        await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
+
+        // Must not have active recurring subscription (use subscriptionSubmit instead)
+        const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
+        if (isSubscribed) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Letter is not in generated_locked status",
+            message: "You have an active subscription. Use the subscription submit flow instead.",
           });
+        }
 
-        // Verify they actually qualify for free first letter
+        // Enforce first-letter eligibility using letter history.
+        // A user is eligible for the $50 review if NONE of their letters have
+        // progressed past generated_locked (i.e., been paid for / unlocked).
+        // NOTE: We do NOT use freeReviewUsedAt here because claimFreeTrialSlot
+        // sets it at submission time to prevent concurrent free submissions,
+        // before the user has had a chance to see their draft and pay $50.
         const db = await (await import("../db")).getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
         const { letterRequests } = await import("../../drizzle/schema");
-        const {
-          eq: eqOp,
-          and: andOp,
-          notInArray: notInOp,
-        } = await import("drizzle-orm");
-        const paidLetters = await db
+        const { eq: eqOp, and: andOp, notInArray: notInOp } = await import("drizzle-orm");
+        const unlockedLetters = await db
           .select({ id: letterRequests.id })
           .from(letterRequests)
           .where(
@@ -413,81 +430,36 @@ export const billingRouter = router({
                 "researching",
                 "drafting",
                 "generated_locked",
+                "pipeline_failed",
               ])
             )
           );
-        // Return structured state instead of throwing so the frontend can switch
-        // directly to the subscribe/pay CTA without showing an error toast.
-        if (paidLetters.length > 0 || ctx.user.freeReviewUsedAt) {
-          return {
-            ok: false as const,
-            nextState: "subscription_required" as const,
-            message:
-              "Your free first letter has already been used. Please subscribe or pay per letter.",
-          };
+        if (unlockedLetters.length > 0) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "The $50 first-letter offer is only available for your first letter. Please subscribe to continue.",
+          });
         }
 
-        // Transition to pending_review
-        await updateLetterStatus(input.letterId, "pending_review");
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "free_unlock",
-          noteText: "First letter — free attorney review (promotional)",
-          noteVisibility: "internal",
-          fromStatus: "generated_locked",
-          toStatus: "pending_review",
+        // Ownership + status guard
+        const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
+        if (!letter)
+          throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
+        if (letter.status !== "generated_locked")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Letter is not in generated_locked status",
+          });
+
+        const origin = getAppUrl(ctx.req);
+        const result = await createFirstLetterReviewCheckout({
+          userId: ctx.user.id,
+          email: ctx.user.email ?? "",
+          name: ctx.user.name,
+          letterId: input.letterId,
+          origin,
         });
-
-        // Mark the free trial as used so future checkPaywallStatus calls are fast
-        const { setFreeReviewUsed } = await import("../db");
-        await setFreeReviewUsed(ctx.user.id);
-        // Invalidate user cache so next request reflects the updated freeReviewUsedAt
-        invalidateUserCache(ctx.user.openId);
-
-        // Send unlock confirmation to subscriber
-        try {
-          await sendLetterUnlockedEmail({
-            to: ctx.user.email ?? "",
-            name: ctx.user.name ?? "Subscriber",
-            subject: letter.subject,
-            letterId: input.letterId,
-            appUrl: getAppUrl(ctx.req),
-          });
-        } catch (e) {
-          console.error("[freeUnlock] Subscriber email error:", e);
-          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_email_failed" } });
-        }
-        // Notify all attorneys (email + in-app) that a new letter is ready for review
-        console.log(`[freeUnlock] Letter #${input.letterId} transitioning generated_locked → pending_review via free unlock`);
-        try {
-          await notifyAllAttorneys({
-            letterId: input.letterId,
-            letterSubject: letter.subject,
-            letterType: letter.letterType,
-            jurisdiction: letter.jurisdictionState ?? "Unknown",
-            appUrl: getAppUrl(ctx.req),
-          });
-        } catch (e) {
-          console.error("[freeUnlock] Attorney notification error:", e);
-          captureServerException(e, { tags: { component: "letters", error_type: "free_unlock_attorney_notify_failed" } });
-        }
-
-        try {
-          await notifyAdmins({
-            category: "letters",
-            type: "free_unlock",
-            title: `Free unlock — letter #${input.letterId} enters review queue`,
-            body: `${ctx.user.name ?? "A subscriber"} used free first letter for "${letter.subject}". Now pending review.`,
-            link: `/admin/letters/${input.letterId}`,
-          });
-        } catch (err) {
-          console.error("[notifyAdmins] free_unlock:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_free_unlock" } });
-        }
-
-        return { ok: true as const, free: true };
+        return result;
       }),
 
     // ─── Payment History: fetch from Stripe ───

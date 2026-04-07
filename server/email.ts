@@ -837,6 +837,7 @@ export async function sendLetterReadyEmail(opts: {
   appUrl: string;
   letterType?: string;
   jurisdictionState?: string;
+  isFirstLetter?: boolean;
 }) {
   const dispatched = await dispatchToWorker({ type: "letter_ready", ...opts });
   if (dispatched) return;
@@ -849,9 +850,26 @@ export async function sendLetterReadyEmail(opts: {
     ? `<p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Jurisdiction:</strong> ${opts.jurisdictionState}</p>`
     : "";
 
+  const priceLabel = opts.isFirstLetter ? "$50" : "$299";
+  const firstLetterBadge = opts.isFirstLetter
+    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%"
+        style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;margin:0 0 16px;">
+        <tr><td style="padding:14px 18px;">
+          <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#065F46;font-weight:700;">
+            🎉 First Letter Special — Only $50 for Attorney Review
+          </p>
+          <p style="margin:6px 0 0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#047857;">
+            As a first-time user, you get attorney review at a reduced rate of $50 (normally $299). Or subscribe to a plan and get it included free.
+          </p>
+        </td></tr>
+      </table>`
+    : "";
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Your letter draft is ready for your review. Click the button below to view it and proceed to attorney review.</p>
+
+    ${firstLetterBadge}
 
     <!-- Letter summary card -->
     <table border="0" cellpadding="0" cellspacing="0" width="100%"
@@ -866,7 +884,7 @@ export async function sendLetterReadyEmail(opts: {
     </table>
 
     <!-- What's included -->
-    <p style="margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:15px;font-weight:700;color:#0F2744;">What's included with attorney review ($299):</p>
+    <p style="margin:0 0 12px;font-family:Inter,Arial,sans-serif;font-size:15px;font-weight:700;color:#0F2744;">What's included with attorney review (${priceLabel}):</p>
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;">
       <tr>
         <td width="28" valign="top" style="padding:4px 8px 8px 0;font-size:16px;">⚖️</td>
@@ -899,29 +917,39 @@ export async function sendLetterReadyEmail(opts: {
       style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;margin:0 0 8px;">
       <tr><td style="padding:14px 18px;">
         <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#1D4ED8;">
-          Your draft is ready and waiting. Click the button below to view a preview and complete your payment to submit for attorney review.
+          Your draft is ready and waiting. Click the button below to view a preview and submit for attorney review.
         </p>
       </td></tr>
     </table>
   `;
 
+  const emailSubjectLine = opts.isFirstLetter
+    ? `[${APP_NAME}] Your first letter draft is ready — attorney review for just $50`
+    : `[${APP_NAME}] Your letter draft is ready — submit for attorney review`;
+  const preheaderText = opts.isFirstLetter
+    ? `Your first letter draft is ready — get attorney review for just $50 (or subscribe to waive the fee).`
+    : `Your letter draft is ready — submit for attorney review for $299.`;
+  const ctaButtonText = opts.isFirstLetter
+    ? "View Draft & Get Attorney Review — $50"
+    : "View Draft & Submit for Review — $299";
+
   const html = buildEmailHtml({
-    preheader: `Your letter draft is ready — submit for attorney review for $299.`,
+    preheader: preheaderText,
     title: "Your Letter Draft Is Ready",
     body,
-    ctaText: "View Draft & Submit for Review — $299",
+    ctaText: ctaButtonText,
     ctaUrl,
     accentColor: "#D97706",
   });
 
   await sendEmail({
     to: opts.to,
-    subject: `[${APP_NAME}] Your letter draft is ready — submit for attorney review`,
+    subject: emailSubjectLine,
     html,
     text: buildPlainText({
       title: "Your Letter Draft Is Ready",
-      body: `Hello ${opts.name},\n\nYour letter draft "${opts.subject}" (Letter #${opts.letterId}) is ready for attorney review.\n\nWhat's included with attorney review ($299):\n- Licensed attorney review\n- Professional edits included\n- PDF delivered to your account\n- Legally sound and jurisdiction-specific\n\nClick below to view a preview of your draft and submit for attorney review.`,
-      ctaText: "View Draft & Submit for Review — $299",
+      body: `Hello ${opts.name},\n\nYour letter draft "${opts.subject}" (Letter #${opts.letterId}) is ready for attorney review.\n\n${opts.isFirstLetter ? "As a first-time user, you get attorney review for just $50 (normally $299). Or subscribe to a plan to get it included free.\n\n" : ""}What's included with attorney review (${priceLabel}):\n- Licensed attorney review\n- Professional edits included\n- PDF delivered to your account\n- Legally sound and jurisdiction-specific\n\nClick below to view a preview of your draft and submit for attorney review.`,
+      ctaText: ctaButtonText,
       ctaUrl,
     }),
   });
@@ -943,6 +971,7 @@ export async function sendPaywallNotificationEmail(opts: {
   appUrl: string;
   letterType?: string;
   jurisdictionState?: string;
+  isFirstLetter?: boolean;
 }) {
   const dispatched = await dispatchToWorker({ type: "paywall_notification", ...opts });
   if (dispatched) return;
@@ -955,15 +984,32 @@ export async function sendPaywallNotificationEmail(opts: {
     ? `<p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Jurisdiction:</strong> ${opts.jurisdictionState}</p>`
     : "";
 
+  const priceLabel = opts.isFirstLetter ? "$50" : "$299";
+  const firstLetterBanner = opts.isFirstLetter
+    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%"
+        style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;margin:0 0 16px;">
+        <tr><td style="padding:14px 18px;">
+          <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#065F46;font-weight:700;">
+            🎉 First Letter Special — Only $50 for Attorney Review
+          </p>
+          <p style="margin:6px 0 0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#047857;">
+            Your first letter gets attorney review for just $50 instead of $299. Or subscribe to a plan and get it included free.
+          </p>
+        </td></tr>
+      </table>`
+    : "";
+
   const body = `
     <p>Hello ${opts.name},</p>
     <p>Great news — your legal letter draft is ready and waiting for you. A licensed attorney is standing by to review, strengthen, and approve it.</p>
+
+    ${firstLetterBanner}
 
     <!-- Letter summary card -->
     <table border="0" cellpadding="0" cellspacing="0" width="100%"
       style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:10px;margin:20px 0;">
       <tr><td style="padding:20px;">
-        <p style="margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#0369A1;font-weight:700;">📋 Your Draft is Ready — Unlock for Attorney Review</p>
+        <p style="margin:0 0 10px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#0369A1;font-weight:700;">📋 Your Draft is Ready — Submit for Attorney Review</p>
         <p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Letter:</strong> ${opts.subject}</p>
         <p style="margin:0 0 6px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;"><strong>Type:</strong> ${letterTypeLabel}</p>
         ${jurisdictionLine}
@@ -977,13 +1023,13 @@ export async function sendPaywallNotificationEmail(opts: {
       <tr>
         <td width="28" valign="top" style="padding:4px 8px 8px 0;font-size:16px;">🔒</td>
         <td style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;padding-bottom:8px;">
-          <strong>View your locked draft</strong> — click below to see a preview of your letter
+          <strong>View your draft preview</strong> — click below to see your letter
         </td>
       </tr>
       <tr>
         <td width="28" valign="top" style="padding:4px 8px 8px 0;font-size:16px;">💳</td>
         <td style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#374151;padding-bottom:8px;">
-          <strong>Unlock for attorney review</strong> — $299 one-time, or subscribe for unlimited letters
+          <strong>Submit for attorney review</strong> — ${priceLabel} one-time, or subscribe for unlimited letters
         </td>
       </tr>
       <tr>
@@ -1005,30 +1051,36 @@ export async function sendPaywallNotificationEmail(opts: {
       style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;margin:0 0 8px;">
       <tr><td style="padding:14px 18px;">
         <p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:14px;color:#1D4ED8;">
-          <strong>Attorney review — $299 one-time payment</strong> or subscribe for unlimited letters.
+          <strong>Attorney review — ${priceLabel} one-time payment</strong> or subscribe for unlimited letters.
           Legal matters are time-sensitive — your draft is ready right now.
         </p>
       </td></tr>
     </table>
   `;
 
+  const emailSubjectLine = opts.isFirstLetter
+    ? `[${APP_NAME}] Your first draft is ready — get attorney review for $50`
+    : `[${APP_NAME}] Your letter is ready — view and unlock for attorney review`;
+
   const html = buildEmailHtml({
-    preheader: `Your letter draft is ready — unlock it for attorney review.`,
-    title: "Your Letter Draft Is Ready! 🎉",
+    preheader: opts.isFirstLetter
+      ? `Your first letter draft is ready — attorney review for just $50.`
+      : `Your letter draft is ready — unlock it for attorney review.`,
+    title: "Your Letter Draft Is Ready!",
     body,
-    ctaText: "View & Unlock Your Letter",
+    ctaText: "View Draft & Submit for Review",
     ctaUrl,
     accentColor: "#2563EB",
   });
 
   await sendEmail({
     to: opts.to,
-    subject: `[${APP_NAME}] Your letter is ready — view and unlock for attorney review`,
+    subject: emailSubjectLine,
     html,
     text: buildPlainText({
       title: "Your Letter Draft Is Ready!",
-      body: `Hello ${opts.name},\n\nYour legal letter draft is ready and waiting for you.\n\nLetter: "${opts.subject}"\nType: ${letterTypeLabel}\nLetter ID: #${opts.letterId}\n\nClick the link below to view a preview of your letter and unlock it for attorney review.\n\nUnlock options:\n- $299 one-time payment for attorney review\n- Subscribe for unlimited letters\n\nA licensed attorney will review, edit, and approve your letter. Legal matters are time-sensitive — act now.`,
-      ctaText: "View & Unlock Your Letter",
+      body: `Hello ${opts.name},\n\nYour legal letter draft is ready and waiting for you.\n\nLetter: "${opts.subject}"\nType: ${letterTypeLabel}\nLetter ID: #${opts.letterId}\n\n${opts.isFirstLetter ? "First Letter Special: Attorney review for just $50 (normally $299). Or subscribe to get it free.\n\n" : ""}Click the link below to view a preview of your letter and submit for attorney review.\n\nOptions:\n- ${priceLabel} one-time payment for attorney review\n- Subscribe for unlimited letters\n\nA licensed attorney will review, edit, and approve your letter. Legal matters are time-sensitive — act now.`,
+      ctaText: "View Draft & Submit for Review",
       ctaUrl,
     }),
   });

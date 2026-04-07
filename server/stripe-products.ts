@@ -32,6 +32,16 @@ export interface PlanConfig {
 /** Price in cents for a single letter unlock ($299) */
 export const LETTER_UNLOCK_PRICE_CENTS = 29900; // $299
 
+/** Price in cents for the first-letter attorney review fee ($50) */
+export const FIRST_LETTER_REVIEW_PRICE_CENTS = 5000; // $50
+
+/**
+ * Stripe product/price IDs for the $50 first-letter attorney review fee.
+ * Created inline via price_data in checkout sessions (no pre-registered price ID required).
+ * This constant documents the plan_id used in Stripe session metadata for this payment type.
+ */
+export const FIRST_LETTER_REVIEW_PLAN_ID = "first_letter_review";
+
 /** Price in cents for Monthly ($299/month) */
 export const MONTHLY_PRICE_CENTS = 29900; // $299
 

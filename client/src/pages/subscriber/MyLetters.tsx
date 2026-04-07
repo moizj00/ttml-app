@@ -49,7 +49,7 @@ function getQuickActions(letter: any) {
   }
 
   if (letter.status === "generated_locked") {
-    actions.push({ label: "Pay to Unlock — $299", icon: CreditCard, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
+    actions.push({ label: "View Draft", icon: FileText, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
   }
 
   // Subscriber revision requested — waiting for attorney

@@ -9,6 +9,7 @@ import {
   markPriorPipelineRunsSuperseded,
   getLetterRequestById as getLetterById,
   hasLetterBeenPreviouslyUnlocked,
+  isUserFirstLetterEligible,
   getAllUsers,
   getUserById,
   createNotification,
@@ -974,6 +975,7 @@ export async function finalizeLetterAfterVetting(
     if (letterForPaywall && !letterForPaywall.submittedByAdmin && !wasAlreadyUnlocked && letterForPaywall.userId != null) {
       const subscriber = await getUserById(letterForPaywall.userId);
       if (subscriber?.email) {
+        const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterForPaywall.userId);
         sendLetterReadyEmail({
           to: subscriber.email,
           name: subscriber.name ?? "Subscriber",
@@ -982,6 +984,7 @@ export async function finalizeLetterAfterVetting(
           appUrl: process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
           letterType: letterForPaywall.letterType ?? undefined,
           jurisdictionState: letterForPaywall.jurisdictionState ?? undefined,
+          isFirstLetter,
         }).catch(e => console.error(`[Pipeline] Failed to send letter-ready email for #${letterId}:`, e));
       }
     }

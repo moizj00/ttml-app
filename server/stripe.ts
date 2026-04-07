@@ -14,6 +14,8 @@ import {
   LETTER_UNLOCK_PRICE_CENTS,
   MONTHLY_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
+  FIRST_LETTER_REVIEW_PRICE_CENTS as FIRST_LETTER_REVIEW_CENTS,
+  FIRST_LETTER_REVIEW_PLAN_ID,
 } from "./stripe-products";
 
 /**
@@ -541,6 +543,67 @@ export async function createLetterUnlockCheckout(params: {
     },
     success_url: `${origin}/subscriber/letters/${letterId}?unlocked=true`,
     cancel_url: `${origin}/subscriber/letters/${letterId}?canceled=true`,
+  });
+
+  if (!session.url) throw new Error("Stripe did not return a checkout URL");
+  return { url: session.url, sessionId: session.id };
+}
+
+// ─── First Letter Review Checkout ($50 attorney review gate) ─────────────────
+/**
+ * Creates a one-time $50 Stripe Checkout session for attorney review of the user's
+ * first letter. The letter_id is stored in session metadata so the webhook can
+ * transition it from generated_locked → pending_review after payment.
+ */
+export async function createFirstLetterReviewCheckout(params: {
+  userId: number;
+  email: string;
+  name?: string | null;
+  letterId: number;
+  origin: string;
+}): Promise<{ url: string; sessionId: string }> {
+  const { userId, email, name, letterId, origin } = params;
+  const stripe = getStripe();
+  const customerId = await getOrCreateStripeCustomer(userId, email, name);
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    client_reference_id: userId.toString(),
+    mode: "payment",
+    payment_method_types: ["card"],
+    metadata: {
+      user_id: userId.toString(),
+      plan_id: FIRST_LETTER_REVIEW_PLAN_ID,
+      letter_id: letterId.toString(),
+      unlock_type: FIRST_LETTER_REVIEW_PLAN_ID,
+      customer_email: email,
+      customer_name: name ?? "",
+    },
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "Attorney Review — First Letter ($50)",
+            description:
+              "One-time attorney review fee for your first letter. A licensed attorney will review, edit, and approve your draft.",
+            metadata: { plan_id: FIRST_LETTER_REVIEW_PLAN_ID, letter_id: letterId.toString() },
+          },
+          unit_amount: FIRST_LETTER_REVIEW_CENTS,
+        },
+        quantity: 1,
+      },
+    ],
+    payment_intent_data: {
+      metadata: {
+        user_id: userId.toString(),
+        plan_id: FIRST_LETTER_REVIEW_PLAN_ID,
+        letter_id: letterId.toString(),
+        unlock_type: FIRST_LETTER_REVIEW_PLAN_ID,
+      },
+    },
+    success_url: `${origin}/letters/${letterId}?first_review_paid=true`,
+    cancel_url: `${origin}/letters/${letterId}?canceled=true`,
   });
 
   if (!session.url) throw new Error("Stripe did not return a checkout URL");

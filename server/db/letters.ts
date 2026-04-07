@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { captureServerException } from "../sentry";
 import {
   adminVerificationCodes,
@@ -380,6 +380,35 @@ export async function countCompletedLetters(
     .from(letterRequests)
     .where(and(...conditions));
   return Number(result[0]?.count ?? 0);
+}
+
+/**
+ * Check if a user is eligible for the $50 first-letter review offer.
+ * Returns true if the user has NO letters that have progressed past generated_locked
+ * (i.e., no letters have been paid for / unlocked).
+ * Uses letter history as the source of truth — NOT freeReviewUsedAt, because
+ * claimFreeTrialSlot sets that at submission time before the draft is generated.
+ */
+export async function isUserFirstLetterEligible(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const unlockedLetters = await db
+    .select({ id: letterRequests.id })
+    .from(letterRequests)
+    .where(
+      and(
+        eq(letterRequests.userId, userId),
+        notInArray(letterRequests.status, [
+          "submitted",
+          "researching",
+          "drafting",
+          "generated_locked",
+          "pipeline_failed",
+        ])
+      )
+    )
+    .limit(1);
+  return unlockedLetters.length === 0;
 }
 
 /**

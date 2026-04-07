@@ -26,7 +26,7 @@ import { inArray, and, isNull, lt, gte, eq } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
-import { getUserById } from "./db";
+import { getUserById, isUserFirstLetterEligible } from "./db";
 import { sendPaywallNotificationEmail } from "./email";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -141,7 +141,8 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         continue;
       }
 
-      // Send the paywall notification email
+      const isFirstLetter = await isUserFirstLetterEligible(letter.userId!);
+
       await sendPaywallNotificationEmail({
         to: subscriber.email,
         name: subscriber.name ?? "Subscriber",
@@ -150,6 +151,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         appUrl: appBaseUrl,
         letterType: letter.letterType ?? undefined,
         jurisdictionState: letter.jurisdictionState ?? undefined,
+        isFirstLetter,
       });
 
       // Stamp the email timestamp to prevent re-sending

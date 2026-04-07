@@ -11,7 +11,7 @@ import { getPlanConfig } from "./stripe-products";
 import {
   getDb, updateLetterStatus, logReviewAction, getLetterRequestById,
   getUserById, createNotification, notifyAdmins, notifyAllAttorneys, getDiscountCodeByCode,
-  incrementDiscountCodeUsage, createCommission,
+  incrementDiscountCodeUsage, createCommission, setFreeReviewUsed,
 } from "./db";
 import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendPaymentFailedEmail, sendClientRevisionRequestEmail } from "./email";
 import { users, processedStripeEvents } from "../drizzle/schema";
@@ -96,23 +96,26 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         }
 
         if (session.mode === "payment") {
-          // One-time per_letter payment
           const paymentIntentId = typeof session.payment_intent === "string"
             ? session.payment_intent
             : session.payment_intent?.id ?? null;
 
-          await activateSubscription({
-            userId,
-            stripeCustomerId: typeof session.customer === "string" ? session.customer : session.customer?.id ?? "",
-            stripeSubscriptionId: null,
-            stripePaymentIntentId: paymentIntentId,
-            planId,
-            status: "active",
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: null, // one-time, no period end
-          });
-
-          console.log(`[StripeWebhook] Per-letter payment activated for user ${userId}`);
+          // Only activate subscription record for known plan types
+          // first_letter_review and revision_consultation are standalone payments, not plans
+          const unlockTypeForActivation = session.metadata?.unlock_type;
+          if (unlockTypeForActivation !== "first_letter_review" && unlockTypeForActivation !== "revision_consultation") {
+            await activateSubscription({
+              userId,
+              stripeCustomerId: typeof session.customer === "string" ? session.customer : session.customer?.id ?? "",
+              stripeSubscriptionId: null,
+              stripePaymentIntentId: paymentIntentId,
+              planId,
+              status: "active",
+              currentPeriodStart: new Date(),
+              currentPeriodEnd: null, // one-time, no period end
+            });
+            console.log(`[StripeWebhook] Per-letter payment activated for user ${userId}`);
+          }
 
           // ─── Letter unlock: transition generated_locked → pending_review ───
           const letterIdStr = session.metadata?.letter_id;
@@ -273,6 +276,93 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                 }
               } catch (unlockErr) {
                 console.error(`[StripeWebhook] Failed to unlock letter #${letterId}:`, unlockErr);
+              }
+            }
+          }
+
+          // ─── First Letter Review: $50 attorney review gate ────────────────────────────
+          if (session.mode === "payment" && session.metadata?.unlock_type === "first_letter_review") {
+            const flLetterIdStr = session.metadata?.letter_id;
+            if (flLetterIdStr) {
+              const flLetterId = parseInt(flLetterIdStr, 10);
+              if (!isNaN(flLetterId)) {
+                try {
+                  const flLetter = await getLetterRequestById(flLetterId);
+                  if (flLetter && flLetter.status === "generated_locked") {
+                    await updateLetterStatus(flLetterId, "pending_review");
+                    await logReviewAction({
+                      letterRequestId: flLetterId,
+                      actorType: "system",
+                      action: "payment_received",
+                      noteText: `$50 first-letter review payment received. Letter queued for attorney review. Stripe session: ${session.id}`,
+                      noteVisibility: "user_visible",
+                      fromStatus: "generated_locked",
+                      toStatus: "pending_review",
+                    });
+                    // Mark the free review slot as used so future paywall checks reflect this
+                    await setFreeReviewUsed(userId);
+                    // Notify subscriber
+                    await createNotification({
+                      userId,
+                      type: "letter_unlocked",
+                      title: "Payment confirmed — letter sent for review!",
+                      body: `Your letter "${flLetter.subject}" is now in the attorney review queue.`,
+                      link: `/letters/${flLetterId}`,
+                    });
+                    // Send unlock confirmation email to subscriber
+                    const flSubscriber = await getUserById(userId);
+                    if (flSubscriber?.email) {
+                      const flOrigin = session.success_url?.split('/letters')[0]
+                        ?? "https://www.talk-to-my-lawyer.com";
+                      await sendLetterUnlockedEmail({
+                        to: flSubscriber.email,
+                        name: flSubscriber.name ?? "Subscriber",
+                        subject: flLetter.subject,
+                        letterId: flLetterId,
+                        appUrl: flOrigin,
+                      }).catch(console.error);
+                    }
+                    // Notify admins
+                    try {
+                      const flAdminUrl = session.success_url?.split('/letters')[0] ?? "https://www.talk-to-my-lawyer.com";
+                      await notifyAdmins({
+                        category: "letters",
+                        type: "payment_received",
+                        title: `$50 first-letter review payment — letter #${flLetterId} unlocked`,
+                        body: `Letter "${flLetter.subject}" unlocked via $50 first-letter review fee and queued for attorney review.`,
+                        link: `/admin/letters/${flLetterId}`,
+                        emailOpts: {
+                          subject: `$50 First-Letter Review Payment — Letter #${flLetterId}`,
+                          preheader: `Letter "${flLetter.subject}" unlocked after $50 payment`,
+                          bodyHtml: `<p>Hello,</p><p>A $50 first-letter review payment has been received for letter <strong>#${flLetterId}</strong> — "${flLetter.subject}". The letter is now in the attorney review queue.</p>`,
+                          ctaText: "View Letter",
+                          ctaUrl: `${flAdminUrl}/admin/letters/${flLetterId}`,
+                        },
+                      });
+                    } catch (err) {
+                      console.error("[notifyAdmins] first_letter_review:", err);
+                    }
+                    // Notify all attorneys
+                    try {
+                      const flOrigin2 = session.success_url?.split('/letters')[0]
+                        ?? "https://www.talk-to-my-lawyer.com";
+                      await notifyAllAttorneys({
+                        letterId: flLetterId,
+                        letterSubject: flLetter.subject,
+                        letterType: flLetter.letterType,
+                        jurisdiction: flLetter.jurisdictionState ?? "Unknown",
+                        appUrl: flOrigin2,
+                      });
+                    } catch (notifyErr) {
+                      console.error(`[StripeWebhook] Failed to notify attorneys for letter #${flLetterId}:`, notifyErr);
+                    }
+                    console.log(`[StripeWebhook] Letter #${flLetterId} first_letter_review → pending_review via $50 payment`);
+                  } else {
+                    console.warn(`[StripeWebhook] first_letter_review: letter #${flLetterId} not in generated_locked (status: ${flLetter?.status})`);
+                  }
+                } catch (flErr) {
+                  console.error(`[StripeWebhook] Failed to process first_letter_review for letter #${flLetterId}:`, flErr);
+                }
               }
             }
           }
@@ -460,6 +550,92 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         });
 
         console.log(`[StripeWebhook] Subscription ${event.type} for user ${userId}, status: ${status}`);
+
+        // ─── Auto-submit first letter for new subscribers (waives the $50 fee) ───
+        // When a user subscribes and has a generated_locked first letter that hasn't been
+        // reviewed yet, automatically submit it for attorney review under their new plan.
+        // Only applies to the FIRST letter — if the user already has unlocked letters,
+        // the $50 gate doesn't apply (they'd be paying $299 for subsequent letters anyway).
+        if (event.type === "customer.subscription.created" && status === "active") {
+          try {
+            const db = await getDb();
+            if (db) {
+              const { letterRequests } = await import("../drizzle/schema");
+              const { eq, and, notInArray } = await import("drizzle-orm");
+
+              // Verify this user has no previously unlocked letters (first-letter eligibility)
+              const previouslyUnlockedLetters = await db
+                .select({ id: letterRequests.id })
+                .from(letterRequests)
+                .where(
+                  and(
+                    eq(letterRequests.userId, userId),
+                    notInArray(letterRequests.status, [
+                      "submitted",
+                      "researching",
+                      "drafting",
+                      "generated_locked",
+                      "pipeline_failed",
+                    ])
+                  )
+                )
+                .limit(1);
+
+              if (previouslyUnlockedLetters.length === 0) {
+                // User has no prior unlocked letters — find their single generated_locked letter
+                const lockedLetters = await db
+                  .select()
+                  .from(letterRequests)
+                  .where(
+                    and(
+                      eq(letterRequests.userId, userId),
+                      eq(letterRequests.status, "generated_locked")
+                    )
+                  )
+                  .limit(1);
+
+                if (lockedLetters.length === 1) {
+                  const lockedLetter = lockedLetters[0];
+                  try {
+                    await updateLetterStatus(lockedLetter.id, "pending_review");
+                    await logReviewAction({
+                      letterRequestId: lockedLetter.id,
+                      actorType: "system",
+                      action: "payment_received",
+                      noteText: `Subscriber signed up — first letter auto-submitted for attorney review (subscription waives $50 fee). Plan: ${planId}`,
+                      noteVisibility: "user_visible",
+                      fromStatus: "generated_locked",
+                      toStatus: "pending_review",
+                    });
+                    await createNotification({
+                      userId,
+                      type: "letter_unlocked",
+                      title: "Subscription activated — letter submitted for review!",
+                      body: `Your letter "${lockedLetter.subject}" has been submitted for attorney review as part of your new plan.`,
+                      link: `/letters/${lockedLetter.id}`,
+                    });
+                    // Notify all attorneys
+                    await notifyAllAttorneys({
+                      letterId: lockedLetter.id,
+                      letterSubject: lockedLetter.subject,
+                      letterType: lockedLetter.letterType,
+                      jurisdiction: lockedLetter.jurisdictionState ?? "Unknown",
+                      appUrl: "https://www.talk-to-my-lawyer.com",
+                    }).catch(console.error);
+                    console.log(`[StripeWebhook] Auto-submitted first letter #${lockedLetter.id} for new subscriber ${userId}`);
+                  } catch (autoSubmitErr) {
+                    console.error(`[StripeWebhook] Failed to auto-submit letter #${lockedLetter.id}:`, autoSubmitErr);
+                  }
+                }
+              } else {
+                console.log(`[StripeWebhook] New subscriber ${userId} has prior unlocked letters — no auto-submit`);
+              }
+            }
+          } catch (autoSubmitErr) {
+            console.error(`[StripeWebhook] Auto-submit first letter error for user ${userId}:`, autoSubmitErr);
+          }
+        }
+
         break;
       }
 
