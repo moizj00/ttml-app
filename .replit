@@ -23,6 +23,30 @@ args = "Start application"
 task = "workflow.run"
 args = "Pipeline Worker"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "full test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "new only"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "run with verbose output"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "review workflow test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Pipeline Orchestration Test"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "run un watch mode"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -45,6 +69,72 @@ args = "NODE_ENV=development npx tsx server/worker.ts"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "full test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "new only"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run server/review-approval-flow.test.ts server/pipeline-pdf-email.test.ts"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "run with verbose output"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run --reporter=verbose"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "review workflow test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run -t \"Review & Approval Flow\""
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "Pipeline Orchestration Test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run -t \"Pipeline Orchestration\""
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "run un watch mode"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [[ports]]
 localPort = 3000
