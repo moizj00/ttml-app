@@ -138,7 +138,7 @@ describe("Force-Transition Audit Logging", () => {
 
     await expect(
       updateLetterStatus(1, "researching", { force: true })
-    ).resolves.not.toThrow();
+    ).resolves.toBeUndefined();
 
     expect(mockLogReviewAction).toHaveBeenCalledOnce();
   });

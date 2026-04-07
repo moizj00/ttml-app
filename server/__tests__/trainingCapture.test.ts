@@ -130,7 +130,7 @@ describe("Training Capture — Consent Gating", () => {
     consoleSpy.mockRestore();
   });
 
-  it("skips gracefully when letter is not found (no userId)", async () => {
+  it("proceeds with capture when letter is not found (consent check bypassed)", async () => {
     const { db, mockInsert } = makeMockDb({ userId: null });
     mockGetDb.mockResolvedValue(db);
 
