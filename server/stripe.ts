@@ -546,3 +546,73 @@ export async function createLetterUnlockCheckout(params: {
   if (!session.url) throw new Error("Stripe did not return a checkout URL");
   return { url: session.url, sessionId: session.id };
 }
+
+// ─── Revision Consultation Checkout ($20 per paid revision) ──────────────────
+const REVISION_CONSULTATION_PRICE_CENTS = 2000; // $20.00
+
+/**
+ * Creates a $20 Stripe checkout session for a subscriber revision consultation.
+ * The revision notes are stored in session metadata so the webhook can
+ * execute the revision after payment is confirmed.
+ */
+export async function createRevisionConsultationCheckout(params: {
+  userId: number;
+  email: string;
+  name?: string | null;
+  letterId: number;
+  revisionNotes: string;
+  origin: string;
+}): Promise<{ url: string; sessionId: string }> {
+  const { userId, email, name, letterId, revisionNotes, origin } = params;
+  const stripe = getStripe();
+  const customerId = await getOrCreateStripeCustomer(userId, email, name);
+
+  // Truncate revision notes to fit Stripe metadata value limit (500 chars)
+  const truncatedNotes = revisionNotes.length > 490
+    ? revisionNotes.slice(0, 490) + "…"
+    : revisionNotes;
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    client_reference_id: userId.toString(),
+    mode: "payment",
+    payment_method_types: ["card"],
+    metadata: {
+      user_id: userId.toString(),
+      plan_id: "revision_consultation",
+      letter_id: letterId.toString(),
+      unlock_type: "revision_consultation",
+      revision_notes: truncatedNotes,
+      customer_email: email,
+      customer_name: name ?? "",
+    },
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "Revision Consultation — $20",
+            description:
+              "Request attorney revisions on your approved letter draft. Each consultation covers one round of changes.",
+            metadata: { plan_id: "revision_consultation", letter_id: letterId.toString() },
+          },
+          unit_amount: REVISION_CONSULTATION_PRICE_CENTS,
+        },
+        quantity: 1,
+      },
+    ],
+    payment_intent_data: {
+      metadata: {
+        user_id: userId.toString(),
+        plan_id: "revision_consultation",
+        letter_id: letterId.toString(),
+        unlock_type: "revision_consultation",
+      },
+    },
+    success_url: `${origin}/letters/${letterId}?revision_paid=true`,
+    cancel_url: `${origin}/letters/${letterId}?revision_canceled=true`,
+  });
+
+  if (!session.url) throw new Error("Stripe did not return a checkout URL");
+  return { url: session.url, sessionId: session.id };
+}

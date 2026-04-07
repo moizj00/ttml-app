@@ -22,27 +22,40 @@ import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
+import { SubscriberReviewBar } from "@/components/shared/SubscriberReviewBar";
 
 // Statuses that require active polling (pipeline in progress or awaiting action)
-const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested"];
+// client_approved polls until pdfUrl is populated by the server-side PDF generation job
+const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested", "client_approved"];
 
-function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onApprove: () => void }) {
+function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId: number; revisionCount?: number; onApprove: () => void }) {
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
+  const MAX_REVISIONS = 5;
+  const WARN_REVISIONS = 3;
+  const revisionsUsed = revisionCount ?? 0;
+  const revisionsRemaining = MAX_REVISIONS - revisionsUsed;
+  const revisionLimitReached = revisionsUsed >= MAX_REVISIONS;
+  const revisionLimitWarning = revisionsUsed >= WARN_REVISIONS && !revisionLimitReached;
+
   const clientApprove = trpc.letters.clientApprove.useMutation({
     onSuccess: () => {
-      toast.success("Letter approved!", { description: "Your approval has been recorded. The letter will proceed to final delivery." });
+      toast.success("Letter approved!", { description: "Your PDF is being generated and will be available for download shortly." });
       onApprove();
     },
     onError: (err) => toast.error("Approval failed", { description: err.message }),
   });
 
   const clientRequestRevision = trpc.letters.clientRequestRevision.useMutation({
-    onSuccess: () => {
-      toast.success("Revision requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
+    onSuccess: (res: any) => {
+      if (res?.revisionWarning) {
+        toast.warning("Revision requested", { description: res.revisionWarning });
+      } else {
+        toast.success("Revision requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
+      }
       setShowRevisionForm(false);
       setRevisionNotes("");
       onApprove();
@@ -71,9 +84,18 @@ function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onAppr
             <div>
               <p className="text-sm font-semibold text-blue-800">Your Letter is Ready — Final Approval Required</p>
               <p className="text-sm text-blue-700 mt-1">
-                Your attorney has reviewed and approved your letter. Please review the final version below, then choose one of the options.
+                Your attorney has reviewed and submitted your letter. Please review the final version below. When you approve, your PDF will be generated and made available for download.
               </p>
             </div>
+
+            {revisionLimitWarning && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  You have used {revisionsUsed} of {MAX_REVISIONS} allowed revision requests. You have <strong>{revisionsRemaining} remaining</strong>.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Button
@@ -84,7 +106,7 @@ function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onAppr
                 disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
-                {clientApprove.isPending ? "Processing..." : "Approve & Send"}
+                {clientApprove.isPending ? "Processing..." : "Approve"}
               </Button>
               <Button
                 data-testid="button-client-request-revision"
@@ -92,10 +114,11 @@ function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onAppr
                 className="border-violet-300 text-violet-700 hover:bg-violet-50"
                 size="sm"
                 onClick={() => { setShowRevisionForm(!showRevisionForm); setShowDeclineConfirm(false); }}
-                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
+                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending || revisionLimitReached}
+                title={revisionLimitReached ? `Maximum revision limit (${MAX_REVISIONS}) reached` : undefined}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
-                Request Revisions
+                {revisionLimitReached ? "Revision Limit Reached" : "Request Revisions"}
               </Button>
               <Button
                 data-testid="button-client-decline"
@@ -111,7 +134,7 @@ function ClientApprovalBlock({ letterId, onApprove }: { letterId: number; onAppr
             </div>
 
             <div className="text-xs text-blue-600/70 space-y-0.5">
-              <p><strong>Approve & Send</strong> — Confirms the letter is ready for delivery to the recipient.</p>
+              <p><strong>Approve</strong> — Generates your final PDF and confirms the letter is ready. You can then download or send it to the recipient.</p>
               <p><strong>Request Revisions</strong> — Sends your feedback to the attorney for further edits. The letter will return to you once revised.</p>
               <p><strong>Decline</strong> — Permanently declines this letter. This cannot be undone.</p>
             </div>
@@ -693,7 +716,7 @@ export default function LetterDetail() {
 
   return (
     <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: letter.subject }]}>
-      <div className="max-w-3xl mx-auto space-y-5">
+      <div className="max-w-3xl mx-auto space-y-5" style={{ paddingBottom: letter.status === 'client_approval_pending' ? '5rem' : undefined }}>
         {/* Header */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
@@ -722,19 +745,19 @@ export default function LetterDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-              {(letter.status === "approved" || letter.status === "client_approved") && finalVersion && (
+              {(letter.status === "client_approved" || letter.status === "sent") && finalVersion && (
                 <>
                   <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background flex-1 sm:flex-initial">
                     <Copy className="w-4 h-4 mr-1" />
                     Copy
                   </Button>
-                  <Button onClick={handleDownloadPdf} size="sm" className="flex-1 sm:flex-initial">
+                  <Button onClick={handleDownloadPdf} size="sm" className="flex-1 sm:flex-initial" disabled={!(data?.letter as any)?.pdfUrl}>
                     <Download className="w-4 h-4 mr-1" />
-                    {(data?.letter as any)?.pdfUrl ? "Download Reviewed PDF" : "Download"}
+                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
                   </Button>
                 </>
               )}
-              {["approved", "client_approved", "rejected", "client_declined"].includes(letter.status) && (
+              {["client_approved", "sent", "rejected", "client_declined"].includes(letter.status) && (
                 <Button onClick={handleArchive} size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={archiveMutation.isPending}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -784,7 +807,11 @@ export default function LetterDetail() {
 
         {/* ── Client Approval Pending ── */}
         {letter.status === "client_approval_pending" && (
-          <ClientApprovalBlock letterId={letterId} onApprove={() => utils.letters.detail.invalidate({ id: letterId })} />
+          <ClientApprovalBlock
+            letterId={letterId}
+            revisionCount={(letter as any).clientRevisionCount ?? 0}
+            onApprove={() => utils.letters.detail.invalidate({ id: letterId })}
+          />
         )}
 
         {/* ── Client Approved ── */}
@@ -793,11 +820,18 @@ export default function LetterDetail() {
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-semibold text-emerald-800">You have approved this letter</p>
-                  <p className="text-sm text-emerald-700 mt-1">
-                    Your approval has been recorded. The letter will proceed to final delivery.
-                  </p>
+                  {(letter as any).pdfUrl ? (
+                    <p className="text-sm text-emerald-700 mt-1">
+                      Your PDF is ready. You can download it or send it directly to the recipient below.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-emerald-700 mt-1 flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                      Your PDF is being generated and will be available for download shortly.
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -885,8 +919,47 @@ export default function LetterDetail() {
           </Card>
         )}
 
-        {/* Final Approved Letter — shown when approved, client pending, or client approved */}
-        {(letter.status === "approved" || letter.status === "client_approved" || letter.status === "client_approval_pending" || letter.status === "sent") && finalVersion && (
+        {/* Sticky bottom review bar — only shown during client_approval_pending */}
+        {letter.status === "client_approval_pending" && (
+          <SubscriberReviewBar
+            letterId={letterId}
+            revisionCount={(letter as any).clientRevisionCount ?? 0}
+            onAction={() => utils.letters.detail.invalidate({ id: letterId })}
+          />
+        )}
+
+        {/* Letter Preview — shown during client_approval_pending so subscriber can read before approving */}
+        {letter.status === "client_approval_pending" && finalVersion && (
+          <Card className="border-blue-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2 text-blue-700">
+                <FileText className="w-4 h-4" />
+                Letter Preview — Review Before Approving
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-white border border-blue-100 rounded-lg p-5">
+                {/<[a-z][\s\S]*>/i.test(finalVersion.content) ? (
+                  <div
+                    className="prose prose-sm max-w-none text-foreground
+                      prose-p:my-2 prose-p:leading-relaxed
+                      prose-headings:font-semibold prose-headings:text-foreground
+                      prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5
+                      prose-strong:text-foreground"
+                    dangerouslySetInnerHTML={{ __html: finalVersion.content }}
+                  />
+                ) : (
+                  <pre className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-sans">
+                    {finalVersion.content}
+                  </pre>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Final Approved Letter — shown after subscriber approves or letter is sent */}
+        {(letter.status === "client_approved" || letter.status === "sent") && finalVersion && (
           <>
           <Dialog open={sendDialogOpen} onOpenChange={(open) => { setSendDialogOpen(open); if (!open) { setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); } }}>
             <DialogContent>
@@ -976,23 +1049,21 @@ export default function LetterDetail() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-sm flex items-center gap-2 text-green-700">
                   <CheckCircle className="w-4 h-4" />
-                  Final Approved Letter
+                  Your Approved Letter
                 </CardTitle>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-copy-letter">
                     <Copy className="w-3.5 h-3.5 mr-1.5" />
                     Copy
                   </Button>
-                  <Button onClick={handleDownloadPdf} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-download-letter">
+                  <Button onClick={handleDownloadPdf} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-download-letter" disabled={!(data?.letter as any)?.pdfUrl}>
                     <Download className="w-3.5 h-3.5 mr-1.5" />
-                    {(data?.letter as any)?.pdfUrl ? "Download Reviewed PDF" : "Download"}
+                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
                   </Button>
-                  {(letter.status === "approved" || letter.status === "client_approved") && (
-                  <Button onClick={() => setSendDialogOpen(true)} size="sm" className="bg-green-700 hover:bg-green-800 text-white" data-testid="button-send-via-lawyer-email">
+                  <Button onClick={() => setSendDialogOpen(true)} size="sm" className="bg-green-700 hover:bg-green-800 text-white" data-testid="button-send-via-lawyer-email" disabled={!(data?.letter as any)?.pdfUrl}>
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     Send Via Lawyer's Email
                   </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>

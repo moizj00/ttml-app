@@ -518,12 +518,13 @@ export const reviewRouter = router({
         await updateLetterVersionPointers(input.letterId, {
           currentFinalVersionId: versionId,
         });
+        // Transition through approved (transient) then auto-forward to client_approval_pending
         await updateLetterStatus(input.letterId, "approved");
         await logReviewAction({
           letterRequestId: input.letterId,
           reviewerId: ctx.user.id,
           actorType: ctx.user.role as any,
-          action: "approved",
+          action: "submitted_for_client_approval",
           noteText: input.internalNote,
           noteVisibility: "internal",
           fromStatus: "under_review",
@@ -539,54 +540,40 @@ export const reviewRouter = router({
             noteVisibility: "user_visible",
           });
         }
-        // ── Generate PDF, upload to S3, store URL ──
-        let pdfUrl: string | undefined;
-        try {
-          const pdfResult = await generateAndUploadApprovedPdf({
-            letterId: input.letterId,
-            letterType: letter.letterType,
-            subject: letter.subject,
-            content: input.finalContent,
-            approvedBy: ctx.user.name ?? undefined,
-            approvedAt: new Date().toISOString(),
-            jurisdictionState: letter.jurisdictionState,
-            jurisdictionCountry: letter.jurisdictionCountry,
-            intakeJson: letter.intakeJson as any,
-          });
-          pdfUrl = pdfResult.pdfUrl;
-          await updateLetterPdfUrl(input.letterId, pdfUrl);
-          console.log(
-            `[Approve] PDF generated for letter #${input.letterId}: ${pdfUrl}`
-          );
-        } catch (pdfErr) {
-          captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
-          console.error(
-            `[Approve] PDF generation failed for letter #${input.letterId}:`,
-            pdfErr
-          );
-          // Non-blocking: approval still succeeds even if PDF fails
-        }
-        // ── Notify subscriber with PDF link ──
+        // Auto-forward to client_approval_pending (approved is transient)
+        await updateLetterStatus(input.letterId, "client_approval_pending");
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: ctx.user.role as any,
+          action: "requested_client_approval",
+          noteText: "Attorney submitted letter for client approval",
+          noteVisibility: "user_visible",
+          fromStatus: "approved",
+          toStatus: "client_approval_pending",
+        });
+        // ── PDF is NOT generated here — it will be generated when the subscriber approves ──
+        // ── Notify subscriber: letter ready for their final approval ──
         try {
           if (letter.userId != null) {
             const appUrl = getAppUrl(ctx.req);
             const subscriber = await getUserById(letter.userId);
             if (subscriber?.email) {
-              await sendLetterApprovedEmail({
+              await sendStatusUpdateEmail({
                 to: subscriber.email,
                 name: subscriber.name ?? "Subscriber",
                 subject: letter.subject,
                 letterId: input.letterId,
+                newStatus: "client_approval_pending",
                 appUrl,
-                pdfUrl,
               });
             }
             await createNotification({
               userId: letter.userId,
-              type: "letter_approved",
-              title: "Your letter has been approved!",
-              body: `Your letter "${letter.subject}" is ready to download.${pdfUrl ? " A PDF copy is available." : ""}`,
-              link: `/dashboard?approved=${input.letterId}`,
+              type: "client_approval_pending",
+              title: "Your letter is ready for final approval",
+              body: `Your letter "${letter.subject}" has been reviewed by an attorney and is ready for your approval.`,
+              link: `/letters/${input.letterId}`,
             });
           }
         } catch (err) {
@@ -630,23 +617,23 @@ export const reviewRouter = router({
           const appUrl2 = getAppUrl(ctx.req);
           await notifyAdmins({
             category: "letters",
-            type: "letter_approved_by_attorney",
-            title: `Letter #${input.letterId} approved by attorney`,
-            body: `${ctx.user.name ?? "An attorney"} approved "${letter.subject}".${pdfUrl ? " PDF generated." : ""}`,
+            type: "letter_submitted_for_client_approval",
+            title: `Letter #${input.letterId} submitted for client approval`,
+            body: `${ctx.user.name ?? "An attorney"} submitted "${letter.subject}" for client approval.`,
             link: `/admin/letters/${input.letterId}`,
             emailOpts: {
-              subject: `Letter #${input.letterId} Approved`,
-              preheader: `Attorney approved letter "${letter.subject}"`,
-              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An attorney"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}".</p>`,
+              subject: `Letter #${input.letterId} Submitted for Client Approval`,
+              preheader: `Attorney submitted letter "${letter.subject}" for client approval`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An attorney"}</strong> has submitted letter <strong>#${input.letterId}</strong> — "${letter.subject}" for client approval.</p>`,
               ctaText: "View Letter",
               ctaUrl: `${appUrl2}/admin/letters/${input.letterId}`,
             },
           });
         } catch (err) {
-          console.error("[notifyAdmins] letter_approved_by_attorney:", err);
-          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_approved" } });
+          console.error("[notifyAdmins] letter_submitted_for_client_approval:", err);
+          captureServerException(err, { tags: { component: "review", error_type: "notify_admins_submitted" } });
         }
-        return { success: true, versionId, pdfUrl };
+        return { success: true, versionId };
       }),
 
     reject: attorneyProcedure
@@ -762,12 +749,18 @@ export const reviewRouter = router({
             message: "Letter must be under_review",
           });
         await updateLetterStatus(input.letterId, "needs_changes", { assignedReviewerId: null });
+        // Encode retriggerPipeline preference in the internal action noteText
+        // so updateForChanges can read it without a schema migration.
+        const internalNoteWithRetrigger = JSON.stringify({
+          retriggerPipeline: input.retriggerPipeline,
+          note: input.internalNote ?? null,
+        });
         await logReviewAction({
           letterRequestId: input.letterId,
           reviewerId: ctx.user.id,
           actorType: ctx.user.role as any,
           action: "requested_changes",
-          noteText: input.internalNote,
+          noteText: internalNoteWithRetrigger,
           noteVisibility: "internal",
           fromStatus: "under_review",
           toStatus: "needs_changes",
@@ -819,15 +812,8 @@ export const reviewRouter = router({
           console.error("[notifyAdmins] letter_changes_requested:", err);
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_changes_requested" } });
         }
-        if (input.retriggerPipeline && letter.intakeJson) {
-          enqueueRetryFromStageJob({
-            type: "retryPipelineFromStage",
-            letterId: input.letterId,
-            intake: letter.intakeJson,
-            stage: "drafting",
-            userId: letter.userId ?? undefined,
-          }).catch(console.error);
-        }
+        // Pipeline re-trigger (if requested) is deferred to when subscriber responds via updateForChanges.
+        // The retriggerPipeline preference is stored in the internal review action above.
         return { success: true };
       }),
 

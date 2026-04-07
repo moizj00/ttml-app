@@ -16,6 +16,7 @@ import {
   Shield,
   ClipboardList,
   Scale,
+  GitCompare,
 } from "lucide-react";
 import { useParams } from "wouter";
 import { useState, useEffect, useRef } from "react";
@@ -25,6 +26,7 @@ import { IntakePanel } from "./review/IntakePanel";
 import { ResearchPanel } from "./review/ResearchPanel";
 import { CitationAuditPanel } from "./review/CitationAuditPanel";
 import { HistoryPanel } from "./review/HistoryPanel";
+import { DiffPanel } from "./review/DiffPanel";
 import { CounterArgumentPanel } from "./review/CounterArgumentPanel";
 import { ApproveDialog } from "./review/ApproveDialog";
 import { RejectDialog } from "./review/RejectDialog";
@@ -127,16 +129,16 @@ export default function ReviewDetail() {
 
   const approveMutation = trpc.review.approve.useMutation({
     onSuccess: () => {
-      toast.success("Letter approved", {
+      toast.success("Letter submitted for client approval", {
         description:
-          "The subscriber has been notified and can now download the final PDF.",
+          "The subscriber has been notified and can now review and approve the letter.",
       });
       setApproveDialog(false);
       setEditMode(false);
       setHasUnsavedChanges(false);
       invalidate();
     },
-    onError: e => toast.error("Approval failed", { description: e.message }),
+    onError: e => toast.error("Submission failed", { description: e.message }),
   });
 
   const rejectMutation = trpc.review.reject.useMutation({
@@ -365,7 +367,7 @@ export default function ReviewDetail() {
             claimIsPending={claimMutation.isPending}
             saveIsPending={saveMutation.isPending}
             unclaimIsPending={unclaimMutation.isPending}
-            requestClientApprovalIsPending={requestClientApprovalMutation.isPending}
+            approvePending={approveMutation.isPending}
             onClaim={() => claimMutation.mutate({ letterId })}
             onCancelEdit={cancelEdit}
             onSave={() => saveMutation.mutate({ letterId, content: htmlToPlainText(editContent) })}
@@ -378,7 +380,6 @@ export default function ReviewDetail() {
             onRequestChanges={() => setChangesDialog(true)}
             onReject={() => setRejectDialog(true)}
             onApprove={openApproveDialog}
-            onRequestClientApproval={() => requestClientApprovalMutation.mutate({ letterId })}
           />
         </div>
 
@@ -530,6 +531,10 @@ export default function ReviewDetail() {
                   <Shield className="w-3 h-3 mr-1" />
                   Counter
                 </TabsTrigger>
+                <TabsTrigger value="diff" className="flex-1 text-xs" data-testid="tab-diff">
+                  <GitCompare className="w-3 h-3 mr-1" />
+                  Diff
+                </TabsTrigger>
                 <TabsTrigger value="history" className="flex-1 text-xs" data-testid="tab-history">
                   <History className="w-3 h-3 mr-1" />
                   History
@@ -556,6 +561,10 @@ export default function ReviewDetail() {
                   counterArguments={counterArguments}
                   counterArgumentGaps={counterArgumentGaps}
                 />
+              </TabsContent>
+
+              <TabsContent value="diff" className="flex-1 overflow-auto mt-2">
+                <DiffPanel versions={versions} />
               </TabsContent>
 
               <TabsContent value="history" className="flex-1 overflow-auto mt-2">

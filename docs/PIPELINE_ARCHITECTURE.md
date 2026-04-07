@@ -134,7 +134,8 @@ submitted → researching → drafting → generated_locked
     │            └→ submitted (pipeline failure reset)
     └→ pipeline_failed (any stage failure after retries)
     
-    approved → client_approval_pending → client_approved → sent
+    approved (transient) → client_approval_pending → client_approved → sent
+                                                   → client_revision_requested → pending_review
     pipeline_failed → submitted (admin retry)
 ```
 
@@ -147,7 +148,8 @@ Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
 - `under_review → approved | rejected | needs_changes | pending_review` (release claim)
 - `needs_changes → submitted`
 - `approved → client_approval_pending`
-- `client_approval_pending → client_approved`
+- `client_approval_pending → client_approved | client_declined | client_revision_requested`
+- `client_revision_requested → pending_review`
 - `client_approved → sent`
 - `sent → (terminal)`
 - `rejected → submitted` (subscriber retry from scratch)

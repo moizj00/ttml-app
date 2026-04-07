@@ -107,14 +107,14 @@ export default function ReviewModal({
   });
   const approveMutation = trpc.review.approve.useMutation({
     onSuccess: () => {
-      toast.success("Letter approved", {
+      toast.success("Letter submitted for client approval", {
         description:
-          "The subscriber has been notified and can now download the final PDF.",
+          "The subscriber has been notified to review and approve the letter.",
       });
       setActiveAction(null);
       invalidate();
     },
-    onError: e => toast.error("Approval failed", { description: e.message }),
+    onError: e => toast.error("Submission failed", { description: e.message }),
   });
   const rejectMutation = trpc.review.reject.useMutation({
     onSuccess: () => {
@@ -360,10 +360,11 @@ export default function ReviewModal({
                 <Button
                   size="sm"
                   onClick={handleApprove}
+                  disabled={approveMutation.isPending}
                   className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm shadow-green-200 shrink-0"
                 >
                   <CheckCircle className="w-4 h-4 mr-1.5" />
-                  Approve
+                  {approveMutation.isPending ? "Submitting..." : "Submit"}
                 </Button>
               </>
             )}
@@ -756,7 +757,7 @@ export default function ReviewModal({
             ACTION DIALOGS (Approve / Reject / Changes)
         ═══════════════════════════════════════════════════ */}
 
-        {/* Approve */}
+        {/* Submit to Client */}
         {activeAction === "approve" && (
           <ActionDialog
             onClose={() => setActiveAction(null)}
@@ -771,10 +772,10 @@ export default function ReviewModal({
                   id="approve-dialog-title"
                   className="text-base font-bold text-foreground"
                 >
-                  Approve Letter
+                  Submit Letter for Client Approval
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  This will finalize the letter and notify the subscriber.
+                  The subscriber will be notified to review and approve. PDF is generated after their approval.
                 </p>
               </div>
             </div>
@@ -819,12 +820,12 @@ export default function ReviewModal({
                 {approveMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    Approving…
+                    Submitting…
                   </>
                 ) : (
                   <>
                     <Gavel className="w-4 h-4 mr-1.5" />
-                    Confirm Approval
+                    Submit to Client
                   </>
                 )}
               </Button>

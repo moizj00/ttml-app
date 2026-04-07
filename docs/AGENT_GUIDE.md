@@ -67,12 +67,13 @@ Talk to My Lawyer is an AI-powered legal letter platform. Users submit details a
 The status flow is defined in `shared/types.ts` → `ALLOWED_TRANSITIONS`. This is the SINGLE SOURCE OF TRUTH:
 
 ```
-submitted → researching → drafting → generated_locked → pending_review → under_review → approved → client_approval_pending → client_approved → sent
+submitted → researching → drafting → generated_locked → pending_review → under_review → approved (transient) → client_approval_pending → client_approved → sent
 ```
 
 **Branches:**
 - Any stage can go to `pipeline_failed` (except post-review stages)
-- `under_review` can go to `rejected` or `needs_changes`
+- `under_review` can go to `rejected`, `needs_changes`, or `approved` (which auto-forwards to `client_approval_pending`)
+- `client_approval_pending` can go to `client_approved`, `client_declined`, or `client_revision_requested` (which goes back to `pending_review`)
 - `needs_changes` and `rejected` loop back to `submitted`
 - `pipeline_failed` loops back to `submitted`
 - Admin can force ANY transition (bypasses the map with `force=true`)
@@ -291,7 +292,9 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 6. Payment moves letter to `pending_review`
 7. Letter appears in Attorney Review Queue
 8. Attorney claims it → `under_review`
-9. Attorney edits in Tiptap, approves → `approved`
+9. Attorney edits in Tiptap, submits → `approved` (transient) → `client_approval_pending`
+10. Subscriber reviews, approves → `client_approved` (PDF generated) → `sent`
+11. OR Subscriber requests revision (first free, then $20 each) → `client_revision_requested` → `pending_review`
 10. Server generates branded PDF, sends email
 11. After client approval → `sent`
 
@@ -416,7 +419,7 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 
 18. **The `runPipelineWithRetry` function is called from `letters.submit`.** Don't call pipeline stages manually from routers.
 
-19. **PDF generation happens on approval.** `generateAndUploadApprovedPdf` is triggered when an attorney approves a letter — not when the pipeline finishes.
+19. **PDF generation happens on subscriber approval.** `generateAndUploadApprovedPdf` is triggered when the subscriber approves the attorney's submitted draft — not when the attorney submits it.
 
 20. **Supabase Realtime is used for live pipeline progress.** The `useLetterRealtime` hook subscribes to letter status changes.
 

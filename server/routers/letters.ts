@@ -119,6 +119,7 @@ import {
   createBillingPortalSession,
   createLetterUnlockCheckout,
   createTrialReviewCheckout,
+  createRevisionConsultationCheckout,
   getUserSubscription,
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
@@ -578,6 +579,26 @@ export const lettersRouter = router({
             message: "Letter must be in needs_changes status",
           });
 
+        // Read the retriggerPipeline preference stored in the latest requested_changes review action
+        let retriggerPipeline = true; // default: re-run pipeline
+        try {
+          const reviewActions = await getReviewActions(input.letterId);
+          const latestChangesAction = [...reviewActions]
+            .reverse()
+            .find(a => a.action === "requested_changes" && a.noteVisibility === "internal");
+          if (latestChangesAction?.noteText) {
+            const parsed = JSON.parse(latestChangesAction.noteText);
+            if (typeof parsed.retriggerPipeline === "boolean") {
+              retriggerPipeline = parsed.retriggerPipeline;
+            }
+          }
+        } catch {
+          // If parsing fails, default to pipeline re-run
+          retriggerPipeline = true;
+        }
+
+        const toStatus = retriggerPipeline ? "submitted" : "pending_review";
+
         // Log the subscriber's response
         await logReviewAction({
           letterRequestId: input.letterId,
@@ -587,7 +608,7 @@ export const lettersRouter = router({
           noteText: input.additionalContext,
           noteVisibility: "user_visible",
           fromStatus: "needs_changes",
-          toStatus: "submitted",
+          toStatus,
         });
 
         extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.user.id, "subscriber_update").catch(console.error);
@@ -608,33 +629,71 @@ export const lettersRouter = router({
           }
         }
 
-        // Transition status back to submitted before re-triggering pipeline
-        // This allows the pipeline to properly set researching → drafting → generated_locked
-        await updateLetterStatus(input.letterId, "submitted");
-
-        const intake = input.updatedIntakeJson ?? letter.intakeJson;
-        if (intake) {
-          const appUrl = getAppUrl(ctx.req);
+        if (retriggerPipeline) {
+          // Full pipeline re-run path: transition to submitted and enqueue
+          await updateLetterStatus(input.letterId, "submitted");
+          const intake = input.updatedIntakeJson ?? letter.intakeJson;
+          if (intake) {
+            const appUrl = getAppUrl(ctx.req);
+            try {
+              await enqueuePipelineJob({
+                type: "runPipeline",
+                letterId: input.letterId,
+                intake,
+                userId: letter.userId,
+                appUrl,
+                label: "updateForChanges",
+              });
+            } catch (enqueueErr) {
+              console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+              captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Failed to start letter reprocessing. Please try again.",
+              });
+            }
+          }
+        } else {
+          // Light-edit path: go back to pending_review so attorney can apply edits manually
+          await updateLetterStatus(input.letterId, "pending_review");
+          // Notify assigned attorney (or admins if none assigned)
           try {
-            await enqueuePipelineJob({
-              type: "runPipeline",
-              letterId: input.letterId,
-              intake,
-              userId: letter.userId,
-              appUrl,
-              label: "updateForChanges",
-            });
-          } catch (enqueueErr) {
-            console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
-            captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "Failed to start letter reprocessing. Please try again.",
-            });
+            const appUrl = getAppUrl(ctx.req);
+            if (letter.assignedReviewerId) {
+              const attorney = await getUserById(letter.assignedReviewerId);
+              if (attorney?.email) {
+                await sendStatusUpdateEmail({
+                  to: attorney.email,
+                  name: attorney.name ?? "Attorney",
+                  subject: letter.subject,
+                  letterId: input.letterId,
+                  newStatus: "pending_review",
+                  appUrl,
+                });
+              }
+              await createNotification({
+                userId: letter.assignedReviewerId,
+                type: "subscriber_feedback_received",
+                title: "Subscriber responded with feedback",
+                body: `Subscriber provided feedback on "${letter.subject}". Please apply the requested edits.`,
+                link: `/review/${input.letterId}`,
+              });
+            } else {
+              await notifyAdmins({
+                category: "letters",
+                type: "subscriber_feedback_received",
+                title: `Subscriber feedback on letter #${input.letterId}`,
+                body: `Subscriber provided feedback on "${letter.subject}" (light-edit path). Letter is back in the review queue.`,
+                link: `/admin/letters/${input.letterId}`,
+              });
+            }
+          } catch (notifyErr) {
+            console.error("[updateForChanges] Light-edit notification failed:", notifyErr);
+            captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
           }
         }
 
-        return { success: true };
+        return { success: true, retriggerPipeline };
       }),
 
     retryFromRejected: subscriberProcedure
@@ -939,7 +998,12 @@ export const lettersRouter = router({
       }),
 
     clientApprove: subscriberProcedure
-      .input(z.object({ letterId: z.number() }))
+      .input(z.object({
+        letterId: z.number(),
+        recipientEmail: z.string().email().optional(),
+        subjectOverride: z.string().max(200).optional(),
+        note: z.string().max(2000).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const letter = await getLetterRequestById(input.letterId);
         if (!letter || letter.userId !== ctx.user.id) {
@@ -951,28 +1015,102 @@ export const lettersRouter = router({
             message: "Letter is not awaiting client approval",
           });
         }
+
+        // Get the final_approved version content for PDF generation
+        let finalContent: string | undefined;
+        if (letter.currentFinalVersionId) {
+          const finalVersion = await getLetterVersionById(letter.currentFinalVersionId);
+          finalContent = finalVersion?.content ?? undefined;
+        }
+
+        // Transition to client_approved
         await updateLetterStatus(input.letterId, "client_approved");
         await logReviewAction({
           letterRequestId: input.letterId,
           reviewerId: ctx.user.id,
           actorType: "subscriber",
           action: "client_approved",
-          noteText: "Subscriber approved the letter for final delivery",
+          noteText: input.note ?? "Subscriber approved the letter",
           noteVisibility: "user_visible",
           fromStatus: "client_approval_pending",
           toStatus: "client_approved",
         });
+
+        // Generate PDF now that subscriber has approved
+        let pdfUrl: string | undefined;
+        if (finalContent) {
+          try {
+            const pdfResult = await generateAndUploadApprovedPdf({
+              letterId: input.letterId,
+              letterType: letter.letterType,
+              subject: input.subjectOverride ?? letter.subject,
+              content: finalContent,
+              approvedBy: ctx.user.name ?? undefined,
+              approvedAt: new Date().toISOString(),
+              jurisdictionState: letter.jurisdictionState,
+              jurisdictionCountry: letter.jurisdictionCountry,
+              intakeJson: letter.intakeJson as any,
+            });
+            pdfUrl = pdfResult.pdfUrl;
+            await updateLetterPdfUrl(input.letterId, pdfUrl);
+            console.log(`[ClientApprove] PDF generated for letter #${input.letterId}: ${pdfUrl}`);
+          } catch (pdfErr) {
+            captureServerException(pdfErr, { tags: { component: "letters", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
+            console.error(`[ClientApprove] PDF generation failed for letter #${input.letterId}:`, pdfErr);
+            // Non-blocking: approval still succeeds even if PDF fails
+          }
+        }
+
+        // Transition to sent
+        await updateLetterStatus(input.letterId, "sent", { force: true });
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "letter_sent",
+          noteText: `Letter approved and PDF generated${pdfUrl ? " — PDF available" : ""}.`,
+          noteVisibility: "user_visible",
+          fromStatus: "client_approved",
+          toStatus: "sent",
+        });
+
+        // Notify subscriber with PDF link
+        try {
+          const appUrl = getAppUrl(ctx.req);
+          const subscriber = await getUserById(ctx.user.id);
+          if (subscriber?.email) {
+            await sendLetterApprovedEmail({
+              to: subscriber.email,
+              name: subscriber.name ?? "Subscriber",
+              subject: letter.subject,
+              letterId: input.letterId,
+              appUrl,
+              pdfUrl,
+            });
+          }
+          await createNotification({
+            userId: ctx.user.id,
+            type: "letter_sent",
+            title: "Your letter is ready!",
+            body: `Your letter "${letter.subject}" has been approved and your PDF is ready to download.${pdfUrl ? " A PDF copy is available." : ""}`,
+            link: `/letters/${input.letterId}`,
+          });
+        } catch (notifyErr) {
+          console.error("[ClientApprove] Subscriber notification failed:", notifyErr);
+          captureServerException(notifyErr, { tags: { component: "letters", error_type: "client_approve_notify_failed" } });
+        }
+
         try {
           await notifyAdmins({
             category: "letters",
             type: "client_approved",
             title: `Client approved letter #${input.letterId}`,
-            body: `${ctx.user.name ?? "A subscriber"} approved "${letter.subject}" for final delivery.`,
+            body: `${ctx.user.name ?? "A subscriber"} approved "${letter.subject}" — PDF generated and letter marked as sent.${pdfUrl ? " PDF available." : ""}`,
             link: `/admin/letters/${input.letterId}`,
             emailOpts: {
               subject: `Client Approved Letter #${input.letterId}`,
-              preheader: `Client approved letter "${letter.subject}" for delivery`,
-              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}" for final delivery.</p>`,
+              preheader: `Client approved letter "${letter.subject}"`,
+              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}". PDF has been generated and the letter is now marked as sent.</p>`,
               ctaText: "View Letter",
               ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
             },
@@ -981,7 +1119,7 @@ export const lettersRouter = router({
           console.error("[notifyAdmins] client_approved:", err);
           captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_approved" } });
         }
-        return { success: true };
+        return { success: true, pdfUrl };
       }),
 
     clientRequestRevision: subscriberProcedure
@@ -1000,6 +1138,45 @@ export const lettersRouter = router({
             message: "Letter is not awaiting client approval",
           });
         }
+
+        // Revision limit guardrail
+        const allActions = await getReviewActions(input.letterId);
+        const revisionCount = allActions.filter(a => a.action === "client_revision_requested").length;
+        if (revisionCount >= 5) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Maximum revision limit reached (5 revisions). Please contact support if you need further changes.",
+          });
+        }
+        // Warn at 3+ but allow
+        const revisionWarning = revisionCount >= 3
+          ? `This is revision ${revisionCount + 1} of 5. You have ${5 - revisionCount - 1} revision(s) remaining.`
+          : undefined;
+
+        // ─── Paid revision gate: revisions 2+ cost $20 each ─────────────────
+        // The first revision (revisionCount === 0) is free.
+        // Subsequent revisions require a $20 Stripe checkout payment.
+        // The webhook will execute the actual revision after payment is confirmed.
+        if (revisionCount >= 1) {
+          const origin = getOriginUrl(ctx.req);
+          const checkout = await createRevisionConsultationCheckout({
+            userId: ctx.user.id,
+            email: ctx.user.email ?? "",
+            name: ctx.user.name,
+            letterId: input.letterId,
+            revisionNotes: input.revisionNotes,
+            origin,
+          });
+          // Return checkout URL — client will redirect to Stripe
+          return {
+            success: false,
+            requiresPayment: true,
+            checkoutUrl: checkout.url,
+            revisionCount,
+            revisionWarning,
+          };
+        }
+
         await updateLetterStatus(input.letterId, "client_revision_requested");
         await logReviewAction({
           letterRequestId: input.letterId,
@@ -1045,7 +1222,7 @@ export const lettersRouter = router({
           console.error("[clientRequestRevision] Notification error:", err);
           captureServerException(err, { tags: { component: "letters", error_type: "client_revision_notification_failed" } });
         }
-        return { success: true };
+        return { success: true, revisionCount: revisionCount + 1, revisionWarning };
       }),
 
     clientDecline: subscriberProcedure

@@ -137,9 +137,9 @@ submitted → researching → drafting → generated_locked
     └→ pipeline_failed  │    │     [Subscriber pays $200]
          └→ pipeline_failed  │           │
               └→ pipeline_failed   ▼
-              └→ submitted   pending_review → under_review → approved → client_approval_pending
-                                           ↻ (release)      → rejected → submitted    → client_approved
-                                                             → needs_changes → submitted    → sent
+              └→ submitted   pending_review → under_review → approved (transient) → client_approval_pending
+                                           ↻ (release)      → rejected → submitted    → client_approved → sent
+                                                             → needs_changes → submitted    → client_revision_requested → pending_review
 ```
 
 Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
@@ -151,7 +151,8 @@ Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
 - `under_review → approved | rejected | needs_changes | pending_review`
 - `needs_changes → submitted`
 - `approved → client_approval_pending`
-- `client_approval_pending → client_approved`
+- `client_approval_pending → client_approved | client_declined | client_revision_requested`
+- `client_revision_requested → pending_review`
 - `client_approved → sent`
 - `sent → (terminal)`
 - `rejected → submitted`

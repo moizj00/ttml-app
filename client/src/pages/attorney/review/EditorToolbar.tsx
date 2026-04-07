@@ -6,7 +6,6 @@ import {
   Save,
   ClipboardList,
   X,
-  Scale,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -17,7 +16,7 @@ interface EditorToolbarProps {
   claimIsPending: boolean;
   saveIsPending: boolean;
   unclaimIsPending: boolean;
-  requestClientApprovalIsPending: boolean;
+  approvePending: boolean;
   onClaim: () => void;
   onCancelEdit: () => void;
   onSave: () => void;
@@ -26,7 +25,9 @@ interface EditorToolbarProps {
   onRequestChanges: () => void;
   onReject: () => void;
   onApprove: () => void;
-  onRequestClientApproval: () => void;
+  // Legacy prop kept for backward compat — no longer renders a button
+  requestClientApprovalIsPending?: boolean;
+  onRequestClientApproval?: () => void;
 }
 
 export function EditorToolbar({
@@ -37,7 +38,7 @@ export function EditorToolbar({
   claimIsPending,
   saveIsPending,
   unclaimIsPending,
-  requestClientApprovalIsPending,
+  approvePending,
   onClaim,
   onCancelEdit,
   onSave,
@@ -46,7 +47,6 @@ export function EditorToolbar({
   onRequestChanges,
   onReject,
   onApprove,
-  onRequestClientApproval,
 }: EditorToolbarProps) {
   return (
     <div className="flex flex-wrap gap-2 flex-shrink-0">
@@ -136,32 +136,18 @@ export function EditorToolbar({
             <XCircle className="w-4 h-4 mr-1.5" />
             Reject
           </Button>
+          {/* "Submit" sends the letter to the subscriber for final approval */}
           <Button
-            data-testid="button-approve"
+            data-testid="button-submit"
             size="sm"
             onClick={onApprove}
+            disabled={approvePending}
             className="bg-green-600 hover:bg-green-700 text-white active:scale-[0.98] transition-transform"
           >
             <CheckCircle className="w-4 h-4 mr-1.5" />
-            Approve
+            {approvePending ? "Submitting..." : "Submit"}
           </Button>
         </>
-      )}
-
-      {letterStatus === "approved" && (
-        <Button
-          data-testid="button-request-client-approval"
-          variant="outline"
-          size="sm"
-          onClick={onRequestClientApproval}
-          disabled={requestClientApprovalIsPending}
-          className="bg-background border-teal-300 text-teal-700 hover:bg-teal-50"
-        >
-          <Scale className="w-4 h-4 mr-1.5" />
-          {requestClientApprovalIsPending
-            ? "Sending..."
-            : "Send to Client for Approval"}
-        </Button>
       )}
     </div>
   );

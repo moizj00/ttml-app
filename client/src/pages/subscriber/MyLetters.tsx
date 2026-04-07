@@ -14,6 +14,8 @@ import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 
 const ACTIVE_STATUSES = ["submitted", "researching", "drafting"];
+const NEEDS_APPROVAL_STATUSES = ["client_approval_pending"];
+const NEEDS_ACTION_STATUSES = ["generated_locked", "needs_changes", "client_approval_pending", "client_revision_requested"];
 
 type SortKey = "date_desc" | "date_asc" | "type";
 
@@ -28,15 +30,28 @@ function sortLetters(letters: any[], sort: SortKey) {
 function getQuickActions(letter: any) {
   const actions: Array<{ label: string; icon: any; href: string; variant: "default" | "outline" | "secondary"; color?: string }> = [];
 
-  if (letter.status === "approved" && (letter as any).pdfUrl) {
+  // Subscriber needs to approve the attorney-submitted letter
+  if (letter.status === "client_approval_pending") {
+    actions.push({ label: "Review & Approve", icon: Eye, href: `/letters/${letter.id}`, variant: "default", color: "bg-blue-600 hover:bg-blue-700 text-white" });
+  }
+
+  // PDF is ready after subscriber approval
+  if ((letter.status === "client_approved" || letter.status === "sent") && (letter as any).pdfUrl) {
     actions.push({ label: "Download PDF", icon: Download, href: (letter as any).pdfUrl, variant: "default", color: "bg-green-600 hover:bg-green-700 text-white" });
   }
+
+  // PDF still generating after approval
+  if ((letter.status === "client_approved" || letter.status === "sent") && !(letter as any).pdfUrl) {
+    actions.push({ label: "View Letter", icon: Eye, href: `/letters/${letter.id}`, variant: "secondary" });
+  }
+
   if (letter.status === "generated_locked") {
     actions.push({ label: "Pay to Unlock — $299", icon: CreditCard, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
   }
 
-  if (letter.status === "approved" && !(letter as any).pdfUrl) {
-    actions.push({ label: "View Letter", icon: Eye, href: `/letters/${letter.id}`, variant: "secondary" });
+  // Subscriber revision requested — waiting for attorney
+  if (letter.status === "client_revision_requested") {
+    actions.push({ label: "View Details", icon: Eye, href: `/letters/${letter.id}`, variant: "outline" });
   }
 
   return actions;
@@ -64,9 +79,10 @@ export default function MyLetters() {
     sort,
   );
 
-  const approvedCount = (letters ?? []).filter((l) => l.status === "approved").length;
+  const approvedCount = (letters ?? []).filter((l) => ["client_approved", "sent"].includes(l.status)).length;
   const pendingCount = (letters ?? []).filter((l) => ["pending_review", "under_review"].includes(l.status)).length;
-  const actionCount = (letters ?? []).filter((l) => ["generated_locked", "needs_changes"].includes(l.status)).length;
+  const approvalPendingCount = (letters ?? []).filter((l) => l.status === "client_approval_pending").length;
+  const actionCount = (letters ?? []).filter((l) => NEEDS_ACTION_STATUSES.includes(l.status)).length;
 
   return (
     <AppLayout breadcrumb={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Letters" }]}>
@@ -78,7 +94,8 @@ export default function MyLetters() {
             <div className="flex items-center gap-2 flex-wrap mt-0.5">
               <span className="text-sm text-muted-foreground">{letters?.length ?? 0} total</span>
               {approvedCount > 0 && <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-medium">{approvedCount} approved</span>}
-              {pendingCount > 0 && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-medium">{pendingCount} in review</span>}
+              {approvalPendingCount > 0 && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-semibold animate-pulse">{approvalPendingCount} awaiting your approval</span>}
+              {pendingCount > 0 && <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-medium">{pendingCount} in review</span>}
               {actionCount > 0 && <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">{actionCount} need action</span>}
             </div>
           </div>
@@ -114,8 +131,12 @@ export default function MyLetters() {
               <SelectItem value="pending_review">Pending Review</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="needs_changes">Needs Changes</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="client_approval_pending">Awaiting Your Approval</SelectItem>
+              <SelectItem value="client_revision_requested">Revision Requested</SelectItem>
+              <SelectItem value="client_approved">Approved</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="client_declined">Declined</SelectItem>
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
@@ -161,10 +182,11 @@ export default function MyLetters() {
         ) : (
           <div className="space-y-2">
             {filtered.map((letter) => {
-              const hasPdf = letter.status === "approved" && !!(letter as any).pdfUrl;
-              const isApproved = letter.status === "approved";
+              const hasPdf = (letter.status === "client_approved" || letter.status === "sent") && !!(letter as any).pdfUrl;
+              const isApproved = letter.status === "client_approved" || letter.status === "sent";
               const isLocked = letter.status === "generated_locked";
-              const needsAction = ["generated_locked", "needs_changes"].includes(letter.status);
+              const isAwaitingApproval = letter.status === "client_approval_pending";
+              const needsAction = NEEDS_ACTION_STATUSES.includes(letter.status);
               const quickActions = getQuickActions(letter);
 
               return (
@@ -173,6 +195,8 @@ export default function MyLetters() {
                   className={`bg-card border rounded-xl p-4 transition-all hover:shadow-sm ${
                     isApproved
                       ? "border-green-200 bg-green-50/20"
+                      : isAwaitingApproval
+                      ? "border-blue-200 bg-blue-50/20 ring-1 ring-blue-200"
                       : isLocked
                       ? "border-amber-200 bg-amber-50/20 ring-1 ring-amber-200"
                       : needsAction
@@ -184,11 +208,13 @@ export default function MyLetters() {
                     {/* Icon */}
                     <div
                       className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        isApproved ? "bg-green-100" : isLocked ? "bg-amber-100" : "bg-primary/10"
+                        isApproved ? "bg-green-100" : isAwaitingApproval ? "bg-blue-100" : isLocked ? "bg-amber-100" : "bg-primary/10"
                       }`}
                     >
                       {isApproved ? (
                         <FileCheck className="w-4.5 h-4.5 text-green-600" />
+                      ) : isAwaitingApproval ? (
+                        <Eye className="w-4 h-4 text-blue-600" />
                       ) : isLocked ? (
                         <Lock className="w-4 h-4 text-amber-600" />
                       ) : (

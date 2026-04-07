@@ -13,7 +13,7 @@ import {
   getUserById, createNotification, notifyAdmins, notifyAllAttorneys, getDiscountCodeByCode,
   incrementDiscountCodeUsage, createCommission,
 } from "./db";
-import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendPaymentFailedEmail } from "./email";
+import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissionEmail, sendPaymentFailedEmail, sendClientRevisionRequestEmail } from "./email";
 import { users, processedStripeEvents } from "../drizzle/schema";
 import { eq, lt, sql } from "drizzle-orm";
 import { captureServerException, addServerBreadcrumb } from "./sentry";
@@ -273,6 +273,75 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                 }
               } catch (unlockErr) {
                 console.error(`[StripeWebhook] Failed to unlock letter #${letterId}:`, unlockErr);
+              }
+            }
+          }
+
+          // ─── Revision Consultation: execute revision after $20 payment ─────────────────
+          if (session.mode === "payment" && session.metadata?.unlock_type === "revision_consultation") {
+            const revLetterIdStr = session.metadata?.letter_id;
+            const revisionNotes = session.metadata?.revision_notes ?? "(no notes provided)";
+            if (revLetterIdStr) {
+              const revLetterId = parseInt(revLetterIdStr, 10);
+              if (!isNaN(revLetterId)) {
+                try {
+                  const revLetter = await getLetterRequestById(revLetterId);
+                  if (revLetter && revLetter.status === "client_approval_pending") {
+                    await updateLetterStatus(revLetterId, "client_revision_requested");
+                    await logReviewAction({
+                      letterRequestId: revLetterId,
+                      reviewerId: userId,
+                      actorType: "subscriber",
+                      action: "client_revision_requested",
+                      noteText: revisionNotes,
+                      noteVisibility: "user_visible",
+                      fromStatus: "client_approval_pending",
+                      toStatus: "client_revision_requested",
+                    });
+                    // Notify assigned attorney
+                    if (revLetter.assignedReviewerId) {
+                      const attorney = await getUserById(revLetter.assignedReviewerId);
+                      const appUrl = session.success_url?.split('/letters')[0] ?? "https://www.talk-to-my-lawyer.com";
+                      if (attorney?.email) {
+                        await sendClientRevisionRequestEmail({
+                          to: attorney.email,
+                          name: attorney.name ?? "Attorney",
+                          letterSubject: revLetter.subject,
+                          letterId: revLetterId,
+                          subscriberNotes: revisionNotes,
+                          appUrl,
+                        }).catch(console.error);
+                      }
+                      await createNotification({
+                        userId: revLetter.assignedReviewerId,
+                        type: "client_revision_requested",
+                        title: "Client requested revisions (paid)",
+                        body: `A subscriber paid for a revision consultation on "${revLetter.subject}". Please review their notes.`,
+                        link: `/review/${revLetterId}`,
+                      });
+                    }
+                    // Notify subscriber
+                    await createNotification({
+                      userId,
+                      type: "revision_payment_confirmed",
+                      title: "Revision consultation confirmed",
+                      body: `Your $20 revision consultation for "${revLetter.subject}" has been confirmed. The attorney will review your notes shortly.`,
+                      link: `/letters/${revLetterId}`,
+                    });
+                    await notifyAdmins({
+                      category: "letters",
+                      type: "client_revision_requested",
+                      title: `Paid revision consultation — letter #${revLetterId}`,
+                      body: `A subscriber paid $20 for a revision consultation on "${revLetter.subject}".`,
+                      link: `/admin/letters/${revLetterId}`,
+                    });
+                    console.log(`[StripeWebhook] Revision consultation executed for letter #${revLetterId}`);
+                  } else {
+                    console.warn(`[StripeWebhook] Revision consultation: letter #${revLetterId} not in client_approval_pending (status: ${revLetter?.status})`);
+                  }
+                } catch (revErr) {
+                  console.error(`[StripeWebhook] Failed to execute revision consultation for letter #${revLetterId}:`, revErr);
+                }
               }
             }
           }

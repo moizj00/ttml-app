@@ -39,12 +39,15 @@ export function ApproveDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-green-700">
             <CheckCircle className="w-5 h-5" />
-            Approve Letter
+            Submit Letter for Client Approval
           </DialogTitle>
         </DialogHeader>
+        <p className="text-sm text-muted-foreground -mt-1">
+          Review and finalise the letter content below. Once submitted, the subscriber will be notified to review and approve it. The PDF will be generated after the subscriber approves.
+        </p>
         <div className="flex-1 overflow-auto space-y-3 min-h-0">
           <Label className="text-sm font-medium">
-            Final Letter Content — review and edit before approving
+            Final Letter Content — review and edit before submitting
           </Label>
           <RichTextEditor
             data-testid="editor-approve-content"
@@ -59,7 +62,7 @@ export function ApproveDialog({
               <div className="flex items-start gap-2">
                 <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                  Research citations in this letter were not independently verified via web search. All legal citations must be manually confirmed before approval.
+                  Research citations in this letter were not independently verified via web search. All legal citations must be manually confirmed before submitting to the client.
                 </p>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -96,7 +99,7 @@ export function ApproveDialog({
             }
             className="bg-green-600 hover:bg-green-700 text-white"
           >
-            {isPending ? "Approving..." : "Confirm Approval"}
+            {isPending ? "Submitting..." : "Submit to Client"}
           </Button>
         </DialogFooter>
       </DialogContent>
