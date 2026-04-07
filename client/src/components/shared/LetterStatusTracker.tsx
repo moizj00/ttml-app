@@ -4,11 +4,10 @@ import {
   TERMINAL_ERROR_STATUSES,
   TERMINAL_ERROR_CONFIG,
   getStageForStatus,
-  getStageProgress,
   isActiveProcessing,
   Loader2,
 } from "@/lib/letterStages";
-import { useStepTransition, useProgressFill, useReducedMotion } from "@/hooks/useAnimations";
+import { useStepTransition, useReducedMotion } from "@/hooks/useAnimations";
 
 // ═══════════════════════════════════════════════════════
 // UNIFIED LETTER STATUS TRACKER
@@ -88,9 +87,6 @@ function CompactTracker({
   isComplete: boolean;
   className: string;
 }) {
-  const targetPercent = getStageProgress(status);
-  const fill = useProgressFill(targetPercent, 200);
-
   return (
     <div className={`flex items-center gap-0.5 w-full max-w-[160px] ${className}`}>
       {LETTER_STAGES.map((stage, idx) => {
@@ -331,7 +327,7 @@ function ExpandedTracker({
                     {subStageDescription ?? stage.description}
                   </span>
                 )}
-                {stepComplete && idx === stageIndex && !isComplete && (
+                {stepComplete && !stepCurrent && idx === stageIndex - 1 && !isComplete && (
                   <span className="text-xs text-emerald-500 mt-0.5 block">
                     Completed
                   </span>
