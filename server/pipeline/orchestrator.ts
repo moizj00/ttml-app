@@ -272,6 +272,18 @@ export async function runFullPipeline(
     intake,
   };
 
+  // Set researching status for the direct pipeline path (n8n path sets it separately at line 147)
+  await updateLetterStatus(letterId, "researching");
+  await logReviewAction({
+    letterRequestId: letterId,
+    actorType: "system",
+    action: "pipeline_stage_started",
+    noteText: "Pipeline started: legal research in progress.",
+    noteVisibility: "user_visible",
+    fromStatus: "submitted",
+    toStatus: "researching",
+  });
+
   try {
     // Stage 1: Perplexity Research
     pipelineCtx.validationResults = [];
@@ -331,6 +343,18 @@ export async function runFullPipeline(
     if (pipelineCtx) {
       pipelineCtx.citationRevalidationTokens = citationTokens;
     }
+
+    // Stage 2: Drafting — update status so subscriber sees progress
+    await updateLetterStatus(letterId, "drafting");
+    await logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "pipeline_stage_started",
+      noteText: "Research complete. Drafting your legal letter.",
+      noteVisibility: "user_visible",
+      fromStatus: "researching",
+      toStatus: "drafting",
+    });
 
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
     // Capture the initial draft for best-effort fallback (both in-context and registry)
@@ -587,6 +611,20 @@ export async function bestEffortFallback(opts: {
     const versionId = (version as any)?.insertId ?? 0;
     await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
 
+    // Guard: if the letter has already progressed past generated_locked (e.g., subscriber paid
+    // during retry window), do NOT regress it back. The force update would bypass validation.
+    const currentLetter = await getLetterById(letterId);
+    const postLockStatuses = [
+      "pending_review", "under_review", "approved", "needs_changes",
+      "client_approval_pending", "client_revision_requested", "client_approved", "sent",
+    ];
+    if (currentLetter && postLockStatuses.includes(currentLetter.status)) {
+      console.log(
+        `[Pipeline] Letter #${letterId} already at "${currentLetter.status}" — skipping bestEffortFallback status update`
+      );
+      return true;
+    }
+
     await updateLetterStatus(letterId, "generated_locked", { force: true });
     await logReviewAction({
       letterRequestId: letterId,
@@ -673,11 +711,27 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   letterId: number
 ): Promise<boolean> {
   const letterRecord = await getLetterById(letterId);
+
+  // Guard: only advance if the letter is actually at generated_locked.
+  // Another process (payment handler, concurrent retry) may have already moved it.
+  if (letterRecord && letterRecord.status !== "generated_locked") {
+    console.log(
+      `[Pipeline] Letter #${letterId} is at "${letterRecord.status}" (not generated_locked) — skipping auto-advance`
+    );
+    return false;
+  }
+
   if (letterRecord?.submittedByAdmin) {
     console.log(
       `[Pipeline] Letter #${letterId} generated_locked → pending_review (admin-submitted, billing bypassed)`
     );
-    await updateLetterStatus(letterId, "pending_review");
+    try {
+      await updateLetterStatus(letterId, "pending_review");
+    } catch (err) {
+      // Race: status changed between our check and the update — log and skip
+      console.warn(`[Pipeline] Auto-advance race for admin letter #${letterId}: ${err instanceof Error ? err.message : err}`);
+      return false;
+    }
     await logReviewAction({
       letterRequestId: letterId,
       actorType: "system",
@@ -710,7 +764,13 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   console.log(
     `[Pipeline] Letter #${letterId} generated_locked → pending_review (previously unlocked, auto-advance after re-pipeline)`
   );
-  await updateLetterStatus(letterId, "pending_review");
+  try {
+    await updateLetterStatus(letterId, "pending_review");
+  } catch (err) {
+    // Race: status changed between our check and the update — log and skip
+    console.warn(`[Pipeline] Auto-advance race for letter #${letterId}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
   await logReviewAction({
     letterRequestId: letterId,
     actorType: "system",

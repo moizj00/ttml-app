@@ -8,6 +8,7 @@ import {
   logReviewAction,
   markPriorPipelineRunsSuperseded,
   getLetterRequestById as getLetterById,
+  getUserById,
   hasLetterBeenPreviouslyUnlocked,
   getAllUsers,
   createNotification,
@@ -16,7 +17,7 @@ import {
 import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, PipelineContext, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
-import { sendNewReviewNeededEmail, sendAdminAlertEmail } from "../email";
+import { sendNewReviewNeededEmail, sendAdminAlertEmail, sendLetterReadyEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
 import { getAnthropicClient, getVettingModelFallback, getFreeOSSModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
@@ -902,11 +903,16 @@ export async function finalizeLetterAfterVetting(
     },
   });
   const versionId = (version as any)?.insertId ?? 0;
+  if (!versionId) {
+    throw new Error(`Failed to create letter version for letter #${letterId} — version insert returned no ID`);
+  }
 
   await updateLetterVersionPointers(letterId, {
     currentAiDraftVersionId: versionId,
   });
 
+  // Only update status AFTER version is persisted and pointer is set,
+  // so Supabase realtime doesn't broadcast "Draft Ready" before the version is accessible
   const finalStatus = "generated_locked" as const;
   await updateLetterStatus(letterId, finalStatus);
 
@@ -957,7 +963,33 @@ export async function finalizeLetterAfterVetting(
     })();
   }
 
-  const letterForPaywall = await getLetterById(letterId);
+  // ── Notify subscriber that their letter draft is ready ─────────────────────
+  // This was previously only sent via bestEffortFallback (degraded path).
+  // Now we also send it on the normal completion path.
+  const letterForEmail = await getLetterById(letterId);
+  if (letterForEmail?.userId) {
+    const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+    (async () => {
+      try {
+        const subscriber = await getUserById(letterForEmail.userId!);
+        if (subscriber?.email) {
+          await sendLetterReadyEmail({
+            to: subscriber.email,
+            name: subscriber.name ?? "Subscriber",
+            subject: letterForEmail.subject,
+            letterId,
+            appUrl: appBaseUrl,
+            letterType: letterForEmail.letterType,
+            jurisdictionState: letterForEmail.jurisdictionState ?? undefined,
+          });
+        }
+      } catch (emailErr) {
+        console.error(`[Pipeline] Failed to send letter-ready email for #${letterId}:`, emailErr);
+      }
+    })();
+  }
+
+  const letterForPaywall = letterForEmail;
   if (letterForPaywall?.submittedByAdmin) {
     console.log(
       `[Pipeline] Skipping paywall email for #${letterId} — admin-submitted letter`

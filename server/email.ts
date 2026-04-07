@@ -622,6 +622,9 @@ export async function sendStatusUpdateEmail(opts: {
       "Your letter draft is complete and has been placed in the attorney review queue.",
     under_review:
       "An attorney has claimed your letter and is currently reviewing it.",
+    pipeline_failed:
+      "We encountered an issue while processing your letter. Our team has been notified and is looking into it. " +
+      "You can retry your letter from your dashboard, or contact our support team for assistance.",
   };
   const message =
     statusMessages[opts.newStatus] ?? "Your letter request has been updated.";
