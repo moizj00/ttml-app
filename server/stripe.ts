@@ -523,7 +523,7 @@ export async function createLetterUnlockCheckout(params: {
           product_data: {
             name: "Legal Letter — Attorney Review",
             description:
-              "Unlock your AI-drafted letter and send it for licensed attorney review and approval.",
+              "Unlock your attorney-reviewed letter and send it for licensed attorney review and approval.",
             metadata: { plan_id: "single_letter", letter_id: letterId.toString() },
           },
           unit_amount: LETTER_UNLOCK_PRICE_CENTS, // $299

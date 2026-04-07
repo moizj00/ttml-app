@@ -65,12 +65,12 @@ export default function Terms() {
           <section>
             <h2 className="text-2xl font-bold mb-4">3. Technology &amp; Automated Systems</h2>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              Talk To My Lawyer uses proprietary artificial intelligence and machine learning technologies to assist in the preparation of legal letters. By using our Service, you acknowledge and agree to the following:
+              Talk To My Lawyer uses proprietary automated technologies to assist in the preparation of legal letters. By using our Service, you acknowledge and agree to the following:
             </p>
 
-            <h3 className="text-lg font-semibold mb-2 mt-6">3.1 AI-Powered Drafting Pipeline</h3>
+            <h3 className="text-lg font-semibold mb-2 mt-6">3.1 Automated Drafting System</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              Our Service employs proprietary large language models (LLMs) that are purpose-built and specifically trained for legal letter generation. These models are not general-purpose AI — they are trained on legal precedents, local court rules, jurisdiction-specific procedures, California legal conventions, and the structural requirements of formal legal correspondence. Our system generates complete legal letters, including proper formatting, citation styles, and structural conventions specific to the relevant jurisdiction.
+              Our Service employs proprietary automated systems that are purpose-built and specifically configured for legal letter generation. These systems are not general-purpose tools — they are built on legal precedents, local court rules, jurisdiction-specific procedures, California legal conventions, and the structural requirements of formal legal correspondence. Our system generates complete legal letters, including proper formatting, citation styles, and structural conventions specific to the relevant jurisdiction.
             </p>
             <p className="text-muted-foreground leading-relaxed mb-3">
               Additionally, our platform uses a Retrieval-Augmented Generation (RAG) architecture that retrieves relevant statutes, regulations, case law, and legal precedents before generating content. This ensures that your letter references real legal authority specific to your jurisdiction and legal matter.
@@ -78,27 +78,27 @@ export default function Terms() {
 
             <h3 className="text-lg font-semibold mb-2 mt-6">3.2 Attorney Review Guarantee</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              All AI-generated letter drafts are reviewed, edited as necessary, and approved by a licensed attorney before delivery to you. No letter is sent or made available in final form without attorney review and approval. The AI system serves as a drafting tool for the reviewing attorney — it does not replace attorney judgment.
+              All system-generated letter drafts are reviewed, edited as necessary, and approved by a licensed attorney before delivery to you. No letter is sent or made available in final form without attorney review and approval. The automated system serves as a drafting tool for the reviewing attorney — it does not replace attorney judgment.
             </p>
 
             <h3 className="text-lg font-semibold mb-2 mt-6">3.3 Jurisdiction-Specific Training</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              Our models are trained on and optimized for California and jurisdiction-specific legal materials, including local court rules, procedural quirks, filing conventions, and precedent patterns. While we strive for accuracy and completeness, the automated systems may not capture every nuance of rapidly evolving law. The attorney review process is designed to catch and correct any such gaps.
+              Our systems are built on and optimized for California and jurisdiction-specific legal materials, including local court rules, procedural quirks, filing conventions, and precedent patterns. While we strive for accuracy and completeness, the automated systems may not capture every nuance of rapidly evolving law. The attorney review process is designed to catch and correct any such gaps.
             </p>
 
             <h3 className="text-lg font-semibold mb-2 mt-6">3.4 Continuous Learning</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              Our AI systems improve over time through reinforcement learning from attorney review outcomes. Aggregated and de-identified patterns from attorney edits and approvals are used to improve drafting quality. Your personal identifying information is not shared with other users or used to train models that serve other users' specific matters.
+              Our automated systems improve over time based on attorney review outcomes. Aggregated and de-identified patterns from attorney edits and approvals are used to improve drafting quality. Your personal identifying information is not shared with other users or used in processes that serve other users' specific matters.
             </p>
 
             <h3 className="text-lg font-semibold mb-2 mt-6">3.5 Not Legal Advice</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              While our letters are drafted by AI and reviewed by licensed attorneys, the Service does not establish an attorney-client relationship between you and any reviewing attorney. The letters produced are tools designed to assist you in your legal matters. They do not constitute independent legal advice, and you should consult with your own attorney for matters requiring personalized legal counsel.
+              While our letters are drafted by our automated system and reviewed by licensed attorneys, the Service does not establish an attorney-client relationship between you and any reviewing attorney. The letters produced are tools designed to assist you in your legal matters. They do not constitute independent legal advice, and you should consult with your own attorney for matters requiring personalized legal counsel.
             </p>
 
             <h3 className="text-lg font-semibold mb-2 mt-6">3.6 Consent to Automated Processing</h3>
             <p className="text-muted-foreground leading-relaxed mb-3">
-              By submitting a letter request, you consent to having your case information — including the description of your legal matter, parties involved, jurisdiction, desired outcome, and any uploaded documents — processed by our automated AI systems as described above. If you do not consent to such processing, you should not use the Service.
+              By submitting a letter request, you consent to having your case information — including the description of your legal matter, parties involved, jurisdiction, desired outcome, and any uploaded documents — processed by our automated systems as described above. If you do not consent to such processing, you should not use the Service.
             </p>
           </section>
 

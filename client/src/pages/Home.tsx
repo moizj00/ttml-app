@@ -194,7 +194,7 @@ export default function Home() {
             "@type": "Offer",
             name: "Single Letter",
             description: "One attorney-drafted legal letter",
-            price: "200",
+            price: "299",
             priceCurrency: "USD",
             eligibleQuantity: {
               "@type": "QuantitativeValue",
@@ -206,11 +206,11 @@ export default function Home() {
             "@type": "Offer",
             name: "Monthly Subscription",
             description: "Ongoing legal letter service billed monthly",
-            price: "200",
+            price: "299",
             priceCurrency: "USD",
             priceSpecification: {
               "@type": "UnitPriceSpecification",
-              price: "200",
+              price: "299",
               priceCurrency: "USD",
               referenceQuantity: {
                 "@type": "QuantitativeValue",
@@ -223,11 +223,11 @@ export default function Home() {
             "@type": "Offer",
             name: "Annual Subscription",
             description: "Ongoing legal letter service billed annually",
-            price: "2000",
+            price: "2400",
             priceCurrency: "USD",
             priceSpecification: {
               "@type": "UnitPriceSpecification",
-              price: "2000",
+              price: "2400",
               priceCurrency: "USD",
               referenceQuantity: {
                 "@type": "QuantitativeValue",

@@ -616,8 +616,8 @@ export async function sendStatusUpdateEmail(opts: {
   const ctaUrl = `${opts.appUrl}/letters/${opts.letterId}`;
   const statusMessages: Record<string, string> = {
     researching:
-      "Our AI is now researching the applicable laws and regulations for your jurisdiction.",
-    drafting: "Our AI is drafting your letter based on the legal research.",
+      "Our system is now researching the applicable laws and regulations for your jurisdiction.",
+    drafting: "Your letter is being drafted based on the legal research.",
     pending_review:
       "Your letter draft is complete and has been placed in the attorney review queue.",
     under_review:
@@ -955,7 +955,7 @@ export async function sendPaywallNotificationEmail(opts: {
 
   const body = `
     <p>Hello ${opts.name},</p>
-    <p>Great news — your AI-drafted legal letter is ready and waiting for you. A licensed attorney is standing by to review, strengthen, and approve it.</p>
+    <p>Great news — your legal letter draft is ready and waiting for you. A licensed attorney is standing by to review, strengthen, and approve it.</p>
 
     <!-- Letter summary card -->
     <table border="0" cellpadding="0" cellspacing="0" width="100%"
@@ -1025,7 +1025,7 @@ export async function sendPaywallNotificationEmail(opts: {
     html,
     text: buildPlainText({
       title: "Your Letter Draft Is Ready!",
-      body: `Hello ${opts.name},\n\nYour AI-drafted legal letter is ready and waiting for you.\n\nLetter: "${opts.subject}"\nType: ${letterTypeLabel}\nLetter ID: #${opts.letterId}\n\nClick the link below to view a preview of your letter and unlock it for attorney review.\n\nUnlock options:\n- $299 one-time payment for attorney review\n- Subscribe for unlimited letters\n\nA licensed attorney will review, edit, and approve your letter. Legal matters are time-sensitive — act now.`,
+      body: `Hello ${opts.name},\n\nYour legal letter draft is ready and waiting for you.\n\nLetter: "${opts.subject}"\nType: ${letterTypeLabel}\nLetter ID: #${opts.letterId}\n\nClick the link below to view a preview of your letter and unlock it for attorney review.\n\nUnlock options:\n- $299 one-time payment for attorney review\n- Subscribe for unlimited letters\n\nA licensed attorney will review, edit, and approve your letter. Legal matters are time-sensitive — act now.`,
       ctaText: "View & Unlock Your Letter",
       ctaUrl,
     }),

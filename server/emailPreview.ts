@@ -151,7 +151,7 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
       const letterTypeLabel = p.letterType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       const body = `
         <p>Hello ${p.name},</p>
-        <p>We've received your legal letter request and our AI pipeline is already working on it. You'll receive another email as soon as your draft is ready to review.</p>
+        <p>We've received your legal letter request and our system is already working on it. You'll receive another email as soon as your draft is ready to review.</p>
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;margin:20px 0;">
           <tr><td style="padding:20px;">
             <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#0369A1;"><strong>📋 Submission Details</strong></p>
@@ -163,7 +163,7 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
         </table>
         <p><strong>What happens next?</strong></p>
         <ol style="margin:8px 0;padding-left:20px;font-family:Inter,Arial,sans-serif;font-size:15px;color:#374151;line-height:1.8;">
-          <li>Our AI conducts jurisdiction-specific legal research</li>
+          <li>Our system conducts jurisdiction-specific legal research</li>
           <li>A professional draft letter is generated</li>
           <li>You'll be notified to review and unlock your letter</li>
           <li>A licensed attorney reviews and approves your final letter</li>
@@ -180,12 +180,12 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
 
   letter_ready: {
     label: "Letter Ready — Unlock Now",
-    description: "Sent to subscriber when the AI pipeline completes and the letter is in generated_locked status.",
+    description: "Sent to subscriber when the drafting pipeline completes and the letter is in generated_locked status.",
     render: (p) => {
       const ctaUrl = `${p.appUrl}/letters/${p.letterId}`;
       const body = `
         <p>Hello ${p.name},</p>
-        <p>Your AI-drafted legal letter is ready! Our system has completed the research and drafting stages for your request.</p>
+        <p>Your legal letter draft is ready! Our system has completed the research and drafting stages for your request.</p>
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;margin:20px 0;">
           <tr><td style="padding:20px;">
             <p style="margin:0 0 8px;font-family:Inter,Arial,sans-serif;font-size:14px;color:#166534;"><strong>✅ Your Draft Is Ready</strong></p>
@@ -198,7 +198,7 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
       `;
       return {
         subject: `[${APP_NAME}] Your letter draft is ready — unlock for attorney review`,
-        html: buildEmailHtml({ preheader: "Your AI-drafted letter is ready — unlock it for attorney review.", title: "Your Letter Draft Is Ready 🎉", body, ctaText: "View & Unlock Your Letter — $29", ctaUrl }),
+        html: buildEmailHtml({ preheader: "Your letter draft is ready — unlock it for attorney review.", title: "Your Letter Draft Is Ready 🎉", body, ctaText: "View & Unlock Your Letter — $29", ctaUrl }),
         plain: `Your letter "${p.subject}" (#${p.letterId}) is ready. Unlock it at: ${ctaUrl}`,
       };
     },
@@ -342,7 +342,7 @@ const TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
 
   job_failed: {
     label: "Pipeline Job Failed (Admin Alert)",
-    description: "Sent to admins when the AI pipeline fails for a letter.",
+    description: "Sent to admins when the drafting pipeline fails for a letter.",
     render: (p) => {
       const ctaUrl = `${p.appUrl}/admin/jobs`;
       const errorMsg = "OpenAI API returned a 503 Service Unavailable error after 3 retry attempts. The pipeline has been halted and the letter reverted to submitted status for manual retry.";
