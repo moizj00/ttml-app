@@ -10,6 +10,8 @@
  *   - Stripe Event Pruning: daily at 03:00 — removes processed webhook events older than 7 days
  *   - Paywall Email Notification: every 5 minutes — sends initial paywall email to subscribers
  *     whose letter reached generated_locked status 10–15 minutes ago (idempotent)
+ *   - Stale Pipeline Lock Recovery: every 15 minutes — detects letters stuck in researching/drafting
+ *     with a lock older than 30 minutes and re-enqueues them for a fresh pipeline run
  *   - Lesson Consolidation: weekly on Sundays at 02:00 — merges similar lessons in scopes with 5+ active lessons
  *   - Lesson Auto-Archival: weekly on Sundays at 02:30 — deactivates stale/ineffective lessons
  *
@@ -28,6 +30,7 @@ import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
 import { processPaywallEmails } from "./paywallEmailCron";
 import { runAutomatedConsolidation, archiveIneffectiveLessons } from "./learning";
+import { recoverStalePipelineLocks } from "./stalePipelineLockRecovery";
 import { logger } from "./logger";
 
 /** Whether the scheduler has been started (prevents double-registration) */
@@ -133,6 +136,29 @@ export function startCronScheduler(): void {
     }
   });
 
+  // Stale pipeline lock recovery: runs every 15 minutes
+  // Detects letters stuck in `researching` or `drafting` with a pipeline lock
+  // older than 30 minutes (worker died / timed out) and re-enqueues them.
+  cron.schedule("*/15 * * * *", async () => {
+    const startTime = Date.now();
+    logger.info(`[Cron] [${new Date().toISOString()}] Running stale pipeline lock recovery...`);
+    try {
+      const result = await recoverStalePipelineLocks();
+      const elapsed = Date.now() - startTime;
+      if (result.recovered > 0 || result.errors > 0) {
+        logger.warn(
+          `[Cron] Stale lock recovery done in ${elapsed}ms — recovered: ${result.recovered}, errors: ${result.errors}`
+        );
+      } else {
+        logger.info(`[Cron] Stale lock recovery done in ${elapsed}ms — no stuck letters found`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Cron] Stale pipeline lock recovery failed: ${msg}`);
+      captureServerException(err, { tags: { component: "cron", job: "stale_lock_recovery" } });
+    }
+  });
+
   // Lesson consolidation: runs weekly on Sundays at 02:00
   // Iterates over (letter_type, jurisdiction) scopes with 5+ active lessons
   // and merges semantically similar lessons to prevent prompt bloat.
@@ -174,7 +200,7 @@ export function startCronScheduler(): void {
     }
   });
 
-  logger.info("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)");
+  logger.info("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min), stale-lock-recovery (every 15 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)");
 }
 
 /**
