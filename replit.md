@@ -80,3 +80,21 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
 - **Google Maps JavaScript API + Places API**: Address autocomplete in letter submission forms.
 - **Railway**: Hosting and deployment.
+- **Playwright**: E2E browser tests.
+
+## Testing
+
+### Unit/Integration Tests (Vitest)
+- Config: `vitest.config.ts`
+- Scope: `server/**/*.test.ts`, `server/**/*.spec.ts`
+- Run: `npm test` or `vitest run`
+
+### E2E Tests (Playwright)
+- Config: `playwright.config.ts`
+- Test directory: `e2e/`
+- Run: `npm run test:e2e` or `npx playwright test`
+- 5 suites: auth, intake form, subscriber dashboard, attorney review, admin dashboard
+- Uses system Chromium (auto-detected from NixOS)
+- Requires test user accounts (env vars `E2E_SUBSCRIBER_EMAIL`, etc.)
+- CI: runs as separate `e2e` job in `.github/workflows/ci.yml`
+- Does NOT interfere with vitest — completely separate test directories and configs
