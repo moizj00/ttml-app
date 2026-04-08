@@ -108,7 +108,7 @@ async function verifyToken(token: string): Promise<User | null> {
             const entry = _userCache.get(supabaseUid);
             if (entry) entry.lastSignedInWrittenAt = now;
           }).catch((err) => {
-            logger.warn("[SupabaseAuth] Failed to update lastSignedIn (non-blocking):", err);
+            logger.warn({ err: err }, "[SupabaseAuth] Failed to update lastSignedIn (non-blocking):");
             captureServerException(err instanceof Error ? err : new Error(String(err)), {
               tags: { component: "supabase_auth", error_type: "last_signed_in_update_failed" },
             });

@@ -381,7 +381,7 @@ export function registerN8nCallbackRoute(app: Express): void {
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ err: msg }, `[n8n Callback] Error processing callback for letter #${letterId}:`);
+        logger.error({ msg: msg }, `[n8n Callback] Error processing callback for letter #${letterId}:`);
         captureServerException(err instanceof Error ? err : new Error(msg), {
           tags: { component: "n8n_callback", error_type: "post_response_processing_failed" },
           extra: { letterId },

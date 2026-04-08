@@ -203,7 +203,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             letterId,
             newStatus: "pipeline_failed",
             appUrl,
-          }).catch(e => logger.error(`[Worker] Failed to send failure notification email to subscriber for letter #${letterId}:`, e));
+          }).catch(e => logger.error({ e: e }, `[Worker] Failed to send failure notification email to subscriber for letter #${letterId}:`));
         }
       }
     } catch (subEmailErr) {
@@ -220,7 +220,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
 
     throw new Error(`Pipeline failed after ${PIPELINE_MAX_RETRIES + 1} attempts for letter #${letterId}`);
   } finally {
-    await releasePipelineLock(letterId).catch(e => logger.error("[Worker] Failed to release pipeline lock:", e));
+    await releasePipelineLock(letterId).catch(e => logger.error({ e: e }, "[Worker] Failed to release pipeline lock:"));
   }
 }
 
@@ -244,13 +244,13 @@ export async function processRetryFromStage(data: RetryFromStageJobData): Promis
           logger.info(`[Worker] Recovered intake from database for letter #${letterId}`);
         }
       } catch (e) {
-        logger.error({ err: e }, `[Worker] Failed to recover intake for letter #${letterId}:`);
+        logger.error({ e: e }, `[Worker] Failed to recover intake for letter #${letterId}:`);
       }
     }
 
     await retryPipelineFromStage(letterId, intake as any, stage, userId);
   } finally {
-    await releasePipelineLock(letterId).catch(e => logger.error("[Worker] Failed to release pipeline lock (retry-from-stage):", e));
+    await releasePipelineLock(letterId).catch(e => logger.error({ e: e }, "[Worker] Failed to release pipeline lock (retry-from-stage):"));
   }
 }
 
@@ -345,7 +345,7 @@ async function startWorker() {
 
   logger.info("[Worker] Warming up database connection...");
   await getDb().catch((err) => {
-    logger.error("[Worker] Database warmup failed:", err);
+    logger.error({ err: err }, "[Worker] Database warmup failed:");
     captureServerException(err, { tags: { component: "worker", error_type: "db_warmup_failed" } });
   });
 
@@ -391,6 +391,6 @@ async function startWorker() {
 }
 
 startWorker().catch((err) => {
-  logger.error("[Worker] Failed to start:", err);
+  logger.error({ err: err }, "[Worker] Failed to start:");
   process.exit(1);
 });

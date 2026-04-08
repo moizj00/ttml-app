@@ -150,7 +150,7 @@ export function registerVerificationRoutes(app: Express) {
             logger.error({ err: emailErr }, "[SupabaseAuth] Failed to send welcome email:");
           }
         }).catch((err) => {
-          logger.error("[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):", err);
+          logger.error({ err: err }, "[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):");
           captureServerException(err instanceof Error ? err : new Error(String(err)), {
             tags: { component: "supabase_auth", error_type: "welcome_email_fetch_failed" },
           });
@@ -251,7 +251,7 @@ export function registerVerificationRoutes(app: Express) {
             }
           }
         })().catch((err) => {
-          logger.error("[SupabaseAuth] Background welcome email task failed:", err);
+          logger.error({ err: err }, "[SupabaseAuth] Background welcome email task failed:");
           captureServerException(err instanceof Error ? err : new Error(String(err)), {
             tags: { component: "supabase_auth", error_type: "welcome_email_background_failed" },
           });

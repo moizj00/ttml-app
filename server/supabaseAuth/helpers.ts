@@ -100,7 +100,7 @@ export async function sendRoleBasedWelcomeEmail(user: User, origin: string): Pro
 
   if (user.role === "employee") {
     const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch((err) => {
-      logger.warn(`[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`, err);
+      logger.warn({ err: err }, `[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`);
       return null;
     });
     await sendEmployeeWelcomeEmail({

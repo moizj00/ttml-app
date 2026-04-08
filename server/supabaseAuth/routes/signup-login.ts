@@ -200,7 +200,7 @@ export function registerSignupLoginRoutes(app: Express) {
                    email.split("@")[0];
       const supabaseEmailVerified = isSupabaseEmailConfirmed(data.user);
       const appUserCheck = await db.getUserByEmail(email).catch((err) => {
-        logger.warn(`[SupabaseAuth] Failed to fetch app user by email during login (${email}):`, err);
+        logger.warn({ err: err }, `[SupabaseAuth] Failed to fetch app user by email during login (${email}):`);
         return null;
       });
 

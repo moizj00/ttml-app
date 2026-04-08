@@ -149,7 +149,7 @@ export async function processDraftReminders(): Promise<ReminderResult> {
         status: "error",
         reason: msg,
       });
-      logger.error({ err: msg }, `[DraftReminders] Failed to send reminder for letter #${letter.id}:`);
+      logger.error({ msg: msg }, `[DraftReminders] Failed to send reminder for letter #${letter.id}:`);
     }
   }
 
@@ -193,7 +193,7 @@ export function registerDraftRemindersRoute(app: Express): void {
       return res.json({ success: true, result });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg }, "[DraftReminders] Cron handler error:");
+      logger.error({ msg: msg }, "[DraftReminders] Cron handler error:");
       return res.status(500).json({ error: msg });
     }
   });

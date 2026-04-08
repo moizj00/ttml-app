@@ -431,7 +431,7 @@ export async function buildLessonsPromptBlock(
     const lessonIds = (lessons as Array<{ id?: number | null }>).map((l) => l.id).filter((id): id is number => id != null);
     if (lessonIds.length > 0) {
       incrementLessonInjectionStats(lessonIds).catch((err) =>
-        logger.warn("[Pipeline] Failed to increment injection stats:", err)
+        logger.warn({ err: err }, "[Pipeline] Failed to increment injection stats:")
       );
     }
 

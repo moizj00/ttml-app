@@ -56,7 +56,7 @@ function upsertToVertexSearchFireAndForget(versionId: number, embedding: number[
   if (!isVertexSearchConfigured()) return;
 
   upsertToVertexSearch(String(versionId), embedding).catch((err) => {
-    logger.warn(`[Embeddings] Vertex Search upsert failed for version #${versionId} (non-blocking):`, err);
+    logger.warn({ err: err }, `[Embeddings] Vertex Search upsert failed for version #${versionId} (non-blocking):`);
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "vertex_upsert_failed" },
       extra: { versionId },

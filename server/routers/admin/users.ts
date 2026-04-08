@@ -81,7 +81,7 @@ export const usersProcedures = {
       try {
         await assignRoleId(input.userId, input.role);
       } catch (e) {
-        logger.error({ err: e }, "[updateRole] Role ID assignment failed:");
+        logger.error({ e: e }, "[updateRole] Role ID assignment failed:");
       }
 
       // Invalidate the user's auth cache so their next request picks up the new role

@@ -123,7 +123,7 @@ export async function runResearchStage(
     noteVisibility: "internal",
     fromStatus: "submitted",
     toStatus: "researching",
-  }).catch(e => logger.error(`[Pipeline] Failed to log submitted→researching action for #${letterId}:`, e));
+  }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to log submitted→researching action for #${letterId}:`));
   try {
     const { notifyAdmins } = await import("../db");
     await notifyAdmins({
@@ -578,7 +578,7 @@ export async function runResearchStage(
     return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ err: msg }, `[Pipeline] Stage 1 failed for letter #${letterId}:`);
+    logger.error({ msg: msg }, `[Pipeline] Stage 1 failed for letter #${letterId}:`);
     captureServerException(err, {
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },

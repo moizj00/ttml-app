@@ -198,7 +198,7 @@ export async function dryRunFineTuneCheck(): Promise<{
   const wouldSubmit = gcpConfigured && thresholdMet && !inProgress && trainingFilesCount > 0;
   notes.push(wouldSubmit ? "DRY RUN: would submit Vertex AI fine-tuning job." : "DRY RUN: would NOT submit a job.");
 
-  logger.info({ data: notes.join(" | ") }, "[FineTune][DryRun]");
+  logger.info({ notes_join: notes.join(" | ") }, "[FineTune][DryRun]");
   return { gcpConfigured, exampleCount, thresholdMet, trainingFilesCount, inProgress, wouldSubmit, notes };
 }
 

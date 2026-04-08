@@ -198,7 +198,7 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      logger.info({ data: storedVerifier.length }, "[PKCE] Exchanging code directly via REST | verifier length:");
+      logger.info({ storedVerifier_length: storedVerifier.length }, "[PKCE] Exchanging code directly via REST | verifier length:");
       const tokenResponse = await fetch(
         `${supabaseUrl}/auth/v1/token?grant_type=pkce`,
         {
@@ -224,12 +224,7 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       if (!tokenResponse.ok || !tokenJson.access_token || !tokenJson.user) {
-        logger.error({
-          status: tokenResponse.status,
-          error: tokenJson.error,
-          description: tokenJson.error_description,
-          message: tokenJson.message,
-        }, "[SupabaseAuth] PKCE token exchange failed:");
+        logger.error({ status: tokenResponse.status, error: tokenJson.error, description: tokenJson.error_description, message: tokenJson.message }, "OAuth callback failed");
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }

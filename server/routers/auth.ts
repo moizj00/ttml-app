@@ -279,13 +279,13 @@ export const authRouter = router({
         try {
           await assignRoleId(userId, input.role);
         } catch (e) {
-          logger.error({ err: e }, "[Onboarding] Role ID assignment failed:");
+          logger.error({ e: e }, "[Onboarding] Role ID assignment failed:");
         }
         if (input.role === "employee") {
           try {
             await createDiscountCodeForEmployee(userId);
           } catch (e) {
-            logger.info({ data: e }, "[Onboarding] Discount code creation skipped (may already exist)");
+            logger.info({ e: e }, "[Onboarding] Discount code creation skipped (may already exist)");
           }
         }
         const roleLabels: Record<string, string> = {

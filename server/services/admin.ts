@@ -70,7 +70,7 @@ export async function changeUserRole(
   try {
     await assignRoleId(input.userId, input.role);
   } catch (e) {
-    logger.error({ err: e }, "[changeUserRole] Role ID assignment failed:");
+    logger.error({ e: e }, "[changeUserRole] Role ID assignment failed:");
   }
 
   const updatedUser = await getUserById(input.userId);
@@ -150,7 +150,7 @@ export async function inviteAttorney(
     }
     await updateUserRole(existingUser.id, "attorney");
     try { await assignRoleId(existingUser.id, "attorney"); } catch (e) {
-      logger.error({ err: e }, "[inviteAttorney] Role ID assignment failed:");
+      logger.error({ e: e }, "[inviteAttorney] Role ID assignment failed:");
     }
     if (existingUser.openId) invalidateUserCache(existingUser.openId);
     try {
@@ -206,7 +206,7 @@ export async function inviteAttorney(
   const appUser = await getUserByOpenId(createData.user.id);
   if (appUser) {
     try { await assignRoleId(appUser.id, "attorney"); } catch (e) {
-      logger.error({ err: e }, "[inviteAttorney] Role ID assignment failed:");
+      logger.error({ e: e }, "[inviteAttorney] Role ID assignment failed:");
     }
   }
 
@@ -325,7 +325,7 @@ async function _handleExistingAuthUser(
       const existingAppUser = await getUserByOpenId(authUserId);
       if (existingAppUser) {
         try { await assignRoleId(existingAppUser.id, "attorney"); } catch (e) {
-          logger.error({ err: e }, "[inviteAttorney] Role ID assignment for existing auth user:");
+          logger.error({ e: e }, "[inviteAttorney] Role ID assignment for existing auth user:");
         }
       }
       await serviceClient.auth.admin.updateUserById(authUserId, {

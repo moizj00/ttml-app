@@ -113,6 +113,6 @@ export async function checkR2Connectivity(): Promise<void> {
     logger.info("[R2] Cloudflare R2 connectivity check passed.");
   } catch (err: any) {
     r2Healthy = false;
-    logger.error("[R2] Cloudflare R2 connectivity check FAILED:", err?.message ?? err);
+    logger.error({ err: err?.message ?? err }, "[R2] Cloudflare R2 connectivity check FAILED:");
   }
 }
