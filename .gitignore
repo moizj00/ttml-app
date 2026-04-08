@@ -145,6 +145,11 @@ test-output-*
 test_reports/
 test-pipeline-results.md
 
+# ── Playwright E2E test artifacts ──────────────────────────────────────────
+playwright-report/
+test-results/
+blob-report/
+
 # ── Agent / AI tooling ──────────────────────────────────────────────────────
 .agents/
 .claude/

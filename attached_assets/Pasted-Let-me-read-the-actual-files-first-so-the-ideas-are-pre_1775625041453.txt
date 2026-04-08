@@ -1,0 +1,73 @@
+Let me read the actual files first so the ideas are precise, not guessed.Perfect — I've read both files in full. Here are tight, ready-to-paste ideas for Claude Code:
+
+---
+
+## `server/email.ts` — Split Strategy
+
+The file has **4 clear layers**. Tell Claude Code:
+
+> **Decompose `server/email.ts` into `server/email/` using this exact structure. Barrel re-export everything from `server/email/index.ts` so all existing imports keep working. Named exports only.**
+>
+> **Layer 1 — `server/email/transport.ts`**  
+> Move: `dispatchToWorker()`, `sendEmail()`, `sendWithRetry()`, `getResend()`, `FROM`, `APP_NAME`, `BRAND_COLOR`, `BRAND_DARK`, `BRAND_ACCENT`, `LOGO_URL`, `WORKER_DISPATCH_TIMEOUT_MS`. These are shared infra used by every template.
+>
+> **Layer 2 — `server/email/layout.ts`**  
+> Move: `buildEmailHtml()`, `buildPlainText()`. Pure template builders, depend only on constants from `transport.ts`.
+>
+> **Layer 3 — `server/email/templates/subscriber.ts`**  
+> Move: `sendLetterSubmissionEmail`, `sendLetterReadyEmail`, `sendLetterUnlockedEmail`, `sendLetterApprovedEmail`, `sendLetterRejectedEmail`, `sendNeedsChangesEmail`, `sendStatusUpdateEmail`, `sendLetterToRecipient`. All subscriber-facing letter lifecycle emails.
+>
+> **Layer 4 — `server/email/templates/system.ts`**  
+> Move: `sendNewReviewNeededEmail`, `sendClientRevisionRequestEmail`, `sendJobFailedAlertEmail`, `sendAdminAlertEmail`, `validateResendCredentials`. Attorney/admin/ops emails.
+>
+> **Layer 5 — `server/email/templates/auth.ts`**  
+> Move: `sendVerificationEmail`, `sendWelcomeEmail`, `sendEmployeeWelcomeEmail`, `sendAttorneyWelcomeEmail`, `sendPasswordResetEmail`, `sendAdminVerificationCodeEmail` (these are in the bottom 647 lines not yet loaded — same principle).
+>
+> Each template file imports `{ dispatchToWorker, sendEmail, sendWithRetry, FROM, ... }` from `../transport` and `{ buildEmailHtml, buildPlainText }` from `../layout`. `index.ts` re-exports all public functions from all 3 template files.
+
+---
+
+## `server/supabaseAuth.ts` — Split Strategy
+
+The file has **5 clear layers**. Tell Claude Code:
+
+> **Decompose `server/supabaseAuth.ts` into `server/supabaseAuth/` using this exact structure. Barrel re-export all current public exports from `server/supabaseAuth/index.ts`. Named exports only.**
+>
+> **`server/supabaseAuth/constants.ts`**  
+> Move: `SUPER_ADMIN_EMAILS`, `CANONICAL_DOMAIN`, `ALLOWED_ORIGIN_HOSTS`, `SUPABASE_SESSION_COOKIE`, `USER_CACHE_TTL_MS`, `LAST_SIGNED_IN_WRITE_INTERVAL_MS`. Pure constants, no imports.
+>
+> **`server/supabaseAuth/clients.ts`**  
+> Move: `getAdminClient()`, `supabaseUrl`, `supabaseServiceRoleKey`, `supabaseAnonKey`. Lazy-init Supabase client singleton.
+>
+> **`server/supabaseAuth/cache.ts`**  
+> Move: `UserCacheEntry` interface, `_userCache`, `_cacheGet()`, `_cacheSet()`, `invalidateUserCache()`, `invalidateAllUserCache()`. The entire 30-second user cache layer with its `LAST_SIGNED_IN_WRITE_INTERVAL_MS` throttle logic.
+>
+> **`server/supabaseAuth/helpers.ts`**  
+> Move: `getOriginUrl()`, `isAllowedHost()`, `getAuthRedirectPath()`, `getPostAuthRedirectPath()`, `isRoleAllowedOnPath()`, `getSafeRelativePath()`, `parseCookies()`, `extractAccessToken()`, `extractBearerToken()`, `extractCookieToken()`, `isSupabaseEmailConfirmed()`, `sendRoleBasedWelcomeEmail()`. Stateless utility functions.
+>
+> **`server/supabaseAuth/verifyToken.ts`**  
+> Move: `verifyToken()` (private), `syncGoogleUser()` (private), `authenticateRequest()` (public export). Core JWT verification and DB sync logic. Imports from `cache.ts`, `clients.ts`, `constants.ts`, `helpers.ts`.
+>
+> **`server/supabaseAuth/routes/signup.ts`** → handler for `POST /api/auth/signup`  
+> **`server/supabaseAuth/routes/login.ts`** → handler for `POST /api/auth/login` + `POST /api/auth/logout`  
+> **`server/supabaseAuth/routes/admin2fa.ts`** → handlers for all `/api/auth/admin-2fa/*` routes  
+> **`server/supabaseAuth/routes/session.ts`** → `POST /api/auth/refresh`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`  
+> **`server/supabaseAuth/routes/google.ts`** → `GET /api/auth/google`, `GET /api/auth/google/callback`, `GET /api/auth/verify-email`
+>
+> Each route file exports a single `register*Routes(app: Express): void` function. `index.ts` calls all of them inside the existing `registerSupabaseAuthRoutes(app)` function — so the one external caller never changes.
+
+---
+
+## Quick-fire for the rest
+
+For `server/routers/letters.ts` (977L):
+> Split into `server/routers/letters/` — `queries.ts` (letterList, letterDetail, letterSearch), `mutations.ts` (submitLetter, updateLetter, deleteLetter), `pipeline.ts` (triggerPipeline, retryPipeline, pipelineStatus), `payment.ts` (requestPayment, confirmPayment, paymentStatus). Merge all into `lettersRouter` in `index.ts`.
+
+For `server/routers/admin.ts` (958L):
+> Split into `server/routers/admin/` — `users.ts`, `letters.ts`, `analytics.ts`, `jobs.ts`. Merge in `index.ts`.
+
+For `shared/types.ts` (886L):
+> Split into `shared/types/` — `letter.ts`, `user.ts`, `pipeline.ts`, `billing.ts`, `review.ts`. Barrel in `shared/types/index.ts`, keep `shared/types.ts` as a one-line `export * from "./types/index"` so no callers break.
+
+For `client/src/pages/subscriber/LetterDetail.tsx` (1068L):
+> Extract into `client/src/pages/subscriber/letter-detail/` — `LetterContent.tsx` (body + paywall), `LetterStatusBanner.tsx`, `LetterActions.tsx` (CTA buttons), `LetterMetadata.tsx`. Keep `LetterDetail.tsx` as the data-fetching page shell that composes these four.
