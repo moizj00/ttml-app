@@ -1,0 +1,212 @@
+# Revalidation Step: Fix TS Errors + Add `pnpm revalidate` Script
+
+
+
+## Context
+
+
+
+The codebase has 9 pre-existing TypeScript errors across 4 client files. These block adding a reliable revalidation step (typecheck + build). This plan fixes all TS errors, adds a `revalidate` script to `package.json`, and updates CI to use it.
+
+
+
+---
+
+
+
+## Step 1: Fix 9 Pre-existing TypeScript Errors
+
+
+
+### 1a. `client/src/pages/admin/AdminSubmitLetter.tsx` (3 errors)
+
+
+
+**Error 1 (line 41):** Missing `situationFields` in INITIAL FormData.
+
+- Add `situationFields: {},` to the INITIAL object (after `communicationsMethod`).
+
+
+
+**Error 2 (line 322):** Step1LetterType missing `activeIntakeFormTemplateId` and `onSelectIntakeTemplate` props.
+
+- Add state: `const [activeIntakeFormTemplateId, setActiveIntakeFormTemplateId] = useState<number | null>(null);`
+
+- Pass props: `activeIntakeFormTemplateId={activeIntakeFormTemplateId} onSelectIntakeTemplate={setActiveIntakeFormTemplateId}`
+
+
+
+**Error 3 (line 325):** Step4Details missing `updateSituationField` prop.
+
+- Add handler:
+
+  ```typescript
+
+  const updateSituationField = (key: string, value: string) => {
+
+    setForm(prev => ({ ...prev, situationFields: { ...prev.situationFields, [key]: value } }));
+
+  };
+
+  ```
+
+- Pass prop: `updateSituationField={updateSituationField}`
+
+
+
+### 1b. `client/src/pages/attorney/ReviewDetail.tsx` (1 error)
+
+
+
+**Error 4 (line 669):** Wrong prop name `report` → should be `citationAuditReport`.
+
+- Change: `<CitationAuditPanel report={citationAuditReport} />` →  
+
+  `<CitationAuditPanel citationAuditReport={citationAuditReport} />`
+
+
+
+### 1c. `shared/types.ts` (fixes errors 6+7)
+
+
+
+**Errors 6-7:** `IntakeFormTemplateRecord` defines `createdAt: string` and `updatedAt: string`, but Drizzle ORM returns `Date` objects from `db.select()`.
+
+- Change `shared/types.ts:169-170`:
+
+  ```
+
+  createdAt: string;  →  createdAt: Date;
+
+  updatedAt: string;  →  updatedAt: Date;
+
+  ```
+
+
+
+### 1d. `client/src/pages/subscriber/IntakeFormTemplates.tsx` (1 error)
+
+
+
+**Error 5 (line ~413):** Casting `tmpl.fieldConfig` to local `FieldConfig` type fails because the Drizzle-inferred type has `unknown` for `fieldConfig` (jsonb column).
+
+- The `intakeFormTemplatesRouter.list` query returns raw Drizzle types where `fieldConfig` is `unknown` (jsonb).
+
+- Fix: cast through `unknown` explicitly: `const fc = tmpl.fieldConfig as unknown as FieldConfig;`
+
+  Or remove the cast since the local `FieldConfig` matches `IntakeFieldConfig`.
+
+
+
+### 1e. `client/src/pages/subscriber/SubmitLetter.tsx` (2 errors)
+
+
+
+**Errors 6-7 (lines 290, 304):** Fixed by the `shared/types.ts` change in 1c above (createdAt/updatedAt now `Date`).
+
+
+
+---
+
+
+
+## Step 2: Add `revalidate` Script
+
+
+
+**File:** `package.json`
+
+
+
+Add a new script:
+
+```json
+
+"revalidate": "tsc --noEmit && vitest run && vite build"
+
+```
+
+
+
+This chains: typecheck → tests → client build. If any step fails, the chain aborts.
+
+
+
+---
+
+
+
+## Step 3: Update CI Pipeline
+
+
+
+**File:** `.github/workflows/ci.yml`
+
+
+
+Replace the 3 separate steps (Type check, Run tests, Build) with a single revalidation step:
+
+```yaml
+
+- name: Revalidate (typecheck + test + build)
+
+  run: pnpm revalidate
+
+```
+
+
+
+---
+
+
+
+## Files to Modify
+
+
+
+| File | Change |
+
+|------|--------|
+
+| `client/src/pages/admin/AdminSubmitLetter.tsx` | Add `situationFields: {}`, template state, `updateSituationField` handler |
+
+| `client/src/pages/attorney/ReviewDetail.tsx` | Fix prop name `report` → `citationAuditReport` |
+
+| `shared/types.ts` | Change `IntakeFormTemplateRecord.createdAt/updatedAt` from `string` to `Date` |
+
+| `client/src/pages/subscriber/IntakeFormTemplates.tsx` | Fix `fieldConfig` cast |
+
+| `package.json` | Add `"revalidate"` script |
+
+| `.github/workflows/ci.yml` | Use `pnpm revalidate` |
+
+
+
+## No Changes Needed
+
+
+
+| File | Reason |
+
+|------|--------|
+
+| `client/src/pages/subscriber/SubmitLetter.tsx` | Fixed by the `shared/types.ts` change |
+
+
+
+---
+
+
+
+## Verification
+
+
+
+1. Run `pnpm check` → 0 TypeScript errors
+
+2. Run `pnpm test` → all 26 tests pass
+
+3. Run `pnpm build` → client + server bundles succeed
+
+4. Run `pnpm revalidate` → full chain passes end-to-end
+
