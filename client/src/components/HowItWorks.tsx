@@ -103,11 +103,12 @@ const PANELS = [
 ];
 
 function IntroPanel() {
+  const prefersReducedMotion = useReducedMotion();
   return (
     <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 text-center">
       <div className="relative mb-6 sm:mb-8">
         <motion.div
-          animate={{ rotate: 360 }}
+          animate={prefersReducedMotion ? {} : { rotate: 360 }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
           className="absolute -inset-6 sm:-inset-8 rounded-full border border-dashed"
           style={{ borderColor: `rgba(37,99,235,0.2)` }}
@@ -198,7 +199,7 @@ function Step1Panel() {
               <div className="flex items-center gap-2 pt-1">
                 <div className="h-2.5 rounded-full" style={{ width: "45%", background: `rgba(37,99,235,0.1)` }} />
                 <motion.div className="w-0.5 h-4 rounded-full" style={{ background: B.primary }}
-                  animate={{ opacity: [1, 0, 1] }} transition={{ duration: 0.8, repeat: Infinity }} />
+                  animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 0.8, repeat: Infinity }} />
               </div>
             </div>
           </div>
