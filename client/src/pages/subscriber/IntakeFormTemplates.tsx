@@ -410,7 +410,7 @@ export default function IntakeFormTemplates() {
         ) : (
           <div className="space-y-3">
             {templates.map(tmpl => {
-              const fc = tmpl.fieldConfig as FieldConfig;
+              const fc = tmpl.fieldConfig as unknown as FieldConfig;
               const fieldCount = (fc?.enabledDefaultFields?.length ?? 0) + (fc?.customFields?.length ?? 0);
               return (
                 <Card key={tmpl.id} data-testid={`card-template-${tmpl.id}`}>
@@ -424,7 +424,7 @@ export default function IntakeFormTemplates() {
                       </p>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button variant="ghost" size="sm" onClick={() => startEdit(tmpl)} data-testid={`button-edit-template-${tmpl.id}`}>
+                      <Button variant="ghost" size="sm" onClick={() => startEdit({ ...tmpl, fieldConfig: tmpl.fieldConfig as unknown as IntakeFieldConfig })} data-testid={`button-edit-template-${tmpl.id}`}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button

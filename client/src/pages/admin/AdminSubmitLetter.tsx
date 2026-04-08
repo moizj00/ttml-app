@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import type { IntakeFormTemplateRecord, IntakeFieldConfig } from "../../../../shared/types";
 import { Step1LetterType } from "../subscriber/intake-steps/Step1LetterType";
 import { Step2Jurisdiction } from "../subscriber/intake-steps/Step2Jurisdiction";
 import { Step3Parties } from "../subscriber/intake-steps/Step3Parties";
@@ -63,6 +64,7 @@ const INITIAL: FormData = {
   communicationsSummary: "",
   communicationsLastContactDate: "",
   communicationsMethod: "",
+  situationFields: {},
 };
 
 export default function AdminSubmitLetter() {
@@ -99,6 +101,34 @@ export default function AdminSubmitLetter() {
   const submit = trpc.letters.adminSubmit.useMutation();
   const uploadAttachment = trpc.letters.uploadAttachment.useMutation();
 
+  const [activeIntakeFormTemplateId, setActiveIntakeFormTemplateId] = useState<number | null>(null);
+  const prevLetterTypeRef = useRef(form.letterType);
+  useEffect(() => {
+    if (form.letterType !== prevLetterTypeRef.current) {
+      prevLetterTypeRef.current = form.letterType;
+      setActiveIntakeFormTemplateId(null);
+    }
+  }, [form.letterType]);
+
+  const { data: intakeFormTemplatesList } = trpc.intakeFormTemplates.list.useQuery();
+
+  const intakeFormTemplatesForType = useMemo((): IntakeFormTemplateRecord[] => {
+    if (!intakeFormTemplatesList || !form.letterType) return [];
+    return (intakeFormTemplatesList as IntakeFormTemplateRecord[]).filter(t => t.baseLetterType === form.letterType);
+  }, [intakeFormTemplatesList, form.letterType]);
+
+  const activeIntakeFormTemplate = useMemo((): IntakeFormTemplateRecord | null => {
+    if (!activeIntakeFormTemplateId || !intakeFormTemplatesList) return null;
+    return (intakeFormTemplatesList as IntakeFormTemplateRecord[]).find(t => t.id === activeIntakeFormTemplateId) ?? null;
+  }, [activeIntakeFormTemplateId, intakeFormTemplatesList]);
+
+  const intakeFormTemplateFieldConfig = useMemo((): IntakeFieldConfig | null => {
+    if (activeIntakeFormTemplate) {
+      return activeIntakeFormTemplate.fieldConfig;
+    }
+    return null;
+  }, [activeIntakeFormTemplate]);
+
   const update = (field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
     if (stepErrors[field]) {
@@ -108,6 +138,13 @@ export default function AdminSubmitLetter() {
         return next;
       });
     }
+  };
+
+  const updateSituationField = (key: string, value: string) => {
+    setForm(prev => ({
+      ...prev,
+      situationFields: { ...prev.situationFields, [key]: value },
+    }));
   };
 
   const getStepErrors = (s: number): Record<string, string> => {
@@ -224,6 +261,13 @@ export default function AdminSubmitLetter() {
                 ? "email"
                 : undefined) as "email" | "certified-mail" | "hand-delivery" | undefined,
         },
+        situationFields: Object.keys(form.situationFields).length > 0
+          ? Object.fromEntries(
+              Object.entries(form.situationFields)
+                .filter(([, v]) => v !== "")
+                .map(([k, v]) => [k, isNaN(Number(v)) ? v : Number(v)])
+            )
+          : undefined,
       };
       const result = await submit.mutateAsync({
         letterType: form.letterType as any,
@@ -231,7 +275,7 @@ export default function AdminSubmitLetter() {
         jurisdictionState: form.jurisdictionState,
         jurisdictionCity: form.jurisdictionCity || undefined,
         intakeJson,
-        ...(activeTemplateId ? { templateId: activeTemplateId } : {}),
+        ...(activeIntakeFormTemplateId ? { templateId: activeIntakeFormTemplateId } : activeTemplateId ? { templateId: activeTemplateId } : {}),
       });
       const letterId = result.letterId;
       const exhibitFiles = exhibits
@@ -319,10 +363,10 @@ export default function AdminSubmitLetter() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 animate-dashboard-fade-up" key={step}>
-            {step === 1 && <Step1LetterType form={form} stepErrors={stepErrors} update={update} />}
+            {step === 1 && <Step1LetterType form={form} stepErrors={stepErrors} update={update} intakeTemplatesForType={intakeFormTemplatesForType} activeIntakeFormTemplateId={activeIntakeFormTemplateId} onSelectIntakeTemplate={setActiveIntakeFormTemplateId} />}
             {step === 2 && <Step2Jurisdiction form={form} stepErrors={stepErrors} update={update} />}
             {step === 3 && <Step3Parties form={form} stepErrors={stepErrors} update={update} />}
-            {step === 4 && <Step4Details form={form} stepErrors={stepErrors} update={update} />}
+            {step === 4 && <Step4Details form={form} stepErrors={stepErrors} update={update} updateSituationField={updateSituationField} enabledSituationFields={intakeFormTemplateFieldConfig?.enabledDefaultFields} customSituationFields={intakeFormTemplateFieldConfig?.customFields} />}
             {step === 5 && <Step5Outcome form={form} stepErrors={stepErrors} update={update} />}
             {step === 6 && <Step6Exhibits exhibits={exhibits} setExhibits={setExhibits} form={form} />}
           </CardContent>

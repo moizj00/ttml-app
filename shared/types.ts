@@ -166,8 +166,8 @@ export interface IntakeFormTemplateRecord {
   baseLetterType: string;
   fieldConfig: IntakeFieldConfig;
   active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // ─── Letter Type display config ───

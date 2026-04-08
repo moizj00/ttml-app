@@ -666,7 +666,7 @@ export default function ReviewDetail() {
               </TabsContent>
 
               <TabsContent value="citations" className="flex-1 overflow-auto mt-2">
-                <CitationAuditPanel report={citationAuditReport} />
+                <CitationAuditPanel citationAuditReport={citationAuditReport} />
               </TabsContent>
 
               <TabsContent value="counter-args" className="flex-1 overflow-auto mt-2">

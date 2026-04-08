@@ -14,7 +14,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:check-migrations": "node scripts/check-migrations.mjs",
-    "db:backfill-migrations": "node scripts/backfill-migrations.mjs"
+    "db:backfill-migrations": "node scripts/backfill-migrations.mjs",
+    "revalidate": "tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",

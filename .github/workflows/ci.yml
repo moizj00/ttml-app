@@ -23,11 +23,5 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Type check
-        run: pnpm check
-
-      - name: Run tests
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
+      - name: Revalidate
+        run: pnpm revalidate
