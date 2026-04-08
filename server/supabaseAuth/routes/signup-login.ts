@@ -27,6 +27,7 @@ import {
 import { invalidateUserCache } from "../user-cache";
 import { getOriginUrl, isSupabaseEmailConfirmed } from "../helpers";
 import { extractAccessToken, parseCookies } from "../jwt";
+import { logger } from "../../logger";
 
 export function registerSignupLoginRoutes(app: Express) {
 
@@ -60,7 +61,7 @@ export function registerSignupLoginRoutes(app: Express) {
       });
 
       if (error) {
-        console.error("[SupabaseAuth] Signup error:", error.message);
+        logger.error("[SupabaseAuth] Signup error:", error.message);
         if (error.message.includes("already been registered") || error.message.includes("already exists") || error.message.includes("already registered")) {
           res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
           return;
@@ -105,18 +106,18 @@ export function registerSignupLoginRoutes(app: Express) {
             name: userName,
             verifyUrl,
           });
-          console.log(`[SupabaseAuth] Verification email sent via Resend to ${email}`);
+          logger.info(`[SupabaseAuth] Verification email sent via Resend to ${email}`);
         } catch (tokenErr) {
-          console.error("[SupabaseAuth] Failed to send verification email:", tokenErr);
+          logger.error("[SupabaseAuth] Failed to send verification email:", tokenErr);
         }
       }
 
       if (appUser && signupRole === "employee" && wantsAffiliate === true) {
         try {
           await db.createDiscountCodeForEmployee(appUser.id, userName);
-          console.log(`[SupabaseAuth] Discount code generated for new affiliate employee #${appUser.id}`);
+          logger.info(`[SupabaseAuth] Discount code generated for new affiliate employee #${appUser.id}`);
         } catch (codeErr) {
-          console.error("[SupabaseAuth] Failed to create discount code for employee:", codeErr);
+          logger.error("[SupabaseAuth] Failed to create discount code for employee:", codeErr);
         }
       }
 
@@ -136,7 +137,7 @@ export function registerSignupLoginRoutes(app: Express) {
           },
         });
       } catch (err) {
-        console.error("[notifyAdmins] new_signup:", err);
+        logger.error("[notifyAdmins] new_signup:", err);
       }
 
       res.status(201).json({
@@ -152,7 +153,7 @@ export function registerSignupLoginRoutes(app: Express) {
         },
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Signup error:", err);
+      logger.error("[SupabaseAuth] Signup error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -177,7 +178,7 @@ export function registerSignupLoginRoutes(app: Express) {
       });
 
       if (error) {
-        console.error("[SupabaseAuth] Login error:", error.message);
+        logger.error("[SupabaseAuth] Login error:", error.message);
         if (error.message.includes("Invalid login credentials")) {
           res.status(401).json({ error: "Invalid email or password" });
           return;
@@ -199,7 +200,7 @@ export function registerSignupLoginRoutes(app: Express) {
                    email.split("@")[0];
       const supabaseEmailVerified = isSupabaseEmailConfirmed(data.user);
       const appUserCheck = await db.getUserByEmail(email).catch((err) => {
-        console.warn(`[SupabaseAuth] Failed to fetch app user by email during login (${email}):`, err);
+        logger.warn(`[SupabaseAuth] Failed to fetch app user by email during login (${email}):`, err);
         return null;
       });
 
@@ -208,7 +209,7 @@ export function registerSignupLoginRoutes(app: Express) {
           const admin = getAdminClient();
           await admin.auth.admin.signOut(data.user.id);
         } catch (signOutErr) {
-          console.warn("[SupabaseAuth] Failed to sign out unverified user from Supabase:", signOutErr);
+          logger.warn("[SupabaseAuth] Failed to sign out unverified user from Supabase:", signOutErr);
         }
         res.status(401).json({ error: "Email not verified", code: "EMAIL_NOT_VERIFIED" });
         return;
@@ -246,9 +247,9 @@ export function registerSignupLoginRoutes(app: Express) {
             name: appUser.name || email.split("@")[0],
             code,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${email}`);
+          logger.info(`[SupabaseAuth] Admin 2FA code dispatched, to=${email}`);
         } catch (err) {
-          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${email}:`, err);
+          logger.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${email}:`, err);
           emailFailed = true;
         }
       }
@@ -270,7 +271,7 @@ export function registerSignupLoginRoutes(app: Express) {
         },
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Login error:", err);
+      logger.error("[SupabaseAuth] Login error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -293,7 +294,7 @@ export function registerSignupLoginRoutes(app: Express) {
 
       res.json({ success: true });
     } catch (err) {
-      console.error("[SupabaseAuth] Logout error:", err);
+      logger.error("[SupabaseAuth] Logout error:", err);
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie(SUPABASE_SESSION_COOKIE, { ...cookieOptions, maxAge: -1 });
       res.clearCookie(ADMIN_2FA_COOKIE, { ...cookieOptions, maxAge: -1 });
@@ -355,7 +356,7 @@ export function registerSignupLoginRoutes(app: Express) {
         },
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Refresh error:", err);
+      logger.error("[SupabaseAuth] Refresh error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });

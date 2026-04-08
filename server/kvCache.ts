@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import type { ResearchPacket } from "../shared/types";
+import { logger } from "./logger";
 
 const KV_CACHE_TTL_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
@@ -62,7 +63,7 @@ export async function getCachedResearch(
 ): Promise<ResearchPacket | null> {
   const config = getWorkerConfig();
   if (!config) {
-    console.debug("[KVCache] Worker not configured — cache lookup skipped");
+    logger.debug("[KVCache] Worker not configured — cache lookup skipped");
     return null;
   }
 
@@ -77,20 +78,20 @@ export async function getCachedResearch(
     });
 
     if (res.status === 404) {
-      console.debug(`[KVCache] Cache miss for key: ${cacheKey}`);
+      logger.debug(`[KVCache] Cache miss for key: ${cacheKey}`);
       return null;
     }
 
     if (!res.ok) {
-      console.warn(`[KVCache] Unexpected status ${res.status} for key: ${cacheKey}`);
+      logger.warn(`[KVCache] Unexpected status ${res.status} for key: ${cacheKey}`);
       return null;
     }
 
     const packet = (await res.json()) as ResearchPacket;
-    console.log(`[KVCache] Cache hit for key: ${cacheKey}`);
+    logger.info(`[KVCache] Cache hit for key: ${cacheKey}`);
     return packet;
   } catch (err) {
-    console.warn("[KVCache] Cache lookup failed (non-fatal):", err);
+    logger.warn("[KVCache] Cache lookup failed (non-fatal):", err);
     return null;
   }
 }
@@ -105,7 +106,7 @@ export async function setCachedResearch(
 ): Promise<void> {
   const config = getWorkerConfig();
   if (!config) {
-    console.debug("[KVCache] Worker not configured — cache store skipped");
+    logger.debug("[KVCache] Worker not configured — cache store skipped");
     return;
   }
 
@@ -121,11 +122,11 @@ export async function setCachedResearch(
     });
 
     if (!res.ok) {
-      console.warn(`[KVCache] Failed to store cache entry (status ${res.status}) for key: ${cacheKey}`);
+      logger.warn(`[KVCache] Failed to store cache entry (status ${res.status}) for key: ${cacheKey}`);
     } else {
-      console.log(`[KVCache] Stored research packet in cache for key: ${cacheKey} (TTL: ${KV_CACHE_TTL_SECONDS}s)`);
+      logger.info(`[KVCache] Stored research packet in cache for key: ${cacheKey} (TTL: ${KV_CACHE_TTL_SECONDS}s)`);
     }
   } catch (err) {
-    console.warn("[KVCache] Cache store failed (non-fatal):", err);
+    logger.warn("[KVCache] Cache store failed (non-fatal):", err);
   }
 }

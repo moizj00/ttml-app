@@ -1,4 +1,5 @@
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 const VERTEX_SEARCH_TIMEOUT_MS = 5_000;
 
@@ -107,9 +108,9 @@ export async function upsertToVertexSearch(
       throw new Error(`Vertex AI upsert returned ${response.status}: ${errText}`);
     }
 
-    console.log(`[VertexSearch] Upserted datapoint id=${id}`);
+    logger.info(`[VertexSearch] Upserted datapoint id=${id}`);
   } catch (err) {
-    console.error(`[VertexSearch] upsertToVertexSearch failed for id=${id}:`, err);
+    logger.error(`[VertexSearch] upsertToVertexSearch failed for id=${id}:`, err);
     captureServerException(err, {
       tags: { component: "vertex-search", error_type: "upsert_failed" },
       extra: { id },
@@ -168,7 +169,7 @@ export async function queryVertexSearch(
       distance: n.distance,
     }));
   } catch (err) {
-    console.error("[VertexSearch] queryVertexSearch failed:", err);
+    logger.error("[VertexSearch] queryVertexSearch failed:", err);
     captureServerException(err, {
       tags: { component: "vertex-search", error_type: "query_failed" },
       extra: { neighborCount },

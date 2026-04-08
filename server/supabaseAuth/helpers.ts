@@ -16,6 +16,7 @@ import {
   sendAttorneyWelcomeEmail,
 } from "../email";
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
@@ -99,7 +100,7 @@ export async function sendRoleBasedWelcomeEmail(user: User, origin: string): Pro
 
   if (user.role === "employee") {
     const discountCode = await db.getDiscountCodeByEmployeeId(user.id).catch((err) => {
-      console.warn(`[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`, err);
+      logger.warn(`[SupabaseAuth] Failed to fetch discount code for employee ${user.id}:`, err);
       return null;
     });
     await sendEmployeeWelcomeEmail({
@@ -178,7 +179,7 @@ export async function syncGoogleUser({
     try {
       await db.createDiscountCodeForEmployee(dbUser.id, dbUser.name || name);
     } catch (codeErr) {
-      console.error("[SupabaseAuth] Failed to create discount code after Google auth:", codeErr);
+      logger.error("[SupabaseAuth] Failed to create discount code after Google auth:", codeErr);
     }
   }
 
@@ -200,7 +201,7 @@ export async function syncGoogleUser({
         },
       });
     } catch (notifyErr) {
-      console.error("[notifyAdmins] new_signup (Google):", notifyErr);
+      logger.error("[notifyAdmins] new_signup (Google):", notifyErr);
       captureServerException(notifyErr instanceof Error ? notifyErr : new Error(String(notifyErr)), {
         tags: { component: "supabase_auth", error_type: "notify_admins_failed" },
       });
@@ -210,7 +211,7 @@ export async function syncGoogleUser({
       const freshUser = dbUser.id ? await db.getUserById(dbUser.id) : null;
       await sendRoleBasedWelcomeEmail(freshUser || dbUser, origin);
     } catch (emailErr) {
-      console.error("[SupabaseAuth] Failed to send welcome email after Google auth:", emailErr);
+      logger.error("[SupabaseAuth] Failed to send welcome email after Google auth:", emailErr);
     }
   }
 

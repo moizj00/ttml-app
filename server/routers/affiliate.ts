@@ -123,6 +123,7 @@ import {
   incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "../stripe";
+import { logger } from "../logger";
 
 /**
  * Sync a discount code to/from the Cloudflare Worker KV allowlist.
@@ -267,7 +268,7 @@ export const affiliateRouter = router({
         if (code) {
           // Register new code in Worker allowlist (fire-and-forget, non-blocking)
           syncCodeToWorkerAllowlist(code.code, "add").catch((err) => {
-            console.error("[DiscountCode] Failed to sync new code to worker allowlist:", err);
+            logger.error("[DiscountCode] Failed to sync new code to worker allowlist:", err);
             captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_sync_failed" } });
           });
         }
@@ -280,7 +281,7 @@ export const affiliateRouter = router({
             link: `/admin/affiliate`,
           });
         } catch (err) {
-          console.error("[notifyAdmins] discount_code_created:", err);
+          logger.error("[notifyAdmins] discount_code_created:", err);
           captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_discount_code" } });
         }
       }
@@ -298,11 +299,11 @@ export const affiliateRouter = router({
       if (!code) throw new TRPCError({ code: "NOT_FOUND", message: "No discount code found to rotate." });
       // Swap allowlist entries: remove old, add new (fire-and-forget)
       if (oldCode) syncCodeToWorkerAllowlist(oldCode.code, "remove").catch((err) => {
-        console.error("[DiscountCode] Failed to remove old code from worker allowlist:", err);
+        logger.error("[DiscountCode] Failed to remove old code from worker allowlist:", err);
         captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_remove_failed" } });
       });
       syncCodeToWorkerAllowlist(code.code, "add").catch((err) => {
-        console.error("[DiscountCode] Failed to add rotated code to worker allowlist:", err);
+        logger.error("[DiscountCode] Failed to add rotated code to worker allowlist:", err);
         captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_sync_failed" } });
       });
       return code;
@@ -367,7 +368,7 @@ export const affiliateRouter = router({
             },
           });
         } catch (err) {
-          console.error("[notifyAdmins] payout_request:", err);
+          logger.error("[notifyAdmins] payout_request:", err);
           captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_payout_request" } });
         }
         return { success: true, payoutRequestId: result.insertId };
@@ -422,7 +423,7 @@ export const affiliateRouter = router({
             daily: { date: string; clicks: number; uniqueVisitors: number }[];
           }>;
         } catch (analyticsErr) {
-          console.warn("[Analytics] Failed to fetch click analytics, returning empty defaults:", analyticsErr);
+          logger.warn("[Analytics] Failed to fetch click analytics, returning empty defaults:", analyticsErr);
           return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
         }
       }),
@@ -465,7 +466,7 @@ export const affiliateRouter = router({
         });
         if (target?.code) {
           syncCodeToWorkerAllowlist(target.code, "remove").catch((err) => {
-            console.error("[DiscountCode] Failed to remove disabled code from worker allowlist:", err);
+            logger.error("[DiscountCode] Failed to remove disabled code from worker allowlist:", err);
             captureServerException(err, { tags: { component: "discount_code", error_type: "worker_allowlist_remove_failed" } });
           });
         }
@@ -513,12 +514,12 @@ export const affiliateRouter = router({
 
           if (idsToMark.length > 0) {
             await markCommissionsPaid(idsToMark);
-            console.log(
+            logger.info(
               `[adminProcessPayout] Payout #${input.payoutId}: marked ${idsToMark.length} commission(s) ` +
               `totalling ${cumulative} cents as paid (payout amount: ${payout.amount} cents)`
             );
           } else {
-            console.warn(
+            logger.warn(
               `[adminProcessPayout] Payout #${input.payoutId}: no pending commissions found to settle ` +
               `for employee #${payout.employeeId}`
             );
@@ -552,7 +553,7 @@ export const affiliateRouter = router({
             }
           }
         } catch (emailErr) {
-          console.error("[adminProcessPayout] Notification email error:", emailErr);
+          logger.error("[adminProcessPayout] Notification email error:", emailErr);
           captureServerException(emailErr, { tags: { component: "payout", error_type: "notification_email_failed" } });
         }
 

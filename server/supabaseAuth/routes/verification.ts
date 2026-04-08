@@ -27,6 +27,7 @@ import {
   sendRoleBasedWelcomeEmail,
   isSupabaseEmailConfirmed,
 } from "../helpers";
+import { logger } from "../../logger";
 
 export function registerVerificationRoutes(app: Express) {
 
@@ -60,7 +61,7 @@ export function registerVerificationRoutes(app: Express) {
       if (code) {
         const { data, error } = await anonClient.auth.exchangeCodeForSession(code);
         if (error || !data.user) {
-          console.error("[SupabaseAuth] Code exchange failed:", error?.message);
+          logger.error("[SupabaseAuth] Code exchange failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -76,7 +77,7 @@ export function registerVerificationRoutes(app: Express) {
         const admin = getAdminClient();
         const { data, error } = await admin.auth.getUser(access_token);
         if (error || !data.user) {
-          console.error("[SupabaseAuth] Access token verification failed:", error?.message);
+          logger.error("[SupabaseAuth] Access token verification failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -87,7 +88,7 @@ export function registerVerificationRoutes(app: Express) {
           type: type as EmailOtpType,
         });
         if (error || !data.user) {
-          console.error("[SupabaseAuth] OTP verification failed:", error?.message);
+          logger.error("[SupabaseAuth] OTP verification failed:", error?.message);
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -146,10 +147,10 @@ export function registerVerificationRoutes(app: Express) {
           try {
             await sendRoleBasedWelcomeEmail(user, origin);
           } catch (emailErr) {
-            console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
+            logger.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
           }
         }).catch((err) => {
-          console.error("[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):", err);
+          logger.error("[SupabaseAuth] Failed to fetch user for welcome email (OAuth verify):", err);
           captureServerException(err instanceof Error ? err : new Error(String(err)), {
             tags: { component: "supabase_auth", error_type: "welcome_email_fetch_failed" },
           });
@@ -183,7 +184,7 @@ export function registerVerificationRoutes(app: Express) {
         },
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Supabase email verification error:", err);
+      logger.error("[SupabaseAuth] Supabase email verification error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -208,7 +209,7 @@ export function registerVerificationRoutes(app: Express) {
         try {
           await getAdminClient().auth.admin.updateUserById(user.openId, { email_confirm: true });
         } catch (confirmErr) {
-          console.error("[SupabaseAuth] Failed to confirm email in Supabase:", confirmErr);
+          logger.error("[SupabaseAuth] Failed to confirm email in Supabase:", confirmErr);
         }
       }
 
@@ -228,7 +229,7 @@ export function registerVerificationRoutes(app: Express) {
           },
         });
       } catch (err) {
-        console.error("[notifyAdmins] email_verified:", err);
+        logger.error("[notifyAdmins] email_verified:", err);
       }
 
       if (user) {
@@ -237,7 +238,7 @@ export function registerVerificationRoutes(app: Express) {
             try {
               await db.createDiscountCodeForEmployee(user.id, user.name || "Employee");
             } catch (codeErr) {
-              console.error("[SupabaseAuth] Failed to create discount code on verification:", codeErr);
+              logger.error("[SupabaseAuth] Failed to create discount code on verification:", codeErr);
             }
           }
 
@@ -246,11 +247,11 @@ export function registerVerificationRoutes(app: Express) {
               const freshUser = await db.getUserById(user.id);
               await sendRoleBasedWelcomeEmail(freshUser || user, origin);
             } catch (emailErr) {
-              console.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
+              logger.error("[SupabaseAuth] Failed to send welcome email:", emailErr);
             }
           }
         })().catch((err) => {
-          console.error("[SupabaseAuth] Background welcome email task failed:", err);
+          logger.error("[SupabaseAuth] Background welcome email task failed:", err);
           captureServerException(err instanceof Error ? err : new Error(String(err)), {
             tags: { component: "supabase_auth", error_type: "welcome_email_background_failed" },
           });
@@ -259,7 +260,7 @@ export function registerVerificationRoutes(app: Express) {
 
       res.json({ success: true, message: "Email verified successfully! You can now sign in." });
     } catch (err) {
-      console.error("[SupabaseAuth] Email verification error:", err);
+      logger.error("[SupabaseAuth] Email verification error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -289,9 +290,9 @@ export function registerVerificationRoutes(app: Express) {
       const verifyUrl = `${origin}/verify-email?token=${verificationToken}`;
       try {
         await sendVerificationEmail({ to: email, name: user.name || email.split("@")[0], verifyUrl });
-        console.log(`[SupabaseAuth] Custom verification email sent to ${email}`);
+        logger.info(`[SupabaseAuth] Custom verification email sent to ${email}`);
       } catch (emailErr) {
-        console.error("[SupabaseAuth] Failed to resend verification email:", emailErr);
+        logger.error("[SupabaseAuth] Failed to resend verification email:", emailErr);
       }
 
       try {
@@ -308,12 +309,12 @@ export function registerVerificationRoutes(app: Express) {
           });
         }
       } catch (supabaseErr) {
-        console.error("[SupabaseAuth] Supabase resend (secondary) failed:", supabaseErr);
+        logger.error("[SupabaseAuth] Supabase resend (secondary) failed:", supabaseErr);
       }
 
       res.json({ success: true, message: "Verification email sent. Please check your inbox." });
     } catch (err) {
-      console.error("[SupabaseAuth] Resend verification error:", err);
+      logger.error("[SupabaseAuth] Resend verification error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });

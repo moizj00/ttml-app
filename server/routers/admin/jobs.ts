@@ -7,6 +7,7 @@ import {
 } from "../../db";
 import { getPipelineQueue } from "../../queue";
 import { retryPipelineJob } from "../../services/admin";
+import { logger } from "../../logger";
 
 export const jobsProcedures = {
   failedJobs: adminProcedure.query(async () => getFailedJobs(100)),
@@ -63,7 +64,7 @@ export const jobsProcedures = {
         recentFailedJobs: failedJobs,
       };
     } catch (err) {
-      console.error("[Queue] Health check failed:", err);
+      logger.error("[Queue] Health check failed:", err);
       return {
         pending: 0,
         active: 0,

@@ -38,8 +38,7 @@ export default function Footer() {
             <p className="mt-4 text-sm text-slate-400 leading-relaxed">
               Attorney-reviewed legal letters drafted around California legal language.
             </p>
-            {/* TODO: Add social links here once TTML social profiles are created.
-                Example:
+            {/* Social links: uncomment and replace YOUR_HANDLE once TTML social profiles are created.
                 <div className="flex items-center gap-3 mt-5">
                   <a href="https://linkedin.com/company/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="LinkedIn" data-testid="social-linkedin"><Linkedin className="w-3.5 h-3.5" /></a>
                   <a href="https://x.com/YOUR_HANDLE" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-colors" aria-label="X (Twitter)" data-testid="social-x"><Twitter className="w-3.5 h-3.5" /></a>

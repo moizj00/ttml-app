@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import type { ResearchPacket, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, TokenUsage } from "../../shared/types";
 import { accumulateTokens } from "./providers";
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // CITATION REGISTRY & ANTI-HALLUCINATION ENGINE
@@ -171,7 +172,7 @@ export async function revalidateCitationsWithPerplexity(
         baseURL: "https://api.groq.com/openai/v1",
         name: "groq",
       });
-      console.log(
+      logger.info(
         `[Pipeline] Revalidating ${registry.length} citations with Groq (free) for letter #${letterId}`
       );
       const { text, usage: citationUsage } = await generateText({
@@ -183,13 +184,13 @@ export async function revalidateCitationsWithPerplexity(
       if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
 
       const updatedRegistry = parseCitationRevalidationResponse(text, registry);
-      console.log(
+      logger.info(
         `[Pipeline] Citation revalidation complete (Groq) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
       );
       return { registry: updatedRegistry, modelKey: "llama-3.3-70b-versatile" };
     } catch (groqErr) {
       const groqMsg = groqErr instanceof Error ? groqErr.message : String(groqErr);
-      console.warn(
+      logger.warn(
         `[Pipeline] Groq citation revalidation failed for letter #${letterId}: ${groqMsg}. Falling back to Perplexity sonar.`
       );
     }
@@ -197,7 +198,7 @@ export async function revalidateCitationsWithPerplexity(
 
   const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
   if (!perplexityApiKey || perplexityApiKey.trim().length === 0) {
-    console.warn(
+    logger.warn(
       `[Pipeline] No citation revalidation provider available (GROQ_API_KEY and PERPLEXITY_API_KEY both missing) — skipping for letter #${letterId}`
     );
     return { registry, modelKey: "none" };
@@ -210,7 +211,7 @@ export async function revalidateCitationsWithPerplexity(
   });
 
   try {
-    console.log(
+    logger.info(
       `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar (fallback) for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
@@ -222,13 +223,13 @@ export async function revalidateCitationsWithPerplexity(
     if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
 
     const updatedRegistry = parseCitationRevalidationResponse(text, registry);
-    console.log(
+    logger.info(
       `[Pipeline] Citation revalidation complete (Perplexity fallback) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
     );
     return { registry: updatedRegistry, modelKey: "sonar" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(
+    logger.warn(
       `[Pipeline] Citation revalidation failed for letter #${letterId}: ${msg}. Continuing with unvalidated registry.`
     );
     return { registry, modelKey: "none" };

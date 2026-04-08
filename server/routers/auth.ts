@@ -123,6 +123,7 @@ import {
   incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "../stripe";
+import { logger } from "../logger";
 
 /**
  * Sync a discount code to/from the Cloudflare Worker KV allowlist.
@@ -278,13 +279,13 @@ export const authRouter = router({
         try {
           await assignRoleId(userId, input.role);
         } catch (e) {
-          console.error("[Onboarding] Role ID assignment failed:", e);
+          logger.error("[Onboarding] Role ID assignment failed:", e);
         }
         if (input.role === "employee") {
           try {
             await createDiscountCodeForEmployee(userId);
           } catch (e) {
-            console.log(
+            logger.info(
               "[Onboarding] Discount code creation skipped (may already exist)",
               e
             );

@@ -4,6 +4,7 @@ import { getRedis } from "./rateLimiter";
 import { getR2HealthStatus, checkR2Connectivity } from "./storage";
 import { ENV } from "./_core/env";
 import { captureServerException } from "./sentry";
+import { logger } from "./logger";
 
 export type ServiceStatus = "ok" | "error" | "unconfigured";
 
@@ -203,7 +204,7 @@ async function runBackgroundProbe(): Promise<void> {
   try {
     cachedResult = await executeFullChecks();
   } catch (err) {
-    console.error("[HealthCheck] Background probe failed:", err);
+    logger.error("[HealthCheck] Background probe failed:", err);
   } finally {
     probeRunning = false;
   }
@@ -211,12 +212,12 @@ async function runBackgroundProbe(): Promise<void> {
 
 export function startHealthProbe(): void {
   runBackgroundProbe().catch((err) => {
-    console.error("[HealthProbe] Initial probe failed:", err);
+    logger.error("[HealthProbe] Initial probe failed:", err);
     captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
   });
   setInterval(() => {
     runBackgroundProbe().catch((err) => {
-      console.error("[HealthProbe] Background probe failed:", err);
+      logger.error("[HealthProbe] Background probe failed:", err);
       captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
     });
   }, PROBE_INTERVAL_MS);

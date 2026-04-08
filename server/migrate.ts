@@ -29,6 +29,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import path from "path";
 import { fileURLToPath } from "url";
+import { logger } from "./logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -79,7 +80,7 @@ async function runMigrations() {
     process.env.DATABASE_URL;
 
   if (!connectionString) {
-    console.error(
+    logger.error(
       "[Migrate] ERROR: No database URL found. Set SUPABASE_DIRECT_URL to:\n" +
       "  postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres?sslmode=require"
     );
@@ -88,7 +89,7 @@ async function runMigrations() {
 
   // Warn if using a pooler URL that may resolve to IPv6 on Railway
   if (connectionString.includes("pooler.supabase.com")) {
-    console.warn(
+    logger.warn(
       "[Migrate] WARNING: Using pooler URL for migrations. " +
       "Set SUPABASE_DIRECT_URL to db.*.supabase.co:5432 to avoid IPv6/pgBouncer issues on Railway."
     );
@@ -100,12 +101,12 @@ async function runMigrations() {
   // level from __dirname (dist/) to reach the project root, then into drizzle/.
   const migrationsFolder = path.resolve(__dirname, "../drizzle");
 
-  console.log(`[Migrate] Running migrations from: ${migrationsFolder}`);
+  logger.info(`[Migrate] Running migrations from: ${migrationsFolder}`);
 
   const MAX_RETRIES = 3;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[Migrate] Attempt ${attempt}/${MAX_RETRIES} — connecting to database...`);
+    logger.info(`[Migrate] Attempt ${attempt}/${MAX_RETRIES} — connecting to database...`);
 
     const client = postgres(connectionString, {
       ssl: "require",
@@ -126,7 +127,7 @@ async function runMigrations() {
         migrationsTable: "__drizzle_migrations",
       });
 
-      console.log("[Migrate] All migrations applied successfully.");
+      logger.info("[Migrate] All migrations applied successfully.");
       await client.end();
       process.exit(0);
     } catch (err) {
@@ -134,7 +135,7 @@ async function runMigrations() {
 
       // Hard fail immediately for IPv6 unreachable — retrying won't help
       if (isIPv6Unreachable(err)) {
-        console.error(
+        logger.error(
           "[Migrate] FATAL: IPv6 network unreachable (ENETUNREACH).\n" +
           "Railway does not support IPv6. The pooler URL resolves to an IPv6 address.\n" +
           "Fix: Set SUPABASE_DIRECT_URL to the direct connection URL:\n" +
@@ -146,7 +147,7 @@ async function runMigrations() {
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
         const delay = attempt * 2000; // 2s, 4s backoff
-        console.warn(
+        logger.warn(
           `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`,
           (err as any)?.cause?.message || (err as any)?.message
         );
@@ -154,7 +155,7 @@ async function runMigrations() {
         continue;
       }
 
-      console.error("[Migrate] Migration failed:", err);
+      logger.error("[Migrate] Migration failed:", err);
       process.exit(1);
     }
   }

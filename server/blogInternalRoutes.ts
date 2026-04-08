@@ -21,6 +21,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { ENV } from "./_core/env";
 import { getPublishedBlogPosts, getBlogPostBySlug } from "./db";
+import { logger } from "./logger";
 
 function blogInternalAuth(req: Request, res: Response, next: NextFunction): void {
   const secret = ENV.cfBlogCacheInvalidationSecret;
@@ -59,7 +60,7 @@ export function registerBlogInternalRoutes(app: Express): void {
       const data = await getPublishedBlogPosts({ category, limit, offset });
       res.json(data);
     } catch (err) {
-      console.error("[blog-internal] /list error:", err);
+      logger.error("[blog-internal] /list error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -83,7 +84,7 @@ export function registerBlogInternalRoutes(app: Express): void {
 
       res.json(post);
     } catch (err) {
-      console.error("[blog-internal] /post/:slug error:", err);
+      logger.error("[blog-internal] /post/:slug error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });

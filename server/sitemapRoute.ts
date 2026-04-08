@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { getPublishedBlogSlugs } from "./db";
+import { logger } from "./logger";
 
 const BASE = "https://www.talk-to-my-lawyer.com";
 
@@ -71,7 +72,7 @@ export function registerSitemapRoute(app: Express): void {
       res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
       res.send(xml);
     } catch (err) {
-      console.error("[sitemap] Error generating sitemap:", err);
+      logger.error("[sitemap] Error generating sitemap:", err);
       res.status(500).setHeader("Content-Type", "text/plain").send("Error generating sitemap");
     }
   });

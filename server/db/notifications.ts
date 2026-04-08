@@ -22,6 +22,7 @@ import {
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
 import { getDb } from "./core";
 import { getAllUsers } from "./users";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // NOTIFICATION HELPERS
@@ -83,12 +84,12 @@ export async function notifyAdmins(opts: {
           name: admin.name ?? "Admin",
           ...opts.emailOpts,
         }).catch((err: unknown) =>
-          console.error(`[notifyAdmins] Email to ${admin.email} failed:`, err)
+          logger.error(`[notifyAdmins] Email to ${admin.email} failed:`, err)
         );
       }
     }
   } catch (err) {
-    console.error("[notifyAdmins] Failed:", err);
+    logger.error("[notifyAdmins] Failed:", err);
     captureServerException(err, { tags: { component: "notifications", error_type: "notify_admins_failed" } });
   }
 }
@@ -108,7 +109,7 @@ export async function notifyAllAttorneys(opts: {
   try {
     const { sendNewReviewNeededEmail } = await import("../email");
     const attorneys = await getAllUsers("attorney");
-    console.log(`[notifyAllAttorneys] Notifying ${attorneys.length} attorney(s) for letter #${opts.letterId}`);
+    logger.info(`[notifyAllAttorneys] Notifying ${attorneys.length} attorney(s) for letter #${opts.letterId}`);
     for (const attorney of attorneys) {
       // Email: attempt independently — failure does not block in-app notification
       if (attorney.email) {
@@ -123,7 +124,7 @@ export async function notifyAllAttorneys(opts: {
             appUrl: opts.appUrl,
           });
         } catch (emailErr) {
-          console.error(`[notifyAllAttorneys] Email failed for attorney #${attorney.id}:`, emailErr);
+          logger.error(`[notifyAllAttorneys] Email failed for attorney #${attorney.id}:`, emailErr);
           captureServerException(emailErr, { tags: { component: "notifications", error_type: "notify_attorney_email_failed" } });
         }
       }
@@ -138,12 +139,12 @@ export async function notifyAllAttorneys(opts: {
           link: `/attorney/queue`,
         });
       } catch (notifErr) {
-        console.error(`[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`, notifErr);
+        logger.error(`[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`, notifErr);
         captureServerException(notifErr, { tags: { component: "notifications", error_type: "notify_attorney_inapp_failed" } });
       }
     }
   } catch (err) {
-    console.error("[notifyAllAttorneys] Failed:", err);
+    logger.error("[notifyAllAttorneys] Failed:", err);
     captureServerException(err, { tags: { component: "notifications", error_type: "notify_all_attorneys_failed" } });
   }
 }

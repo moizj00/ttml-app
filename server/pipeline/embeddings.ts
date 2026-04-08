@@ -6,6 +6,7 @@ import {
   upsertToVertexSearch,
   queryVertexSearch,
 } from "./vertex-search";
+import { logger } from "../logger";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1536;
@@ -55,7 +56,7 @@ function upsertToVertexSearchFireAndForget(versionId: number, embedding: number[
   if (!isVertexSearchConfigured()) return;
 
   upsertToVertexSearch(String(versionId), embedding).catch((err) => {
-    console.warn(`[Embeddings] Vertex Search upsert failed for version #${versionId} (non-blocking):`, err);
+    logger.warn(`[Embeddings] Vertex Search upsert failed for version #${versionId} (non-blocking):`, err);
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "vertex_upsert_failed" },
       extra: { versionId },
@@ -68,9 +69,9 @@ export async function embedAndStoreLetterVersion(versionId: number, content: str
     const embedding = await generateEmbedding(content);
     await storeEmbedding(versionId, embedding);
     upsertToVertexSearchFireAndForget(versionId, embedding);
-    console.log(`[Embeddings] Stored embedding for version #${versionId} (${EMBEDDING_DIMENSIONS} dims, vertex=${isVertexSearchConfigured()})`);
+    logger.info(`[Embeddings] Stored embedding for version #${versionId} (${EMBEDDING_DIMENSIONS} dims, vertex=${isVertexSearchConfigured()})`);
   } catch (err) {
-    console.error(`[Embeddings] Failed to embed version #${versionId}:`, err);
+    logger.error(`[Embeddings] Failed to embed version #${versionId}:`, err);
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "embed_and_store_failed" },
       extra: { versionId },
@@ -94,7 +95,7 @@ async function findSimilarLettersViaVertexSearch(
   const start = Date.now();
   const matches = await queryVertexSearch(queryEmbedding, matchCount);
   const latencyMs = Date.now() - start;
-  console.log(`[Embeddings] Vertex Search returned ${matches.length} neighbors in ${latencyMs}ms`);
+  logger.info(`[Embeddings] Vertex Search returned ${matches.length} neighbors in ${latencyMs}ms`);
 
   if (matches.length === 0) return [];
 
@@ -174,10 +175,10 @@ export async function findSimilarLetters(
         const start = Date.now();
         const results = await findSimilarLettersViaVertexSearch(queryEmbedding, matchCount, matchThreshold);
         const latencyMs = Date.now() - start;
-        console.log(`[Embeddings] findSimilarLetters via Vertex Search: ${results.length} results in ${latencyMs}ms`);
+        logger.info(`[Embeddings] findSimilarLetters via Vertex Search: ${results.length} results in ${latencyMs}ms`);
         return results;
       } catch (vertexErr) {
-        console.warn("[Embeddings] Vertex Search query failed, falling back to pgvector:", vertexErr);
+        logger.warn("[Embeddings] Vertex Search query failed, falling back to pgvector:", vertexErr);
         captureServerException(vertexErr, {
           tags: { component: "embeddings", error_type: "vertex_search_fallback" },
         });
@@ -186,7 +187,7 @@ export async function findSimilarLetters(
 
     return await findSimilarLettersViaPgvector(queryEmbedding, matchCount, matchThreshold);
   } catch (err) {
-    console.error("[Embeddings] findSimilarLetters failed:", err);
+    logger.error("[Embeddings] findSimilarLetters failed:", err);
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "similar_search_failed" },
     });

@@ -22,6 +22,7 @@ import {
   type LetterTemplateData,
 } from "./letterTemplates";
 import { generatePdfViaWorker } from "./workerPdfClient";
+import { logger } from "./logger";
 
 interface IntakeData {
   sender?: {
@@ -86,7 +87,7 @@ function resolveChromiumPath(): string {
  */
 async function launchBrowser() {
   const executablePath = resolveChromiumPath();
-  console.log(`[PDF] Launching local Chromium: ${executablePath}`);
+  logger.info(`[PDF] Launching local Chromium: ${executablePath}`);
   return puppeteer.launch({
     headless: true,
     executablePath,
@@ -171,7 +172,7 @@ export async function generateAndUploadApprovedPdf(
     throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate PDF`);
   }
 
-  console.log(`[PDF] Generating approved PDF for letter #${opts.letterId} (template: Template-1-Approved)`);
+  logger.info(`[PDF] Generating approved PDF for letter #${opts.letterId} (template: Template-1-Approved)`);
   const pdfBuffer = await generatePdfBuffer(opts);
 
   const timestamp = Date.now();
@@ -184,7 +185,7 @@ export async function generateAndUploadApprovedPdf(
 
   const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
 
-  console.log(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${fileKey} (${pdfBuffer.length} bytes) → ${url}`);
+  logger.info(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${fileKey} (${pdfBuffer.length} bytes) → ${url}`);
   return { pdfUrl: url, pdfKey: fileKey };
 }
 
@@ -242,7 +243,7 @@ export async function generateDraftPdfBuffer(opts: {
     throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate draft PDF`);
   }
 
-  console.log(`[PDF] Generating draft PDF for letter #${opts.letterId} (template: Template-2-Draft)`);
+  logger.info(`[PDF] Generating draft PDF for letter #${opts.letterId} (template: Template-2-Draft)`);
   const data = buildTemplateData(opts);
   const html = buildDraftLetterHtml(data);
   const headerTemplate = buildDraftHeaderHtml(data);
@@ -259,6 +260,6 @@ export async function generateDraftPdfBuffer(opts: {
     () => htmlToPdfBufferLocal(html, headerTemplate, footerTemplate)
   );
 
-  console.log(`[PDF] Draft PDF generated for letter #${opts.letterId}: ${buffer.length} bytes (not uploaded — streamed directly)`);
+  logger.info(`[PDF] Draft PDF generated for letter #${opts.letterId}: ${buffer.length} bytes (not uploaded — streamed directly)`);
   return buffer;
 }

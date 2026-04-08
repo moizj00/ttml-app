@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { logger } from "./logger";
 
 // ─── DSN Configuration ───────────────────────────────────────────────────────
 // The DSN is sourced from the SENTRY_DSN environment variable at runtime.
@@ -39,9 +40,9 @@ if (SENTRY_DSN) {
     ],
   });
 
-  console.log("[Sentry] Instrumentation initialized via --import");
+  logger.info("[Sentry] Instrumentation initialized via --import");
 } else {
-  console.log("[Sentry] No DSN configured — monitoring disabled");
+  logger.info("[Sentry] No DSN configured — monitoring disabled");
 }
 
 // ─── MCP Server Wrapper ───────────────────────────────────────────────────────

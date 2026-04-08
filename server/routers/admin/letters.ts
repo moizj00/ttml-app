@@ -19,6 +19,7 @@ import {
 } from "../../email";
 import { captureServerException } from "../../sentry";
 import { forceStatusTransition, diagnoseAndRepairLetterState } from "../../services/admin";
+import { logger } from "../../logger";
 
 export const adminLettersProcedures = {
   allLetters: adminProcedure
@@ -135,7 +136,7 @@ export const adminLettersProcedures = {
           });
         }
       } catch (err) {
-        console.error("[Notify] Failed:", err);
+        logger.error("[Notify] Failed:", err);
         captureServerException(err, { tags: { component: "review", error_type: "unlock_notification_failed" } });
       }
       return { success: true };

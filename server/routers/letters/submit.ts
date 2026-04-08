@@ -14,6 +14,7 @@ import {
 import { captureServerException } from "../../sentry";
 import { enqueuePipelineJob } from "../../queue";
 import { submitLetter } from "../../services/letters";
+import { logger } from "../../logger";
 
 export const submitProcedures = {
   submit: verifiedSubscriberProcedure
@@ -137,7 +138,7 @@ export const submitProcedures = {
           label: "admin_submit",
         });
       } catch (enqueueErr) {
-        console.error("[Queue] Failed to enqueue admin pipeline job:", enqueueErr);
+        logger.error("[Queue] Failed to enqueue admin pipeline job:", enqueueErr);
         captureServerException(enqueueErr, { tags: { component: "queue", error_type: "admin_enqueue_failed" } });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

@@ -36,6 +36,7 @@ import {
 import { runAssemblyStage, autoAdvanceIfPreviouslyUnlocked } from "./pipeline";
 import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
 import { captureServerException } from "./sentry";
+import { logger } from "./logger";
 
 interface N8nVettingReport {
   citationsVerified: number;
@@ -77,7 +78,7 @@ export function registerN8nCallbackRoute(app: Express): void {
       const callbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
 
       if (!callbackSecret) {
-        console.error(
+        logger.error(
           "[n8n Callback] N8N_CALLBACK_SECRET is not configured — refusing all requests"
         );
         res.status(503).json({ error: "Service not configured" });
@@ -86,7 +87,7 @@ export function registerN8nCallbackRoute(app: Express): void {
       const incomingSecret =
         (req.headers["x-ttml-callback-secret"] as string) ?? "";
       if (!incomingSecret) {
-        console.warn("[n8n Callback] Missing callback secret header");
+        logger.warn("[n8n Callback] Missing callback secret header");
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
@@ -96,7 +97,7 @@ export function registerN8nCallbackRoute(app: Express): void {
         secretBuf.length !== incomingBuf.length ||
         !timingSafeEqual(secretBuf, incomingBuf)
       ) {
-        console.warn("[n8n Callback] Invalid callback secret");
+        logger.warn("[n8n Callback] Invalid callback secret");
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
@@ -126,7 +127,7 @@ export function registerN8nCallbackRoute(app: Express): void {
       const hasVetting = !!(vettedLetter && vettingReport);
       const isAligned = !!(researchPacket && draftOutput && assembledLetter);
       const providerTag = provider ?? (hasVetting ? "n8n-4stage" : isAligned ? "n8n-3stage" : "n8n-legacy");
-      console.log(
+      logger.info(
         `[n8n Callback] Received for letter #${letterId}, success=${success}, ` +
           `provider=${providerTag}, aligned=${isAligned}, vetted=${hasVetting}, stages=${(stages ?? []).join(",")}`
       );
@@ -140,7 +141,7 @@ export function registerN8nCallbackRoute(app: Express): void {
 
         if (!success || !effectiveDraft) {
           const errMsg = error ?? "n8n pipeline returned no content";
-          console.error(
+          logger.error(
             `[n8n Callback] Pipeline failed for letter #${letterId}: ${errMsg}`
           );
           await updateLetterStatus(letterId, "submitted");
@@ -233,11 +234,11 @@ export function registerN8nCallbackRoute(app: Express): void {
                 },
               },
             });
-            console.log(
+            logger.info(
               `[n8n Callback] Research version stored for letter #${letterId}`
             );
           } catch (researchErr) {
-            console.warn(
+            logger.warn(
               `[n8n Callback] Failed to store research version for #${letterId}:`,
               researchErr
             );
@@ -245,7 +246,7 @@ export function registerN8nCallbackRoute(app: Express): void {
         }
 
         if (hasVetting && vettingReport) {
-          console.log(
+          logger.info(
             `[n8n Callback] Vetted letter stored for letter #${letterId} (risk: ${vettingReport.riskLevel}, changes: ${vettingReport.changesApplied?.length ?? 0}, bloat_removed: ${vettingReport.bloatPhrasesRemoved?.length ?? 0})`
           );
         }
@@ -254,7 +255,7 @@ export function registerN8nCallbackRoute(app: Express): void {
 
         if (isAligned || hasVetting) {
           const stageLabel = hasVetting ? "4-stage" : "3-stage";
-          console.log(
+          logger.info(
             `[n8n Callback] Aligned ${stageLabel} complete for letter #${letterId}. Skipping local assembly.`
           );
           await updateLetterStatus(letterId, "generated_locked");
@@ -267,7 +268,7 @@ export function registerN8nCallbackRoute(app: Express): void {
             toStatus: "generated_locked",
           });
         } else {
-          console.log(
+          logger.info(
             `[n8n Callback] Legacy n8n output for letter #${letterId}. Running local assembly stage.`
           );
           const letter = await getLetterRequestById(letterId);
@@ -320,7 +321,7 @@ export function registerN8nCallbackRoute(app: Express): void {
 
               await runAssemblyStage(letterId, intake, research, draft);
               assemblyHandledEmails = true;
-              console.log(
+              logger.info(
                 `[n8n Callback] Local assembly complete for letter #${letterId}`
               );
             } catch (assemblyErr) {
@@ -328,7 +329,7 @@ export function registerN8nCallbackRoute(app: Express): void {
                 assemblyErr instanceof Error
                   ? assemblyErr.message
                   : String(assemblyErr);
-              console.warn(
+              logger.warn(
                 `[n8n Callback] Local assembly failed for letter #${letterId}: ${assemblyMsg}. Using n8n draft as final.`
               );
 
@@ -362,11 +363,11 @@ export function registerN8nCallbackRoute(app: Express): void {
             // the paywallEmailCron job (POST /api/cron/paywall-emails).
             // We do NOT send an immediate email here — the cron picks up the letter
             // once lastStatusChangedAt falls in the 10–15 minute window.
-            console.log(
+            logger.info(
               `[n8n Callback] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
             );
           } else {
-            console.log(
+            logger.info(
               `[n8n Callback] Skipping paywall email for #${letterId} — previously unlocked`
             );
           }
@@ -374,19 +375,19 @@ export function registerN8nCallbackRoute(app: Express): void {
           try {
             await autoAdvanceIfPreviouslyUnlocked(letterId);
           } catch (autoUnlockErr) {
-            console.error(
+            logger.error(
               `[n8n Callback] Auto-unlock check failed for #${letterId}:`,
               autoUnlockErr
             );
           }
         }
 
-        console.log(
+        logger.info(
           `[n8n Callback] Processing complete for letter #${letterId} (${providerTag})`
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(
+        logger.error(
           `[n8n Callback] Error processing callback for letter #${letterId}:`,
           msg
         );

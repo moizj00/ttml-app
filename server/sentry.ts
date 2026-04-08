@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { logger } from "./logger";
 
 let initialized = false;
 
@@ -8,11 +9,11 @@ export function initServerSentry() {
   const client = Sentry.getClient();
   if (client) {
     initialized = true;
-    console.log("[Sentry] Already initialized via --import instrumentation");
+    logger.info("[Sentry] Already initialized via --import instrumentation");
     return;
   }
 
-  console.log("[Sentry] Not pre-initialized — skipping duplicate init (use --import server/instrument.ts)");
+  logger.info("[Sentry] Not pre-initialized — skipping duplicate init (use --import server/instrument.ts)");
 }
 
 // ─── Helper: Capture exception with context ───
@@ -29,7 +30,7 @@ export function captureServerException(
   }
 ) {
   if (!Sentry.getClient()) {
-    console.error("[Sentry] Not initialized, logging error:", error);
+    logger.error("[Sentry] Not initialized, logging error:", error);
     return;
   }
 

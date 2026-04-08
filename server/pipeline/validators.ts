@@ -2,6 +2,7 @@ import type { IntakeJson, ResearchPacket, DraftOutput, ValidationResult, Groundi
 import { PIPELINE_ERROR_CODES } from "../../shared/types";
 import { type NormalizedPromptInput } from "../intake-normalizer";
 import { extractCitationsFromText, normalizeCitation } from "./citations";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // DETERMINISTIC VALIDATORS
@@ -82,7 +83,7 @@ export function validateResearchPacket(data: unknown): {
     );
 
   if (warnings.length > 0) {
-    console.warn(
+    logger.warn(
       `[Pipeline] Research packet soft warnings: ${warnings.join("; ")}`
     );
   }
@@ -246,7 +247,7 @@ export async function retryOnValidationFailure<T>(
   stageName: string
 ): Promise<T> {
   const errorFeedback = `\n\n## VALIDATION ERRORS FROM PREVIOUS ATTEMPT — FIX THESE:\n${validationErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}\n\nYou must fix ALL of the above issues in this attempt. Do not repeat the same mistakes.`;
-  console.log(
+  logger.info(
     `[Pipeline] Retrying ${stageName} with ${validationErrors.length} validation error(s) fed back into prompt (backoff ${RETRY_BACKOFF_MS}ms)`
   );
   await new Promise(resolve => setTimeout(resolve, RETRY_BACKOFF_MS));
@@ -408,7 +409,7 @@ export function validateContentConsistency(
   let jurisdictionMismatch = false;
   let foundJurisdiction: string | null = null;
   if (!expectedStateIsKnown) {
-    console.warn(`[Pipeline] validateContentConsistency: expectedState "${expectedState}" is not a known US state; skipping jurisdiction mismatch loop`);
+    logger.warn(`[Pipeline] validateContentConsistency: expectedState "${expectedState}" is not a known US state; skipping jurisdiction mismatch loop`);
   }
   for (const state of expectedStateIsKnown ? US_STATE_NAMES : []) {
     if (state.toLowerCase() === expectedState.toLowerCase()) continue;

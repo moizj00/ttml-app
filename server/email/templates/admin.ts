@@ -4,6 +4,7 @@
  */
 
 import { dispatchToWorker, buildEmailHtml, buildPlainText, sendEmail, sendWithRetry, APP_NAME, BRAND_COLOR, BRAND_DARK, FROM } from "../core";
+import { logger } from "../../logger";
 
 /** Notify admin when an AI pipeline job fails */
 export async function sendJobFailedAlertEmail(opts: {
@@ -91,11 +92,11 @@ export async function sendAdminVerificationCodeEmail(opts: {
   name: string;
   code: string;
 }) {
-  console.log(`[Email] Sending admin 2FA code to=${opts.to}, from=${FROM}`);
+  logger.info(`[Email] Sending admin 2FA code to=${opts.to}, from=${FROM}`);
 
   const dispatched = await dispatchToWorker({ type: "admin_verification_code", ...opts });
   if (dispatched) {
-    console.log(`[Email] Admin 2FA code dispatched to Worker for to=${opts.to}`);
+    logger.info(`[Email] Admin 2FA code dispatched to Worker for to=${opts.to}`);
     return;
   }
 
@@ -137,9 +138,9 @@ export async function sendAdminVerificationCodeEmail(opts: {
         body: `Hello ${opts.name}, your admin verification code is: ${opts.code}. This code expires in 10 minutes. If you did not attempt to sign in, please secure your account immediately.`,
       }),
     });
-    console.log(`[Email] Admin 2FA code sent successfully to=${opts.to}`);
+    logger.info(`[Email] Admin 2FA code sent successfully to=${opts.to}`);
   } catch (err) {
-    console.error(`[Email] Admin 2FA code FAILED to=${opts.to}, from=${FROM}, error:`, err);
+    logger.error(`[Email] Admin 2FA code FAILED to=${opts.to}, from=${FROM}, error:`, err);
     throw err;
   }
 }

@@ -3,6 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
+import { logger } from "../logger";
 
 export async function setupVite(app: Express, server: Server) {
   // Dynamic import: vite and vite.config are only loaded in development mode.
@@ -64,7 +65,7 @@ export function serveStatic(app: Express) {
   const distPath = path.resolve(import.meta.dirname, "public");
 
   if (!fs.existsSync(distPath)) {
-    console.error(
+    logger.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }

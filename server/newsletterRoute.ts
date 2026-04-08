@@ -2,6 +2,7 @@ import type { Express, RequestHandler } from "express";
 import { z } from "zod";
 import { getDb } from "./db";
 import { newsletterSubscribers } from "../drizzle/schema";
+import { logger } from "./logger";
 
 const subscribeSchema = z.object({
   email: z.string().email().max(320),
@@ -32,7 +33,7 @@ export function registerNewsletterRoute(app: Express) {
 
       res.json({ success: true });
     } catch (err) {
-      console.error("[Newsletter] Subscribe error:", err);
+      logger.error("[Newsletter] Subscribe error:", err);
       res.status(500).json({ error: "Something went wrong. Please try again." });
     }
   };

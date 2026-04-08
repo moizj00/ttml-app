@@ -18,6 +18,7 @@ import {
   getPublishedBlogPosts,
   getBlogPostBySlug,
 } from "./db";
+import { logger } from "./logger";
 
 type BlogListOptions = { category?: string; limit?: number; offset?: number };
 type BlogListResult = Awaited<ReturnType<typeof getPublishedBlogPosts>>;
@@ -52,11 +53,11 @@ export async function getCachedBlogPosts(
       return (await res.json()) as BlogListResult;
     }
 
-    console.warn(
+    logger.warn(
       `[blog-cache] Worker list request failed (${res.status}), falling back to DB`
     );
   } catch (err) {
-    console.warn("[blog-cache] Worker list request error, falling back to DB:", err);
+    logger.warn("[blog-cache] Worker list request error, falling back to DB:", err);
   }
 
   return getPublishedBlogPosts(options);
@@ -87,11 +88,11 @@ export async function getCachedBlogPost(
       return (await res.json()) as BlogPost;
     }
 
-    console.warn(
+    logger.warn(
       `[blog-cache] Worker getBySlug request failed (${res.status}), falling back to DB`
     );
   } catch (err) {
-    console.warn("[blog-cache] Worker getBySlug request error, falling back to DB:", err);
+    logger.warn("[blog-cache] Worker getBySlug request error, falling back to DB:", err);
   }
 
   return getBlogPostBySlug(slug);

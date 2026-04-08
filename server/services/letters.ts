@@ -41,6 +41,7 @@ import {
 } from "../stripe";
 import type { IntakeJson } from "../../shared/types";
 import { getAppUrl } from "../routers/_shared";
+import { logger } from "../logger";
 
 // ─── Submit Letter (subscriber path) ───────────────────────────────────────
 
@@ -141,7 +142,7 @@ export async function submitLetter(
       jurisdictionState: input.jurisdictionState,
       appUrl,
     }).catch(err => {
-      console.error("[Email] Submission confirmation failed:", err);
+      logger.error("[Email] Submission confirmation failed:", err);
       captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } });
     });
   }
@@ -157,7 +158,7 @@ export async function submitLetter(
       usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
     });
   } catch (enqueueErr) {
-    console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+    logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
     captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
     await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
     throw new TRPCError({
@@ -175,7 +176,7 @@ export async function submitLetter(
       link: `/admin/letters/${letterId}`,
     });
   } catch (err) {
-    console.error("[notifyAdmins] letter_submitted:", err);
+    logger.error("[notifyAdmins] letter_submitted:", err);
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
   }
 
@@ -195,7 +196,7 @@ async function _refundUsage(
       await decrementLettersUsed(userId);
     }
   } catch (refundErr) {
-    console.error("[Submit] Failed to refund usage:", refundErr);
+    logger.error("[Submit] Failed to refund usage:", refundErr);
     captureServerException(refundErr, { tags: { component: "letters", error_type: "usage_refund_failed" } });
   }
 }
@@ -260,7 +261,7 @@ export async function processSubscriberFeedback(
     toStatus,
   });
 
-  extractLessonFromSubscriberFeedback(letterId, additionalContext, ctx.userId, "subscriber_update").catch(console.error);
+  extractLessonFromSubscriberFeedback(letterId, additionalContext, ctx.userId, "subscriber_update").catch(logger.error);
 
   if (updatedIntakeJson) {
     const db = await (await import("../db")).getDb();
@@ -290,7 +291,7 @@ export async function processSubscriberFeedback(
           label: "updateForChanges",
         });
       } catch (enqueueErr) {
-        console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+        logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
         captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -330,7 +331,7 @@ export async function processSubscriberFeedback(
         });
       }
     } catch (notifyErr) {
-      console.error("[processSubscriberFeedback] Light-edit notification failed:", notifyErr);
+      logger.error("[processSubscriberFeedback] Light-edit notification failed:", notifyErr);
       captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
     }
   }
@@ -374,7 +375,7 @@ export async function retryFromRejected(
   });
 
   if (input.additionalContext) {
-    extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.userId, "subscriber_retry").catch(console.error);
+    extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.userId, "subscriber_retry").catch(logger.error);
   }
 
   if (input.updatedIntakeJson) {
@@ -410,7 +411,7 @@ export async function retryFromRejected(
       label: "retryFromRejected",
     });
   } catch (enqueueErr) {
-    console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+    logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
     captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -445,7 +446,7 @@ export async function retryFromRejected(
       link: `/admin/letters/${input.letterId}`,
     });
   } catch (err) {
-    console.error("[retryFromRejected] Notification error:", err);
+    logger.error("[retryFromRejected] Notification error:", err);
     captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
   }
 
@@ -511,7 +512,7 @@ export async function sendLetterToRecipientFlow(
       toStatus: "sent",
     });
   } catch (err) {
-    console.error("[sendToRecipient] Failed to update status to sent:", err);
+    logger.error("[sendToRecipient] Failed to update status to sent:", err);
     captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
   }
 
@@ -524,7 +525,7 @@ export async function sendLetterToRecipientFlow(
       link: `/admin/letters/${input.letterId}`,
     });
   } catch (err) {
-    console.error("[notifyAdmins] letter_sent_to_recipient:", err);
+    logger.error("[notifyAdmins] letter_sent_to_recipient:", err);
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
   }
 
@@ -585,7 +586,7 @@ export async function clientDeclineLetter(
       },
     });
   } catch (err) {
-    console.error("[notifyAdmins] client_declined:", err);
+    logger.error("[notifyAdmins] client_declined:", err);
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
   }
   return { success: true };

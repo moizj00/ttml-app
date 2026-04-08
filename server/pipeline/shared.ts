@@ -3,6 +3,7 @@ import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
 import { isOpenAIFailoverAvailable, isGroqFallbackAvailable } from "./providers";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // PROMPT INJECTION SANITIZATION
@@ -59,7 +60,7 @@ export function sanitizeForPrompt(
   }
 
   if (hadInjection) {
-    console.warn(
+    logger.warn(
       `[pipeline:sanitize] Prompt injection pattern detected in field "${fieldName ?? "unknown"}": input truncated/redacted`
     );
   }
@@ -232,24 +233,24 @@ export async function withModelFailover<T>(
     const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
 
     if (!isOpenAIFailoverAvailable()) {
-      console.error(
+      logger.error(
         `[Pipeline] ${stage} for letter #${letterId}: rate-limit/credits error detected but OPENAI_API_KEY is not set — skipping OpenAI failover. Original error: ${primaryMsg}`
       );
       // Skip straight to OSS fallback if available
     } else {
-      console.warn(
+      logger.warn(
         `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o-mini failover. Original error: ${primaryMsg}`
       );
 
       try {
         const result = await fallbackFn();
-        console.log(
+        logger.info(
           `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover succeeded (provider=openai-failover)`
         );
         return { result, provider: "openai-failover", failoverTriggered: true };
       } catch (fallbackErr) {
         const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-        console.error(
+        logger.error(
           `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
         );
 
@@ -270,7 +271,7 @@ export async function withModelFailover<T>(
         }
 
         if (!isGroqFallbackAvailable()) {
-          console.warn(
+          logger.warn(
             `[Pipeline] ${stage} for letter #${letterId}: GROQ_API_KEY is not set — OSS last resort unavailable. All providers exhausted.`
           );
           captureServerException(fallbackErr, {
@@ -289,18 +290,18 @@ export async function withModelFailover<T>(
           );
         }
 
-        console.warn(
+        logger.warn(
           `[Pipeline] ${stage} for letter #${letterId}: switching to Groq Llama 3.3 70B OSS last resort.`
         );
         try {
           const result = await ossLastResortFn();
-          console.log(
+          logger.info(
             `[Pipeline] ${stage} for letter #${letterId}: Groq Llama 3.3 OSS last resort succeeded (provider=groq-oss-fallback)`
           );
           return { result, provider: "groq-oss-fallback", failoverTriggered: true };
         } catch (ossErr) {
           const ossMsg = ossErr instanceof Error ? ossErr.message : String(ossErr);
-          console.error(
+          logger.error(
             `[Pipeline] ${stage} for letter #${letterId}: Groq OSS last resort also failed (all 3 providers exhausted): ${ossMsg}`
           );
           captureServerException(ossErr, {
@@ -327,24 +328,24 @@ export async function withModelFailover<T>(
     }
 
     if (!isGroqFallbackAvailable()) {
-      console.warn(
+      logger.warn(
         `[Pipeline] ${stage} for letter #${letterId}: GROQ_API_KEY is not set — OSS last resort unavailable. Original error: ${primaryMsg}`
       );
       throw primaryErr;
     }
 
-    console.warn(
+    logger.warn(
       `[Pipeline] ${stage} for letter #${letterId}: OpenAI unavailable — switching directly to Groq Llama 3.3 70B OSS last resort. Original error: ${primaryMsg}`
     );
     try {
       const result = await ossLastResortFn();
-      console.log(
+      logger.info(
         `[Pipeline] ${stage} for letter #${letterId}: Groq Llama 3.3 OSS last resort succeeded (provider=groq-oss-fallback)`
       );
       return { result, provider: "groq-oss-fallback", failoverTriggered: true };
     } catch (ossErr) {
       const ossMsg = ossErr instanceof Error ? ossErr.message : String(ossErr);
-      console.error(
+      logger.error(
         `[Pipeline] ${stage} for letter #${letterId}: Groq OSS last resort also failed: ${ossMsg}`
       );
       captureServerException(ossErr, {
@@ -393,7 +394,7 @@ async function findSimilarLessons(
     `);
     return results as any[];
   } catch (err) {
-    console.warn("[Pipeline] Semantic lesson search failed, skipping:", err);
+    logger.warn("[Pipeline] Semantic lesson search failed, skipping:", err);
     return [];
   }
 }
@@ -430,7 +431,7 @@ export async function buildLessonsPromptBlock(
     const lessonIds = (lessons as Array<{ id?: number | null }>).map((l) => l.id).filter((id): id is number => id != null);
     if (lessonIds.length > 0) {
       incrementLessonInjectionStats(lessonIds).catch((err) =>
-        console.warn("[Pipeline] Failed to increment injection stats:", err)
+        logger.warn("[Pipeline] Failed to increment injection stats:", err)
       );
     }
 
@@ -454,7 +455,7 @@ export async function buildLessonsPromptBlock(
 
     return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n\n${sections.join("\n\n")}\n`;
   } catch (err) {
-    console.error("[Pipeline] Failed to load lessons for prompt injection:", err);
+    logger.error("[Pipeline] Failed to load lessons for prompt injection:", err);
     captureServerException(err, { tags: { component: "pipeline", error_type: "lessons_load_failed" } });
     return "";
   }

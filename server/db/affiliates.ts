@@ -21,6 +21,7 @@ import {
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
 import { getDb } from "./core";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // DISCOUNT CODE HELPERS
@@ -73,7 +74,7 @@ export async function createDiscountCodeForEmployee(
       return result[0];
     } catch (err: any) {
       if (err?.code === "23505" && attempt < MAX_RETRIES - 1) {
-        console.warn(`[DiscountCode] Unique conflict on ${code}, retrying (${attempt + 1}/${MAX_RETRIES})`);
+        logger.warn(`[DiscountCode] Unique conflict on ${code}, retrying (${attempt + 1}/${MAX_RETRIES})`);
         continue;
       }
       throw err;
@@ -105,7 +106,7 @@ export async function rotateDiscountCode(
       return result[0];
     } catch (err: any) {
       if (err?.code === "23505" && attempt < MAX_RETRIES - 1) {
-        console.warn(`[DiscountCode] Unique conflict on rotate ${newCode}, retrying (${attempt + 1}/${MAX_RETRIES})`);
+        logger.warn(`[DiscountCode] Unique conflict on rotate ${newCode}, retrying (${attempt + 1}/${MAX_RETRIES})`);
         continue;
       }
       throw err;
@@ -216,7 +217,7 @@ export async function createCommission(data: {
       )
       .limit(1);
     if (existing.length > 0) {
-      console.log(
+      logger.info(
         `[Commission] Duplicate prevented: commission already exists for PI ${data.stripePaymentIntentId}`
       );
       return existing[0];

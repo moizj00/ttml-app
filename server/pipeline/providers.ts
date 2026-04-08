@@ -3,6 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, type ToolSet } from "ai";
 import OpenAI from "openai";
 import type { TokenUsage } from "../../shared/types";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // MODEL PROVIDERS
@@ -40,7 +41,7 @@ export function isOpenAIFailoverAvailable(): boolean {
 export function getResearchModel() {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
-    console.warn(
+    logger.warn(
       "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to Claude for research"
     );
     const anthropic = getAnthropicClient();

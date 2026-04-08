@@ -5,6 +5,7 @@
  */
 
 import { getResend } from "./core";
+import { logger } from "../logger";
 
 /** Validate Resend credentials (used in tests and health checks) */
 export async function validateResendCredentials(): Promise<boolean> {
@@ -13,7 +14,7 @@ export async function validateResendCredentials(): Promise<boolean> {
     const { error } = await r.domains.list();
     return !error;
   } catch (err) {
-    console.warn("[Email] Resend credential validation failed:", err);
+    logger.warn("[Email] Resend credential validation failed:", err);
     return false;
   }
 }

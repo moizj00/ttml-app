@@ -124,6 +124,7 @@ import {
   incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "../stripe";
+import { logger } from "../logger";
 
 /**
  * Sync a discount code to/from the Cloudflare Worker KV allowlist.
@@ -295,7 +296,7 @@ export const documentsRouter = router({
             documentText = fileBuffer.toString("utf-8");
           }
         } catch (err) {
-          console.error("[DocumentAnalyzer] Text extraction failed:", err);
+          logger.error("[DocumentAnalyzer] Text extraction failed:", err);
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -445,7 +446,7 @@ ${truncatedText}
           // Validate via lenient schema (applies safe defaults for partial/malformed AI output)
           analysisResult = documentAnalysisResultLenientSchema.parse(parsed);
         } catch (err) {
-          console.error("[DocumentAnalyzer] AI analysis failed:", err);
+          logger.error("[DocumentAnalyzer] AI analysis failed:", err);
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "ai_analysis_failed" } });
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -467,7 +468,7 @@ ${truncatedText}
               });
             }
           } catch (dbErr) {
-            console.error("[DocumentAnalyzer] DB insert failed (non-fatal):", dbErr);
+            logger.error("[DocumentAnalyzer] DB insert failed (non-fatal):", dbErr);
             captureServerException(dbErr, { tags: { component: "document_analyzer", error_type: "db_insert_failed" } });
           }
         })();
@@ -510,7 +511,7 @@ ${truncatedText}
 
           return { rows: fetched, nextCursor };
         } catch (err) {
-          console.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
+          logger.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "get_analyses_failed" } });
           return { rows: [], nextCursor: undefined };
         }

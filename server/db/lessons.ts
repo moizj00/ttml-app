@@ -21,6 +21,7 @@ import {
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
 import { getDb, getReadDb } from "./core";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // PIPELINE LESSONS HELPERS (Recursive Learning)
@@ -56,9 +57,9 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
         await embDb.execute(
           sql`UPDATE pipeline_lessons SET embedding = ${vectorParam}::vector WHERE id = ${inserted.insertId}`
         );
-        console.log(`[Lessons] Stored embedding for lesson #${inserted.insertId}`);
+        logger.info(`[Lessons] Stored embedding for lesson #${inserted.insertId}`);
       } catch (embErr) {
-        console.warn(`[Lessons] Failed to embed lesson #${inserted?.insertId}:`, embErr);
+        logger.warn(`[Lessons] Failed to embed lesson #${inserted?.insertId}:`, embErr);
       }
     });
   }

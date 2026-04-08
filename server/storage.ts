@@ -4,6 +4,7 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from './_core/env';
+import { logger } from "./logger";
 
 let cachedClient: S3Client | null = null;
 
@@ -99,7 +100,7 @@ export function getR2HealthStatus(): boolean | null {
 
 export async function checkR2Connectivity(): Promise<void> {
   if (!ENV.r2AccountId || !ENV.r2AccessKeyId || !ENV.r2SecretAccessKey || !ENV.r2BucketName) {
-    console.warn("[R2] Cloudflare R2 credentials not fully configured — storage uploads will fail.");
+    logger.warn("[R2] Cloudflare R2 credentials not fully configured — storage uploads will fail.");
     r2Healthy = false;
     return;
   }
@@ -109,9 +110,9 @@ export async function checkR2Connectivity(): Promise<void> {
     const bucket = getR2Bucket();
     await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
     r2Healthy = true;
-    console.log("[R2] Cloudflare R2 connectivity check passed.");
+    logger.info("[R2] Cloudflare R2 connectivity check passed.");
   } catch (err: any) {
     r2Healthy = false;
-    console.error("[R2] Cloudflare R2 connectivity check FAILED:", err?.message ?? err);
+    logger.error("[R2] Cloudflare R2 connectivity check FAILED:", err?.message ?? err);
   }
 }

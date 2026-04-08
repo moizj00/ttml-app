@@ -19,6 +19,7 @@ import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
 import { getUserById } from "./db";
 import { sendDraftReminderEmail } from "./email";
+import { logger } from "./logger";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export async function processDraftReminders(): Promise<ReminderResult> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[DraftReminders] Database not available — skipping");
+    logger.warn("[DraftReminders] Database not available — skipping");
     return result;
   }
 
@@ -83,7 +84,7 @@ export async function processDraftReminders(): Promise<ReminderResult> {
       )
     );
 
-  console.log(
+  logger.info(
     `[DraftReminders] Found ${eligibleLetters.length} eligible letters for reminder`
   );
   result.processed = eligibleLetters.length;
@@ -137,7 +138,7 @@ export async function processDraftReminders(): Promise<ReminderResult> {
 
       result.sent++;
       result.details.push({ letterId: letter.id, status: "sent" });
-      console.log(
+      logger.info(
         `[DraftReminders] Reminder sent for letter #${letter.id} to ${subscriber.email} (${Math.round(hoursWaiting)}h waiting)`
       );
     } catch (err) {
@@ -148,14 +149,14 @@ export async function processDraftReminders(): Promise<ReminderResult> {
         status: "error",
         reason: msg,
       });
-      console.error(
+      logger.error(
         `[DraftReminders] Failed to send reminder for letter #${letter.id}:`,
         msg
       );
     }
   }
 
-  console.log(
+  logger.info(
     `[DraftReminders] Done — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
   );
   return result;
@@ -195,12 +196,12 @@ export function registerDraftRemindersRoute(app: Express): void {
       return res.json({ success: true, result });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[DraftReminders] Cron handler error:", msg);
+      logger.error("[DraftReminders] Cron handler error:", msg);
       return res.status(500).json({ error: msg });
     }
   });
 
-  console.log(
+  logger.info(
     "[DraftReminders] Route registered: POST /api/cron/draft-reminders"
   );
 }

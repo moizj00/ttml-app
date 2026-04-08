@@ -17,6 +17,7 @@ import {
 } from "./user-cache";
 import { isSupabaseEmailConfirmed } from "./helpers";
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 // ─── Cookie / Token Extraction ─────────────────────────────────────────────
 export function parseCookies(cookieHeader: string | undefined): Map<string, string> {
@@ -44,7 +45,7 @@ function extractCookieToken(req: Request): string | null {
     const parsed = JSON.parse(sbSession);
     return parsed.access_token || null;
   } catch {
-    console.warn("[SupabaseAuth] Stored session value is not JSON, treating as raw token");
+    logger.warn("[SupabaseAuth] Stored session value is not JSON, treating as raw token");
     return sbSession;
   }
 }
@@ -57,7 +58,7 @@ export function extractAccessToken(req: Request): string | null {
       const parsed = JSON.parse(sbSession);
       return parsed.access_token || null;
     } catch {
-      console.warn("[SupabaseAuth] sb-session cookie is not JSON, treating as raw token");
+      logger.warn("[SupabaseAuth] sb-session cookie is not JSON, treating as raw token");
       return sbSession;
     }
   }
@@ -107,7 +108,7 @@ async function verifyToken(token: string): Promise<User | null> {
             const entry = _userCache.get(supabaseUid);
             if (entry) entry.lastSignedInWrittenAt = now;
           }).catch((err) => {
-            console.warn("[SupabaseAuth] Failed to update lastSignedIn (non-blocking):", err);
+            logger.warn("[SupabaseAuth] Failed to update lastSignedIn (non-blocking):", err);
             captureServerException(err instanceof Error ? err : new Error(String(err)), {
               tags: { component: "supabase_auth", error_type: "last_signed_in_update_failed" },
             });
@@ -178,7 +179,7 @@ async function verifyToken(token: string): Promise<User | null> {
     }
     return appUser || null;
   } catch (err) {
-    console.warn("[SupabaseAuth] authenticateRequest failed, returning null:", err);
+    logger.warn("[SupabaseAuth] authenticateRequest failed, returning null:", err);
     captureServerException(err instanceof Error ? err : new Error(String(err)), {
       tags: { component: "supabase_auth", error_type: "authenticate_request_failed" },
     });
@@ -205,7 +206,7 @@ export async function authenticateRequest(req: Request): Promise<User | null> {
   }
 
   if (bearerToken || cookieToken) {
-    console.warn("[SupabaseAuth] JWT verification failed: all auth sources rejected");
+    logger.warn("[SupabaseAuth] JWT verification failed: all auth sources rejected");
   }
   return null;
 }

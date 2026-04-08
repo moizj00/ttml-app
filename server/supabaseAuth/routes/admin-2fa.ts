@@ -12,6 +12,7 @@ import { getSessionCookieOptions } from "../../_core/cookies";
 import { ADMIN_2FA_COOKIE, ADMIN_2FA_TTL_MS, signAdmin2FAToken, verifyAdmin2FAToken } from "../../_core/admin2fa";
 import { sendAdminVerificationCodeEmail } from "../../email";
 import { authenticateRequest, parseCookies } from "../jwt";
+import { logger } from "../../logger";
 
 export function registerAdmin2FARoutes(app: Express) {
 
@@ -41,7 +42,7 @@ export function registerAdmin2FARoutes(app: Express) {
       });
       res.json({ success: true });
     } catch (err) {
-      console.error("[SupabaseAuth] Admin 2FA verify error:", err);
+      logger.error("[SupabaseAuth] Admin 2FA verify error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -60,10 +61,10 @@ export function registerAdmin2FARoutes(app: Express) {
         name: user.name || user.email!.split("@")[0],
         code,
       });
-      console.log(`[SupabaseAuth] Admin 2FA resend dispatched, to=${user.email}`);
+      logger.info(`[SupabaseAuth] Admin 2FA resend dispatched, to=${user.email}`);
       res.json({ success: true, message: "A new verification code has been sent to your email." });
     } catch (err) {
-      console.error("[SupabaseAuth] Admin 2FA resend error:", err);
+      logger.error("[SupabaseAuth] Admin 2FA resend error:", err);
       const message = err instanceof Error ? err.message : "Unknown error";
       res.status(500).json({ error: `Failed to send verification code: ${message}. Please check your email address or try again.` });
     }

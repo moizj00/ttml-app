@@ -3,6 +3,7 @@
  */
 
 import { dispatchToWorker, buildEmailHtml, buildPlainText, getResend, APP_NAME, BRAND_DARK } from "../core";
+import { logger } from "../../logger";
 
 /**
  * Send the approved letter directly to a recipient email address.
@@ -41,7 +42,7 @@ export async function sendLetterToRecipient(opts: {
         hasPdfAttachment = true;
       }
     } catch (err) {
-      console.warn("[Email] Could not fetch PDF for attachment, falling back to inline HTML:", err);
+      logger.warn("[Email] Could not fetch PDF for attachment, falling back to inline HTML:", err);
     }
   }
 
@@ -98,12 +99,12 @@ export async function sendLetterToRecipient(opts: {
       return;
     } catch (err) {
       lastErr = err;
-      console.error(`[Email] sendLetterToRecipient attempt ${attempt + 1} failed:`, err);
+      logger.error(`[Email] sendLetterToRecipient attempt ${attempt + 1} failed:`, err);
       if (attempt < delays.length) {
         await new Promise(r => setTimeout(r, delays[attempt]));
       }
     }
   }
-  console.error("[Email] sendLetterToRecipient all retry attempts exhausted:", lastErr);
+  logger.error("[Email] sendLetterToRecipient all retry attempts exhausted:", lastErr);
   throw lastErr;
 }

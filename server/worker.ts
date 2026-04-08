@@ -27,6 +27,7 @@ import {
 import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { getDb } from "./db";
+import { logger } from "./logger";
 
 const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
@@ -36,14 +37,14 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
 
   const lockAcquired = await acquirePipelineLock(letterId);
   if (!lockAcquired) {
-    console.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping duplicate run (${label})`);
+    logger.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping duplicate run (${label})`);
     return;
   }
 
   const apiCheck = preflightApiKeyCheck("full");
   if (!apiCheck.ok) {
     const msg = `[Worker] API key preflight failed for letter #${letterId}: ${apiCheck.missing.join("; ")}`;
-    console.error(msg);
+    logger.error(msg);
     try {
       await updateLetterStatus(letterId, "pipeline_failed", { force: true });
     } catch { /* ignore */ }
@@ -64,14 +65,14 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       try {
         if (attempt > 0) {
           const delay = PIPELINE_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-          console.log(`[Worker] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
+          logger.info(`[Worker] Retry ${attempt}/${PIPELINE_MAX_RETRIES} for letter #${letterId} in ${delay}ms (${label})`);
           await new Promise(r => setTimeout(r, delay));
         }
         {
           const current = await getLetterRequestById(letterId);
           const retryableStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
           if (attempt > 0 && current && !retryableStatuses.includes(current.status)) {
-            console.log(`[Worker] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
+            logger.info(`[Worker] Letter #${letterId} status changed to "${current.status}" during backoff, aborting retry (${label})`);
             return;
           }
           if (attempt === 0) {
@@ -91,12 +92,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             const { getLatestResearchRun } = await import("./db");
             const latestResearch = await getLatestResearchRun(letterId);
             if (latestResearch?.resultJson) {
-              console.log(`[Worker] Retry ${attempt}: research already succeeded for letter #${letterId} — retrying from drafting stage`);
+              logger.info(`[Worker] Retry ${attempt}: research already succeeded for letter #${letterId} — retrying from drafting stage`);
               await retryPipelineFromStage(letterId, intake as any, "drafting", userId);
               return;
             }
           } catch (stageCheckErr) {
-            console.warn(`[Worker] Stage-aware check failed for letter #${letterId}, falling back to full pipeline:`, stageCheckErr);
+            logger.warn(`[Worker] Stage-aware check failed for letter #${letterId}, falling back to full pipeline:`, stageCheckErr);
           }
         }
 
@@ -105,17 +106,17 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       } catch (err) {
         lastErr = err;
         const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[Worker] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, errMsg);
+        logger.error(`[Worker] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, errMsg);
         captureServerException(err, { tags: { component: "pipeline-worker", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
 
         if (err instanceof PipelineError && err.category === "permanent") {
-          console.error(`[Worker] Permanent error (${err.code}) for letter #${letterId} — skipping remaining retries`);
+          logger.error(`[Worker] Permanent error (${err.code}) for letter #${letterId} — skipping remaining retries`);
           break;
         }
       }
     }
 
-    console.error(`[Worker] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
+    logger.error(`[Worker] All ${PIPELINE_MAX_RETRIES + 1} attempts exhausted for letter #${letterId} (${label})`);
 
     // ── Best-effort fallback: attempt to deliver a degraded draft before failing ──
     // Only runs after retry exhaustion, never on the first attempt.
@@ -132,7 +133,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
         errorMessage: lastErrMsg,
       });
       if (fallbackDelivered) {
-        console.log(`[Worker] Degraded draft delivered for letter #${letterId} — skipping pipeline_failed`);
+        logger.info(`[Worker] Degraded draft delivered for letter #${letterId} — skipping pipeline_failed`);
         return; // successfully delivered (degraded) — don't refund or notify failure
       }
     }
@@ -141,13 +142,13 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       try {
         if (usageContext.isFreeTrialSubmission) {
           await refundFreeTrialSlot(userId);
-          console.log(`[Worker] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`);
+          logger.info(`[Worker] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`);
         } else {
           await decrementLettersUsed(userId);
-          console.log(`[Worker] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`);
+          logger.info(`[Worker] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`);
         }
       } catch (refundErr) {
-        console.error("[Worker] Failed to refund usage after pipeline failure:", refundErr);
+        logger.error("[Worker] Failed to refund usage after pipeline failure:", refundErr);
         captureServerException(refundErr, { tags: { component: "pipeline-worker", error_type: "usage_refund_failed" } });
       }
     }
@@ -167,7 +168,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             });
           }
         } catch (emailErr) {
-          console.error("[Worker] Failed to email admin:", emailErr);
+          logger.error("[Worker] Failed to email admin:", emailErr);
           captureServerException(emailErr, { tags: { component: "pipeline-worker", error_type: "admin_email_failed" } });
         }
         try {
@@ -180,12 +181,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             link: `/admin/letters/${letterId}`,
           });
         } catch (notifErr) {
-          console.error("[Worker] Failed to create notification:", notifErr);
+          logger.error("[Worker] Failed to create notification:", notifErr);
           captureServerException(notifErr, { tags: { component: "pipeline-worker", error_type: "notification_failed" } });
         }
       }
     } catch (notifyErr) {
-      console.error("[Worker] Failed to notify admins:", notifyErr);
+      logger.error("[Worker] Failed to notify admins:", notifyErr);
       captureServerException(notifyErr, { tags: { component: "pipeline-worker", error_type: "notify_admins_failed" } });
     }
 
@@ -202,24 +203,24 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             letterId,
             newStatus: "pipeline_failed",
             appUrl,
-          }).catch(e => console.error(`[Worker] Failed to send failure notification email to subscriber for letter #${letterId}:`, e));
+          }).catch(e => logger.error(`[Worker] Failed to send failure notification email to subscriber for letter #${letterId}:`, e));
         }
       }
     } catch (subEmailErr) {
-      console.error("[Worker] Failed to notify subscriber of pipeline failure:", subEmailErr);
+      logger.error("[Worker] Failed to notify subscriber of pipeline failure:", subEmailErr);
       captureServerException(subEmailErr, { tags: { component: "pipeline-worker", error_type: "subscriber_email_failed" } });
     }
 
     try {
       await updateLetterStatus(letterId, "pipeline_failed", { force: true });
     } catch (statusErr) {
-      console.error("[Worker] Failed to set pipeline_failed status:", statusErr);
+      logger.error("[Worker] Failed to set pipeline_failed status:", statusErr);
       captureServerException(statusErr, { tags: { component: "pipeline-worker", error_type: "status_update_failed" } });
     }
 
     throw new Error(`Pipeline failed after ${PIPELINE_MAX_RETRIES + 1} attempts for letter #${letterId}`);
   } finally {
-    await releasePipelineLock(letterId).catch(e => console.error("[Worker] Failed to release pipeline lock:", e));
+    await releasePipelineLock(letterId).catch(e => logger.error("[Worker] Failed to release pipeline lock:", e));
   }
 }
 
@@ -229,33 +230,33 @@ export async function processRetryFromStage(data: RetryFromStageJobData): Promis
 
   const lockAcquired = await acquirePipelineLock(letterId);
   if (!lockAcquired) {
-    console.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping duplicate retry-from-stage run (stage=${stage})`);
+    logger.warn(`[Worker] Letter #${letterId} pipeline lock already held — skipping duplicate retry-from-stage run (stage=${stage})`);
     return;
   }
 
   try {
     if (!intake || typeof intake !== "object") {
-      console.warn(`[Worker] Retry job for letter #${letterId}: intake is null/invalid — will attempt recovery from database`);
+      logger.warn(`[Worker] Retry job for letter #${letterId}: intake is null/invalid — will attempt recovery from database`);
       try {
         const letter = await getLetterRequestById(letterId);
         if (letter?.intakeJson && typeof letter.intakeJson === "object") {
           intake = letter.intakeJson;
-          console.log(`[Worker] Recovered intake from database for letter #${letterId}`);
+          logger.info(`[Worker] Recovered intake from database for letter #${letterId}`);
         }
       } catch (e) {
-        console.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
+        logger.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
       }
     }
 
     await retryPipelineFromStage(letterId, intake as any, stage, userId);
   } finally {
-    await releasePipelineLock(letterId).catch(e => console.error("[Worker] Failed to release pipeline lock (retry-from-stage):", e));
+    await releasePipelineLock(letterId).catch(e => logger.error("[Worker] Failed to release pipeline lock (retry-from-stage):", e));
   }
 }
 
 export async function processJob(job: Job<PipelineJobData>): Promise<void> {
   const startTime = Date.now();
-  console.log(`[Worker] Processing job ${job.id} (type=${job.data.type}, letterId=${job.data.letterId})`);
+  logger.info(`[Worker] Processing job ${job.id} (type=${job.data.type}, letterId=${job.data.letterId})`);
 
   try {
     switch (job.data.type) {
@@ -269,10 +270,10 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
         throw new Error(`Unknown job type: ${(job.data as any).type}`);
     }
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[Worker] Job ${job.id} completed in ${elapsed}s`);
+    logger.info(`[Worker] Job ${job.id} completed in ${elapsed}s`);
   } catch (err) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Worker] Job ${job.id} failed after ${elapsed}s:`, err instanceof Error ? err.message : err);
+    logger.error(`[Worker] Job ${job.id} failed after ${elapsed}s:`, err instanceof Error ? err.message : err);
     throw err;
   }
 }
@@ -280,18 +281,18 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
 async function startWorker() {
   // ── OPENAI_API_KEY availability check — required for model failover ──
   if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.trim().length === 0) {
-    console.warn(
+    logger.warn(
       "[Worker] WARNING: OPENAI_API_KEY is not set. Model failover is unavailable. " +
       "If Perplexity or Claude hit rate limits, their errors will be treated as fatal. " +
       "Set OPENAI_API_KEY to enable automatic failover to GPT-4o."
     );
   } else {
-    console.log("[Worker] OPENAI_API_KEY detected — model failover to GPT-4o is enabled for all pipeline stages.");
+    logger.info("[Worker] OPENAI_API_KEY detected — model failover to GPT-4o is enabled for all pipeline stages.");
   }
 
   // ── GCS/Vertex AI availability checks ──
   if (!process.env.GCP_PROJECT_ID) {
-    console.warn(
+    logger.warn(
       "[Worker] WARNING: GCP_PROJECT_ID is not set. Training capture to GCS and Vertex AI fine-tuning are disabled. " +
       "Set GCP_PROJECT_ID, GCS_TRAINING_BUCKET, and GCP_REGION to enable."
     );
@@ -299,7 +300,7 @@ async function startWorker() {
     const gcsOk = !!process.env.GCS_TRAINING_BUCKET;
     const vertexOk = !!process.env.GCP_REGION;
     const credentialsOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    console.log(
+    logger.info(
       `[Worker] GCP_PROJECT_ID detected — GCS training capture: ${gcsOk ? "enabled" : "DISABLED (set GCS_TRAINING_BUCKET)"}, ` +
       `Vertex AI fine-tuning: ${vertexOk ? "enabled" : "DISABLED (set GCP_REGION)"}` +
       (credentialsOk ? ", GOOGLE_APPLICATION_CREDENTIALS: set" : ", GOOGLE_APPLICATION_CREDENTIALS: using ADC (Application Default Credentials)")
@@ -310,14 +311,14 @@ async function startWorker() {
   {
     const { isVertexSearchConfigured, getVertexSearchMissingVars } = await import("./pipeline/vertex-search");
     if (isVertexSearchConfigured()) {
-      console.log(
+      logger.info(
         `[Worker] Vertex AI Vector Search: ENABLED (index=${process.env.VERTEX_SEARCH_INDEX_ID}, ` +
         `endpoint=${process.env.VERTEX_SEARCH_INDEX_ENDPOINT_ID}, ` +
         `deployedIndex=${process.env.VERTEX_SEARCH_DEPLOYED_INDEX_ID})`
       );
     } else {
       const missing = getVertexSearchMissingVars();
-      console.warn(
+      logger.warn(
         `[Worker] Vertex AI Vector Search: disabled — falling back to pgvector. ` +
         (missing.length > 0 ? `Missing env vars: ${missing.join(", ")}` : "Unknown configuration issue.")
       );
@@ -332,19 +333,19 @@ async function startWorker() {
         const { pollFineTuneRunStatuses } = await import("./pipeline/fine-tune");
         await pollFineTuneRunStatuses();
       } catch (pollErr) {
-        console.warn("[Worker] Fine-tune poll error:", pollErr);
+        logger.warn("[Worker] Fine-tune poll error:", pollErr);
       }
     };
     // Initial poll on startup (deferred slightly to let DB warm up)
     setTimeout(runPoll, 10_000);
     // Then every 30 minutes
     setInterval(runPoll, POLL_INTERVAL_MS);
-    console.log("[Worker] Fine-tune status polling scheduled every 30 minutes.");
+    logger.info("[Worker] Fine-tune status polling scheduled every 30 minutes.");
   }
 
-  console.log("[Worker] Warming up database connection...");
+  logger.info("[Worker] Warming up database connection...");
   await getDb().catch((err) => {
-    console.error("[Worker] Database warmup failed:", err);
+    logger.error("[Worker] Database warmup failed:", err);
     captureServerException(err, { tags: { component: "worker", error_type: "db_warmup_failed" } });
   });
 
@@ -358,15 +359,15 @@ async function startWorker() {
   });
 
   worker.on("ready", () => {
-    console.log("[Worker] Pipeline worker is ready and listening for jobs");
+    logger.info("[Worker] Pipeline worker is ready and listening for jobs");
   });
 
   worker.on("completed", (job) => {
-    console.log(`[Worker] Job ${job.id} completed successfully`);
+    logger.info(`[Worker] Job ${job.id} completed successfully`);
   });
 
   worker.on("failed", (job, err) => {
-    console.error(`[Worker] Job ${job?.id} failed:`, err.message);
+    logger.error(`[Worker] Job ${job?.id} failed:`, err.message);
     captureServerException(err, {
       tags: { component: "pipeline-worker", error_type: "job_failed" },
       extra: { jobId: job?.id, jobData: job?.data },
@@ -374,11 +375,11 @@ async function startWorker() {
   });
 
   worker.on("error", (err) => {
-    console.error("[Worker] Worker error:", err.message);
+    logger.error("[Worker] Worker error:", err.message);
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`[Worker] Received ${signal}, shutting down gracefully...`);
+    logger.info(`[Worker] Received ${signal}, shutting down gracefully...`);
     await worker.close();
     process.exit(0);
   };
@@ -386,10 +387,10 @@ async function startWorker() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
-  console.log(`[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1)`);
+  logger.info(`[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1)`);
 }
 
 startWorker().catch((err) => {
-  console.error("[Worker] Failed to start:", err);
+  logger.error("[Worker] Failed to start:", err);
   process.exit(1);
 });

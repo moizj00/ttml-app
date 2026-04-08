@@ -48,6 +48,7 @@ import {
   validateVettingOutput,
 } from "./vetting-prompts";
 import type { VettingReport, PostVetDeterministicContext } from "./vetting-prompts";
+import { logger } from "../logger";
 
 const VETTING_TIMEOUT_MS = 120_000;
 
@@ -72,11 +73,11 @@ export async function runVettingStage(
     });
     const rawJobId = (job as any)?.insertId;
     if (rawJobId == null) {
-      console.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
+      logger.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
     }
     jobId = rawJobId ?? 0;
   } catch (jobCreateErr) {
-    console.warn(`[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`, jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr);
+    logger.warn(`[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`, jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr);
     captureServerException(jobCreateErr, { tags: { component: "pipeline", error_type: "workflow_job_create_failed" }, extra: { letterId } });
   }
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
@@ -98,7 +99,7 @@ export async function runVettingStage(
   );
 
   const preVetCitationAudit = runCitationAudit(assembledLetter, citationRegistry);
-  console.log(
+  logger.info(
     `[Pipeline] Stage 4: Pre-vet citation audit for letter #${letterId}: ${preVetCitationAudit.verifiedCitations.length} verified, ${preVetCitationAudit.unverifiedCitations.length} unverified, risk score: ${preVetCitationAudit.hallucinationRiskScore}%`
   );
 
@@ -125,7 +126,7 @@ export async function runVettingStage(
 
   const detectedBloat = detectBloatPhrases(assembledLetter);
   if (detectedBloat.length > 0) {
-    console.log(
+    logger.info(
       `[Pipeline] Stage 4: Detected ${detectedBloat.length} bloat phrases in letter #${letterId}: ${detectedBloat.slice(0, 5).join(", ")}${detectedBloat.length > 5 ? "..." : ""}`
     );
   }
@@ -237,7 +238,7 @@ export async function runVettingStage(
   };
 
   try {
-    console.log(
+    logger.info(
       `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
     );
 
@@ -281,7 +282,7 @@ export async function runVettingStage(
     );
 
     if (initialVettingProvider === "groq-oss-fallback") {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: Groq Llama 3.3 used as last-resort for letter #${letterId} (VETTING_OSS_FALLBACK)`
       );
       if (pipelineCtx) {
@@ -291,7 +292,7 @@ export async function runVettingStage(
         );
       }
     } else if (vettingFailover) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${vettingProvider})`
       );
       if (pipelineCtx) {
@@ -306,7 +307,7 @@ export async function runVettingStage(
     let parsed = parseVettingResponse(rawResponse);
 
     if (!parsed) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: Failed to parse vetting JSON for letter #${letterId}, retrying...`
       );
       rawResponse = await retryOnValidationFailure(
@@ -317,7 +318,7 @@ export async function runVettingStage(
       parsed = parseVettingResponse(rawResponse);
       if (!parsed) {
         const failMsg = `Stage 4 vetting failed: could not parse valid JSON after retry for letter #${letterId}`;
-        console.error(`[Pipeline] ${failMsg}`);
+        logger.error(`[Pipeline] ${failMsg}`);
         addValidationResult(pipelineCtx, {
           stage: "vetting",
           check: "json_parse",
@@ -367,7 +368,7 @@ export async function runVettingStage(
     });
 
     if (!checks.validation.valid) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: Vetting validation failed for letter #${letterId}: ${checks.validation.errors.join("; ")}. Retrying vetting...`
       );
       const retryResponse = await retryOnValidationFailure(
@@ -392,14 +393,14 @@ export async function runVettingStage(
           currentLetter = retryParsed.vettedLetter;
           currentReport = retryParsed.vettingReport;
           checks = retryChecks;
-          console.log(`[Pipeline] Stage 4: Retry improved results for letter #${letterId}`);
+          logger.info(`[Pipeline] Stage 4: Retry improved results for letter #${letterId}`);
         }
       }
     }
 
     const postVetBloat = detectBloatPhrases(currentLetter);
     if (postVetBloat.length > 0) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: ${postVetBloat.length} bloat phrase(s) persist after vetting for letter #${letterId}: ${postVetBloat.join(", ")}`
       );
       addValidationResult(pipelineCtx, {
@@ -430,7 +431,7 @@ export async function runVettingStage(
     const jobStatus = checks.validation.valid ? "completed" : (checks.validation.critical ? "failed" : "completed");
 
     if (checks.validation.critical) {
-      console.error(
+      logger.error(
         `[Pipeline] Stage 4: CRITICAL issues for letter #${letterId} (needs assembly retry): ${checks.validation.errors.join("; ")}`
       );
       await updateWorkflowJob(jobId, {
@@ -468,7 +469,7 @@ export async function runVettingStage(
     }
 
     if (!checks.validation.valid) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 4: Non-critical structural issues for letter #${letterId} (proceeding with best available): ${checks.validation.errors.join("; ")}`
       );
       addValidationResult(pipelineCtx, {
@@ -481,7 +482,7 @@ export async function runVettingStage(
       });
     }
 
-    console.log(
+    logger.info(
       `[Pipeline] Stage 4 complete for letter #${letterId}: risk=${currentReport.riskLevel}, changes=${currentReport.changesApplied.length}, bloat_removed=${currentReport.bloatPhrasesRemoved.length}`
     );
 
@@ -517,13 +518,13 @@ export async function runVettingStage(
       },
     });
 
-    console.log(
+    logger.info(
       `[Pipeline] Stage 4 complete for letter #${letterId}: provider=${vettingProvider}, risk=${currentReport.riskLevel}`
     );
     return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
+    logger.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
     captureServerException(err, {
       tags: { pipeline_stage: "vetting", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
@@ -635,7 +636,7 @@ export async function finalizeLetterAfterVetting(
               bodyHtml: `<p>Letter #${letterId} completed the pipeline with quality warnings attached.</p><p>Warnings:</p><ul>${qualityWarnings.map(w => `<li>${w}</li>`).join("")}</ul><p>The draft is in <strong>generated_locked</strong> status and requires heightened attorney scrutiny upon review.</p>`,
               ctaText: "View Letter",
               ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
-            }).catch(e => console.error(`[Pipeline] Failed admin alert email for degraded draft #${letterId}:`, e));
+            }).catch(e => logger.error(`[Pipeline] Failed admin alert email for degraded draft #${letterId}:`, e));
           }
           createNotification({
             userId: admin.id,
@@ -644,10 +645,10 @@ export async function finalizeLetterAfterVetting(
             title: `Quality-flagged draft: letter #${letterId}`,
             body: `Vetting quality warnings attached (${qualityWarnings.length}). Extra attorney scrutiny needed.`,
             link: `/admin/letters/${letterId}`,
-          }).catch(e => console.error(`[Pipeline] Failed notification for degraded draft #${letterId}:`, e));
+          }).catch(e => logger.error(`[Pipeline] Failed notification for degraded draft #${letterId}:`, e));
         }
       } catch (alertErr) {
-        console.error(`[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`, alertErr);
+        logger.error(`[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`, alertErr);
       }
     })();
   }
@@ -670,25 +671,25 @@ export async function finalizeLetterAfterVetting(
           letterType: letterForPaywall.letterType ?? undefined,
           jurisdictionState: letterForPaywall.jurisdictionState ?? undefined,
           isFirstLetter,
-        }).catch(e => console.error(`[Pipeline] Failed to send letter-ready email for #${letterId}:`, e));
+        }).catch(e => logger.error(`[Pipeline] Failed to send letter-ready email for #${letterId}:`, e));
       }
     }
   } catch (emailErr) {
-    console.error(`[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`, emailErr);
+    logger.error(`[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`, emailErr);
   }
 
   if (letterForPaywall?.submittedByAdmin) {
-    console.log(
+    logger.info(
       `[Pipeline] Skipping paywall email for #${letterId} — admin-submitted letter`
     );
   } else {
     const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
     if (!wasAlreadyUnlocked) {
-      console.log(
+      logger.info(
         `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
       );
     } else {
-      console.log(
+      logger.info(
         `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
       );
     }
@@ -731,7 +732,7 @@ export async function runAssemblyVettingLoop(
       allCriticalErrors = [vettingResult.vettingReport.overallAssessment || "Vetting flagged critical issues but no specific errors were provided"];
     }
 
-    console.warn(
+    logger.warn(
       `[Pipeline] Assembly↔Vetting retry #${assemblyRetries} for letter #${letterId}: critical issues found: ${allCriticalErrors.join("; ")}`
     );
 

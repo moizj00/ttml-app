@@ -125,6 +125,7 @@ import {
   incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "../stripe";
+import { logger } from "../logger";
 
 /**
  * Sync a discount code to/from the Cloudflare Worker KV allowlist.
@@ -489,7 +490,7 @@ export const billingRouter = router({
           metadata: pi.metadata ?? {},
         }));
       } catch (e) {
-        console.error("[paymentHistory] Stripe error:", e);
+        logger.error("[paymentHistory] Stripe error:", e);
         return [];
       }
     }),
@@ -521,7 +522,7 @@ export const billingRouter = router({
           })),
         };
       } catch (e) {
-        console.error("[receipts] Stripe error:", e);
+        logger.error("[receipts] Stripe error:", e);
         return { invoices: [] };
       }
     }),
@@ -576,11 +577,11 @@ export const billingRouter = router({
             appUrl: getAppUrl(ctx.req),
           });
         } catch (e) {
-          console.error("[subscriptionSubmit] Email error:", e);
+          logger.error("[subscriptionSubmit] Email error:", e);
           captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
         }
         // Notify all attorneys (email + in-app) that a new letter is ready for review
-        console.log(`[subscriptionSubmit] Letter #${input.letterId} transitioning generated_locked → pending_review via subscription submit`);
+        logger.info(`[subscriptionSubmit] Letter #${input.letterId} transitioning generated_locked → pending_review via subscription submit`);
         try {
           await notifyAllAttorneys({
             letterId: input.letterId,
@@ -590,7 +591,7 @@ export const billingRouter = router({
             appUrl: getAppUrl(ctx.req),
           });
         } catch (notifyErr) {
-          console.error("[subscriptionSubmit] Failed to notify attorneys:", notifyErr);
+          logger.error("[subscriptionSubmit] Failed to notify attorneys:", notifyErr);
           captureServerException(notifyErr, { tags: { component: "billing", error_type: "subscription_submit_attorney_notify_failed" } });
         }
         // Notify admins
@@ -603,7 +604,7 @@ export const billingRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          console.error("[notifyAdmins] subscription_submit:", err);
+          logger.error("[notifyAdmins] subscription_submit:", err);
           captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
         }
         return { ok: true as const };

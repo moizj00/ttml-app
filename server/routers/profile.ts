@@ -123,6 +123,7 @@ import {
   incrementLettersUsed,
   hasActiveRecurringSubscription,
 } from "../stripe";
+import { logger } from "../logger";
 
 /**
  * Sync a discount code to/from the Cloudflare Worker KV allowlist.
@@ -372,7 +373,7 @@ export const profileRouter = router({
           });
         } catch (emailErr) {
           captureServerException(emailErr, { tags: { component: "profile", error_type: "verification_email_failed" } });
-          console.error(
+          logger.error(
             "[Profile] Failed to send verification email:",
             emailErr
           );

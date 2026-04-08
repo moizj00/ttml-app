@@ -1,5 +1,6 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import IORedis from "ioredis";
+import { logger } from "./logger";
 
 const QUEUE_NAME = "pipeline";
 
@@ -79,7 +80,7 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
   const job = await queue.add(`pipeline:${data.label}:${data.letterId}`, data, {
     jobId: `pipeline-${data.letterId}-${Date.now()}`,
   });
-  console.log(`[Queue] Enqueued pipeline job ${job.id} for letter #${data.letterId} (${data.label})`);
+  logger.info(`[Queue] Enqueued pipeline job ${job.id} for letter #${data.letterId} (${data.label})`);
   return job.id!;
 }
 
@@ -91,13 +92,13 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
     if (existing) {
       const state = await existing.getState();
       if (state === "waiting" || state === "active" || state === "delayed") {
-        console.warn(`[Queue] Retry job already queued/active for letter #${data.letterId} stage=${data.stage} (state=${state}) — skipping duplicate`);
+        logger.warn(`[Queue] Retry job already queued/active for letter #${data.letterId} stage=${data.stage} (state=${state}) — skipping duplicate`);
         return existing.id!;
       }
       await existing.remove().catch(() => {});
     }
   } catch (checkErr) {
-    console.warn(`[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`, checkErr);
+    logger.warn(`[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`, checkErr);
     const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
       jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
     });
@@ -107,10 +108,10 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
     const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
       jobId: dedupeId,
     });
-    console.log(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
+    logger.info(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
     return job.id!;
   } catch (addErr) {
-    console.warn(`[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`, addErr);
+    logger.warn(`[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`, addErr);
     const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
       jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
     });

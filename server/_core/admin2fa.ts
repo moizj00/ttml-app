@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import { logger } from "../logger";
 
 const _secret = process.env.ADMIN_2FA_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!_secret) {
@@ -25,7 +26,7 @@ export function verifyAdmin2FAToken(cookieValue: string, userId: number): boolea
     if (Date.now() - payload.ts > ADMIN_2FA_TTL_MS) return false;
     return true;
   } catch (err) {
-    console.warn("[Admin2FA] Token verification failed (malformed token):", err);
+    logger.warn("[Admin2FA] Token verification failed (malformed token):", err);
     return false;
   }
 }

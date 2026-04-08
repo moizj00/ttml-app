@@ -1,4 +1,5 @@
 import { ENV } from "./_core/env";
+import { logger } from "./logger";
 
 /**
  * Sends a cache invalidation request to the Cloudflare Blog Cache Worker.
@@ -33,12 +34,12 @@ async function invalidateBlogCache(payload: {
     });
 
     if (!res.ok) {
-      console.warn(
+      logger.warn(
         `[blog-cache] Invalidation failed (${res.status}): ${await res.text()}`
       );
     }
   } catch (err) {
-    console.warn("[blog-cache] Invalidation request error:", err);
+    logger.warn("[blog-cache] Invalidation request error:", err);
   }
 }
 

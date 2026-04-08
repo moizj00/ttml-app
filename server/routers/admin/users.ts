@@ -20,6 +20,7 @@ import { captureServerException } from "../../sentry";
 import { invalidateUserCache } from "../../supabaseAuth";
 import { hasEverSubscribed } from "../../stripe";
 import { inviteAttorney } from "../../services/admin";
+import { logger } from "../../logger";
 
 export const usersProcedures = {
   stats: adminProcedure.query(async () => getSystemStats()),
@@ -80,7 +81,7 @@ export const usersProcedures = {
       try {
         await assignRoleId(input.userId, input.role);
       } catch (e) {
-        console.error("[updateRole] Role ID assignment failed:", e);
+        logger.error("[updateRole] Role ID assignment failed:", e);
       }
 
       // Invalidate the user's auth cache so their next request picks up the new role
@@ -99,7 +100,7 @@ export const usersProcedures = {
             link: "/attorney",
           });
         } catch (err) {
-          console.error("[updateRole] Failed to send attorney promotion notification:", err);
+          logger.error("[updateRole] Failed to send attorney promotion notification:", err);
           captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
         }
         try {
@@ -115,7 +116,7 @@ export const usersProcedures = {
             });
           }
         } catch (err) {
-          console.error("[updateRole] Failed to send attorney onboarding queue notification:", err);
+          logger.error("[updateRole] Failed to send attorney onboarding queue notification:", err);
           captureServerException(err, { tags: { component: "admin", error_type: "attorney_onboarding_queue_notification_failed" } });
         }
       }
@@ -129,7 +130,7 @@ export const usersProcedures = {
           link: `/admin/users`,
         });
       } catch (err) {
-        console.error("[notifyAdmins] user_role_changed:", err);
+        logger.error("[notifyAdmins] user_role_changed:", err);
         captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
       }
       return { success: true };

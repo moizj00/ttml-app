@@ -19,6 +19,7 @@ import {
 } from "../client";
 import { getSafeRelativePath, getPostAuthRedirectPath, syncGoogleUser, getOriginUrl } from "../helpers";
 import { parseCookies } from "../jwt";
+import { logger } from "../../logger";
 
 export function registerOAuthRoutes(app: Express) {
 
@@ -71,7 +72,7 @@ export function registerOAuthRoutes(app: Express) {
 
       res.json({ url: supabaseAuthUrl.toString() });
     } catch (err) {
-      console.error("[SupabaseAuth] Google OAuth error:", err);
+      logger.error("[SupabaseAuth] Google OAuth error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -101,7 +102,7 @@ export function registerOAuthRoutes(app: Express) {
       const admin = getAdminClient();
       const { data, error } = await admin.auth.getUser(access_token);
       if (error || !data.user) {
-        console.error("[SupabaseAuth] Google finalize failed:", error);
+        logger.error("[SupabaseAuth] Google finalize failed:", error);
         res.status(401).json({ error: "Google sign-in session is invalid or expired" });
         return;
       }
@@ -139,9 +140,9 @@ export function registerOAuthRoutes(app: Express) {
             name: dbUser.name || data.user.email!.split("@")[0],
             code,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${data.user.email} (Google OAuth)`);
+          logger.info(`[SupabaseAuth] Admin 2FA code dispatched, to=${data.user.email} (Google OAuth)`);
         } catch (err) {
-          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth):`, err);
+          logger.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth):`, err);
           emailFailed = true;
         }
       }
@@ -158,7 +159,7 @@ export function registerOAuthRoutes(app: Express) {
         redirectPath: finalRole === "admin" ? "/admin/verify" : getPostAuthRedirectPath(finalRole, safeNext),
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Google finalize error:", err);
+      logger.error("[SupabaseAuth] Google finalize error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -192,12 +193,12 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       if (!storedVerifier) {
-        console.error("[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
+        logger.error("[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
 
-      console.log("[PKCE] Exchanging code directly via REST | verifier length:", storedVerifier.length);
+      logger.info("[PKCE] Exchanging code directly via REST | verifier length:", storedVerifier.length);
       const tokenResponse = await fetch(
         `${supabaseUrl}/auth/v1/token?grant_type=pkce`,
         {
@@ -223,7 +224,7 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       if (!tokenResponse.ok || !tokenJson.access_token || !tokenJson.user) {
-        console.error("[SupabaseAuth] PKCE token exchange failed:", {
+        logger.error("[SupabaseAuth] PKCE token exchange failed:", {
           status: tokenResponse.status,
           error: tokenJson.error,
           description: tokenJson.error_description,
@@ -270,9 +271,9 @@ export function registerOAuthRoutes(app: Express) {
             name: dbUser.name || user.email!.split("@")[0],
             code: code2,
           });
-          console.log(`[SupabaseAuth] Admin 2FA code dispatched, to=${user.email} (Google callback)`);
+          logger.info(`[SupabaseAuth] Admin 2FA code dispatched, to=${user.email} (Google callback)`);
         } catch (err2) {
-          console.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback):`, err2);
+          logger.error(`[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback):`, err2);
           emailFailed = true;
         }
         res.redirect(emailFailed ? "/admin/verify?emailFailed=1" : "/admin/verify");
@@ -281,7 +282,7 @@ export function registerOAuthRoutes(app: Express) {
         res.redirect(redirectPath);
       }
     } catch (err) {
-      console.error("[SupabaseAuth] Google callback error:", err);
+      logger.error("[SupabaseAuth] Google callback error:", err);
       res.redirect("/login?error=server_error");
     }
   });

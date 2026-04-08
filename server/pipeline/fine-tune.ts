@@ -2,6 +2,7 @@ import { sql, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/core";
 import { fineTuneRuns } from "../../drizzle/schema";
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 const FINE_TUNE_THRESHOLD = 50;
 const BASE_MODEL = "gemini-1.5-flash-002";
@@ -81,7 +82,7 @@ async function mergeTrainingFiles(gcsPaths: string[]): Promise<string> {
       const lines = content.toString("utf-8").trim().split("\n").filter(Boolean);
       allLines.push(...lines);
     } catch (downloadErr) {
-      console.warn(`[FineTune] Failed to read ${uri}, skipping:`, downloadErr);
+      logger.warn(`[FineTune] Failed to read ${uri}, skipping:`, downloadErr);
     }
   }
 
@@ -197,7 +198,7 @@ export async function dryRunFineTuneCheck(): Promise<{
   const wouldSubmit = gcpConfigured && thresholdMet && !inProgress && trainingFilesCount > 0;
   notes.push(wouldSubmit ? "DRY RUN: would submit Vertex AI fine-tuning job." : "DRY RUN: would NOT submit a job.");
 
-  console.log("[FineTune][DryRun]", notes.join(" | "));
+  logger.info("[FineTune][DryRun]", notes.join(" | "));
   return { gcpConfigured, exampleCount, thresholdMet, trainingFilesCount, inProgress, wouldSubmit, notes };
 }
 
@@ -208,32 +209,32 @@ export async function checkAndTriggerFineTune(opts?: { dryRun?: boolean }): Prom
   }
 
   if (!isVertexConfigured()) {
-    console.warn("[FineTune] Vertex AI not configured — skipping fine-tune check. Set GCP_PROJECT_ID, GCP_REGION, and GCS_TRAINING_BUCKET.");
+    logger.warn("[FineTune] Vertex AI not configured — skipping fine-tune check. Set GCP_PROJECT_ID, GCP_REGION, and GCS_TRAINING_BUCKET.");
     return;
   }
 
   try {
     const inProgress = await hasSubmittedRunInProgress();
     if (inProgress) {
-      console.log("[FineTune] A fine-tune run is already in progress — skipping.");
+      logger.info("[FineTune] A fine-tune run is already in progress — skipping.");
       return;
     }
 
     const exampleCount = await countTrainingExamplesSinceLastTune();
-    console.log(`[FineTune] ${exampleCount} training examples since last fine-tune (threshold: ${FINE_TUNE_THRESHOLD})`);
+    logger.info(`[FineTune] ${exampleCount} training examples since last fine-tune (threshold: ${FINE_TUNE_THRESHOLD})`);
 
     if (exampleCount < FINE_TUNE_THRESHOLD) return;
 
     const trainingPaths = await getAllTrainingGcsPathsSinceLastTune();
     if (trainingPaths.length === 0) {
-      console.warn("[FineTune] No training files found in training_log — cannot trigger fine-tune");
+      logger.warn("[FineTune] No training files found in training_log — cannot trigger fine-tune");
       return;
     }
 
-    console.log(`[FineTune] Threshold met (${exampleCount} >= ${FINE_TUNE_THRESHOLD}). Merging ${trainingPaths.length} training files...`);
+    logger.info(`[FineTune] Threshold met (${exampleCount} >= ${FINE_TUNE_THRESHOLD}). Merging ${trainingPaths.length} training files...`);
 
     const mergedUri = await mergeTrainingFiles(trainingPaths);
-    console.log(`[FineTune] Merged training file: ${mergedUri}`);
+    logger.info(`[FineTune] Merged training file: ${mergedUri}`);
 
     const vertexJobId = await submitVertexFineTuningJob(mergedUri);
 
@@ -248,9 +249,9 @@ export async function checkAndTriggerFineTune(opts?: { dryRun?: boolean }): Prom
       });
     }
 
-    console.log(`[FineTune] Vertex AI fine-tuning job submitted: ${vertexJobId}`);
+    logger.info(`[FineTune] Vertex AI fine-tuning job submitted: ${vertexJobId}`);
   } catch (err) {
-    console.error("[FineTune] Failed to check/trigger fine-tune:", err);
+    logger.error("[FineTune] Failed to check/trigger fine-tune:", err);
     captureServerException(err, {
       tags: { component: "fine_tune", error_type: "trigger_failed" },
     });
@@ -275,7 +276,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
 
     if (activeRuns.length === 0) return;
 
-    console.log(`[FineTune] Polling ${activeRuns.length} active fine-tune run(s)...`);
+    logger.info(`[FineTune] Polling ${activeRuns.length} active fine-tune run(s)...`);
 
     const { GoogleAuth } = await import("google-auth-library");
     const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -302,7 +303,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
         });
 
         if (!resp.ok) {
-          console.warn(`[FineTune] Failed to poll job ${run.vertexJobId}: HTTP ${resp.status}`);
+          logger.warn(`[FineTune] Failed to poll job ${run.vertexJobId}: HTTP ${resp.status}`);
           continue;
         }
 
@@ -329,7 +330,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
         }
 
         if (newStatus && newStatus !== run.status) {
-          console.log(`[FineTune] Job ${run.vertexJobId}: ${run.status} → ${newStatus}`);
+          logger.info(`[FineTune] Job ${run.vertexJobId}: ${run.status} → ${newStatus}`);
           await db
             .update(fineTuneRuns)
             .set({
@@ -340,10 +341,10 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
             } as any)
             .where(eq(fineTuneRuns.id, run.id));
         } else {
-          console.log(`[FineTune] Job ${run.vertexJobId}: status unchanged (${run.status})`);
+          logger.info(`[FineTune] Job ${run.vertexJobId}: status unchanged (${run.status})`);
         }
       } catch (pollErr) {
-        console.warn(`[FineTune] Error polling job ${run.vertexJobId}:`, pollErr);
+        logger.warn(`[FineTune] Error polling job ${run.vertexJobId}:`, pollErr);
         captureServerException(pollErr, {
           tags: { component: "fine_tune", error_type: "poll_failed" },
           extra: { runId: run.id, vertexJobId: run.vertexJobId },
@@ -351,7 +352,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error("[FineTune] pollFineTuneRunStatuses failed:", err);
+    logger.error("[FineTune] pollFineTuneRunStatuses failed:", err);
     captureServerException(err, { tags: { component: "fine_tune", error_type: "poll_setup_failed" } });
   }
 }

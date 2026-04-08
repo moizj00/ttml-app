@@ -3,6 +3,7 @@ import { getStripe } from "./stripe";
 import { subscriptions, processedStripeEvents } from "../drizzle/schema";
 import { eq, lt, sql } from "drizzle-orm";
 import { captureServerException } from "./sentry";
+import { logger } from "./logger";
 
 type SubStatus = "active" | "canceled" | "past_due" | "trialing" | "incomplete" | "none";
 
@@ -30,7 +31,7 @@ export async function syncSubscriptionsWithStripe(): Promise<{
   try {
     stripe = getStripe();
   } catch {
-    console.warn("[SubscriptionSync] Stripe not configured, skipping sync");
+    logger.warn("[SubscriptionSync] Stripe not configured, skipping sync");
     return { checked: 0, corrected: 0, errors: 0 };
   }
 
@@ -60,7 +61,7 @@ export async function syncSubscriptionsWithStripe(): Promise<{
       const mappedStatus = mapStripeStatus(stripeSub.status);
 
       if (mappedStatus !== sub.status) {
-        console.log(
+        logger.info(
           `[SubscriptionSync] Correcting user ${sub.userId}: DB=${sub.status} → Stripe=${mappedStatus} (stripe_sub=${sub.stripeSubscriptionId})`
         );
 
@@ -85,7 +86,7 @@ export async function syncSubscriptionsWithStripe(): Promise<{
       }
     } catch (err) {
       errors++;
-      console.error(
+      logger.error(
         `[SubscriptionSync] Error checking subscription ${sub.stripeSubscriptionId} for user ${sub.userId}:`,
         err instanceof Error ? err.message : err
       );

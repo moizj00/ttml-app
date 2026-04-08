@@ -20,6 +20,7 @@ import { authenticateRequest } from "./supabaseAuth";
 import { getLetterRequestSafeForSubscriber, getLetterVersionsByRequestId } from "./db";
 import { generateDraftPdfBuffer } from "./pdfGenerator";
 import { checkTrpcRateLimit } from "./rateLimiter";
+import { logger } from "./logger";
 
 export function registerDraftPdfRoute(app: Express) {
   app.get("/api/letters/:letterId/draft-pdf", async (req: Request, res: Response) => {
@@ -108,9 +109,9 @@ export function registerDraftPdfRoute(app: Express) {
       res.setHeader("Cache-Control", "no-store");
       res.send(pdfBuffer);
 
-      console.log(`[DraftPDF] User ${user.id} downloaded Unreviewed PDF for letter #${letterId}`);
+      logger.info(`[DraftPDF] User ${user.id} downloaded Unreviewed PDF for letter #${letterId}`);
     } catch (err) {
-      console.error("[DraftPDF] Error generating draft PDF:", err);
+      logger.error("[DraftPDF] Error generating draft PDF:", err);
       res.status(500).json({ error: "Failed to generate draft PDF" });
     }
   });

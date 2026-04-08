@@ -5,6 +5,7 @@ import type { NormalizedPromptInput } from "../intake-normalizer";
 import { runCitationAudit, replaceUnverifiedCitations } from "./citations";
 import { validateContentConsistency } from "./validators";
 import { captureServerException } from "../sentry";
+import { logger } from "../logger";
 
 export function parseVettingResponse(raw: string): { vettedLetter: string; vettingReport: VettingReport } | null {
   try {
@@ -28,7 +29,7 @@ export function parseVettingResponse(raw: string): { vettedLetter: string; vetti
       },
     };
   } catch (parseErr) {
-    console.warn("[Pipeline] Failed to parse vetting response JSON, skipping vetting stage:", parseErr);
+    logger.warn("[Pipeline] Failed to parse vetting response JSON, skipping vetting stage:", parseErr);
     captureServerException(parseErr instanceof Error ? parseErr : new Error(String(parseErr)), {
       tags: { component: "pipeline", error_type: "vetting_parse_failed" },
     });

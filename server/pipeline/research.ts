@@ -17,6 +17,7 @@ import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RE
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
+import { logger } from "../logger";
 
 function synthesizeResearchFromIntake(intake: IntakeJson): ResearchPacket {
   const state = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "Unknown";
@@ -122,7 +123,7 @@ export async function runResearchStage(
     noteVisibility: "internal",
     fromStatus: "submitted",
     toStatus: "researching",
-  }).catch(e => console.error(`[Pipeline] Failed to log submitted→researching action for #${letterId}:`, e));
+  }).catch(e => logger.error(`[Pipeline] Failed to log submitted→researching action for #${letterId}:`, e));
   try {
     const { notifyAdmins } = await import("../db");
     await notifyAdmins({
@@ -133,7 +134,7 @@ export async function runResearchStage(
       link: `/admin/letters/${letterId}`,
     });
   } catch (err) {
-    console.error("[notifyAdmins] pipeline_researching:", err);
+    logger.error("[notifyAdmins] pipeline_researching:", err);
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
   }
 
@@ -169,12 +170,12 @@ export async function runResearchStage(
       // schema-drifted cache entries. On validation failure, treat as a miss.
       const cacheValidation = validateResearchPacket(cachedPacket);
       if (!cacheValidation.valid) {
-        console.warn(
+        logger.warn(
           `[KVCache] Cached packet for key ${kvCacheKey} failed validation (treating as miss): ${cacheValidation.errors.join("; ")}`
         );
         // Fall through to live Perplexity call
       } else {
-        console.log(`[Pipeline] Stage 1: KV cache hit for letter #${letterId} (key: ${kvCacheKey}) — skipping Perplexity API call`);
+        logger.info(`[Pipeline] Stage 1: KV cache hit for letter #${letterId} (key: ${kvCacheKey}) — skipping Perplexity API call`);
 
         const cacheHitResult: ValidationResult = {
           stage: "research",
@@ -211,7 +212,7 @@ export async function runResearchStage(
       }
     }
   } catch (cacheErr) {
-    console.warn(`[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`, cacheErr);
+    logger.warn(`[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`, cacheErr);
   }
   // ── End KV Cache check ──
 
@@ -220,7 +221,7 @@ export async function runResearchStage(
   let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-sonnet-4";
 
   try {
-    console.log(
+    logger.info(
       `[Pipeline] Stage 1: ${researchConfig.provider} 8-task deep research for letter #${letterId}`
     );
 
@@ -247,7 +248,7 @@ export async function runResearchStage(
         activeProvider = "openai-stored-prompt";
         activeFallbackTools = undefined;
         researchModelKey = "gpt-4o-search-preview";
-        console.log(`[Pipeline] Stage 1: Using OpenAI stored prompt for letter #${letterId}`);
+        logger.info(`[Pipeline] Stage 1: Using OpenAI stored prompt for letter #${letterId}`);
         const storedResult = await runOpenAIStoredPromptResearch(userPrompt);
         activeModel = null as any;
         return { text: storedResult.text, usage: storedResult.usage } as any;
@@ -268,7 +269,7 @@ export async function runResearchStage(
     );
 
     if (initialProvider === "groq-oss-fallback") {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: Groq Llama 3.3 used as last-resort for letter #${letterId} (RESEARCH_OSS_FALLBACK) — research is NOT web-grounded.`
       );
       if (pipelineCtx) {
@@ -279,7 +280,7 @@ export async function runResearchStage(
         pipelineCtx.researchUnverified = true;
       }
     } else if (initialProvider === "openai-failover" && activeProvider === "openai-stored-prompt") {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: OpenAI stored prompt (web search) used for letter #${letterId} — Perplexity was unavailable.`
       );
       if (pipelineCtx) {
@@ -289,7 +290,7 @@ export async function runResearchStage(
         );
       }
     } else if (initialFailover) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: Switched to OpenAI failover for letter #${letterId} (provider=${activeProvider})`
       );
       if (pipelineCtx) {
@@ -386,7 +387,7 @@ export async function runResearchStage(
       researchPacket = parseResearchJson(text);
     } catch {
       stage1RetryUsed = true;
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: First JSON parse failed for letter #${letterId}. Retrying (1 of 1) with stricter prompt.`
       );
       try {
@@ -560,24 +561,24 @@ export async function runResearchStage(
     }
 
     if (isClaudeFallback) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: Claude fallback used for letter #${letterId} — research is NOT web-grounded. Citations may not be verified.`
       );
     } else if (isOpenAIFailover) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: OpenAI gpt-4o-search-preview failover used for letter #${letterId} — research IS web-grounded via webSearchPreview tool. Perplexity was rate-limited.`
       );
     } else if (isGroqOSSFallback) {
-      console.warn(
+      logger.warn(
         `[Pipeline] Stage 1: Groq Llama 3.3 70B OSS last-resort used for letter #${letterId} — research is NOT web-grounded. Both Perplexity and OpenAI were exhausted.`
       );
     }
 
-    console.log(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${activeProvider})`);
+    logger.info(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${activeProvider})`);
     return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Pipeline] Stage 1 failed for letter #${letterId}:`, msg);
+    logger.error(`[Pipeline] Stage 1 failed for letter #${letterId}:`, msg);
     captureServerException(err, {
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },
@@ -586,7 +587,7 @@ export async function runResearchStage(
     const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
 
     const syntheticPacket = synthesizeResearchFromIntake(intake);
-    console.warn(
+    logger.warn(
       `[Pipeline] Stage 1: All research providers failed for letter #${letterId} — synthesizing research from intake data. Pipeline will continue with degraded research.`
     );
 

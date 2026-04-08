@@ -28,6 +28,7 @@ import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
 import { processPaywallEmails } from "./paywallEmailCron";
 import { runAutomatedConsolidation, archiveIneffectiveLessons } from "./learning";
+import { logger } from "./logger";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
@@ -38,58 +39,58 @@ let started = false;
  */
 export function startCronScheduler(): void {
   if (process.env.NODE_ENV === "test") {
-    console.log("[Cron] Skipping scheduler in test environment");
+    logger.info("[Cron] Skipping scheduler in test environment");
     return;
   }
 
   if (started) {
-    console.log("[Cron] Scheduler already running — skipping duplicate start");
+    logger.info("[Cron] Scheduler already running — skipping duplicate start");
     return;
   }
 
   started = true;
-  console.log("[Cron] Starting scheduler...");
+  logger.info("[Cron] Starting scheduler...");
 
   cron.schedule("0 * * * *", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running draft reminders...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running draft reminders...`);
     try {
       const result = await processDraftReminders();
       const elapsed = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[Cron] Draft reminders done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Draft reminder job failed: ${msg}`);
+      logger.error(`[Cron] Draft reminder job failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "draft_reminders" } });
     }
   });
 
   cron.schedule("0 */6 * * *", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running subscription sync...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running subscription sync...`);
     try {
       const result = await syncSubscriptionsWithStripe();
       const elapsed = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[Cron] Subscription sync done in ${elapsed}ms — checked: ${result.checked}, corrected: ${result.corrected}, errors: ${result.errors}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Subscription sync job failed: ${msg}`);
+      logger.error(`[Cron] Subscription sync job failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "subscription_sync" } });
     }
   });
 
   cron.schedule("0 3 * * *", async () => {
-    console.log(`[Cron] [${new Date().toISOString()}] Pruning old Stripe events...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Pruning old Stripe events...`);
     try {
       const deleted = await pruneProcessedStripeEvents();
-      console.log(`[Cron] Pruned ${deleted} old Stripe events`);
+      logger.info(`[Cron] Pruned ${deleted} old Stripe events`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Stripe event pruning failed: ${msg}`);
+      logger.error(`[Cron] Stripe event pruning failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "stripe_event_pruning" } });
     }
   });
@@ -98,16 +99,16 @@ export function startCronScheduler(): void {
   // Releases letters that have been under_review for 48+ hours back to pending_review
   cron.schedule("30 * * * *", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running stale review detection...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running stale review detection...`);
     try {
       const result = await releaseStaleReviews();
       const elapsed = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[Cron] Stale review detection done in ${elapsed}ms — released: ${result.released}, errors: ${result.errors}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Stale review detection failed: ${msg}`);
+      logger.error(`[Cron] Stale review detection failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "stale_review_detection" } });
     }
   });
@@ -118,16 +119,16 @@ export function startCronScheduler(): void {
   // Idempotent: initial_paywall_email_sent_at column prevents duplicate sends.
   cron.schedule("*/5 * * * *", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running paywall email notifications...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running paywall email notifications...`);
     try {
       const result = await processPaywallEmails();
       const elapsed = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[Cron] Paywall emails done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Paywall email job failed: ${msg}`);
+      logger.error(`[Cron] Paywall email job failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "paywall_emails" } });
     }
   });
@@ -137,16 +138,16 @@ export function startCronScheduler(): void {
   // and merges semantically similar lessons to prevent prompt bloat.
   cron.schedule("0 2 * * 0", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running lesson consolidation...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running lesson consolidation...`);
     try {
       const result = await runAutomatedConsolidation();
       const elapsed = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[Cron] Lesson consolidation done in ${elapsed}ms — scopes: ${result.scopesProcessed}, consolidated: ${result.totalConsolidated}, deactivated: ${result.totalDeactivated}, errors: ${result.errors}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Lesson consolidation failed: ${msg}`);
+      logger.error(`[Cron] Lesson consolidation failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "lesson_consolidation" } });
     }
   });
@@ -156,24 +157,24 @@ export function startCronScheduler(): void {
   // proven harmful (after-score < before-score), or low weight with no recent injections.
   cron.schedule("30 2 * * 0", async () => {
     const startTime = Date.now();
-    console.log(`[Cron] [${new Date().toISOString()}] Running lesson auto-archival...`);
+    logger.info(`[Cron] [${new Date().toISOString()}] Running lesson auto-archival...`);
     try {
       const result = await archiveIneffectiveLessons();
       const elapsed = Date.now() - startTime;
       const reasonSummary = Object.entries(result.reasons)
         .map(([r, c]) => `${r}: ${c}`)
         .join(", ");
-      console.log(
+      logger.info(
         `[Cron] Lesson auto-archival done in ${elapsed}ms — archived: ${result.archived}${reasonSummary ? ` (${reasonSummary})` : ""}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Lesson auto-archival failed: ${msg}`);
+      logger.error(`[Cron] Lesson auto-archival failed: ${msg}`);
       captureServerException(err, { tags: { component: "cron", job: "lesson_archival" } });
     }
   });
 
-  console.log("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)");
+  logger.info("[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), paywall-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)");
 }
 
 /**
@@ -185,7 +186,7 @@ export function stopCronScheduler(): void {
   // node-cron v4 does not expose a global destroy — individual tasks are GC'd
   // when the process exits. This function exists for future extension.
   started = false;
-  console.log("[Cron] Scheduler stopped");
+  logger.info("[Cron] Scheduler stopped");
 }
 
 /** Exposed for testing */

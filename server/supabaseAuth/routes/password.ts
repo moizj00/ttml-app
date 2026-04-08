@@ -17,6 +17,7 @@ import {
   getAdminClient,
 } from "../client";
 import { getOriginUrl } from "../helpers";
+import { logger } from "../../logger";
 
 export function registerPasswordRoutes(app: Express) {
 
@@ -38,12 +39,12 @@ export function registerPasswordRoutes(app: Express) {
       });
 
       if (error) {
-        console.error("[SupabaseAuth] Password reset error:", error.message);
+        logger.error("[SupabaseAuth] Password reset error:", error.message);
       }
 
       res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
     } catch (err) {
-      console.error("[SupabaseAuth] Forgot password error:", err);
+      logger.error("[SupabaseAuth] Forgot password error:", err);
       res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
     }
   });
@@ -75,7 +76,7 @@ export function registerPasswordRoutes(app: Express) {
       const { error } = await userClient.auth.updateUser({ password });
 
       if (error) {
-        console.error("[SupabaseAuth] Password update error:", error.message);
+        logger.error("[SupabaseAuth] Password update error:", error.message);
         res.status(400).json({ error: "Failed to reset password. The link may have expired." });
         return;
       }
@@ -110,7 +111,7 @@ export function registerPasswordRoutes(app: Express) {
                 (res as any)._invitationSession = sessionData.session;
               }
             } catch (signInErr) {
-              console.error("[SupabaseAuth] Failed to auto-sign-in attorney after invitation:", signInErr);
+              logger.error("[SupabaseAuth] Failed to auto-sign-in attorney after invitation:", signInErr);
             }
 
             try {
@@ -120,7 +121,7 @@ export function registerPasswordRoutes(app: Express) {
                 dashboardUrl: `${origin}/attorney`,
               });
             } catch (welcomeErr) {
-              console.error("[SupabaseAuth] Failed to send attorney welcome email:", welcomeErr);
+              logger.error("[SupabaseAuth] Failed to send attorney welcome email:", welcomeErr);
             }
             try {
               await db.createNotification({
@@ -131,19 +132,19 @@ export function registerPasswordRoutes(app: Express) {
                 link: "/attorney",
               });
             } catch (notifErr) {
-              console.error("[SupabaseAuth] Failed to create attorney welcome notification:", notifErr);
+              logger.error("[SupabaseAuth] Failed to create attorney welcome notification:", notifErr);
             }
             try {
               await admin.auth.admin.updateUserById(supaUser.id, {
                 user_metadata: { invited_attorney: false },
               });
             } catch (clearErr) {
-              console.error("[SupabaseAuth] Failed to clear invited_attorney flag:", clearErr);
+              logger.error("[SupabaseAuth] Failed to clear invited_attorney flag:", clearErr);
             }
           }
         }
       } catch (postResetErr) {
-        console.error("[SupabaseAuth] Post-reset attorney check error:", postResetErr);
+        logger.error("[SupabaseAuth] Post-reset attorney check error:", postResetErr);
       }
 
       const invitationSession = (res as any)._invitationSession;
@@ -160,7 +161,7 @@ export function registerPasswordRoutes(app: Express) {
         } : {}),
       });
     } catch (err) {
-      console.error("[SupabaseAuth] Reset password error:", err);
+      logger.error("[SupabaseAuth] Reset password error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });

@@ -12,6 +12,7 @@
  */
 
 import { ENV } from "./_core/env";
+import { logger } from "./logger";
 
 interface WorkerPdfRequest {
   html: string;
@@ -38,7 +39,7 @@ export async function generatePdfViaWorker(
   localFallback: () => Promise<Buffer>
 ): Promise<WorkerPdfResult> {
   if (!isWorkerConfigured()) {
-    console.log("[PdfWorker] PDF_WORKER_URL not configured — using local Puppeteer");
+    logger.info("[PdfWorker] PDF_WORKER_URL not configured — using local Puppeteer");
     const buffer = await localFallback();
     return { buffer, source: "local" };
   }
@@ -48,19 +49,19 @@ export async function generatePdfViaWorker(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const buffer = await callWorker(req, attempt);
-      console.log(
+      logger.info(
         `[PdfWorker] Letter #${req.letterId} — generated via Worker (${buffer.length} bytes, attempt ${attempt + 1})`
       );
       return { buffer, source: "worker" };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(
+      logger.warn(
         `[PdfWorker] Letter #${req.letterId} — Worker attempt ${attempt + 1} failed: ${lastError.message}`
       );
     }
   }
 
-  console.warn(
+  logger.warn(
     `[PdfWorker] Letter #${req.letterId} — all Worker attempts failed, falling back to local Puppeteer. Last error: ${lastError?.message}`
   );
   const buffer = await localFallback();
