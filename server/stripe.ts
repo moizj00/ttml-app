@@ -541,8 +541,8 @@ export async function createLetterUnlockCheckout(params: {
         unlock_type: "letter_unlock",
       },
     },
-    success_url: `${origin}/subscriber/letters/${letterId}?unlocked=true`,
-    cancel_url: `${origin}/subscriber/letters/${letterId}?canceled=true`,
+    success_url: `${origin}/letters/${letterId}?unlocked=true`,
+    cancel_url: `${origin}/letters/${letterId}?canceled=true`,
   });
 
   if (!session.url) throw new Error("Stripe did not return a checkout URL");
