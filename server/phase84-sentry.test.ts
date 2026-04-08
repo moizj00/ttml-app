@@ -263,20 +263,33 @@ describe("Pipeline Sentry instrumentation", () => {
 // ─── 9. Stripe Webhook Sentry instrumentation ───
 
 describe("Stripe Webhook Sentry instrumentation", () => {
-  const webhookPath = path.join(__dirname, "stripeWebhook.ts");
+  // stripeWebhook is now a directory module — read all .ts files recursively
+  function readStripeWebhookModule(): string {
+    const dir = path.join(__dirname, "stripeWebhook");
+    const handlersDir = path.join(dir, "handlers");
+    const rootFiles = fs.readdirSync(dir)
+      .filter(f => f.endsWith(".ts"))
+      .map(f => { try { return fs.readFileSync(path.join(dir, f), "utf-8"); } catch { return ""; } });
+    const handlerFiles = fs.existsSync(handlersDir)
+      ? fs.readdirSync(handlersDir)
+          .filter(f => f.endsWith(".ts"))
+          .map(f => { try { return fs.readFileSync(path.join(handlersDir, f), "utf-8"); } catch { return ""; } })
+      : [];
+    return [...rootFiles, ...handlerFiles].join("\n");
+  }
 
-  it("stripeWebhook.ts imports captureServerException", () => {
-    const content = fs.readFileSync(webhookPath, "utf-8");
+  it("stripeWebhook module imports captureServerException", () => {
+    const content = readStripeWebhookModule();
     expect(content).toContain('import { captureServerException');
   });
 
   it("Signature verification failure captures to Sentry", () => {
-    const content = fs.readFileSync(webhookPath, "utf-8");
+    const content = readStripeWebhookModule();
     expect(content).toContain('error_type: "signature_verification"');
   });
 
   it("Event processing failure captures to Sentry with event_type tag", () => {
-    const content = fs.readFileSync(webhookPath, "utf-8");
+    const content = readStripeWebhookModule();
     expect(content).toContain("event_type: event.type");
   });
 });

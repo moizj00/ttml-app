@@ -321,7 +321,7 @@ describe("Attorney Review Pipeline — letterDetail canView Logic (Source Code)"
 // ─── 4. Claim Mutation — Source Code Logic Tests ──────────────────────────────
 
 describe("Attorney Review Pipeline — Claim Mutation (Source Code)", () => {
-  const routersFile = readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8");
+  const routersFile = readRouterModule(join(SERVER_DIR, "routers"), "review");
 
   it("claim mutation checks for pending_review or under_review status", () => {
     expect(routersFile).toMatch(
