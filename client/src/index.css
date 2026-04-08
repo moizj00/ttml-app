@@ -653,9 +653,24 @@
   .animate-backdrop-out,
   .bell-ping-indicator::after,
   .animate-status-pulse,
-  .animate-drag-glow {
+  .animate-drag-glow,
+  .animate-popup-shimmer,
+  .animate-popup-icon-glow,
+  .animate-popup-pulse {
     animation: none !important;
+  }
+
+  .animate-sidebar-out,
+  .animate-backdrop-out,
+  .bell-ping-indicator::after {
     display: none !important;
+  }
+
+  .animate-popup-overlay,
+  .animate-popup-card {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 
   .toaster [data-sonner-toast] {

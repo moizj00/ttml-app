@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { motion, useTransform, useSpring, useMotionValue } from "framer-motion";
+import { motion, useTransform, useSpring, useMotionValue, useReducedMotion } from "framer-motion";
 
 const B = {
   primary:   "#2563eb",
@@ -104,35 +104,35 @@ const PANELS = [
 
 function IntroPanel() {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 text-center">
-      <div className="relative mb-8">
+    <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 text-center">
+      <div className="relative mb-6 sm:mb-8">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute -inset-8 rounded-full border border-dashed"
+          className="absolute -inset-6 sm:-inset-8 rounded-full border border-dashed"
           style={{ borderColor: `rgba(37,99,235,0.2)` }}
         />
         <div
-          className="w-20 h-20 md:w-24 md:h-24 rounded-full shadow-2xl flex items-center justify-center relative z-10"
+          className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full shadow-2xl flex items-center justify-center relative z-10"
           style={{ background: "white", border: `1px solid ${B.bgMuted}`, color: B.primary }}
         >
-          <IconScale className="w-8 h-8 md:w-10 md:h-10" />
+          <IconScale className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10" />
         </div>
         <div className="absolute -top-3 -right-3" style={{ color: B.accent }}>
-          <IconSparkles className="w-6 h-6 md:w-8 md:h-8" />
+          <IconSparkles className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8" />
         </div>
       </div>
 
       <h2
-        className="font-bold tracking-tight mb-6"
-        style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", color: B.textPri, lineHeight: 1.1 }}
+        className="font-bold tracking-tight mb-4 sm:mb-6"
+        style={{ fontSize: "clamp(1.5rem, 5vw, 3.5rem)", color: B.textPri, lineHeight: 1.1 }}
       >
         From Facts to Draft.{" "}
         <span style={{ color: B.primary }}>Precision Flow.</span>
       </h2>
 
       <p
-        className="max-w-xl mx-auto text-base md:text-lg leading-relaxed"
+        className="max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-relaxed"
         style={{ color: B.textSec }}
       >
         No more blank-page guessing. A structured, predictable pipeline for generating California-focused legal letters.
@@ -143,8 +143,8 @@ function IntroPanel() {
 
 function Step1Panel() {
   return (
-    <div className="flex items-center justify-center h-full px-6 md:px-12 lg:px-20">
-      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center">
+    <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-12 lg:px-20 py-4 sm:py-0 overflow-y-auto">
+      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center">
         <div>
           <div className="text-sm font-bold tracking-widest uppercase mb-4" style={{ color: B.primary }}>STEP 01</div>
           <h3 className="font-bold leading-tight mb-4" style={{ fontSize: "clamp(1.5rem, 3vw, 2.5rem)", color: B.textPri }}>
@@ -224,8 +224,8 @@ function Step1Panel() {
 
 function Step2Panel() {
   return (
-    <div className="flex items-center justify-center h-full px-6 md:px-12 lg:px-20">
-      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center">
+    <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-12 lg:px-20 py-4 sm:py-0 overflow-y-auto">
+      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center">
         <div className="relative order-2 md:order-1">
           <div
             className="relative rounded-2xl overflow-hidden shadow-2xl"
@@ -289,8 +289,8 @@ function Step2Panel() {
 
 function Step3Panel() {
   return (
-    <div className="flex items-center justify-center h-full px-6 md:px-12 lg:px-20">
-      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center">
+    <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-12 lg:px-20 py-4 sm:py-0 overflow-y-auto">
+      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center">
         <div>
           <div className="text-sm font-bold tracking-widest uppercase mb-4" style={{ color: B.success }}>STEP 03</div>
           <h3 className="font-bold leading-tight mb-4" style={{ fontSize: "clamp(1.5rem, 3vw, 2.5rem)", color: B.textPri }}>
@@ -357,12 +357,12 @@ function Step3Panel() {
 
 function OutroPanel() {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+    <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6 text-center">
       <div
-        className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-8 mx-auto"
+        className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full mb-6 sm:mb-8 mx-auto"
         style={{ background: `rgba(37,99,235,0.1)`, color: B.primary }}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 sm:w-10 sm:h-10">
           <path d="m22 2-7 20-4-9-9-4Z" />
           <path d="M22 2 11 13" />
         </svg>
@@ -370,20 +370,20 @@ function OutroPanel() {
 
       <h2
         className="font-bold tracking-tight mb-4"
-        style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", color: B.textPri, lineHeight: 1.1 }}
+        style={{ fontSize: "clamp(1.5rem, 5vw, 3.5rem)", color: B.textPri, lineHeight: 1.1 }}
       >
         Ready to Send.
       </h2>
 
       <p
-        className="text-base md:text-lg max-w-md mx-auto"
+        className="text-sm sm:text-base md:text-lg max-w-md mx-auto"
         style={{ color: B.textSec }}
       >
         Your facts. California law. Expertly structured.
       </p>
 
       <div
-        className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-white shadow-lg"
+        className="mt-6 sm:mt-8 inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-sm font-semibold text-white shadow-lg"
         style={{ background: `linear-gradient(135deg, ${B.primary}, ${B.dark})` }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg>
@@ -472,7 +472,7 @@ export default function HowItWorks() {
         />
 
         <motion.div
-          className="absolute pointer-events-none rounded-full"
+          className="absolute pointer-events-none rounded-full hidden sm:block"
           style={{
             width: "clamp(300px, 50vw, 800px)",
             height: "clamp(300px, 50vw, 800px)",
@@ -484,7 +484,7 @@ export default function HowItWorks() {
         />
 
         <motion.div
-          className="absolute pointer-events-none rounded-full"
+          className="absolute pointer-events-none rounded-full hidden sm:block"
           style={{
             width: "clamp(200px, 35vw, 600px)",
             height: "clamp(200px, 35vw, 600px)",
