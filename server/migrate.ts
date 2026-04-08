@@ -135,27 +135,17 @@ async function runMigrations() {
 
       // Hard fail immediately for IPv6 unreachable — retrying won't help
       if (isIPv6Unreachable(err)) {
-        logger.error(
-          "[Migrate] FATAL: IPv6 network unreachable (ENETUNREACH).\n" +
-          "Railway does not support IPv6. The pooler URL resolves to an IPv6 address.\n" +
-          "Fix: Set SUPABASE_DIRECT_URL to the direct connection URL:\n" +
-          "  postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require\n" +
-          "Original error:", err
-        );
-        process.exit(1);
+        logger.error({ err }, "FATAL: IPv6 network unreachable (ENETUNREACH). Railway does not support IPv6. The pooler URL resolves to an IPv6 address. Fix: Set SUPABASE_DIRECT_URL to the direct connection URL: postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require");
       }
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
         const delay = attempt * 2000; // 2s, 4s backoff
-        logger.warn(
-          `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`,
-          (err as any)?.cause?.message || (err as any)?.message
-        );
+        logger.warn({ err: (err as any)?.cause?.message || (err as any)?.message }, `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`);
         await sleep(delay);
         continue;
       }
 
-      logger.error("[Migrate] Migration failed:", err);
+      logger.error({ err: err }, "[Migrate] Migration failed:");
       process.exit(1);
     }
   }

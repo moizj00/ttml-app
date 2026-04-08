@@ -60,7 +60,7 @@ export function registerBlogInternalRoutes(app: Express): void {
       const data = await getPublishedBlogPosts({ category, limit, offset });
       res.json(data);
     } catch (err) {
-      logger.error("[blog-internal] /list error:", err);
+      logger.error({ err: err }, "[blog-internal] /list error:");
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -84,7 +84,7 @@ export function registerBlogInternalRoutes(app: Express): void {
 
       res.json(post);
     } catch (err) {
-      logger.error("[blog-internal] /post/:slug error:", err);
+      logger.error({ err: err }, "[blog-internal] /post/:slug error:");
       res.status(500).json({ error: "Internal server error" });
     }
   });

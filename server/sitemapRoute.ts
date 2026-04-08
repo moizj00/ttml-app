@@ -72,7 +72,7 @@ export function registerSitemapRoute(app: Express): void {
       res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
       res.send(xml);
     } catch (err) {
-      logger.error("[sitemap] Error generating sitemap:", err);
+      logger.error({ err: err }, "[sitemap] Error generating sitemap:");
       res.status(500).setHeader("Content-Type", "text/plain").send("Error generating sitemap");
     }
   });

@@ -30,7 +30,7 @@ export function captureServerException(
   }
 ) {
   if (!Sentry.getClient()) {
-    logger.error("[Sentry] Not initialized, logging error:", error);
+    logger.error({ err: error }, "[Sentry] Not initialized, logging error:");
     return;
   }
 

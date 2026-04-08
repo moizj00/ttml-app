@@ -91,7 +91,7 @@ export async function getCachedResearch(
     logger.info(`[KVCache] Cache hit for key: ${cacheKey}`);
     return packet;
   } catch (err) {
-    logger.warn("[KVCache] Cache lookup failed (non-fatal):", err);
+    logger.warn({ err: err }, "[KVCache] Cache lookup failed (non-fatal):");
     return null;
   }
 }
@@ -127,6 +127,6 @@ export async function setCachedResearch(
       logger.info(`[KVCache] Stored research packet in cache for key: ${cacheKey} (TTL: ${KV_CACHE_TTL_SECONDS}s)`);
     }
   } catch (err) {
-    logger.warn("[KVCache] Cache store failed (non-fatal):", err);
+    logger.warn({ err: err }, "[KVCache] Cache store failed (non-fatal):");
   }
 }

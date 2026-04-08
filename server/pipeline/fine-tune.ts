@@ -82,7 +82,7 @@ async function mergeTrainingFiles(gcsPaths: string[]): Promise<string> {
       const lines = content.toString("utf-8").trim().split("\n").filter(Boolean);
       allLines.push(...lines);
     } catch (downloadErr) {
-      logger.warn(`[FineTune] Failed to read ${uri}, skipping:`, downloadErr);
+      logger.warn({ err: downloadErr }, `[FineTune] Failed to read ${uri}, skipping:`);
     }
   }
 
@@ -198,7 +198,7 @@ export async function dryRunFineTuneCheck(): Promise<{
   const wouldSubmit = gcpConfigured && thresholdMet && !inProgress && trainingFilesCount > 0;
   notes.push(wouldSubmit ? "DRY RUN: would submit Vertex AI fine-tuning job." : "DRY RUN: would NOT submit a job.");
 
-  logger.info("[FineTune][DryRun]", notes.join(" | "));
+  logger.info({ notes_join: notes.join(" | ") }, "[FineTune][DryRun]");
   return { gcpConfigured, exampleCount, thresholdMet, trainingFilesCount, inProgress, wouldSubmit, notes };
 }
 
@@ -251,7 +251,7 @@ export async function checkAndTriggerFineTune(opts?: { dryRun?: boolean }): Prom
 
     logger.info(`[FineTune] Vertex AI fine-tuning job submitted: ${vertexJobId}`);
   } catch (err) {
-    logger.error("[FineTune] Failed to check/trigger fine-tune:", err);
+    logger.error({ err: err }, "[FineTune] Failed to check/trigger fine-tune:");
     captureServerException(err, {
       tags: { component: "fine_tune", error_type: "trigger_failed" },
     });
@@ -344,7 +344,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
           logger.info(`[FineTune] Job ${run.vertexJobId}: status unchanged (${run.status})`);
         }
       } catch (pollErr) {
-        logger.warn(`[FineTune] Error polling job ${run.vertexJobId}:`, pollErr);
+        logger.warn({ err: pollErr }, `[FineTune] Error polling job ${run.vertexJobId}:`);
         captureServerException(pollErr, {
           tags: { component: "fine_tune", error_type: "poll_failed" },
           extra: { runId: run.id, vertexJobId: run.vertexJobId },
@@ -352,7 +352,7 @@ export async function pollFineTuneRunStatuses(): Promise<void> {
       }
     }
   } catch (err) {
-    logger.error("[FineTune] pollFineTuneRunStatuses failed:", err);
+    logger.error({ err: err }, "[FineTune] pollFineTuneRunStatuses failed:");
     captureServerException(err, { tags: { component: "fine_tune", error_type: "poll_setup_failed" } });
   }
 }

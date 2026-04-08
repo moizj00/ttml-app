@@ -162,14 +162,14 @@ async function checkLimit(
   } catch (err) {
     if (!failOpen) {
       // Fail-closed: deny on Redis error for sensitive endpoints
-      logger.error("[RateLimit] Redis error on critical endpoint, denying request:", err);
+      logger.error({ err: err }, "[RateLimit] Redis error on critical endpoint, denying request:");
       res.status(503).json({
         error: "Service temporarily unavailable. Please try again shortly.",
       });
       return false;
     }
     // Fail-open: allow on Redis error for general endpoints
-    logger.warn("[RateLimit] Redis error, allowing request:", err);
+    logger.warn({ err: err }, "[RateLimit] Redis error, allowing request:");
     return true;
   }
 }
@@ -289,14 +289,14 @@ export async function checkTrpcRateLimit(
     if (err?.code === "TOO_MANY_REQUESTS") throw err;
     if (err?.code === "INTERNAL_SERVER_ERROR") throw err;
     if (failClosed) {
-      logger.error("[RateLimit] Redis error on critical endpoint, denying:", err?.message);
+      logger.error({ err: err?.message }, "[RateLimit] Redis error on critical endpoint, denying:");
       const { TRPCError } = await import("@trpc/server");
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Service temporarily unavailable. Please try again shortly.",
       });
     }
-    logger.warn("[RateLimit] tRPC check error, allowing:", err?.message);
+    logger.warn({ err: err?.message }, "[RateLimit] tRPC check error, allowing:");
   }
 }
 
@@ -313,7 +313,7 @@ export async function pingRedis(): Promise<boolean> {
     const result = await r.ping();
     return result === "PONG";
   } catch (err) {
-    logger.warn("[RateLimiter] Redis ping failed:", err);
+    logger.warn({ err: err }, "[RateLimiter] Redis ping failed:");
     return false;
   }
 }

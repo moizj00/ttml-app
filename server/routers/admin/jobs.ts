@@ -64,7 +64,7 @@ export const jobsProcedures = {
         recentFailedJobs: failedJobs,
       };
     } catch (err) {
-      logger.error("[Queue] Health check failed:", err);
+      logger.error({ err: err }, "[Queue] Health check failed:");
       return {
         pending: 0,
         active: 0,

@@ -394,7 +394,7 @@ async function findSimilarLessons(
     `);
     return results as any[];
   } catch (err) {
-    logger.warn("[Pipeline] Semantic lesson search failed, skipping:", err);
+    logger.warn({ err: err }, "[Pipeline] Semantic lesson search failed, skipping:");
     return [];
   }
 }
@@ -431,7 +431,7 @@ export async function buildLessonsPromptBlock(
     const lessonIds = (lessons as Array<{ id?: number | null }>).map((l) => l.id).filter((id): id is number => id != null);
     if (lessonIds.length > 0) {
       incrementLessonInjectionStats(lessonIds).catch((err) =>
-        logger.warn("[Pipeline] Failed to increment injection stats:", err)
+        logger.warn({ err: err }, "[Pipeline] Failed to increment injection stats:")
       );
     }
 
@@ -455,7 +455,7 @@ export async function buildLessonsPromptBlock(
 
     return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n\n${sections.join("\n\n")}\n`;
   } catch (err) {
-    logger.error("[Pipeline] Failed to load lessons for prompt injection:", err);
+    logger.error({ err: err }, "[Pipeline] Failed to load lessons for prompt injection:");
     captureServerException(err, { tags: { component: "pipeline", error_type: "lessons_load_failed" } });
     return "";
   }

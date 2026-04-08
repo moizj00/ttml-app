@@ -204,7 +204,7 @@ async function runBackgroundProbe(): Promise<void> {
   try {
     cachedResult = await executeFullChecks();
   } catch (err) {
-    logger.error("[HealthCheck] Background probe failed:", err);
+    logger.error({ err: err }, "[HealthCheck] Background probe failed:");
   } finally {
     probeRunning = false;
   }
@@ -212,12 +212,12 @@ async function runBackgroundProbe(): Promise<void> {
 
 export function startHealthProbe(): void {
   runBackgroundProbe().catch((err) => {
-    logger.error("[HealthProbe] Initial probe failed:", err);
+    logger.error({ err: err }, "[HealthProbe] Initial probe failed:");
     captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
   });
   setInterval(() => {
     runBackgroundProbe().catch((err) => {
-      logger.error("[HealthProbe] Background probe failed:", err);
+      logger.error({ err: err }, "[HealthProbe] Background probe failed:");
       captureServerException(err, { tags: { component: "health_probe", error_type: "probe_failed" } });
     });
   }, PROBE_INTERVAL_MS);

@@ -84,12 +84,12 @@ export async function notifyAdmins(opts: {
           name: admin.name ?? "Admin",
           ...opts.emailOpts,
         }).catch((err: unknown) =>
-          logger.error(`[notifyAdmins] Email to ${admin.email} failed:`, err)
+          logger.error({ err: err }, `[notifyAdmins] Email to ${admin.email} failed:`)
         );
       }
     }
   } catch (err) {
-    logger.error("[notifyAdmins] Failed:", err);
+    logger.error({ err: err }, "[notifyAdmins] Failed:");
     captureServerException(err, { tags: { component: "notifications", error_type: "notify_admins_failed" } });
   }
 }
@@ -124,7 +124,7 @@ export async function notifyAllAttorneys(opts: {
             appUrl: opts.appUrl,
           });
         } catch (emailErr) {
-          logger.error(`[notifyAllAttorneys] Email failed for attorney #${attorney.id}:`, emailErr);
+          logger.error({ err: emailErr }, `[notifyAllAttorneys] Email failed for attorney #${attorney.id}:`);
           captureServerException(emailErr, { tags: { component: "notifications", error_type: "notify_attorney_email_failed" } });
         }
       }
@@ -139,12 +139,12 @@ export async function notifyAllAttorneys(opts: {
           link: `/attorney/queue`,
         });
       } catch (notifErr) {
-        logger.error(`[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`, notifErr);
+        logger.error({ err: notifErr }, `[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`);
         captureServerException(notifErr, { tags: { component: "notifications", error_type: "notify_attorney_inapp_failed" } });
       }
     }
   } catch (err) {
-    logger.error("[notifyAllAttorneys] Failed:", err);
+    logger.error({ err: err }, "[notifyAllAttorneys] Failed:");
     captureServerException(err, { tags: { component: "notifications", error_type: "notify_all_attorneys_failed" } });
   }
 }

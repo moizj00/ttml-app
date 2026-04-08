@@ -296,7 +296,7 @@ export const documentsRouter = router({
             documentText = fileBuffer.toString("utf-8");
           }
         } catch (err) {
-          logger.error("[DocumentAnalyzer] Text extraction failed:", err);
+          logger.error({ err: err }, "[DocumentAnalyzer] Text extraction failed:");
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -446,7 +446,7 @@ ${truncatedText}
           // Validate via lenient schema (applies safe defaults for partial/malformed AI output)
           analysisResult = documentAnalysisResultLenientSchema.parse(parsed);
         } catch (err) {
-          logger.error("[DocumentAnalyzer] AI analysis failed:", err);
+          logger.error({ err: err }, "[DocumentAnalyzer] AI analysis failed:");
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "ai_analysis_failed" } });
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -468,7 +468,7 @@ ${truncatedText}
               });
             }
           } catch (dbErr) {
-            logger.error("[DocumentAnalyzer] DB insert failed (non-fatal):", dbErr);
+            logger.error({ err: dbErr }, "[DocumentAnalyzer] DB insert failed (non-fatal):");
             captureServerException(dbErr, { tags: { component: "document_analyzer", error_type: "db_insert_failed" } });
           }
         })();
@@ -511,7 +511,7 @@ ${truncatedText}
 
           return { rows: fetched, nextCursor };
         } catch (err) {
-          logger.error("[DocumentAnalyzer] getMyAnalyses failed:", err);
+          logger.error({ err: err }, "[DocumentAnalyzer] getMyAnalyses failed:");
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "get_analyses_failed" } });
           return { rows: [], nextCursor: undefined };
         }

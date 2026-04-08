@@ -111,7 +111,7 @@ export function registerDraftPdfRoute(app: Express) {
 
       logger.info(`[DraftPDF] User ${user.id} downloaded Unreviewed PDF for letter #${letterId}`);
     } catch (err) {
-      logger.error("[DraftPDF] Error generating draft PDF:", err);
+      logger.error({ err: err }, "[DraftPDF] Error generating draft PDF:");
       res.status(500).json({ error: "Failed to generate draft PDF" });
     }
   });
