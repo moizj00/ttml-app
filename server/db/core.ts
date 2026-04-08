@@ -4,6 +4,21 @@ import postgres from "postgres";
 import { captureServerException } from "../sentry";
 import { discountCodes } from "../../drizzle/schema";
 
+/**
+ * Re-throws migration errors unless the failure is clearly idempotent
+ * (i.e. the object or column already exists).  Any other error means
+ * the schema is in an unexpected state and the app must not start.
+ */
+function throwIfUnexpectedMigrationError(label: string, err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/already exists/i.test(msg)) {
+    console.log(`[Database] Migration: ${label} already applied — skipping`);
+    return;
+  }
+  captureServerException(err, { tags: { component: "database", error_type: "migration_failed", migration: label } });
+  throw new Error(`[Database] Fatal migration error (${label}): ${msg}`);
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 let _readDb: ReturnType<typeof drizzle> | null = null;
 let _readDbFailed = false;
@@ -31,7 +46,6 @@ export async function getDb() {
     }
   }
   if (_db && !_startupMigrationRan) {
-    _startupMigrationRan = true;
     // One-time migration: remove maxUses:1 limit from all existing discount codes
     try {
       await _db
@@ -40,7 +54,7 @@ export async function getDb() {
         .where(eq(discountCodes.maxUses, 1));
       console.log("[Database] Migration: cleared maxUses:1 from discount codes");
     } catch (migErr) {
-      console.warn("[Database] Migration error (maxUses cleanup):", migErr);
+      throwIfUnexpectedMigrationError("maxUses cleanup", migErr);
     }
     // Add pipeline_locked_at column if it doesn't exist (session locking feature)
     try {
@@ -50,7 +64,7 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured pipeline_locked_at column exists");
     } catch (migErr) {
-      console.warn("[Database] Migration error (pipeline_locked_at):", migErr);
+      throwIfUnexpectedMigrationError("pipeline_locked_at", migErr);
     }
     // Add recursive learning hardening columns to pipeline_lessons
     try {
@@ -70,7 +84,7 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured pipeline_lessons hardening columns exist");
     } catch (migErr) {
-      console.warn("[Database] Migration error (pipeline_lessons hardening):", migErr);
+      throwIfUnexpectedMigrationError("pipeline_lessons hardening", migErr);
     }
     // Add 'consolidation' to lesson_source enum if it doesn't exist
     try {
@@ -83,7 +97,7 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured 'consolidation' enum value exists");
     } catch (migErr) {
-      console.warn("[Database] Migration error (consolidation enum):", migErr);
+      throwIfUnexpectedMigrationError("consolidation enum", migErr);
     }
     // Add 'client_revision_requested' and 'client_declined' to letter_status enum
     try {
@@ -103,7 +117,7 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured client_revision_requested and client_declined enum values exist");
     } catch (migErr) {
-      console.warn("[Database] Migration error (client approval statuses):", migErr);
+      throwIfUnexpectedMigrationError("client approval statuses", migErr);
     }
     // Add 'assembly' to job_type enum if it doesn't exist (used by pipeline assembly stage logging)
     try {
@@ -116,7 +130,7 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured 'assembly' job_type enum value exists");
     } catch (migErr) {
-      console.warn("[Database] Migration error (assembly job_type enum):", migErr);
+      throwIfUnexpectedMigrationError("assembly job_type enum", migErr);
     }
     try {
       await _db.execute(sql`
@@ -139,8 +153,10 @@ export async function getDb() {
       `);
       console.log("[Database] Migration: ensured intake_form_templates table exists");
     } catch (migErr) {
-      console.warn("[Database] Migration error (intake_form_templates):", migErr);
+      throwIfUnexpectedMigrationError("intake_form_templates", migErr);
     }
+    // Mark migrations complete only after all have succeeded
+    _startupMigrationRan = true;
   }
   return _db;
 }

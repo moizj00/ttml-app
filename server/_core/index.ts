@@ -140,8 +140,8 @@ async function startServer() {
       origin &&
       (STATIC_ALLOWED_ORIGINS.has(origin) ||
         (isDev && localhostOrigin) ||
-        railwayOrigin ||
-        replitOrigin)
+        (isDev && railwayOrigin) ||
+        (isDev && replitOrigin))
     ) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -285,15 +285,15 @@ async function startServer() {
   const preferredPort = parseInt(process.env.PORT || "3000", 10);
   const port = await resolveListenPort(preferredPort);
 
+  // Run DB connection and startup migrations before accepting traffic.
+  // If migrations fail fatally the thrown error propagates through startServer()
+  // which is caught by the top-level .catch(console.error) — the process exits
+  // and the server never starts listening.
+  await getDb();
+  console.log("[Startup] Database connection and startup migrations complete");
+
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    // Warm up DB connection on startup so first request doesn't timeout
-    getDb()
-      .then(() => console.log("[Startup] Database connection warmed up"))
-      .catch((err) => {
-        console.error("[Startup] Database warmup failed:", err);
-        captureServerException(err, { tags: { component: "startup", error_type: "db_warmup_failed" } });
-      });
     // Start in-process cron scheduler (draft reminders, etc.)
     startCronScheduler();
     // Check Cloudflare R2 connectivity
@@ -306,4 +306,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  console.error("[Fatal] Server failed to start:", err);
+  process.exit(1);
+});

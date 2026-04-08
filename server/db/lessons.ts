@@ -41,11 +41,20 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
       try {
         const { generateEmbedding } = await import("../pipeline/embeddings");
         const embedding = await generateEmbedding(data.lessonText);
-        const vectorStr = `[${embedding.join(",")}]`;
         const embDb = await getDb();
         if (!embDb) return;
+        // Build a validated numeric array and pass it as a bound SQL parameter.
+        // Each element is cast through Number() to guarantee no non-numeric values
+        // can be injected.  The $1 placeholder in the final SQL is the pgvector
+        // literal string '[n,n,...]'; PostgreSQL casts it to the vector type server-side.
+        const numericEmbedding = embedding.map((v) => {
+          const n = Number(v);
+          if (!isFinite(n)) throw new Error(`Invalid embedding value: ${v}`);
+          return n;
+        });
+        const vectorParam = `[${numericEmbedding.join(",")}]`;
         await embDb.execute(
-          sql`UPDATE pipeline_lessons SET embedding = ${vectorStr}::vector WHERE id = ${inserted.insertId}`
+          sql`UPDATE pipeline_lessons SET embedding = ${vectorParam}::vector WHERE id = ${inserted.insertId}`
         );
         console.log(`[Lessons] Stored embedding for lesson #${inserted.insertId}`);
       } catch (embErr) {
