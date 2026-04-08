@@ -179,7 +179,7 @@ export async function syncGoogleUser({
     try {
       await db.createDiscountCodeForEmployee(dbUser.id, dbUser.name || name);
     } catch (codeErr) {
-      logger.error("[SupabaseAuth] Failed to create discount code after Google auth:", codeErr);
+      logger.error({ err: codeErr }, "[SupabaseAuth] Failed to create discount code after Google auth:");
     }
   }
 
@@ -201,7 +201,7 @@ export async function syncGoogleUser({
         },
       });
     } catch (notifyErr) {
-      logger.error("[notifyAdmins] new_signup (Google):", notifyErr);
+      logger.error({ err: notifyErr }, "[notifyAdmins] new_signup (Google):");
       captureServerException(notifyErr instanceof Error ? notifyErr : new Error(String(notifyErr)), {
         tags: { component: "supabase_auth", error_type: "notify_admins_failed" },
       });
@@ -211,7 +211,7 @@ export async function syncGoogleUser({
       const freshUser = dbUser.id ? await db.getUserById(dbUser.id) : null;
       await sendRoleBasedWelcomeEmail(freshUser || dbUser, origin);
     } catch (emailErr) {
-      logger.error("[SupabaseAuth] Failed to send welcome email after Google auth:", emailErr);
+      logger.error({ err: emailErr }, "[SupabaseAuth] Failed to send welcome email after Google auth:");
     }
   }
 

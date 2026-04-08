@@ -361,7 +361,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Claim subscriber notification failed:", err);
+          logger.error({ err: err }, "[Notify] Claim subscriber notification failed:");
           captureServerException(err, { tags: { component: "review", error_type: "claim_notification_failed" } });
         }
         // ── Notify attorney: review assignment confirmation ──
@@ -390,7 +390,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Claim attorney notification failed:", err);
+          logger.error({ err: err }, "[Notify] Claim attorney notification failed:");
           captureServerException(err, { tags: { component: "review", error_type: "attorney_notification_failed" } });
         }
         try {
@@ -402,7 +402,7 @@ export const reviewRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] letter_claimed:", err);
+          logger.error({ err: err }, "[notifyAdmins] letter_claimed:");
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_claimed" } });
         }
         return { success: true };
@@ -449,7 +449,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Unclaim subscriber notification failed:", err);
+          logger.error({ err: err }, "[Notify] Unclaim subscriber notification failed:");
           captureServerException(err, { tags: { component: "review", error_type: "unclaim_notification_failed" } });
         }
         try {
@@ -461,7 +461,7 @@ export const reviewRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] letter_released:", err);
+          logger.error({ err: err }, "[notifyAdmins] letter_released:");
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_released" } });
         }
         return { success: true };
@@ -578,7 +578,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Failed:", err);
+          logger.error({ err: err }, "[Notify] Failed:");
           captureServerException(err, { tags: { component: "review", error_type: "approval_notification_failed" } });
         }
         extractLessonFromApproval(input.letterId, input.internalNote, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
@@ -589,7 +589,7 @@ export const reviewRouter = router({
             const { embedAndStoreLetterVersion } = await import("../pipeline/embeddings");
             await embedAndStoreLetterVersion(versionId, input.finalContent);
           } catch (embErr) {
-            logger.error(`[Approve] Embedding failed for letter #${input.letterId}:`, embErr);
+            logger.error({ err: embErr }, `[Approve] Embedding failed for letter #${input.letterId}:`);
           }
         })();
         (async () => {
@@ -603,7 +603,7 @@ export const reviewRouter = router({
               input.finalContent,
             );
           } catch (trainErr) {
-            logger.error(`[Approve] Training capture failed for letter #${input.letterId}:`, trainErr);
+            logger.error({ err: trainErr }, `[Approve] Training capture failed for letter #${input.letterId}:`);
           }
         })();
         (async () => {
@@ -611,7 +611,7 @@ export const reviewRouter = router({
             const { checkAndTriggerFineTune } = await import("../pipeline/fine-tune");
             await checkAndTriggerFineTune();
           } catch (ftErr) {
-            logger.error(`[Approve] Fine-tune check failed:`, ftErr);
+            logger.error({ err: ftErr }, `[Approve] Fine-tune check failed:`);
           }
         })();
         try {
@@ -631,7 +631,7 @@ export const reviewRouter = router({
             },
           });
         } catch (err) {
-          logger.error("[notifyAdmins] letter_submitted_for_client_approval:", err);
+          logger.error({ err: err }, "[notifyAdmins] letter_submitted_for_client_approval:");
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_submitted" } });
         }
         return { success: true, versionId };
@@ -704,7 +704,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Failed:", err);
+          logger.error({ err: err }, "[Notify] Failed:");
           captureServerException(err, { tags: { component: "review", error_type: "rejection_notification_failed" } });
         }
         extractLessonFromRejection(input.letterId, input.reason, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
@@ -718,7 +718,7 @@ export const reviewRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] letter_rejected:", err);
+          logger.error({ err: err }, "[notifyAdmins] letter_rejected:");
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_rejected" } });
         }
         return { success: true };
@@ -797,7 +797,7 @@ export const reviewRouter = router({
             });
           }
         } catch (err) {
-          logger.error("[Notify] Failed:", err);
+          logger.error({ err: err }, "[Notify] Failed:");
           captureServerException(err, { tags: { component: "review", error_type: "changes_notification_failed" } });
         }
         extractLessonFromChangesRequest(input.letterId, input.internalNote, input.userVisibleNote, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
@@ -810,7 +810,7 @@ export const reviewRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] letter_changes_requested:", err);
+          logger.error({ err: err }, "[notifyAdmins] letter_changes_requested:");
           captureServerException(err, { tags: { component: "review", error_type: "notify_admins_changes_requested" } });
         }
         // Pipeline re-trigger (if requested) is deferred to when subscriber responds via updateForChanges.

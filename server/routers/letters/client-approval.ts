@@ -83,7 +83,7 @@ export const clientApprovalProcedures = {
           });
         }
       } catch (err) {
-        logger.error("[requestClientApproval] Notification error:", err);
+        logger.error({ err: err }, "[requestClientApproval] Notification error:");
         captureServerException(err, { tags: { component: "letters", error_type: "client_approval_notification_failed" } });
       }
       try {
@@ -95,7 +95,7 @@ export const clientApprovalProcedures = {
           link: `/admin/letters/${input.letterId}`,
         });
       } catch (err) {
-        logger.error("[notifyAdmins] letter_pending_client_approval:", err);
+        logger.error({ err: err }, "[notifyAdmins] letter_pending_client_approval:");
         captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_pending_approval" } });
       }
       return { success: true };
@@ -160,7 +160,7 @@ export const clientApprovalProcedures = {
           logger.info(`[ClientApprove] PDF generated for letter #${input.letterId}: ${pdfUrl}`);
         } catch (pdfErr) {
           captureServerException(pdfErr, { tags: { component: "letters", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
-          logger.error(`[ClientApprove] PDF generation failed for letter #${input.letterId}:`, pdfErr);
+          logger.error({ err: pdfErr }, `[ClientApprove] PDF generation failed for letter #${input.letterId}:`);
           // Non-blocking: approval still succeeds even if PDF fails
         }
       }
@@ -185,7 +185,7 @@ export const clientApprovalProcedures = {
         } catch (sendErr) {
           recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
           captureServerException(sendErr, { tags: { component: "letters", error_type: "client_approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });
-          logger.error(`[ClientApprove] Failed to send letter #${input.letterId} to recipient:`, sendErr);
+          logger.error({ err: sendErr }, `[ClientApprove] Failed to send letter #${input.letterId} to recipient:`);
         }
       }
 
@@ -243,7 +243,7 @@ export const clientApprovalProcedures = {
           link: `/letters/${input.letterId}`,
         });
       } catch (notifyErr) {
-        logger.error("[ClientApprove] Subscriber notification failed:", notifyErr);
+        logger.error({ err: notifyErr }, "[ClientApprove] Subscriber notification failed:");
         captureServerException(notifyErr, { tags: { component: "letters", error_type: "client_approve_notify_failed" } });
       }
 
@@ -263,7 +263,7 @@ export const clientApprovalProcedures = {
           },
         });
       } catch (err) {
-        logger.error("[notifyAdmins] client_approved:", err);
+        logger.error({ err: err }, "[notifyAdmins] client_approved:");
         captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_approved" } });
       }
       return { success: true, pdfUrl, recipientSent, recipientSendError };
@@ -373,7 +373,7 @@ export const clientApprovalProcedures = {
           link: `/admin/letters/${input.letterId}`,
         });
       } catch (err) {
-        logger.error("[clientRequestRevision] Notification error:", err);
+        logger.error({ err: err }, "[clientRequestRevision] Notification error:");
         captureServerException(err, { tags: { component: "letters", error_type: "client_revision_notification_failed" } });
       }
       return { success: true, revisionCount: revisionCount + 1, revisionWarning };

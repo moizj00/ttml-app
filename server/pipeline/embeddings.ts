@@ -71,7 +71,7 @@ export async function embedAndStoreLetterVersion(versionId: number, content: str
     upsertToVertexSearchFireAndForget(versionId, embedding);
     logger.info(`[Embeddings] Stored embedding for version #${versionId} (${EMBEDDING_DIMENSIONS} dims, vertex=${isVertexSearchConfigured()})`);
   } catch (err) {
-    logger.error(`[Embeddings] Failed to embed version #${versionId}:`, err);
+    logger.error({ err: err }, `[Embeddings] Failed to embed version #${versionId}:`);
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "embed_and_store_failed" },
       extra: { versionId },
@@ -178,7 +178,7 @@ export async function findSimilarLetters(
         logger.info(`[Embeddings] findSimilarLetters via Vertex Search: ${results.length} results in ${latencyMs}ms`);
         return results;
       } catch (vertexErr) {
-        logger.warn("[Embeddings] Vertex Search query failed, falling back to pgvector:", vertexErr);
+        logger.warn({ err: vertexErr }, "[Embeddings] Vertex Search query failed, falling back to pgvector:");
         captureServerException(vertexErr, {
           tags: { component: "embeddings", error_type: "vertex_search_fallback" },
         });
@@ -187,7 +187,7 @@ export async function findSimilarLetters(
 
     return await findSimilarLettersViaPgvector(queryEmbedding, matchCount, matchThreshold);
   } catch (err) {
-    logger.error("[Embeddings] findSimilarLetters failed:", err);
+    logger.error({ err: err }, "[Embeddings] findSimilarLetters failed:");
     captureServerException(err, {
       tags: { component: "embeddings", error_type: "similar_search_failed" },
     });

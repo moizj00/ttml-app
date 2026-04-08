@@ -14,7 +14,7 @@ export async function validateResendCredentials(): Promise<boolean> {
     const { error } = await r.domains.list();
     return !error;
   } catch (err) {
-    logger.warn("[Email] Resend credential validation failed:", err);
+    logger.warn({ err: err }, "[Email] Resend credential validation failed:");
     return false;
   }
 }

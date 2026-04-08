@@ -39,7 +39,7 @@ async function invalidateBlogCache(payload: {
       );
     }
   } catch (err) {
-    logger.warn("[blog-cache] Invalidation request error:", err);
+    logger.warn({ err: err }, "[blog-cache] Invalidation request error:");
   }
 }
 

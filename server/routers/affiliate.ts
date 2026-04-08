@@ -281,7 +281,7 @@ export const affiliateRouter = router({
             link: `/admin/affiliate`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] discount_code_created:", err);
+          logger.error({ err: err }, "[notifyAdmins] discount_code_created:");
           captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_discount_code" } });
         }
       }
@@ -368,7 +368,7 @@ export const affiliateRouter = router({
             },
           });
         } catch (err) {
-          logger.error("[notifyAdmins] payout_request:", err);
+          logger.error({ err: err }, "[notifyAdmins] payout_request:");
           captureServerException(err, { tags: { component: "affiliate", error_type: "notify_admins_payout_request" } });
         }
         return { success: true, payoutRequestId: result.insertId };
@@ -423,7 +423,7 @@ export const affiliateRouter = router({
             daily: { date: string; clicks: number; uniqueVisitors: number }[];
           }>;
         } catch (analyticsErr) {
-          logger.warn("[Analytics] Failed to fetch click analytics, returning empty defaults:", analyticsErr);
+          logger.warn({ err: analyticsErr }, "[Analytics] Failed to fetch click analytics, returning empty defaults:");
           return { totalClicks: 0, uniqueVisitors: 0, daily: [] };
         }
       }),
@@ -553,7 +553,7 @@ export const affiliateRouter = router({
             }
           }
         } catch (emailErr) {
-          logger.error("[adminProcessPayout] Notification email error:", emailErr);
+          logger.error({ err: emailErr }, "[adminProcessPayout] Notification email error:");
           captureServerException(emailErr, { tags: { component: "payout", error_type: "notification_email_failed" } });
         }
 

@@ -204,7 +204,7 @@ async function runBackgroundProbe(): Promise<void> {
   try {
     cachedResult = await executeFullChecks();
   } catch (err) {
-    logger.error("[HealthCheck] Background probe failed:", err);
+    logger.error({ err: err }, "[HealthCheck] Background probe failed:");
   } finally {
     probeRunning = false;
   }

@@ -238,10 +238,7 @@ export function registerN8nCallbackRoute(app: Express): void {
               `[n8n Callback] Research version stored for letter #${letterId}`
             );
           } catch (researchErr) {
-            logger.warn(
-              `[n8n Callback] Failed to store research version for #${letterId}:`,
-              researchErr
-            );
+            logger.warn({ err: researchErr }, `[n8n Callback] Failed to store research version for #${letterId}:`);
           }
         }
 
@@ -375,10 +372,7 @@ export function registerN8nCallbackRoute(app: Express): void {
           try {
             await autoAdvanceIfPreviouslyUnlocked(letterId);
           } catch (autoUnlockErr) {
-            logger.error(
-              `[n8n Callback] Auto-unlock check failed for #${letterId}:`,
-              autoUnlockErr
-            );
+            logger.error({ err: autoUnlockErr }, `[n8n Callback] Auto-unlock check failed for #${letterId}:`);
           }
         }
 
@@ -387,10 +381,7 @@ export function registerN8nCallbackRoute(app: Express): void {
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error(
-          `[n8n Callback] Error processing callback for letter #${letterId}:`,
-          msg
-        );
+        logger.error({ err: msg }, `[n8n Callback] Error processing callback for letter #${letterId}:`);
         captureServerException(err instanceof Error ? err : new Error(msg), {
           tags: { component: "n8n_callback", error_type: "post_response_processing_failed" },
           extra: { letterId },

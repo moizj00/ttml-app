@@ -42,7 +42,7 @@ export function registerAdmin2FARoutes(app: Express) {
       });
       res.json({ success: true });
     } catch (err) {
-      logger.error("[SupabaseAuth] Admin 2FA verify error:", err);
+      logger.error({ err: err }, "[SupabaseAuth] Admin 2FA verify error:");
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -64,7 +64,7 @@ export function registerAdmin2FARoutes(app: Express) {
       logger.info(`[SupabaseAuth] Admin 2FA resend dispatched, to=${user.email}`);
       res.json({ success: true, message: "A new verification code has been sent to your email." });
     } catch (err) {
-      logger.error("[SupabaseAuth] Admin 2FA resend error:", err);
+      logger.error({ err: err }, "[SupabaseAuth] Admin 2FA resend error:");
       const message = err instanceof Error ? err.message : "Unknown error";
       res.status(500).json({ error: `Failed to send verification code: ${message}. Please check your email address or try again.` });
     }

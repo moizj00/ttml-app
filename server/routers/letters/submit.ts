@@ -138,7 +138,7 @@ export const submitProcedures = {
           label: "admin_submit",
         });
       } catch (enqueueErr) {
-        logger.error("[Queue] Failed to enqueue admin pipeline job:", enqueueErr);
+        logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue admin pipeline job:");
         captureServerException(enqueueErr, { tags: { component: "queue", error_type: "admin_enqueue_failed" } });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

@@ -110,7 +110,7 @@ export async function upsertToVertexSearch(
 
     logger.info(`[VertexSearch] Upserted datapoint id=${id}`);
   } catch (err) {
-    logger.error(`[VertexSearch] upsertToVertexSearch failed for id=${id}:`, err);
+    logger.error({ err: err }, `[VertexSearch] upsertToVertexSearch failed for id=${id}:`);
     captureServerException(err, {
       tags: { component: "vertex-search", error_type: "upsert_failed" },
       extra: { id },
@@ -169,7 +169,7 @@ export async function queryVertexSearch(
       distance: n.distance,
     }));
   } catch (err) {
-    logger.error("[VertexSearch] queryVertexSearch failed:", err);
+    logger.error({ err: err }, "[VertexSearch] queryVertexSearch failed:");
     captureServerException(err, {
       tags: { component: "vertex-search", error_type: "query_failed" },
       extra: { neighborCount },

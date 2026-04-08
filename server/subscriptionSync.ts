@@ -86,10 +86,7 @@ export async function syncSubscriptionsWithStripe(): Promise<{
       }
     } catch (err) {
       errors++;
-      logger.error(
-        `[SubscriptionSync] Error checking subscription ${sub.stripeSubscriptionId} for user ${sub.userId}:`,
-        err instanceof Error ? err.message : err
-      );
+      logger.error({ err: err instanceof Error ? err.message : err }, `[SubscriptionSync] Error checking subscription ${sub.stripeSubscriptionId} for user ${sub.userId}:`);
       captureServerException(err, {
         tags: { component: "subscription_sync" },
         extra: { userId: sub.userId, stripeSubscriptionId: sub.stripeSubscriptionId },

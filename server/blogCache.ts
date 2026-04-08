@@ -57,7 +57,7 @@ export async function getCachedBlogPosts(
       `[blog-cache] Worker list request failed (${res.status}), falling back to DB`
     );
   } catch (err) {
-    logger.warn("[blog-cache] Worker list request error, falling back to DB:", err);
+    logger.warn({ err: err }, "[blog-cache] Worker list request error, falling back to DB:");
   }
 
   return getPublishedBlogPosts(options);
@@ -92,7 +92,7 @@ export async function getCachedBlogPost(
       `[blog-cache] Worker getBySlug request failed (${res.status}), falling back to DB`
     );
   } catch (err) {
-    logger.warn("[blog-cache] Worker getBySlug request error, falling back to DB:", err);
+    logger.warn({ err: err }, "[blog-cache] Worker getBySlug request error, falling back to DB:");
   }
 
   return getBlogPostBySlug(slug);

@@ -77,7 +77,7 @@ export async function runVettingStage(
     }
     jobId = rawJobId ?? 0;
   } catch (jobCreateErr) {
-    logger.warn(`[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`, jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr);
+    logger.warn({ err: jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr }, `[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`);
     captureServerException(jobCreateErr, { tags: { component: "pipeline", error_type: "workflow_job_create_failed" }, extra: { letterId } });
   }
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
@@ -524,7 +524,7 @@ export async function runVettingStage(
     return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Pipeline] Stage 4 failed for letter #${letterId}:`, msg);
+    logger.error({ err: msg }, `[Pipeline] Stage 4 failed for letter #${letterId}:`);
     captureServerException(err, {
       tags: { pipeline_stage: "vetting", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
@@ -648,7 +648,7 @@ export async function finalizeLetterAfterVetting(
           }).catch(e => logger.error(`[Pipeline] Failed notification for degraded draft #${letterId}:`, e));
         }
       } catch (alertErr) {
-        logger.error(`[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`, alertErr);
+        logger.error({ err: alertErr }, `[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`);
       }
     })();
   }
@@ -675,7 +675,7 @@ export async function finalizeLetterAfterVetting(
       }
     }
   } catch (emailErr) {
-    logger.error(`[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`, emailErr);
+    logger.error({ err: emailErr }, `[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`);
   }
 
   if (letterForPaywall?.submittedByAdmin) {

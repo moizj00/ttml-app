@@ -33,7 +33,7 @@ export function registerNewsletterRoute(app: Express) {
 
       res.json({ success: true });
     } catch (err) {
-      logger.error("[Newsletter] Subscribe error:", err);
+      logger.error({ err: err }, "[Newsletter] Subscribe error:");
       res.status(500).json({ error: "Something went wrong. Please try again." });
     }
   };

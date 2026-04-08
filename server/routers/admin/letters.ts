@@ -136,7 +136,7 @@ export const adminLettersProcedures = {
           });
         }
       } catch (err) {
-        logger.error("[Notify] Failed:", err);
+        logger.error({ err: err }, "[Notify] Failed:");
         captureServerException(err, { tags: { component: "review", error_type: "unlock_notification_failed" } });
       }
       return { success: true };

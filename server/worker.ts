@@ -97,7 +97,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
               return;
             }
           } catch (stageCheckErr) {
-            logger.warn(`[Worker] Stage-aware check failed for letter #${letterId}, falling back to full pipeline:`, stageCheckErr);
+            logger.warn({ err: stageCheckErr }, `[Worker] Stage-aware check failed for letter #${letterId}, falling back to full pipeline:`);
           }
         }
 
@@ -106,7 +106,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       } catch (err) {
         lastErr = err;
         const errMsg = err instanceof Error ? err.message : String(err);
-        logger.error(`[Worker] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`, errMsg);
+        logger.error({ err: errMsg }, `[Worker] Attempt ${attempt + 1} failed for letter #${letterId} (${label}):`);
         captureServerException(err, { tags: { component: "pipeline-worker", error_type: "attempt_failed" }, extra: { letterId, attempt: attempt + 1 } });
 
         if (err instanceof PipelineError && err.category === "permanent") {
@@ -148,7 +148,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
           logger.info(`[Worker] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`);
         }
       } catch (refundErr) {
-        logger.error("[Worker] Failed to refund usage after pipeline failure:", refundErr);
+        logger.error({ err: refundErr }, "[Worker] Failed to refund usage after pipeline failure:");
         captureServerException(refundErr, { tags: { component: "pipeline-worker", error_type: "usage_refund_failed" } });
       }
     }
@@ -168,7 +168,7 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             });
           }
         } catch (emailErr) {
-          logger.error("[Worker] Failed to email admin:", emailErr);
+          logger.error({ err: emailErr }, "[Worker] Failed to email admin:");
           captureServerException(emailErr, { tags: { component: "pipeline-worker", error_type: "admin_email_failed" } });
         }
         try {
@@ -181,12 +181,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
             link: `/admin/letters/${letterId}`,
           });
         } catch (notifErr) {
-          logger.error("[Worker] Failed to create notification:", notifErr);
+          logger.error({ err: notifErr }, "[Worker] Failed to create notification:");
           captureServerException(notifErr, { tags: { component: "pipeline-worker", error_type: "notification_failed" } });
         }
       }
     } catch (notifyErr) {
-      logger.error("[Worker] Failed to notify admins:", notifyErr);
+      logger.error({ err: notifyErr }, "[Worker] Failed to notify admins:");
       captureServerException(notifyErr, { tags: { component: "pipeline-worker", error_type: "notify_admins_failed" } });
     }
 
@@ -207,14 +207,14 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
         }
       }
     } catch (subEmailErr) {
-      logger.error("[Worker] Failed to notify subscriber of pipeline failure:", subEmailErr);
+      logger.error({ err: subEmailErr }, "[Worker] Failed to notify subscriber of pipeline failure:");
       captureServerException(subEmailErr, { tags: { component: "pipeline-worker", error_type: "subscriber_email_failed" } });
     }
 
     try {
       await updateLetterStatus(letterId, "pipeline_failed", { force: true });
     } catch (statusErr) {
-      logger.error("[Worker] Failed to set pipeline_failed status:", statusErr);
+      logger.error({ err: statusErr }, "[Worker] Failed to set pipeline_failed status:");
       captureServerException(statusErr, { tags: { component: "pipeline-worker", error_type: "status_update_failed" } });
     }
 
@@ -244,7 +244,7 @@ export async function processRetryFromStage(data: RetryFromStageJobData): Promis
           logger.info(`[Worker] Recovered intake from database for letter #${letterId}`);
         }
       } catch (e) {
-        logger.error(`[Worker] Failed to recover intake for letter #${letterId}:`, e);
+        logger.error({ err: e }, `[Worker] Failed to recover intake for letter #${letterId}:`);
       }
     }
 
@@ -273,7 +273,7 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
     logger.info(`[Worker] Job ${job.id} completed in ${elapsed}s`);
   } catch (err) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.error(`[Worker] Job ${job.id} failed after ${elapsed}s:`, err instanceof Error ? err.message : err);
+    logger.error({ err: err instanceof Error ? err.message : err }, `[Worker] Job ${job.id} failed after ${elapsed}s:`);
     throw err;
   }
 }
@@ -333,7 +333,7 @@ async function startWorker() {
         const { pollFineTuneRunStatuses } = await import("./pipeline/fine-tune");
         await pollFineTuneRunStatuses();
       } catch (pollErr) {
-        logger.warn("[Worker] Fine-tune poll error:", pollErr);
+        logger.warn({ err: pollErr }, "[Worker] Fine-tune poll error:");
       }
     };
     // Initial poll on startup (deferred slightly to let DB warm up)
@@ -367,7 +367,7 @@ async function startWorker() {
   });
 
   worker.on("failed", (job, err) => {
-    logger.error(`[Worker] Job ${job?.id} failed:`, err.message);
+    logger.error({ err: err.message }, `[Worker] Job ${job?.id} failed:`);
     captureServerException(err, {
       tags: { component: "pipeline-worker", error_type: "job_failed" },
       extra: { jobId: job?.id, jobData: job?.data },
@@ -375,7 +375,7 @@ async function startWorker() {
   });
 
   worker.on("error", (err) => {
-    logger.error("[Worker] Worker error:", err.message);
+    logger.error({ err: err.message }, "[Worker] Worker error:");
   });
 
   const shutdown = async (signal: string) => {

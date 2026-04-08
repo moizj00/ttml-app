@@ -134,7 +134,7 @@ export async function runResearchStage(
       link: `/admin/letters/${letterId}`,
     });
   } catch (err) {
-    logger.error("[notifyAdmins] pipeline_researching:", err);
+    logger.error({ err: err }, "[notifyAdmins] pipeline_researching:");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
   }
 
@@ -212,7 +212,7 @@ export async function runResearchStage(
       }
     }
   } catch (cacheErr) {
-    logger.warn(`[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`, cacheErr);
+    logger.warn({ err: cacheErr }, `[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`);
   }
   // ── End KV Cache check ──
 
@@ -578,7 +578,7 @@ export async function runResearchStage(
     return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Pipeline] Stage 1 failed for letter #${letterId}:`, msg);
+    logger.error({ err: msg }, `[Pipeline] Stage 1 failed for letter #${letterId}:`);
     captureServerException(err, {
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },

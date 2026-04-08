@@ -81,7 +81,7 @@ export const usersProcedures = {
       try {
         await assignRoleId(input.userId, input.role);
       } catch (e) {
-        logger.error("[updateRole] Role ID assignment failed:", e);
+        logger.error({ err: e }, "[updateRole] Role ID assignment failed:");
       }
 
       // Invalidate the user's auth cache so their next request picks up the new role
@@ -100,7 +100,7 @@ export const usersProcedures = {
             link: "/attorney",
           });
         } catch (err) {
-          logger.error("[updateRole] Failed to send attorney promotion notification:", err);
+          logger.error({ err: err }, "[updateRole] Failed to send attorney promotion notification:");
           captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
         }
         try {
@@ -116,7 +116,7 @@ export const usersProcedures = {
             });
           }
         } catch (err) {
-          logger.error("[updateRole] Failed to send attorney onboarding queue notification:", err);
+          logger.error({ err: err }, "[updateRole] Failed to send attorney onboarding queue notification:");
           captureServerException(err, { tags: { component: "admin", error_type: "attorney_onboarding_queue_notification_failed" } });
         }
       }
@@ -130,7 +130,7 @@ export const usersProcedures = {
           link: `/admin/users`,
         });
       } catch (err) {
-        logger.error("[notifyAdmins] user_role_changed:", err);
+        logger.error({ err: err }, "[notifyAdmins] user_role_changed:");
         captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
       }
       return { success: true };

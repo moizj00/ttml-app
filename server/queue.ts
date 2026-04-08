@@ -98,7 +98,7 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
       await existing.remove().catch(() => {});
     }
   } catch (checkErr) {
-    logger.warn(`[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`, checkErr);
+    logger.warn({ err: checkErr }, `[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`);
     const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
       jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
     });
@@ -111,7 +111,7 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
     logger.info(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
     return job.id!;
   } catch (addErr) {
-    logger.warn(`[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`, addErr);
+    logger.warn({ err: addErr }, `[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`);
     const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
       jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
     });

@@ -179,7 +179,7 @@ async function verifyToken(token: string): Promise<User | null> {
     }
     return appUser || null;
   } catch (err) {
-    logger.warn("[SupabaseAuth] authenticateRequest failed, returning null:", err);
+    logger.warn({ err: err }, "[SupabaseAuth] authenticateRequest failed, returning null:");
     captureServerException(err instanceof Error ? err : new Error(String(err)), {
       tags: { component: "supabase_auth", error_type: "authenticate_request_failed" },
     });

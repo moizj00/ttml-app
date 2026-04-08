@@ -373,10 +373,7 @@ export const profileRouter = router({
           });
         } catch (emailErr) {
           captureServerException(emailErr, { tags: { component: "profile", error_type: "verification_email_failed" } });
-          logger.error(
-            "[Profile] Failed to send verification email:",
-            emailErr
-          );
+          logger.error({ err: emailErr }, "[Profile] Failed to send verification email:");
         }
 
         return {

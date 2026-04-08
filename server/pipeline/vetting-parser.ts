@@ -29,7 +29,7 @@ export function parseVettingResponse(raw: string): { vettedLetter: string; vetti
       },
     };
   } catch (parseErr) {
-    logger.warn("[Pipeline] Failed to parse vetting response JSON, skipping vetting stage:", parseErr);
+    logger.warn({ err: parseErr }, "[Pipeline] Failed to parse vetting response JSON, skipping vetting stage:");
     captureServerException(parseErr instanceof Error ? parseErr : new Error(String(parseErr)), {
       tags: { component: "pipeline", error_type: "vetting_parse_failed" },
     });

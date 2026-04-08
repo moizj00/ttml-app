@@ -42,7 +42,7 @@ export async function sendLetterToRecipient(opts: {
         hasPdfAttachment = true;
       }
     } catch (err) {
-      logger.warn("[Email] Could not fetch PDF for attachment, falling back to inline HTML:", err);
+      logger.warn({ err: err }, "[Email] Could not fetch PDF for attachment, falling back to inline HTML:");
     }
   }
 
@@ -99,12 +99,12 @@ export async function sendLetterToRecipient(opts: {
       return;
     } catch (err) {
       lastErr = err;
-      logger.error(`[Email] sendLetterToRecipient attempt ${attempt + 1} failed:`, err);
+      logger.error({ err: err }, `[Email] sendLetterToRecipient attempt ${attempt + 1} failed:`);
       if (attempt < delays.length) {
         await new Promise(r => setTimeout(r, delays[attempt]));
       }
     }
   }
-  logger.error("[Email] sendLetterToRecipient all retry attempts exhausted:", lastErr);
+  logger.error({ err: lastErr }, "[Email] sendLetterToRecipient all retry attempts exhausted:");
   throw lastErr;
 }

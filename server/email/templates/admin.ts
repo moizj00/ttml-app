@@ -140,7 +140,7 @@ export async function sendAdminVerificationCodeEmail(opts: {
     });
     logger.info(`[Email] Admin 2FA code sent successfully to=${opts.to}`);
   } catch (err) {
-    logger.error(`[Email] Admin 2FA code FAILED to=${opts.to}, from=${FROM}, error:`, err);
+    logger.error({ err: err }, `[Email] Admin 2FA code FAILED to=${opts.to}, from=${FROM}, error:`);
     throw err;
   }
 }

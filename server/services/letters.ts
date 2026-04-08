@@ -158,7 +158,7 @@ export async function submitLetter(
       usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
     });
   } catch (enqueueErr) {
-    logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
     captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
     await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
     throw new TRPCError({
@@ -176,7 +176,7 @@ export async function submitLetter(
       link: `/admin/letters/${letterId}`,
     });
   } catch (err) {
-    logger.error("[notifyAdmins] letter_submitted:", err);
+    logger.error({ err: err }, "[notifyAdmins] letter_submitted:");
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
   }
 
@@ -196,7 +196,7 @@ async function _refundUsage(
       await decrementLettersUsed(userId);
     }
   } catch (refundErr) {
-    logger.error("[Submit] Failed to refund usage:", refundErr);
+    logger.error({ err: refundErr }, "[Submit] Failed to refund usage:");
     captureServerException(refundErr, { tags: { component: "letters", error_type: "usage_refund_failed" } });
   }
 }
@@ -291,7 +291,7 @@ export async function processSubscriberFeedback(
           label: "updateForChanges",
         });
       } catch (enqueueErr) {
-        logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+        logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
         captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -331,7 +331,7 @@ export async function processSubscriberFeedback(
         });
       }
     } catch (notifyErr) {
-      logger.error("[processSubscriberFeedback] Light-edit notification failed:", notifyErr);
+      logger.error({ err: notifyErr }, "[processSubscriberFeedback] Light-edit notification failed:");
       captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
     }
   }
@@ -411,7 +411,7 @@ export async function retryFromRejected(
       label: "retryFromRejected",
     });
   } catch (enqueueErr) {
-    logger.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
+    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
     captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -446,7 +446,7 @@ export async function retryFromRejected(
       link: `/admin/letters/${input.letterId}`,
     });
   } catch (err) {
-    logger.error("[retryFromRejected] Notification error:", err);
+    logger.error({ err: err }, "[retryFromRejected] Notification error:");
     captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
   }
 
@@ -512,7 +512,7 @@ export async function sendLetterToRecipientFlow(
       toStatus: "sent",
     });
   } catch (err) {
-    logger.error("[sendToRecipient] Failed to update status to sent:", err);
+    logger.error({ err: err }, "[sendToRecipient] Failed to update status to sent:");
     captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
   }
 
@@ -525,7 +525,7 @@ export async function sendLetterToRecipientFlow(
       link: `/admin/letters/${input.letterId}`,
     });
   } catch (err) {
-    logger.error("[notifyAdmins] letter_sent_to_recipient:", err);
+    logger.error({ err: err }, "[notifyAdmins] letter_sent_to_recipient:");
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
   }
 
@@ -586,7 +586,7 @@ export async function clientDeclineLetter(
       },
     });
   } catch (err) {
-    logger.error("[notifyAdmins] client_declined:", err);
+    logger.error({ err: err }, "[notifyAdmins] client_declined:");
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
   }
   return { success: true };

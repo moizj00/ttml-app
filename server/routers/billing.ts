@@ -490,7 +490,7 @@ export const billingRouter = router({
           metadata: pi.metadata ?? {},
         }));
       } catch (e) {
-        logger.error("[paymentHistory] Stripe error:", e);
+        logger.error({ err: e }, "[paymentHistory] Stripe error:");
         return [];
       }
     }),
@@ -522,7 +522,7 @@ export const billingRouter = router({
           })),
         };
       } catch (e) {
-        logger.error("[receipts] Stripe error:", e);
+        logger.error({ err: e }, "[receipts] Stripe error:");
         return { invoices: [] };
       }
     }),
@@ -577,7 +577,7 @@ export const billingRouter = router({
             appUrl: getAppUrl(ctx.req),
           });
         } catch (e) {
-          logger.error("[subscriptionSubmit] Email error:", e);
+          logger.error({ err: e }, "[subscriptionSubmit] Email error:");
           captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
         }
         // Notify all attorneys (email + in-app) that a new letter is ready for review
@@ -591,7 +591,7 @@ export const billingRouter = router({
             appUrl: getAppUrl(ctx.req),
           });
         } catch (notifyErr) {
-          logger.error("[subscriptionSubmit] Failed to notify attorneys:", notifyErr);
+          logger.error({ err: notifyErr }, "[subscriptionSubmit] Failed to notify attorneys:");
           captureServerException(notifyErr, { tags: { component: "billing", error_type: "subscription_submit_attorney_notify_failed" } });
         }
         // Notify admins
@@ -604,7 +604,7 @@ export const billingRouter = router({
             link: `/admin/letters/${input.letterId}`,
           });
         } catch (err) {
-          logger.error("[notifyAdmins] subscription_submit:", err);
+          logger.error({ err: err }, "[notifyAdmins] subscription_submit:");
           captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
         }
         return { ok: true as const };

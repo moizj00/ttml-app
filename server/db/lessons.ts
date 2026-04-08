@@ -59,7 +59,7 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
         );
         logger.info(`[Lessons] Stored embedding for lesson #${inserted.insertId}`);
       } catch (embErr) {
-        logger.warn(`[Lessons] Failed to embed lesson #${inserted?.insertId}:`, embErr);
+        logger.warn({ err: embErr }, `[Lessons] Failed to embed lesson #${inserted?.insertId}:`);
       }
     });
   }

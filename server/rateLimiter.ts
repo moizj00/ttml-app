@@ -162,14 +162,14 @@ async function checkLimit(
   } catch (err) {
     if (!failOpen) {
       // Fail-closed: deny on Redis error for sensitive endpoints
-      logger.error("[RateLimit] Redis error on critical endpoint, denying request:", err);
+      logger.error({ err: err }, "[RateLimit] Redis error on critical endpoint, denying request:");
       res.status(503).json({
         error: "Service temporarily unavailable. Please try again shortly.",
       });
       return false;
     }
     // Fail-open: allow on Redis error for general endpoints
-    logger.warn("[RateLimit] Redis error, allowing request:", err);
+    logger.warn({ err: err }, "[RateLimit] Redis error, allowing request:");
     return true;
   }
 }
@@ -313,7 +313,7 @@ export async function pingRedis(): Promise<boolean> {
     const result = await r.ping();
     return result === "PONG";
   } catch (err) {
-    logger.warn("[RateLimiter] Redis ping failed:", err);
+    logger.warn({ err: err }, "[RateLimiter] Redis ping failed:");
     return false;
   }
 }

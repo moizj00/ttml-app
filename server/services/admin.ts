@@ -70,7 +70,7 @@ export async function changeUserRole(
   try {
     await assignRoleId(input.userId, input.role);
   } catch (e) {
-    logger.error("[changeUserRole] Role ID assignment failed:", e);
+    logger.error({ err: e }, "[changeUserRole] Role ID assignment failed:");
   }
 
   const updatedUser = await getUserById(input.userId);
@@ -88,7 +88,7 @@ export async function changeUserRole(
         link: "/attorney",
       });
     } catch (err) {
-      logger.error("[changeUserRole] Failed to send attorney promotion notification:", err);
+      logger.error({ err: err }, "[changeUserRole] Failed to send attorney promotion notification:");
       captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
     }
 
@@ -105,7 +105,7 @@ export async function changeUserRole(
       link: `/admin/users`,
     });
   } catch (err) {
-    logger.error("[notifyAdmins] user_role_changed:", err);
+    logger.error({ err: err }, "[notifyAdmins] user_role_changed:");
     captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
   }
 
@@ -150,7 +150,7 @@ export async function inviteAttorney(
     }
     await updateUserRole(existingUser.id, "attorney");
     try { await assignRoleId(existingUser.id, "attorney"); } catch (e) {
-      logger.error("[inviteAttorney] Role ID assignment failed:", e);
+      logger.error({ err: e }, "[inviteAttorney] Role ID assignment failed:");
     }
     if (existingUser.openId) invalidateUserCache(existingUser.openId);
     try {
@@ -162,7 +162,7 @@ export async function inviteAttorney(
         link: "/attorney",
       });
     } catch (err) {
-      logger.error("[inviteAttorney] notification failed:", err);
+      logger.error({ err: err }, "[inviteAttorney] notification failed:");
     }
     await _notifyAttorneyOfPendingQueue(existingUser.id, "[inviteAttorney]");
     return { success: true, alreadyExisted: true, message: `${email} already had an account and has been promoted to attorney.` };
@@ -180,7 +180,7 @@ export async function inviteAttorney(
   });
 
   if (createError) {
-    logger.error("[inviteAttorney] Supabase createUser error:", createError.message);
+    logger.error({ err: createError.message }, "[inviteAttorney] Supabase createUser error:");
     if (createError.message.includes("already") || createError.message.includes("exists")) {
       return await _handleExistingAuthUser(email, name, ctx, serviceClient);
     }
@@ -206,7 +206,7 @@ export async function inviteAttorney(
   const appUser = await getUserByOpenId(createData.user.id);
   if (appUser) {
     try { await assignRoleId(appUser.id, "attorney"); } catch (e) {
-      logger.error("[inviteAttorney] Role ID assignment failed:", e);
+      logger.error({ err: e }, "[inviteAttorney] Role ID assignment failed:");
     }
   }
 
@@ -218,7 +218,7 @@ export async function inviteAttorney(
   });
 
   if (linkError || !linkData?.properties?.action_link) {
-    logger.error("[inviteAttorney] generateLink error:", linkError?.message);
+    logger.error({ err: linkError?.message }, "[inviteAttorney] generateLink error:");
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",
@@ -233,7 +233,7 @@ export async function inviteAttorney(
       invitedByName: ctx.actingAdmin.name || undefined,
     });
   } catch (emailErr) {
-    logger.error("[inviteAttorney] Failed to send invitation email:", emailErr);
+    logger.error({ err: emailErr }, "[inviteAttorney] Failed to send invitation email:");
     captureServerException(emailErr, { tags: { component: "admin", error_type: "attorney_invitation_email_failed" } });
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -250,7 +250,7 @@ export async function inviteAttorney(
       link: `/admin/users`,
     });
   } catch (err) {
-    logger.error("[notifyAdmins] attorney_invited:", err);
+    logger.error({ err: err }, "[notifyAdmins] attorney_invited:");
   }
 
   if (appUser) {
@@ -278,7 +278,7 @@ async function _notifyAttorneyOfPendingQueue(userId: number, logPrefix: string):
       });
     }
   } catch (err) {
-    logger.error(`${logPrefix} Onboarding queue notification failed:`, err);
+    logger.error({ err: err }, `${logPrefix} Onboarding queue notification failed:`);
   }
 }
 
@@ -325,7 +325,7 @@ async function _handleExistingAuthUser(
       const existingAppUser = await getUserByOpenId(authUserId);
       if (existingAppUser) {
         try { await assignRoleId(existingAppUser.id, "attorney"); } catch (e) {
-          logger.error("[inviteAttorney] Role ID assignment for existing auth user:", e);
+          logger.error({ err: e }, "[inviteAttorney] Role ID assignment for existing auth user:");
         }
       }
       await serviceClient.auth.admin.updateUserById(authUserId, {
@@ -343,7 +343,7 @@ async function _handleExistingAuthUser(
       return { success: true, alreadyExisted: true, message: `${email} had an auth account and has been set up as an attorney. Invitation sent.` };
     }
   } catch (recoveryErr) {
-    logger.error("[inviteAttorney] Recovery attempt for existing auth user failed:", recoveryErr);
+    logger.error({ err: recoveryErr }, "[inviteAttorney] Recovery attempt for existing auth user failed:");
   }
   throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists in the auth system." });
 }
@@ -386,7 +386,7 @@ export async function retryPipelineJob(input: RetryJobInput) {
       message: `Retry started for stage: ${input.stage} (job: ${jobId})`,
     };
   } catch (enqueueErr) {
-    logger.error(`[Admin] Failed to enqueue retry for letter #${input.letterId}:`, enqueueErr);
+    logger.error({ err: enqueueErr }, `[Admin] Failed to enqueue retry for letter #${input.letterId}:`);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: `Failed to enqueue retry job: ${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}`,
