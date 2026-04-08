@@ -15,7 +15,7 @@
  * Test strategy: source-code structural assertions (no live DB/network calls).
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, readdirSync, statSync, existsSync } from "fs";
 import { join } from "path";
 
 const SERVER_DIR = join(__dirname);
@@ -25,9 +25,23 @@ function readServer(file: string) {
   return readFileSync(join(SERVER_DIR, file), "utf-8");
 }
 
+function readRouterModule(routersDir: string, name: string): string {
+  const dirPath = join(routersDir, name);
+  try {
+    if (statSync(dirPath).isDirectory()) {
+      return readdirSync(dirPath)
+        .filter(f => f.endsWith(".ts"))
+        .map(f => { try { return readFileSync(join(dirPath, f), "utf-8"); } catch { return ""; } })
+        .join("\n");
+    }
+  } catch {}
+  try { return readFileSync(join(routersDir, `${name}.ts`), "utf-8"); } catch { return ""; }
+}
+
 function readAllRouters() {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+  const routersDir = join(SERVER_DIR, "routers");
+  return subRouters.map(r => readRouterModule(routersDir, r)).join("\n");
 }
 
 function readClient(...segments: string[]) {

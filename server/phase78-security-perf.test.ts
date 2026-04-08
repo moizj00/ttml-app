@@ -213,9 +213,14 @@ describe("getAllEmployeeEarnings batch query", () => {
 // ─── adminEmployeePerformance batching verification ─────────────────────────────
 describe("adminEmployeePerformance uses batched queries", () => {
   it("admin router imports getAllEmployeeEarnings from db", async () => {
-    // Verify the import exists in the admin sub-router
+    // Verify the import exists in the admin sub-router (now a directory module)
     const fs = await import("fs");
-    const adminRouterSource = fs.readFileSync("server/routers/admin.ts", "utf-8");
+    const path = await import("path");
+    const adminDir = "server/routers/admin";
+    const adminRouterSource = fs.readdirSync(adminDir)
+      .filter((f: string) => f.endsWith(".ts"))
+      .map((f: string) => fs.readFileSync(path.join(adminDir, f), "utf-8"))
+      .join("\n");
     expect(adminRouterSource).toContain("getAllEmployeeEarnings");
     // Verify it no longer uses the N+1 pattern
     expect(adminRouterSource).not.toContain("employees.map(async (emp) =>");

@@ -9,7 +9,7 @@
  *  5. No self-signup path can produce an admin user
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -18,10 +18,22 @@ import { signAdmin2FAToken, ADMIN_2FA_COOKIE } from "./_core/admin2fa";
 const SERVER_DIR = join(__dirname);
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
 
+function readRouterModule(routersDir: string, name: string): string {
+  const dirPath = join(routersDir, name);
+  try {
+    if (statSync(dirPath).isDirectory()) {
+      return readdirSync(dirPath)
+        .filter(f => f.endsWith(".ts"))
+        .map(f => { try { return readFileSync(join(dirPath, f), "utf-8"); } catch { return ""; } })
+        .join("\n");
+    }
+  } catch {}
+  try { return readFileSync(join(routersDir, `${name}.ts`), "utf-8"); } catch { return ""; }
+}
 function readAllRouters(): string {
   const dir = join(SERVER_DIR, "routers");
   const files = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  return files.map(f => readFileSync(join(dir, `${f}.ts`), "utf-8")).join("\n");
+  return files.map(f => readRouterModule(dir, f)).join("\n");
 }
 function readAllSupabaseAuth(): string {
   const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");

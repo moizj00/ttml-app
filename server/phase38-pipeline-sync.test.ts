@@ -18,12 +18,23 @@ import * as path from "path";
 const SERVER_DIR = path.resolve(__dirname);
 const CLIENT_DIR = path.resolve(__dirname, "../client/src");
 
+function readRouterModule(routersDir: string, name: string): string {
+  const dirPath = path.join(routersDir, name);
+  try {
+    if (fs.statSync(dirPath).isDirectory()) {
+      return fs.readdirSync(dirPath)
+        .filter((f: string) => f.endsWith(".ts"))
+        .map((f: string) => { try { return fs.readFileSync(path.join(dirPath, f), "utf-8"); } catch { return ""; } })
+        .join("\n");
+    }
+  } catch {}
+  const p = path.join(routersDir, `${name}.ts`);
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
+}
 function readAllRouters() {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  return subRouters.map(r => {
-    const p = path.join(SERVER_DIR, "routers", `${r}.ts`);
-    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
-  }).join("\n");
+  const routersDir = path.join(SERVER_DIR, "routers");
+  return subRouters.map(r => readRouterModule(routersDir, r)).join("\n");
 }
 function readAllDb() {
   const files = ["core", "letters", "letter-versions", "users", "admin", "affiliates", "analytics", "auth-tokens", "lessons", "notifications", "pipeline-records", "quality", "review-actions"];

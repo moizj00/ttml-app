@@ -25,9 +25,23 @@ import { join } from "path";
 
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
 const SERVER_DIR = join(__dirname);
+function readRouterModule(routersDir: string, name: string): string {
+  const { statSync, readdirSync } = require("fs");
+  const dirPath = join(routersDir, name);
+  try {
+    if (statSync(dirPath).isDirectory()) {
+      return readdirSync(dirPath)
+        .filter((f: string) => f.endsWith(".ts"))
+        .map((f: string) => { try { return readFileSync(join(dirPath, f), "utf-8"); } catch { return ""; } })
+        .join("\n");
+    }
+  } catch {}
+  try { return readFileSync(join(routersDir, `${name}.ts`), "utf-8"); } catch { return ""; }
+}
 const allRoutersContent = () => {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  const routerContent = subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+  const routersDir = join(SERVER_DIR, "routers");
+  const routerContent = subRouters.map(r => readRouterModule(routersDir, r)).join("\n");
   const servicesDir = join(SERVER_DIR, "services");
   const serviceFiles = ["letters.ts", "admin.ts"];
   const serviceContent = serviceFiles

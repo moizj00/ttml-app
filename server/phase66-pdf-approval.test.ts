@@ -150,12 +150,25 @@ describe("letter_requests schema", () => {
 // ─── Approval flow verification ───────────────────────────────────────────────
 
 describe("approval flow", () => {
-  function readAllRouters() {
+  function readRouterModule(routersDir: string, name: string): string {
     const fs = require("fs");
+    const path = require("path");
+    const dirPath = path.join(routersDir, name);
+    try {
+      if (fs.statSync(dirPath).isDirectory()) {
+        return fs.readdirSync(dirPath)
+          .filter((f: string) => f.endsWith(".ts"))
+          .map((f: string) => { try { return fs.readFileSync(path.join(dirPath, f), "utf-8"); } catch { return ""; } })
+          .join("\n");
+      }
+    } catch {}
+    try { return fs.readFileSync(path.join(routersDir, `${name}.ts`), "utf-8"); } catch { return ""; }
+  }
+  function readAllRouters() {
     const path = require("path");
     const dir = path.resolve(__dirname, "routers");
     const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-    return subRouters.map((r: string) => fs.readFileSync(path.join(dir, `${r}.ts`), "utf-8")).join("\n");
+    return subRouters.map((r: string) => readRouterModule(dir, r)).join("\n");
   }
 
   it("approve procedure imports generateAndUploadApprovedPdf", () => {

@@ -12,13 +12,26 @@
  *   - Subscriber sees final_approved version after approval
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const SERVER_DIR = join(__dirname);
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
+
+function readRouterModule(routersDir: string, name: string): string {
+  const dirPath = join(routersDir, name);
+  try {
+    if (statSync(dirPath).isDirectory()) {
+      return readdirSync(dirPath)
+        .filter(f => f.endsWith(".ts"))
+        .map(f => { try { return readFileSync(join(dirPath, f), "utf-8"); } catch { return ""; } })
+        .join("\n");
+    }
+  } catch {}
+  try { return readFileSync(join(routersDir, `${name}.ts`), "utf-8"); } catch { return ""; }
+}
 
 function readAllSupabaseAuth(): string {
   const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
@@ -67,10 +80,11 @@ const ADMIN_CTX = makeCtx({ id: 1, role: "admin", email: "ravivo@homes.land" });
 
 describe("Attorney Review Pipeline — Source Code Structure", () => {
   // Routers are now split — combine review + letters sub-router content
+  const _routersDir = join(SERVER_DIR, "routers");
   const routersFile = [
-    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
-    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
-    readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8"),
+    readRouterModule(_routersDir, "review"),
+    readRouterModule(_routersDir, "letters"),
+    readRouterModule(_routersDir, "admin"),
   ].join("\n");
   const reviewModalFile = readFileSync(
     join(CLIENT_SRC, "components", "shared", "ReviewModal.tsx"),
@@ -259,9 +273,10 @@ describe("Attorney Review Pipeline — RBAC Enforcement", () => {
 // ─── 3. letterDetail canView Guard — Source Code Logic Tests ─────────────────
 
 describe("Attorney Review Pipeline — letterDetail canView Logic (Source Code)", () => {
+  const _rd2 = join(SERVER_DIR, "routers");
   const routersFile = [
-    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
-    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
+    readRouterModule(_rd2, "review"),
+    readRouterModule(_rd2, "letters"),
   ].join("\n");
 
   it("canView allows access when letter is pending_review (any attorney can view)", () => {
@@ -347,9 +362,10 @@ describe("Attorney Review Pipeline — Claim Mutation (Source Code)", () => {
 // ─── 5. Subscriber Letter Delivery ───────────────────────────────────────────
 
 describe("Subscriber Letter Delivery — Approved Letter Visible in My Letters", () => {
+  const _rd3 = join(SERVER_DIR, "routers");
   const routersFile = [
-    readFileSync(join(SERVER_DIR, "routers", "review.ts"), "utf-8"),
-    readFileSync(join(SERVER_DIR, "routers", "letters.ts"), "utf-8"),
+    readRouterModule(_rd3, "review"),
+    readRouterModule(_rd3, "letters"),
   ].join("\n");
 
   it("letters.detail procedure exists for subscribers", () => {
@@ -402,7 +418,7 @@ describe("Attorney Session Refresh — Role Updates Without Logout", () => {
   });
 
   it("updateRole sends in-app notification to promoted attorney", () => {
-    const adminRouter = readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8");
+    const adminRouter = readRouterModule(join(SERVER_DIR, "routers"), "admin");
     const adminService = (() => { try { return readFileSync(join(SERVER_DIR, "services", "admin.ts"), "utf-8"); } catch { return ""; } })();
     const routersFile = adminRouter + "\n" + adminService;
     expect(routersFile).toContain("createNotification");

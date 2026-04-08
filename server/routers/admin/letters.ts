@@ -1,0 +1,180 @@
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { adminProcedure } from "../../_core/trpc";
+import { getAppUrl } from "../_shared";
+import {
+  claimLetterForReview,
+  getAllLetterRequests,
+  getLetterRequestById,
+  getLetterVersionsByRequestId,
+  getReviewActions,
+  getResearchRunsByLetterId,
+  getWorkflowJobsByLetterId,
+  logReviewAction,
+  updateLetterStatus,
+  getUserById,
+} from "../../db";
+import {
+  sendNewReviewNeededEmail,
+} from "../../email";
+import { captureServerException } from "../../sentry";
+import { forceStatusTransition, diagnoseAndRepairLetterState } from "../../services/admin";
+
+export const adminLettersProcedures = {
+  allLetters: adminProcedure
+    .input(z.object({ status: z.string().optional() }).optional())
+    .query(async ({ input }) =>
+      getAllLetterRequests({ status: input?.status })
+    ),
+
+  getLetterDetail: adminProcedure
+    .input(z.object({ letterId: z.number() }))
+    .query(async ({ input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+      const [versions, actions, jobs, researchRuns] = await Promise.all([
+        getLetterVersionsByRequestId(input.letterId, true), // include internal
+        getReviewActions(input.letterId, true), // include internal
+        getWorkflowJobsByLetterId(input.letterId),
+        getResearchRunsByLetterId(input.letterId),
+      ]);
+      const aiDraftVersion = versions.find(v => v.versionType === "ai_draft");
+
+      // Aggregate token/cost across all jobs with tracked cost (includes failed jobs
+      // that still incurred API charges), so pipelineCostSummary reflects true spend.
+      const trackedJobs = jobs.filter(j => j.estimatedCostUsd != null);
+      const pipelineCostSummary = {
+        totalPromptTokens: trackedJobs.reduce((s, j) => s + (j.promptTokens ?? 0), 0),
+        totalCompletionTokens: trackedJobs.reduce((s, j) => s + (j.completionTokens ?? 0), 0),
+        totalTokens: trackedJobs.reduce((s, j) => s + (j.promptTokens ?? 0) + (j.completionTokens ?? 0), 0),
+        totalCostUsd: trackedJobs
+          .reduce((s, j) => s + parseFloat(j.estimatedCostUsd as string ?? "0"), 0)
+          .toFixed(6),
+        byStage: trackedJobs.map(j => ({
+          jobId: j.id,
+          jobType: j.jobType,
+          provider: j.provider,
+          promptTokens: j.promptTokens ?? 0,
+          completionTokens: j.completionTokens ?? 0,
+          totalTokens: (j.promptTokens ?? 0) + (j.completionTokens ?? 0),
+          estimatedCostUsd: j.estimatedCostUsd,
+        })),
+      };
+
+      return {
+        ...letter,
+        aiDraftContent: aiDraftVersion?.content ?? null,
+        letterVersions: versions,
+        reviewActions: actions,
+        workflowJobs: jobs,
+        researchRuns,
+        pipelineCostSummary,
+      };
+    }),
+
+  letterJobs: adminProcedure
+    .input(z.object({ letterId: z.number() }))
+    .query(async ({ input }) => getWorkflowJobsByLetterId(input.letterId)),
+
+  forceStatusTransition: adminProcedure
+    .input(
+      z.object({
+        letterId: z.number(),
+        newStatus: z.enum([
+          "submitted",
+          "researching",
+          "drafting",
+          "generated_locked",
+          "pending_review",
+          "under_review",
+          "needs_changes",
+          "approved",
+          "client_approval_pending",
+          "client_revision_requested",
+          "client_declined",
+          "client_approved",
+          "sent",
+          "rejected",
+          "pipeline_failed",
+        ]),
+        reason: z.string().min(5).max(5000),
+      })
+    )
+    .mutation(async ({ ctx, input }) =>
+      forceStatusTransition(input, { userId: ctx.user.id, appUrl: getAppUrl(ctx.req) })
+    ),
+
+  assignLetter: adminProcedure
+    .input(z.object({ letterId: z.number(), employeeId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+      await updateLetterStatus(input.letterId, letter.status, {
+        assignedReviewerId: input.employeeId,
+      });
+      await logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.user.id,
+        actorType: "admin",
+        action: "assigned_reviewer",
+        noteText: `Assigned to employee ID ${input.employeeId}`,
+        noteVisibility: "internal",
+      });
+      try {
+        const appUrl = getAppUrl(ctx.req);
+        const employee = await getUserById(input.employeeId);
+        if (employee?.email) {
+          await sendNewReviewNeededEmail({
+            to: employee.email,
+            name: employee.name ?? "Attorney",
+            letterSubject: letter.subject,
+            letterId: input.letterId,
+            letterType: letter.letterType,
+            jurisdiction: `${letter.jurisdictionState ?? ""}, ${letter.jurisdictionCountry ?? "US"}`,
+            appUrl,
+          });
+        }
+      } catch (err) {
+        console.error("[Notify] Failed:", err);
+        captureServerException(err, { tags: { component: "review", error_type: "unlock_notification_failed" } });
+      }
+      return { success: true };
+    }),
+
+  claimLetterAsAttorney: adminProcedure
+    .input(z.object({ letterId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!["pending_review", "client_revision_requested"].includes(letter.status)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Letter must be in pending_review or client_revision_requested status to claim",
+        });
+      }
+      if (letter.assignedReviewerId !== null && letter.assignedReviewerId !== undefined) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Letter already has an assigned reviewer",
+        });
+      }
+      await claimLetterForReview(input.letterId, ctx.user.id);
+      await logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.user.id,
+        actorType: "admin",
+        action: "admin_claimed_as_attorney",
+        noteText: `Admin claimed letter for review as attorney`,
+        noteVisibility: "internal",
+        fromStatus: letter.status,
+        toStatus: "under_review",
+      });
+      return { success: true };
+    }),
+
+  repairLetterState: adminProcedure
+    .input(z.object({ letterId: z.number() }))
+    .mutation(async ({ ctx, input }) =>
+      diagnoseAndRepairLetterState(input.letterId, ctx.user.id)
+    ),
+};
