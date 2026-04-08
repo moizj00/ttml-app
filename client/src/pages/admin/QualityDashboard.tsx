@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AppLayout from "@/components/shared/AppLayout";
+import { SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,6 +169,7 @@ export default function QualityDashboard() {
         </div>
 
         {/* ── Quality Overview Stats ── */}
+        <SectionErrorBoundary label="Quality Overview">
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
             <Gauge className="w-4 h-4" /> Quality Overview
@@ -223,8 +225,10 @@ export default function QualityDashboard() {
             </div>
           )}
         </div>
+        </SectionErrorBoundary>
 
         {/* ── Quality Score Trend ── */}
+        <SectionErrorBoundary label="Quality Score Trend">
         {!trendLoading && qualityTrend.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -253,8 +257,10 @@ export default function QualityDashboard() {
             </CardContent>
           </Card>
         )}
+        </SectionErrorBoundary>
 
         {/* ── Attorney Edit Distance Trend ── */}
+        <SectionErrorBoundary label="Edit Distance Trend">
         {!editDistLoading && editDistTrend.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -314,8 +320,10 @@ export default function QualityDashboard() {
             </CardContent>
           </Card>
         )}
+        </SectionErrorBoundary>
 
         {/* ── RAG Monitoring ── */}
+        <SectionErrorBoundary label="RAG Monitoring">
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
             <Sparkles className="w-4 h-4" /> RAG Monitoring
@@ -493,8 +501,10 @@ export default function QualityDashboard() {
             </Card>
           )}
         </div>
+        </SectionErrorBoundary>
 
         {/* ── Lesson Effectiveness ── */}
+        <SectionErrorBoundary label="Lesson Effectiveness">
         {!impactLoading && lessonImpact.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -557,8 +567,10 @@ export default function QualityDashboard() {
             </CardContent>
           </Card>
         )}
+        </SectionErrorBoundary>
 
         {/* ── Quality by Letter Type ── */}
+        <SectionErrorBoundary label="Quality by Letter Type">
         {!byTypeLoading && byLetterType.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -587,8 +599,10 @@ export default function QualityDashboard() {
             </CardContent>
           </Card>
         )}
+        </SectionErrorBoundary>
 
         {/* ── Fine-tune Runs ── */}
+        <SectionErrorBoundary label="Fine-tune Run History">
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
             <Server className="w-4 h-4" /> Fine-tune Run History
@@ -651,6 +665,7 @@ export default function QualityDashboard() {
             </Card>
           )}
         </div>
+        </SectionErrorBoundary>
       </div>
     </AppLayout>
   );

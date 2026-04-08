@@ -5,6 +5,8 @@ import { Component, ErrorInfo, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
+  label?: string;
 }
 
 interface State {
@@ -36,12 +38,16 @@ class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     captureException(error, {
       componentStack: errorInfo.componentStack ?? "unknown",
-      boundary: "ErrorBoundary",
+      boundary: this.props.label ?? "ErrorBoundary",
     });
   }
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
       const isChunk = isChunkLoadError(this.state.error);
 
       return (
@@ -93,3 +99,58 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
+
+interface SectionErrorBoundaryProps {
+  children: ReactNode;
+  label?: string;
+}
+
+interface SectionState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, SectionState> {
+  constructor(props: SectionErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): SectionState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    captureException(error, {
+      componentStack: errorInfo.componentStack ?? "unknown",
+      boundary: `SectionErrorBoundary:${this.props.label ?? "unknown"}`,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">
+              {this.props.label ? `${this.props.label} failed to load` : "This section failed to load"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              {this.state.error?.message ?? "An unexpected error occurred"}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="mt-3 text-xs flex items-center gap-1.5 text-primary hover:underline"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}

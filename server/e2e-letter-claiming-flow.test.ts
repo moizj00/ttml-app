@@ -220,7 +220,7 @@ describe("Letter Claiming Flow — State Machine Integrity", () => {
   });
 
   it("ALLOWED_TRANSITIONS defines under_review → approved, rejected, needs_changes", () => {
-    const typesFile = readFileSync(join(__dirname, "..", "shared", "types.ts"), "utf-8");
+    const typesFile = readFileSync(join(__dirname, "..", "shared", "types", "letter.ts"), "utf-8");
     expect(typesFile).toMatch(/under_review[\s\S]{0,100}approved/);
     expect(typesFile).toMatch(/under_review[\s\S]{0,100}rejected/);
     expect(typesFile).toMatch(/under_review[\s\S]{0,100}needs_changes/);

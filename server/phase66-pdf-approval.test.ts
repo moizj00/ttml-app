@@ -210,14 +210,21 @@ describe("My Letters page", () => {
   });
 
   it("LetterDetail opens pdfUrl in new tab for download", async () => {
-    const source = await import("fs").then(fs =>
-      fs.readFileSync(
-        new URL("../client/src/pages/subscriber/LetterDetail.tsx", import.meta.url).pathname,
-        "utf-8"
-      )
+    const fs = await import("fs");
+    const path = await import("path");
+    const letterDetailSrc = fs.readFileSync(
+      new URL("../client/src/pages/subscriber/LetterDetail.tsx", import.meta.url).pathname,
+      "utf-8"
     );
-    expect(source).toContain("window.open(data.letter.pdfUrl");
-    expect(source).toContain("_blank");
-    expect(source).toContain("Download PDF");
+    const approvedPanelSrc = fs.readFileSync(
+      path.resolve(
+        new URL("../client/src/pages/subscriber/letter-detail/ApprovedLetterPanel.tsx", import.meta.url).pathname
+      ),
+      "utf-8"
+    );
+    const combinedSrc = letterDetailSrc + approvedPanelSrc;
+    expect(combinedSrc).toMatch(/window\.open\(pdfUrl|window\.open\(data\.letter\.pdfUrl/);
+    expect(combinedSrc).toContain("_blank");
+    expect(combinedSrc).toContain("Download PDF");
   });
 });

@@ -1,4 +1,5 @@
 import AppLayout from "@/components/shared/AppLayout";
+import { SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -387,6 +388,7 @@ export default function AdminUsers() {
           </div>
         )}
 
+        <SectionErrorBoundary label="User List">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map(i => (
@@ -548,6 +550,7 @@ export default function AdminUsers() {
             })}
           </div>
         )}
+        </SectionErrorBoundary>
       </div>
 
       <AlertDialog

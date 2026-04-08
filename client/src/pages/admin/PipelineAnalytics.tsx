@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AppLayout from "@/components/shared/AppLayout";
+import { SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,7 @@ export default function PipelineAnalytics() {
           </Card>
         ) : (
           <>
+            <SectionErrorBoundary label="Success Rate">
             {/* Pipeline Success Rate */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
@@ -188,7 +190,9 @@ export default function PipelineAnalytics() {
                 </CardContent>
               </Card>
             </div>
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Stage Timings & Review">
             {/* Stage Processing Times */}
             {data.stageTimings.length > 0 && (
               <Card>
@@ -324,7 +328,9 @@ export default function PipelineAnalytics() {
                 </CardContent>
               </Card>
             </div>
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Quality Scores">
             {/* Quality Score Distribution + Trend */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Quality Distribution */}
@@ -421,7 +427,9 @@ export default function PipelineAnalytics() {
                 </CardContent>
               </Card>
             </div>
+            </SectionErrorBoundary>
 
+            <SectionErrorBoundary label="Retries & Failures">
             {/* Retry Stats + Failure Reasons */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Retry Stats */}
@@ -510,6 +518,7 @@ export default function PipelineAnalytics() {
                 </CardContent>
               </Card>
             </div>
+            </SectionErrorBoundary>
           </>
         )}
       </div>

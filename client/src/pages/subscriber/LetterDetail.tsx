@@ -1,470 +1,100 @@
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
-import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Send, Clock, Copy, Trash2, Mail, XCircle, RotateCcw, RefreshCw } from "lucide-react";
+import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Clock, Copy, Trash2, XCircle, RotateCcw } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 import { SubscriberReviewBar } from "@/components/shared/SubscriberReviewBar";
+import { ClientApprovalBlock } from "./letter-detail/ClientApprovalBlock";
+import { RejectionRetryBlock } from "./letter-detail/RejectionRetryBlock";
+import { LetterStatusDisplay } from "./letter-detail/LetterStatusDisplay";
+import { NeedsChangesPanel } from "./letter-detail/NeedsChangesPanel";
+import { ApprovedLetterPanel } from "./letter-detail/ApprovedLetterPanel";
+import { LetterContentRenderer } from "./letter-detail/LetterContentRenderer";
 
-// Statuses that require active polling (pipeline in progress or awaiting action)
-// client_approved polls until pdfUrl is populated by the server-side PDF generation job
 const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested", "client_approved"];
 
-function ClientApprovalBlock({ letterId, revisionCount, onApprove }: { letterId: number; revisionCount?: number; onApprove: () => void }) {
-  const [showRevisionForm, setShowRevisionForm] = useState(false);
-  const [revisionNotes, setRevisionNotes] = useState("");
-  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
-  const [declineReason, setDeclineReason] = useState("");
-  const [showSendDialog, setShowSendDialog] = useState(false);
-  const [approveRecipientEmail, setApproveRecipientEmail] = useState("");
-  const [approveSubjectOverride, setApproveSubjectOverride] = useState("");
-  const [approveNote, setApproveNote] = useState("");
-
-  const MAX_REVISIONS = 5;
-  const WARN_REVISIONS = 3;
-  const revisionsUsed = revisionCount ?? 0;
-  const revisionsRemaining = MAX_REVISIONS - revisionsUsed;
-  const revisionLimitReached = revisionsUsed >= MAX_REVISIONS;
-  const revisionLimitWarning = revisionsUsed >= WARN_REVISIONS && !revisionLimitReached;
-
-  const clientApprove = trpc.letters.clientApprove.useMutation({
-    onSuccess: (res) => {
-      const result = res as { success: boolean; pdfUrl?: string; recipientSent?: boolean; recipientSendError?: string };
-      if (result.recipientSent) {
-        toast.success("Letter approved & sent!", { description: "Your PDF has been generated and the letter sent to the recipient." });
-      } else if (result.recipientSendError) {
-        toast.warning("Letter approved, but sending failed", { description: "Your PDF is ready for download. You can retry sending via the 'Send Via Lawyer's Email' button." });
-      } else {
-        toast.success("Letter approved!", { description: "Your PDF is being generated and will be available for download shortly." });
-      }
-      setShowSendDialog(false);
-      setApproveRecipientEmail("");
-      setApproveSubjectOverride("");
-      setApproveNote("");
-      onApprove();
-    },
-    onError: (err) => toast.error("Approval failed", { description: err.message }),
-  });
-
-  const clientRequestRevision = trpc.letters.clientRequestRevision.useMutation({
-    onSuccess: (res) => {
-      const result = res as { success: boolean; requiresPayment?: boolean; checkoutUrl?: string; revisionCount?: number; revisionWarning?: string };
-      if (result.requiresPayment && result.checkoutUrl) {
-        toast.info("Redirecting to payment", {
-          description: "A $20 revision consultation fee applies. You will be redirected to complete payment.",
-        });
-        setTimeout(() => { window.location.href = result.checkoutUrl!; }, 1500);
-        return;
-      }
-      if (result.revisionWarning) {
-        toast.warning("Revision requested", { description: result.revisionWarning });
-      } else {
-        toast.success("Revision requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
-      }
-      setShowRevisionForm(false);
-      setRevisionNotes("");
-      onApprove();
-    },
-    onError: (err) => toast.error("Request failed", { description: err.message }),
-  });
-
-  const clientDecline = trpc.letters.clientDecline.useMutation({
-    onSuccess: () => {
-      toast.info("Letter declined", { description: "The letter has been declined. Our team has been notified." });
-      setShowDeclineConfirm(false);
-      setDeclineReason("");
-      onApprove();
-    },
-    onError: (err) => toast.error("Decline failed", { description: err.message }),
-  });
-
-  return (
-    <Card className="border-blue-200 bg-blue-50/40">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <CheckCircle className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="flex-1 space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-blue-800">Your Letter is Ready — Final Approval Required</p>
-              <p className="text-sm text-blue-700 mt-1">
-                Your attorney has reviewed and submitted your letter. Please review the final version below. When you approve, your PDF will be generated and made available for download.
-              </p>
-            </div>
-
-            {revisionLimitWarning && (
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">
-                  You have used {revisionsUsed} of {MAX_REVISIONS} allowed revision requests. You have <strong>{revisionsRemaining} remaining</strong>.
-                </p>
-              </div>
-            )}
-
-            <Dialog open={showSendDialog} onOpenChange={(open) => { setShowSendDialog(open); if (!open) { setApproveRecipientEmail(""); setApproveSubjectOverride(""); setApproveNote(""); } }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Approve & Send Letter</DialogTitle>
-                  <DialogDescription>
-                    Your letter will be approved, a PDF generated, and sent directly to the recipient's email — all in one step.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="approve-recipient-email">Recipient Email Address</Label>
-                    <Input
-                      id="approve-recipient-email"
-                      data-testid="input-approve-recipient-email"
-                      type="email"
-                      placeholder="recipient@example.com"
-                      value={approveRecipientEmail}
-                      onChange={(e) => setApproveRecipientEmail(e.target.value)}
-                      disabled={clientApprove.isPending}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="approve-subject-override">Subject Line (optional)</Label>
-                    <Input
-                      id="approve-subject-override"
-                      data-testid="input-approve-subject-override"
-                      type="text"
-                      placeholder="Leave blank to use the original subject"
-                      value={approveSubjectOverride}
-                      onChange={(e) => setApproveSubjectOverride(e.target.value)}
-                      disabled={clientApprove.isPending}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="approve-note">Note to Recipient (optional)</Label>
-                    <Textarea
-                      id="approve-note"
-                      data-testid="input-approve-note"
-                      placeholder="Add an optional note that will appear in the email..."
-                      value={approveNote}
-                      onChange={(e) => setApproveNote(e.target.value)}
-                      rows={3}
-                      disabled={clientApprove.isPending}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowSendDialog(false)} disabled={clientApprove.isPending} data-testid="button-cancel-approve-send">
-                    Cancel
-                  </Button>
-                  <Button
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => clientApprove.mutate({
-                      letterId,
-                      recipientEmail: approveRecipientEmail.trim(),
-                      subjectOverride: approveSubjectOverride.trim() || undefined,
-                      note: approveNote.trim() || undefined,
-                    })}
-                    disabled={clientApprove.isPending || !approveRecipientEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(approveRecipientEmail.trim())}
-                    data-testid="button-confirm-approve-send"
-                  >
-                    {clientApprove.isPending ? "Processing..." : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Approve & Send
-                      </>
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                data-testid="button-client-approve-send"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                size="sm"
-                onClick={() => { setShowSendDialog(true); setShowRevisionForm(false); setShowDeclineConfirm(false); }}
-                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Approve & Send
-              </Button>
-              <Button
-                data-testid="button-client-approve"
-                variant="outline"
-                className="border-green-300 text-green-700 hover:bg-green-50"
-                size="sm"
-                onClick={() => clientApprove.mutate({ letterId })}
-                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                {clientApprove.isPending ? "Processing..." : "Approve Only"}
-              </Button>
-              <Button
-                data-testid="button-client-request-revision"
-                variant="outline"
-                className="border-violet-300 text-violet-700 hover:bg-violet-50"
-                size="sm"
-                onClick={() => { setShowRevisionForm(!showRevisionForm); setShowDeclineConfirm(false); }}
-                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending || revisionLimitReached}
-                title={revisionLimitReached ? `Maximum revision limit (${MAX_REVISIONS}) reached` : undefined}
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                {revisionLimitReached ? "Revision Limit Reached" : "Request Revisions"}
-              </Button>
-              <Button
-                data-testid="button-client-decline"
-                variant="outline"
-                className="border-red-300 text-red-700 hover:bg-red-50"
-                size="sm"
-                onClick={() => { setShowDeclineConfirm(!showDeclineConfirm); setShowRevisionForm(false); }}
-                disabled={clientApprove.isPending || clientRequestRevision.isPending || clientDecline.isPending}
-              >
-                <XCircle className="w-4 h-4 mr-2" />
-                Decline
-              </Button>
-            </div>
-
-            <div className="text-xs text-blue-600/70 space-y-0.5">
-              <p><strong>Approve & Send</strong> — Generates your final PDF and sends it directly to the recipient in one step.</p>
-              <p><strong>Approve Only</strong> — Generates your final PDF without sending. You can download or send it later.</p>
-              <p><strong>Request Revisions</strong> — Sends your feedback to the attorney for further edits. The letter will return to you once revised.</p>
-              <p><strong>Decline</strong> — Permanently declines this letter. This cannot be undone.</p>
-            </div>
-
-            {showRevisionForm && (
-              <div className="bg-white border border-violet-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium text-violet-800">What changes would you like?</p>
-                <Textarea
-                  data-testid="input-revision-notes"
-                  value={revisionNotes}
-                  onChange={(e) => setRevisionNotes(e.target.value)}
-                  placeholder="Describe the changes you'd like the attorney to make (at least 10 characters)..."
-                  rows={3}
-                  className="border-violet-200"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    data-testid="button-submit-revision-request"
-                    size="sm"
-                    className="bg-violet-600 hover:bg-violet-700 text-white"
-                    onClick={() => clientRequestRevision.mutate({ letterId, revisionNotes })}
-                    disabled={clientRequestRevision.isPending || revisionNotes.trim().length < 10}
-                  >
-                    {clientRequestRevision.isPending ? "Submitting..." : "Submit Revision Request"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowRevisionForm(false)}>Cancel</Button>
-                </div>
-              </div>
-            )}
-
-            {showDeclineConfirm && (
-              <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium text-red-800">Are you sure you want to decline this letter?</p>
-                <p className="text-xs text-red-600">This action is permanent and cannot be undone. The letter will not be sent.</p>
-                <Textarea
-                  data-testid="input-decline-reason"
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                  placeholder="Reason for declining (optional)..."
-                  rows={2}
-                  className="border-red-200"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    data-testid="button-confirm-decline"
-                    size="sm"
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => clientDecline.mutate({ letterId, reason: declineReason.trim() || undefined })}
-                    disabled={clientDecline.isPending}
-                  >
-                    {clientDecline.isPending ? "Declining..." : "Confirm Decline"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowDeclineConfirm(false)}>Cancel</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RejectionRetryBlock({ letterId, onRetry }: { letterId: number; onRetry: () => void }) {
-  const [showRetryForm, setShowRetryForm] = useState(false);
-  const [retryContext, setRetryContext] = useState("");
-
-  const retryFromRejected = trpc.letters.retryFromRejected.useMutation({
-    onSuccess: () => {
-      toast.success("Letter resubmitted", { description: "Your letter is being re-processed with the updated information. You'll be notified when it's ready." });
-      setShowRetryForm(false);
-      setRetryContext("");
-      onRetry();
-    },
-    onError: (err) => toast.error("Retry failed", { description: err.message }),
-  });
-
-  return (
-    <Card className="border-red-200 bg-red-50/30">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-red-800">Letter Request Rejected</p>
-              <p className="text-sm text-red-700 mt-1">
-                The reviewing attorney has rejected this letter request. Please review the attorney notes above for details on why the request could not be processed.
-              </p>
-            </div>
-
-            {!showRetryForm ? (
-              <Button
-                data-testid="button-retry-from-rejected"
-                size="sm"
-                variant="outline"
-                className="border-red-300 text-red-700 hover:bg-red-100"
-                onClick={() => setShowRetryForm(true)}
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Retry with Updated Information
-              </Button>
-            ) : (
-              <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium text-red-800">Provide additional context or corrections</p>
-                <p className="text-xs text-red-600">Address the attorney's feedback in your response. Your letter will be re-processed through the entire pipeline with this new information.</p>
-                <Textarea
-                  data-testid="input-retry-context"
-                  value={retryContext}
-                  onChange={(e) => setRetryContext(e.target.value)}
-                  placeholder="Explain what has changed, provide missing details, or clarify any misunderstandings (at least 10 characters)..."
-                  rows={4}
-                  className="border-red-200"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    data-testid="button-submit-retry"
-                    size="sm"
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => retryFromRejected.mutate({ letterId, additionalContext: retryContext.trim() || undefined })}
-                    disabled={retryFromRejected.isPending || retryContext.trim().length < 10}
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    {retryFromRejected.isPending ? "Resubmitting..." : "Resubmit Letter"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowRetryForm(false)}>Cancel</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+const STATUS_LABELS: Record<string, string> = {
+  researching: "Our team is researching your legal situation...",
+  drafting: "Drafting your letter...",
+  generated_locked: "Your letter draft is ready!",
+  pending_review: "Sent to attorney review queue.",
+  under_review: "An attorney is reviewing your letter.",
+  approved: "Your letter has been approved!",
+  client_approval_pending: "Your letter is ready for your final approval.",
+  client_revision_requested: "Your revision request has been submitted.",
+  client_approved: "You approved the letter for delivery.",
+  client_declined: "You declined the letter.",
+  rejected: "Your letter request was rejected.",
+  needs_changes: "The attorney has requested changes.",
+  sent: "Your letter has been sent to the recipient.",
+};
 
 export default function LetterDetail() {
   const params = useParams<{ id: string }>();
   const search = useSearch();
   const letterId = parseInt(params.id ?? "0");
   const [updateText, setUpdateText] = useState("");
-  const [sendDialogOpen, setSendDialogOpen] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [sendSubjectOverride, setSendSubjectOverride] = useState("");
-  const [sendNote, setSendNote] = useState("");
-  const [showRequestEditForm, setShowRequestEditForm] = useState(false);
-  const [requestEditNotes, setRequestEditNotes] = useState("");
 
-  // Show success toast after Stripe redirect
   useEffect(() => {
-    const searchParams = new URLSearchParams(search);
-    if (searchParams.get("unlocked") === "true") {
-      toast.success("Payment confirmed", {
-        description: "Your letter has been sent for attorney review. You'll receive an email when it's approved.",
-        duration: 6000,
-      });
-    } else if (searchParams.get("canceled") === "true") {
+    const sp = new URLSearchParams(search);
+    if (sp.get("unlocked") === "true") {
+      toast.success("Payment confirmed", { description: "Your letter has been sent for attorney review. You'll receive an email when it's approved.", duration: 6000 });
+    } else if (sp.get("canceled") === "true") {
       toast.info("Checkout canceled", { description: "No charges were made. Your letter draft is still ready whenever you are." });
     }
   }, [search]);
 
-  // Poll every 5s for in-progress statuses
   const { data, isLoading, error } = trpc.letters.detail.useQuery(
     { id: letterId },
     {
       enabled: !!letterId,
       refetchInterval: (query) => {
         const status = query.state.data?.letter?.status;
-        return status && POLLING_STATUSES.includes(status) ? 5000 : false;
+        return status && POLLING_STATUSES.includes(status) ? 10000 : false;
       },
     }
   );
 
   const utils = trpc.useUtils();
+  const invalidate = () => utils.letters.detail.invalidate({ id: letterId });
 
-  // Supabase Realtime — instant status updates without polling
   useLetterRealtime({
     letterId: letterId || null,
     enabled: !!letterId,
     onStatusChange: ({ newStatus }) => {
-      utils.letters.detail.invalidate({ id: letterId });
-      const statusLabels: Record<string, string> = {
-        researching: "Our team is researching your legal situation...",
-        drafting: "Drafting your letter...",
-        generated_locked: "Your letter draft is ready!",
-        pending_review: "Sent to attorney review queue.",
-        under_review: "An attorney is reviewing your letter.",
-        approved: "Your letter has been approved!",
-        client_approval_pending: "Your letter is ready for your final approval.",
-        client_revision_requested: "Your revision request has been submitted.",
-        client_approved: "You approved the letter for delivery.",
-        client_declined: "You declined the letter.",
-        rejected: "Your letter request was rejected.",
-        needs_changes: "The attorney has requested changes.",
-        sent: "Your letter has been sent to the recipient.",
-      };
-      const label = statusLabels[newStatus];
+      invalidate();
+      const label = STATUS_LABELS[newStatus];
       if (label) {
         if (newStatus === "approved" || newStatus === "client_approved") toast.success(label);
-        else if (newStatus === "rejected" || newStatus === "needs_changes" || newStatus === "client_declined") toast.warning(label);
+        else if (["rejected", "needs_changes", "client_declined"].includes(newStatus)) toast.warning(label);
         else toast.info(label);
       }
     },
   });
 
   const archiveMutation = trpc.letters.archive.useMutation({
-    onSuccess: () => {
-      toast.success("Letter archived", { description: "You can find it in your letter history." });
-      window.history.back();
-    },
+    onSuccess: () => { toast.success("Letter archived"); window.history.back(); },
     onError: (err: any) => toast.error("Could not archive letter", { description: err.message }),
   });
 
-  const handleCopyToClipboard = () => {
-    const finalVer = data?.versions?.find((v: any) => v.versionType === "final_approved");
-    if (!finalVer) {
-      toast.error("Nothing to copy", { description: "The approved letter content is not yet available." });
-      return;
-    }
-    navigator.clipboard.writeText(finalVer.content).then(() => {
-      toast.success("Copied to clipboard", { description: "The letter content is ready to paste." });
-    }).catch(() => {
-      toast.error("Copy failed", { description: "Please try selecting and copying the text manually." });
-    });
+  const updateMutation = trpc.letters.updateForChanges.useMutation({
+    onSuccess: () => { toast.success("Response submitted", { description: "Our legal team is re-processing your letter with the new information." }); setUpdateText(""); },
+    onError: (err) => toast.error("Submission failed", { description: err.message }),
+  });
+
+  const handleCopy = () => {
+    const content = data?.versions?.find((v: any) => v.versionType === "final_approved")?.content;
+    if (!content) { toast.error("Nothing to copy"); return; }
+    navigator.clipboard.writeText(content)
+      .then(() => toast.success("Copied to clipboard"))
+      .catch(() => toast.error("Copy failed", { description: "Please try selecting and copying the text manually." }));
   };
 
   const handleArchive = () => {
@@ -473,339 +103,13 @@ export default function LetterDetail() {
     }
   };
 
-  const updateMutation = trpc.letters.updateForChanges.useMutation({
-    onSuccess: () => {
-      toast.success("Response submitted", { description: "Our legal team is re-processing your letter with the new information." });
-      setUpdateText("");
-    },
-    onError: (err) => toast.error("Submission failed", { description: err.message }),
-  });
-
-  const sendToRecipientMutation = trpc.letters.sendToRecipient.useMutation({
-    onSuccess: () => {
-      toast.success("Letter sent", { description: `The approved letter has been sent to ${recipientEmail}.` });
-      setSendDialogOpen(false);
-      setRecipientEmail("");
-      setSendSubjectOverride("");
-      setSendNote("");
-    },
-    onError: (err) => toast.error("Failed to send letter", { description: err.message }),
-  });
-
-  const requestEditMutation = trpc.letters.clientRequestRevision.useMutation({
-    onSuccess: (res) => {
-      const result = res as { success: boolean; requiresPayment?: boolean; checkoutUrl?: string; revisionCount?: number; revisionWarning?: string };
-      if (result.requiresPayment && result.checkoutUrl) {
-        toast.info("Redirecting to payment", {
-          description: "A $20 revision consultation fee applies. You will be redirected to complete payment.",
-        });
-        setTimeout(() => { window.location.href = result.checkoutUrl!; }, 1500);
-        return;
-      }
-      if (result.revisionWarning) {
-        toast.warning("Edit requested", { description: result.revisionWarning });
-      } else {
-        toast.success("Edit requested", { description: "Your feedback has been sent to the attorney. The letter will be revised and returned to you." });
-      }
-      setShowRequestEditForm(false);
-      setRequestEditNotes("");
-      utils.letters.detail.invalidate({ id: letterId });
-    },
-    onError: (err) => toast.error("Request failed", { description: err.message }),
-  });
-
-  const handleSubmitUpdate = () => {
-    if (updateText.trim().length < 10) {
-      toast.error("Response too short", { description: "Please provide at least 10 characters of additional context." });
-      return;
-    }
-    updateMutation.mutate({ letterId, additionalContext: updateText });
-  };
-
-  const handleDownloadPdf = () => {
-    if (data?.letter?.pdfUrl) {
-      window.open(data.letter.pdfUrl, "_blank");
-      return;
-    }
-    handleDownloadFallback();
-  };
-
-  const handleDownloadFallback = () => {
-    if (!data?.versions) return;
-    const finalVersion = data.versions.find((v) => v.versionType === "final_approved");
-    if (!finalVersion) return;
-
-    const isHtml = /<[a-z][\s\S]*>/i.test(finalVersion.content);
-    const letterBody = isHtml
-      ? finalVersion.content
-      : finalVersion.content
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .split(/\n\n+/)
-          .map((para: string) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
-          .join("\n");
-
-    const letterTypeLabel = (data?.letter?.letterType ?? "").replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-    const docDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-
-    const printHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>${data?.letter?.subject ?? "Legal Letter"} — Talk to My Lawyer</title>
-  <style>
-    @page {
-      size: letter;
-      margin: 0.85in 1in 1in 1in;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Georgia', 'Times New Roman', Times, serif;
-      font-size: 11.5pt;
-      line-height: 1.7;
-      color: #111;
-      background: #fff;
-    }
-
-    /* ── Letterhead ── */
-    .letterhead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 14px;
-      border-bottom: 2.5px solid #1e3a5f;
-      margin-bottom: 6px;
-    }
-    .brand-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .brand-icon {
-      width: 36px;
-      height: 36px;
-      background: #1e3a5f;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-size: 18px;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-    .brand-name {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 13pt;
-      font-weight: 700;
-      color: #1e3a5f;
-      letter-spacing: -0.3px;
-    }
-    .brand-tagline {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 8pt;
-      color: #6b7280;
-      letter-spacing: 0.3px;
-      margin-top: 1px;
-    }
-    .doc-meta {
-      text-align: right;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .doc-meta-label {
-      font-size: 7.5pt;
-      color: #9ca3af;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      font-weight: 600;
-    }
-    .doc-meta-value {
-      font-size: 9pt;
-      color: #374151;
-      margin-top: 2px;
-    }
-
-    /* ── Attorney badge ── */
-    .attorney-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 6px;
-      padding: 7px 12px;
-      margin: 10px 0 22px;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .attorney-badge-icon {
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-    .attorney-badge-text {
-      font-size: 8.5pt;
-      color: #166534;
-      font-weight: 600;
-    }
-    .attorney-badge-sub {
-      font-size: 7.5pt;
-      color: #4ade80;
-      color: #16a34a;
-      font-weight: 400;
-    }
-
-    /* ── Letter body ── */
-    .letter-body {
-      font-size: 11.5pt;
-      line-height: 1.75;
-      color: #111;
-    }
-    .letter-body p {
-      margin-bottom: 14px;
-    }
-    .letter-body p:last-child {
-      margin-bottom: 0;
-    }
-    .letter-body br + br {
-      display: block;
-      content: "";
-      margin-top: 10px;
-    }
-    .letter-body strong, .letter-body b {
-      font-weight: 700;
-    }
-    .letter-body em, .letter-body i {
-      font-style: italic;
-    }
-    .letter-body u {
-      text-decoration: underline;
-    }
-    .letter-body ul, .letter-body ol {
-      margin: 8px 0 14px 22px;
-    }
-    .letter-body li {
-      margin-bottom: 4px;
-    }
-    .letter-body h1, .letter-body h2, .letter-body h3 {
-      font-family: Arial, Helvetica, sans-serif;
-      font-weight: 700;
-      margin: 18px 0 8px;
-      color: #111;
-    }
-    .letter-body h1 { font-size: 13pt; }
-    .letter-body h2 { font-size: 12pt; }
-    .letter-body h3 { font-size: 11.5pt; }
-
-    /* ── Footer ── */
-    .footer {
-      position: running(footer);
-    }
-    @page { @bottom-center { content: element(footer); } }
-
-    .footer-bar {
-      border-top: 1.5px solid #e5e7eb;
-      padding-top: 10px;
-      margin-top: 40px;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .footer-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .footer-cert {
-      font-size: 7.5pt;
-      color: #6b7280;
-      line-height: 1.4;
-    }
-    .footer-cert strong {
-      color: #374151;
-      font-weight: 600;
-    }
-    .footer-id {
-      font-size: 7.5pt;
-      color: #9ca3af;
-      text-align: right;
-      white-space: nowrap;
-    }
-
-    @media print {
-      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-    }
-  </style>
-</head>
-<body>
-
-  <!-- Letterhead -->
-  <div class="letterhead">
-    <div class="brand-left">
-      <div class="brand-icon">&#9878;</div>
-      <div>
-        <div class="brand-name">Talk to My Lawyer</div>
-        <div class="brand-tagline">Attorney-Reviewed Legal Correspondence</div>
-      </div>
-    </div>
-    <div class="doc-meta">
-      <div class="doc-meta-label">Document Type</div>
-      <div class="doc-meta-value">${letterTypeLabel}</div>
-    </div>
-  </div>
-
-  <!-- Attorney Approved Badge -->
-  <div class="attorney-badge">
-    <div class="attorney-badge-icon">&#10003;</div>
-    <div>
-      <span class="attorney-badge-text">Attorney Reviewed &amp; Approved</span>
-      <span class="attorney-badge-sub"> &mdash; This letter has been reviewed and approved by a licensed attorney</span>
-    </div>
-  </div>
-
-  <!-- Letter Body -->
-  <div class="letter-body">
-    ${letterBody}
-  </div>
-
-  <!-- Footer -->
-  <div class="footer-bar">
-    <div class="footer-row">
-      <div class="footer-cert">
-        <strong>Talk to My Lawyer &mdash; Attorney-Reviewed Document</strong><br>
-        This letter was professionally drafted and approved by a licensed attorney. Generated ${docDate}.
-      </div>
-      <div class="footer-id">Document ID: #${letterId}</div>
-    </div>
-  </div>
-
-</body>
-</html>`;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      const blob = new Blob([printHtml], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `legal-letter-${letterId}.html`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); }, 600);
-  };
-
   if (!letterId || isNaN(letterId) || letterId <= 0) {
     return (
       <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: "Invalid Letter" }]}>
         <div className="text-center py-16">
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
           <h3 className="font-semibold text-foreground mb-2">Invalid letter ID</h3>
-          <Button asChild variant="outline" size="sm" className="bg-background">
-            <Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link>
-          </Button>
+          <Button asChild variant="outline" size="sm"><Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link></Button>
         </div>
       </AppLayout>
     );
@@ -814,9 +118,7 @@ export default function LetterDetail() {
   if (isLoading) {
     return (
       <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: `Letter #${letterId}` }]}>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-32 bg-muted animate-pulse rounded-xl" />)}
-        </div>
+        <div className="space-y-4">{[1, 2, 3].map((i) => <div key={i} className="h-32 bg-muted animate-pulse rounded-xl" />)}</div>
       </AppLayout>
     );
   }
@@ -828,9 +130,7 @@ export default function LetterDetail() {
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
           <h3 className="font-semibold text-foreground mb-2">Letter not found</h3>
           <p className="text-sm text-muted-foreground mb-3">This letter doesn't exist or you don't have access to it.</p>
-          <Button asChild variant="outline" size="sm" className="bg-background">
-            <Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link>
-          </Button>
+          <Button asChild variant="outline" size="sm"><Link href="/letters"><ArrowLeft className="w-4 h-4 mr-2" />Back to Letters</Link></Button>
         </div>
       </AppLayout>
     );
@@ -841,13 +141,14 @@ export default function LetterDetail() {
   const aiDraftVersion = versions?.find((v) => v.versionType === "ai_draft");
   const userVisibleActions = actions?.filter((a) => a.noteVisibility === "user_visible" && a.noteText);
   const isPolling = POLLING_STATUSES.includes(letter.status);
-  // generated_unlocked is a legacy status (Phase ≤68) treated identically to generated_locked
-  // Admin-submitted letters bypass paywall entirely — never show paywall UI
   const isGeneratedLocked = (letter.status === "generated_locked" || letter.status === "generated_unlocked") && !(letter as any).submittedByAdmin;
+  const isApproved = letter.status === "client_approved" || letter.status === "sent";
+  const pdfUrl = (letter as any).pdfUrl as string | null | undefined;
 
   return (
     <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: letter.subject }]}>
-      <div className="max-w-3xl mx-auto space-y-5" style={{ paddingBottom: letter.status === 'client_approval_pending' ? '5rem' : undefined }}>
+      <div className="max-w-3xl mx-auto space-y-5" style={{ paddingBottom: letter.status === "client_approval_pending" ? "5rem" : undefined }}>
+
         {/* Header */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
@@ -863,28 +164,19 @@ export default function LetterDetail() {
                 </p>
                 <div className="flex items-center gap-3 mt-2">
                   <StatusBadge status={letter.status} />
-                  <span className="text-xs text-muted-foreground">
-                    Submitted {new Date(letter.createdAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-xs text-muted-foreground">Submitted {new Date(letter.createdAt).toLocaleDateString()}</span>
                   {isPolling && !["submitted", "researching", "drafting"].includes(letter.status) && (
-                    <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Auto-refreshing...
-                    </span>
+                    <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1"><Clock className="w-3 h-3" />Updating...</span>
                   )}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-              {(letter.status === "client_approved" || letter.status === "sent") && finalVersion && (
+              {isApproved && finalVersion && (
                 <>
-                  <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background flex-1 sm:flex-initial">
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copy
-                  </Button>
-                  <Button onClick={handleDownloadPdf} size="sm" className="flex-1 sm:flex-initial" disabled={!(data?.letter as any)?.pdfUrl}>
-                    <Download className="w-4 h-4 mr-1" />
-                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
+                  <Button onClick={handleCopy} size="sm" variant="outline" className="bg-background flex-1 sm:flex-initial"><Copy className="w-4 h-4 mr-1" />Copy</Button>
+                  <Button onClick={() => pdfUrl && window.open(pdfUrl, "_blank")} size="sm" className="flex-1 sm:flex-initial" disabled={!pdfUrl}>
+                    <Download className="w-4 h-4 mr-1" />{pdfUrl ? "Download PDF" : "Generating..."}
                   </Button>
                 </>
               )}
@@ -897,35 +189,16 @@ export default function LetterDetail() {
           </div>
         </div>
 
-        {/* Status Timeline */}
-        <Card>
-          <CardContent className="p-5">
-            <LetterStatusTracker status={letter.status} size="expanded" />
-          </CardContent>
-        </Card>
+        <LetterStatusDisplay status={letter.status} />
 
-
-        {/* ── PAYWALL: generated_locked — blurred draft preview + payment CTAs ── */}
         {isGeneratedLocked && (
-          <LetterPaywall
-            letterId={letterId}
-            letterType={letter.letterType}
-            subject={letter.subject}
-            draftContent={aiDraftVersion?.content ?? undefined}
-            qualityDegraded={letter.qualityDegraded === true}
-          />
+          <LetterPaywall letterId={letterId} letterType={letter.letterType} subject={letter.subject} draftContent={aiDraftVersion?.content ?? undefined} qualityDegraded={letter.qualityDegraded === true} />
         )}
 
-        {/* ── Client Approval Pending ── */}
         {letter.status === "client_approval_pending" && (
-          <ClientApprovalBlock
-            letterId={letterId}
-            revisionCount={(letter as any).clientRevisionCount ?? 0}
-            onApprove={() => utils.letters.detail.invalidate({ id: letterId })}
-          />
+          <ClientApprovalBlock letterId={letterId} revisionCount={(letter as any).clientRevisionCount ?? 0} onApprove={invalidate} />
         )}
 
-        {/* ── Client Approved ── */}
         {letter.status === "client_approved" && (
           <Card className="border-emerald-200 bg-emerald-50/30">
             <CardContent className="p-5">
@@ -933,10 +206,8 @@ export default function LetterDetail() {
                 <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-emerald-800">You have approved this letter</p>
-                  {(letter as any).pdfUrl ? (
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Your PDF is ready. You can download it or send it directly to the recipient below.
-                    </p>
+                  {pdfUrl ? (
+                    <p className="text-sm text-emerald-700 mt-1">Your PDF is ready. You can download it or send it to the recipient below.</p>
                   ) : (
                     <p className="text-sm text-emerald-700 mt-1 flex items-center gap-2">
                       <span className="inline-block w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -949,278 +220,53 @@ export default function LetterDetail() {
           </Card>
         )}
 
-
-        {/* Attorney Notes (user-visible only) */}
         {!isGeneratedLocked && userVisibleActions && userVisibleActions.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-primary" />
-                Attorney Notes
-              </CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" />Attorney Notes</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {userVisibleActions.map((action) => (
                 <div key={action.id} className="bg-muted/50 rounded-lg p-3">
                   <p className="text-sm text-foreground">{action.noteText}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(action.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{new Date(action.createdAt).toLocaleDateString()}</p>
                 </div>
               ))}
             </CardContent>
           </Card>
         )}
 
-        {/* Needs Changes — Subscriber Update Form */}
         {letter.status === "needs_changes" && (
-          <Card className="border-amber-200 bg-amber-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
-                <AlertCircle className="w-4 h-4" />
-                Changes Requested — Your Response
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-amber-700">
-                The reviewing attorney has requested changes. Please review the attorney notes above and provide additional context or corrections below. Our legal team will re-process your letter with this new information.
-              </p>
-              <Textarea
-                value={updateText}
-                onChange={(e) => setUpdateText(e.target.value)}
-                placeholder="Provide additional context, corrections, or clarifications here..."
-                rows={4}
-                className="bg-white border-amber-200"
-              />
-              <Button
-                onClick={handleSubmitUpdate}
-                disabled={updateMutation.isPending || updateText.trim().length < 10}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                {updateMutation.isPending ? (
-                  "Submitting..."
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Submit Response & Re-Process
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Sticky bottom review bar — only shown during client_approval_pending */}
-        {letter.status === "client_approval_pending" && (
-          <SubscriberReviewBar
-            letterId={letterId}
-            revisionCount={(letter as any).clientRevisionCount ?? 0}
-            onAction={() => utils.letters.detail.invalidate({ id: letterId })}
+          <NeedsChangesPanel
+            updateText={updateText}
+            onUpdateTextChange={setUpdateText}
+            isPending={updateMutation.isPending}
+            onSubmit={() => {
+              if (updateText.trim().length < 10) { toast.error("Response too short", { description: "Please provide at least 10 characters." }); return; }
+              updateMutation.mutate({ letterId, additionalContext: updateText });
+            }}
           />
         )}
 
-        {/* Letter Preview — shown during client_approval_pending so subscriber can read before approving */}
+        {letter.status === "client_approval_pending" && (
+          <SubscriberReviewBar letterId={letterId} revisionCount={(letter as any).clientRevisionCount ?? 0} onAction={invalidate} />
+        )}
+
         {letter.status === "client_approval_pending" && finalVersion && (
           <Card className="border-blue-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2 text-blue-700">
-                <FileText className="w-4 h-4" />
-                Letter Preview — Review Before Approving
-              </CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2 text-blue-700"><FileText className="w-4 h-4" />Letter Preview — Review Before Approving</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-white border border-blue-100 rounded-lg p-5">
-                {/<[a-z][\s\S]*>/i.test(finalVersion.content) ? (
-                  <div
-                    className="prose prose-sm max-w-none text-foreground
-                      prose-p:my-2 prose-p:leading-relaxed
-                      prose-headings:font-semibold prose-headings:text-foreground
-                      prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5
-                      prose-strong:text-foreground"
-                    dangerouslySetInnerHTML={{ __html: finalVersion.content }}
-                  />
-                ) : (
-                  <pre className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-sans">
-                    {finalVersion.content}
-                  </pre>
-                )}
-              </div>
+              <LetterContentRenderer content={finalVersion.content} borderClass="border-blue-100" />
             </CardContent>
           </Card>
         )}
 
-        {/* Final Approved Letter — shown after subscriber approves or letter is sent */}
-        {(letter.status === "client_approved" || letter.status === "sent") && finalVersion && (
-          <>
-          <Dialog open={sendDialogOpen} onOpenChange={(open) => { setSendDialogOpen(open); if (!open) { setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); } }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Send Letter via Lawyer's Email</DialogTitle>
-                <DialogDescription>
-                  Enter the recipient's email address. The approved letter will be sent from our platform's legal address, with the PDF attached (or letter content inline if no PDF is available).
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="recipient-email">Recipient Email Address</Label>
-                  <Input
-                    id="recipient-email"
-                    data-testid="input-recipient-email"
-                    type="email"
-                    placeholder="recipient@example.com"
-                    value={recipientEmail}
-                    onChange={(e) => setRecipientEmail(e.target.value)}
-                    disabled={sendToRecipientMutation.isPending}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="subject-override">Subject Line (optional)</Label>
-                  <Input
-                    id="subject-override"
-                    data-testid="input-subject-override"
-                    type="text"
-                    placeholder={letter.subject}
-                    value={sendSubjectOverride}
-                    onChange={(e) => setSendSubjectOverride(e.target.value)}
-                    disabled={sendToRecipientMutation.isPending}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave blank to use the original letter subject.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="send-note">Note to Recipient (optional)</Label>
-                  <Textarea
-                    id="send-note"
-                    data-testid="input-send-note"
-                    placeholder="Add an optional note that will appear in the email to the recipient..."
-                    value={sendNote}
-                    onChange={(e) => setSendNote(e.target.value)}
-                    rows={3}
-                    disabled={sendToRecipientMutation.isPending}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  The letter will be sent from our platform's lawyer email address on behalf of you.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => { setSendDialogOpen(false); setRecipientEmail(""); setSendSubjectOverride(""); setSendNote(""); }}
-                  disabled={sendToRecipientMutation.isPending}
-                  data-testid="button-cancel-send"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => sendToRecipientMutation.mutate({
-                    letterId,
-                    recipientEmail: recipientEmail.trim(),
-                    subjectOverride: sendSubjectOverride.trim() || undefined,
-                    note: sendNote.trim() || undefined,
-                  })}
-                  disabled={sendToRecipientMutation.isPending || !recipientEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim())}
-                  data-testid="button-confirm-send"
-                >
-                  {sendToRecipientMutation.isPending ? (
-                    "Sending..."
-                  ) : (
-                    <>
-                      <Mail className="w-4 h-4 mr-2" />
-                      Send Letter
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Card className="border-green-200 bg-green-50/30">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className="text-sm flex items-center gap-2 text-green-700">
-                  <CheckCircle className="w-4 h-4" />
-                  Your Approved Letter
-                </CardTitle>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button onClick={handleDownloadPdf} size="sm" className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-download-letter" disabled={!(data?.letter as any)?.pdfUrl}>
-                    <Download className="w-4 h-4 mr-1.5" />
-                    {(data?.letter as any)?.pdfUrl ? "Download PDF" : "Generating PDF..."}
-                  </Button>
-                  <Button onClick={handleCopyToClipboard} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-copy-letter">
-                    <Copy className="w-3.5 h-3.5 mr-1.5" />
-                    Copy
-                  </Button>
-                  <Button onClick={() => setSendDialogOpen(true)} size="sm" variant="outline" className="bg-background border-green-300 text-green-700 hover:bg-green-50" data-testid="button-send-via-lawyer-email" disabled={!(data?.letter as any)?.pdfUrl}>
-                    <Mail className="w-3.5 h-3.5 mr-1.5" />
-                    Send Via Lawyer's Email
-                  </Button>
-                  <Button
-                    onClick={() => setShowRequestEditForm(!showRequestEditForm)}
-                    size="sm"
-                    variant="outline"
-                    className="border-violet-300 text-violet-700 hover:bg-violet-50"
-                    data-testid="button-request-edit"
-                    disabled={requestEditMutation.isPending}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                    Request Edit
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {showRequestEditForm && (
-                <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 space-y-3 mb-4">
-                  <p className="text-sm font-medium text-violet-800">What changes would you like?</p>
-                  <p className="text-xs text-violet-600">
-                    Your first post-approval edit request is free. Subsequent edit requests will require a $20 consultation fee.
-                  </p>
-                  <Textarea
-                    data-testid="input-request-edit-notes"
-                    value={requestEditNotes}
-                    onChange={(e) => setRequestEditNotes(e.target.value)}
-                    placeholder="Describe the changes you'd like the attorney to make (at least 10 characters)..."
-                    rows={3}
-                    className="border-violet-200"
-                    disabled={requestEditMutation.isPending}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      data-testid="button-submit-request-edit"
-                      size="sm"
-                      className="bg-violet-600 hover:bg-violet-700 text-white"
-                      onClick={() => requestEditMutation.mutate({ letterId, revisionNotes: requestEditNotes })}
-                      disabled={requestEditMutation.isPending || requestEditNotes.trim().length < 10}
-                    >
-                      {requestEditMutation.isPending ? "Submitting..." : "Submit Edit Request"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setShowRequestEditForm(false); setRequestEditNotes(""); }}>Cancel</Button>
-                  </div>
-                </div>
-              )}
-              <div className="bg-white border border-green-200 rounded-lg p-5">
-                {/<[a-z][\s\S]*>/i.test(finalVersion.content) ? (
-                  <div
-                    className="prose prose-sm max-w-none text-foreground
-                      prose-p:my-2 prose-p:leading-relaxed
-                      prose-headings:font-semibold prose-headings:text-foreground
-                      prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5
-                      prose-strong:text-foreground"
-                    dangerouslySetInnerHTML={{ __html: finalVersion.content }}
-                  />
-                ) : (
-                  <pre className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-sans">
-                    {finalVersion.content}
-                  </pre>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          </>
+        {isApproved && finalVersion && (
+          <ApprovedLetterPanel letterId={letterId} letterSubject={letter.subject} pdfUrl={pdfUrl} content={finalVersion.content} onInvalidate={invalidate} onCopy={handleCopy} />
         )}
 
-        {/* Client Declined Notice */}
         {letter.status === "client_declined" && (
           <Card className="border-red-200 bg-red-50/30">
             <CardContent className="p-5">
@@ -1228,16 +274,13 @@ export default function LetterDetail() {
                 <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-red-800">You Declined This Letter</p>
-                  <p className="text-sm text-red-700 mt-1">
-                    You chose not to proceed with this letter. If you need assistance with a similar matter, you can submit a new letter request.
-                  </p>
+                  <p className="text-sm text-red-700 mt-1">You chose not to proceed with this letter. If you need assistance with a similar matter, you can submit a new letter request.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Client Revision Requested Notice */}
         {letter.status === "client_revision_requested" && (
           <Card className="border-violet-200 bg-violet-50/30">
             <CardContent className="p-5">
@@ -1245,35 +288,23 @@ export default function LetterDetail() {
                 <RotateCcw className="w-5 h-5 text-violet-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-violet-800">Revision Requested</p>
-                  <p className="text-sm text-violet-700 mt-1">
-                    Your revision request has been sent to the attorney. The letter will be revised and returned for your approval.
-                  </p>
+                  <p className="text-sm text-violet-700 mt-1">Your revision request has been sent to the attorney. The letter will be revised and returned for your approval.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Rejected Notice with Retry */}
         {letter.status === "rejected" && (
-          <RejectionRetryBlock letterId={letterId} onRetry={() => utils.letters.detail.invalidate({ id: letterId })} />
+          <RejectionRetryBlock letterId={letterId} onRetry={invalidate} />
         )}
 
-        {/* Attachments */}
         {attachments && attachments.length > 0 && (
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Attachments ({attachments.length})</CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Attachments ({attachments.length})</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {attachments.map((att) => (
-                <a
-                  key={att.id}
-                  href={att.storageUrl ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-2.5 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
-                >
+                <a key={att.id} href={att.storageUrl ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
                   <FileText className="w-4 h-4 text-primary flex-shrink-0" />
                   <span className="text-sm text-foreground flex-1 truncate">{att.fileName ?? "Attachment"}</span>
                   <Download className="w-3.5 h-3.5 text-muted-foreground" />
