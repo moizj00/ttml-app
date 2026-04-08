@@ -284,14 +284,6 @@ export default function TemplateGallery() {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Mic className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground hidden sm:inline">Describe your situation:</span>
-            <VoiceInputButton
-              fieldId="template-match"
-              onTranscript={handleVoiceTranscript}
-            />
-          </div>
         </div>
 
         {voiceQuery && voiceMatches.length > 0 && (
