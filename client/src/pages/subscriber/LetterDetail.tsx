@@ -4,13 +4,14 @@ import { LetterPaywall } from "@/components/LetterPaywall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Clock, Copy, Trash2, XCircle, RotateCcw } from "lucide-react";
+import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Clock, Copy, Trash2, XCircle, RotateCcw, Eye } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 import { SubscriberReviewBar } from "@/components/shared/SubscriberReviewBar";
+import { SubscriberLetterPreviewModal } from "@/components/shared/SubscriberLetterPreviewModal";
 import { ClientApprovalBlock } from "./letter-detail/ClientApprovalBlock";
 import { RejectionRetryBlock } from "./letter-detail/RejectionRetryBlock";
 import { LetterStatusDisplay } from "./letter-detail/LetterStatusDisplay";
@@ -41,6 +42,8 @@ export default function LetterDetail() {
   const search = useSearch();
   const letterId = parseInt(params.id ?? "0");
   const [updateText, setUpdateText] = useState("");
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewModalDismissed, setPreviewModalDismissed] = useState(false);
 
   useEffect(() => {
     const sp = new URLSearchParams(search);
@@ -76,8 +79,20 @@ export default function LetterDetail() {
         else if (["rejected", "needs_changes", "client_declined"].includes(newStatus)) toast.warning(label);
         else toast.info(label);
       }
+      // Auto-open preview modal when letter transitions to client_approval_pending
+      if (newStatus === "client_approval_pending") {
+        setPreviewModalDismissed(false);
+        setPreviewModalOpen(true);
+      }
     },
   });
+
+  // Auto-open preview modal on initial load if status is client_approval_pending
+  useEffect(() => {
+    if (data?.letter?.status === "client_approval_pending" && !previewModalDismissed) {
+      setPreviewModalOpen(true);
+    }
+  }, [data?.letter?.status, previewModalDismissed]);
 
   const archiveMutation = trpc.letters.archive.useMutation({
     onSuccess: () => { toast.success("Letter archived"); window.history.back(); },
@@ -147,6 +162,19 @@ export default function LetterDetail() {
 
   return (
     <AppLayout breadcrumb={[{ label: "My Letters", href: "/letters" }, { label: letter.subject }]}>
+      {/* Subscriber Letter Preview Modal — auto-opens for client_approval_pending */}
+      <SubscriberLetterPreviewModal
+        letterId={letterId}
+        open={previewModalOpen}
+        onOpenChange={(open) => {
+          setPreviewModalOpen(open);
+          if (!open) {
+            setPreviewModalDismissed(true);
+            invalidate();
+          }
+        }}
+      />
+
       <div className="max-w-3xl mx-auto space-y-5" style={{ paddingBottom: letter.status === "client_approval_pending" ? "5rem" : undefined }}>
 
         {/* Header */}
@@ -172,6 +200,19 @@ export default function LetterDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+              {/* Re-open preview modal button for client_approval_pending */}
+              {letter.status === "client_approval_pending" && previewModalDismissed && (
+                <Button
+                  onClick={() => { setPreviewModalDismissed(false); setPreviewModalOpen(true); }}
+                  size="sm"
+                  variant="outline"
+                  className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 flex-1 sm:flex-initial"
+                  data-testid="button-reopen-preview-modal"
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  Review Letter
+                </Button>
+              )}
               {isApproved && finalVersion && (
                 <>
                   <Button onClick={handleCopy} size="sm" variant="outline" className="bg-background flex-1 sm:flex-initial"><Copy className="w-4 h-4 mr-1" />Copy</Button>
