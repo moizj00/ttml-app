@@ -201,6 +201,9 @@ describe("admin.updateRole — Active Subscriber Cannot Be Promoted to Attorney"
       return {
         ...original,
         updateUserRole: vi.fn().mockResolvedValue(undefined),
+        // Mock getUserById to prevent real DB connection (avoids startup migration)
+        getUserById: vi.fn().mockResolvedValue({ id: 99, openId: null, email: "test@example.com", name: "Test User" }),
+        assignRoleId: vi.fn().mockResolvedValue(undefined),
       };
     });
 

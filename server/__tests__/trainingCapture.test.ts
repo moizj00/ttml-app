@@ -24,6 +24,29 @@ vi.mock("@google-cloud/storage", () => ({
   },
 }));
 
+// Mock the logger module so we can spy on info/warn/error calls.
+// The mock must be declared before the dynamic imports below.
+const mockLoggerInfo = vi.fn();
+const mockLoggerWarn = vi.fn();
+const mockLoggerError = vi.fn();
+vi.mock("../logger", () => ({
+  createLogger: vi.fn(() => ({
+    info: mockLoggerInfo,
+    warn: mockLoggerWarn,
+    error: mockLoggerError,
+  })),
+  logger: {
+    info: mockLoggerInfo,
+    warn: mockLoggerWarn,
+    error: mockLoggerError,
+    child: vi.fn(() => ({
+      info: mockLoggerInfo,
+      warn: mockLoggerWarn,
+      error: mockLoggerError,
+    })),
+  },
+}));
+
 const { getDb } = await import("../db/core");
 const { captureTrainingExample } = await import("../pipeline/training-capture");
 
@@ -120,28 +143,27 @@ describe("Training Capture — Consent Gating", () => {
     const { db, mockInsert } = makeMockDb({ userId: 1, consented: false });
     mockGetDb.mockResolvedValue(db);
 
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await captureTrainingExample(42, "demand", "CA", makeIntake() as any, "Letter content");
 
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
+    // The production code uses tcLogger.info (pino) — check the logger mock
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ letterId: 42 }),
       expect.stringContaining("user has not consented")
     );
-    consoleSpy.mockRestore();
   });
 
   it("skips capture when letter is not found (no userId)", async () => {
     const { db, mockInsert } = makeMockDb({ userId: null });
     mockGetDb.mockResolvedValue(db);
 
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await captureTrainingExample(99, "demand", "CA", makeIntake() as any, "Letter content");
 
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ letterId: 99 }),
       expect.stringContaining("letter not found or missing userId")
     );
-    consoleSpy.mockRestore();
   });
 
   it("skips gracefully when user record is not found", async () => {
@@ -161,14 +183,13 @@ describe("Training Capture — Consent Gating", () => {
     } as any;
     mockGetDb.mockResolvedValue(db);
 
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await captureTrainingExample(42, "demand", "CA", makeIntake() as any, "Letter content");
 
     expect(mockInsert).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ letterId: 42 }),
       expect.stringContaining("user has not consented")
     );
-    consoleSpy.mockRestore();
   });
 
   it("exits silently when DB is unavailable (getDb returns null)", async () => {

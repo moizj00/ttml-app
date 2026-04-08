@@ -117,6 +117,26 @@ vi.mock("./_core/sentry", () => ({
   captureServerException: vi.fn(),
 }));
 
+// Mock supabaseAuth/client to bypass the SUPABASE_SERVICE_ROLE_KEY guard in
+// getAdminClient(). The @supabase/supabase-js mock above handles the actual
+// client behaviour; this just prevents the env-var guard from throwing.
+vi.mock("./supabaseAuth/client", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./supabaseAuth/client")>();
+  return {
+    ...original,
+    getAdminClient: vi.fn(() => ({
+      auth: {
+        getUser: mockGetUser,
+        admin: {
+          createUser: mockAdminCreateUser,
+          deleteUser: mockAdminDeleteUser,
+          generateLink: mockGenerateLink,
+        },
+      },
+    })),
+  };
+});
+
 // ─── Live server helpers ──────────────────────────────────────────────────────
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5000";
