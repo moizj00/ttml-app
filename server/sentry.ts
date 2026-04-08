@@ -3,17 +3,22 @@ import { logger } from "./logger";
 
 let initialized = false;
 
+/**
+ * Log Sentry initialization status.
+ * Sentry.init() is performed in server/instrument.ts which is loaded
+ * via Node's --import flag before the application starts. This function
+ * simply confirms that the SDK client is available.
+ */
 export function initServerSentry() {
   if (initialized) return;
+  initialized = true;
 
   const client = Sentry.getClient();
   if (client) {
-    initialized = true;
-    logger.info("[Sentry] Already initialized via --import instrumentation");
-    return;
+    logger.info("[Sentry] SDK client available (initialized via --import instrumentation)");
+  } else {
+    logger.info("[Sentry] SDK client not available — error monitoring disabled");
   }
-
-  logger.info("[Sentry] Not pre-initialized — skipping duplicate init (use --import server/instrument.ts)");
 }
 
 // ─── Helper: Capture exception with context ───
@@ -88,4 +93,3 @@ export function setServerUser(user: {
 
 // Re-export for direct access
 export { Sentry };
-export { wrapMcpServer } from "./mcp";

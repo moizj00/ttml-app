@@ -53,7 +53,7 @@ export function initSentry() {
 
     // ─── Before Send Hook ───
     beforeSend(event) {
-      // Strip PII from breadcrumbs if needed
+      // Strip PII from breadcrumbs
       if (event.breadcrumbs) {
         event.breadcrumbs = event.breadcrumbs.map(bc => {
           // Redact authorization headers from fetch breadcrumbs
@@ -66,6 +66,12 @@ export function initSentry() {
           }
           return bc;
         });
+      }
+      // Scrub tokens from URLs that may appear in event data
+      if (event.request?.url) {
+        event.request.url = event.request.url
+          .replace(/token=[^&]*/gi, "token=[REDACTED]")
+          .replace(/access_token=[^&]*/gi, "access_token=[REDACTED]");
       }
       return event;
     },
