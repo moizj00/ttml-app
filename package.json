@@ -17,7 +17,7 @@
     "db:backfill-migrations": "node scripts/backfill-migrations.mjs"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.47",
+    "@ai-sdk/anthropic": "^3.0.64",
     "@ai-sdk/openai": "^3.0.12",
     "@aws-sdk/client-s3": "^3.1013.0",
     "@aws-sdk/s3-request-presigner": "^3.1013.0",
