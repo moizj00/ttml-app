@@ -180,7 +180,7 @@ export async function inviteAttorney(
   });
 
   if (createError) {
-    logger.error({ err: createError.message }, "[inviteAttorney] Supabase createUser error:");
+    logger.error({ err: createError }, "[inviteAttorney] Supabase createUser error:");
     if (createError.message.includes("already") || createError.message.includes("exists")) {
       return await _handleExistingAuthUser(email, name, ctx, serviceClient);
     }
@@ -218,7 +218,7 @@ export async function inviteAttorney(
   });
 
   if (linkError || !linkData?.properties?.action_link) {
-    logger.error({ err: linkError?.message }, "[inviteAttorney] generateLink error:");
+    logger.error({ err: linkError }, "[inviteAttorney] generateLink error:");
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",

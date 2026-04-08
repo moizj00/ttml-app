@@ -43,7 +43,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       ENV.stripeWebhookSecret
     );
   } catch (err: any) {
-    stripeLogger.error({ err: err.message }, "[StripeWebhook] Signature verification failed");
+    stripeLogger.error({ err }, "[StripeWebhook] Signature verification failed");
     captureServerException(err, {
       tags: { component: "stripe_webhook", error_type: "signature_verification" },
     });

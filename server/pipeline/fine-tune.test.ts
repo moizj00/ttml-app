@@ -1,5 +1,20 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+// Mock the pino logger so we can assert on logger.warn / logger.info calls
+const mockLoggerWarn = vi.fn();
+const mockLoggerInfo = vi.fn();
+const mockLoggerError = vi.fn();
+vi.mock("../logger", () => ({
+  logger: {
+    warn: mockLoggerWarn,
+    info: mockLoggerInfo,
+    error: mockLoggerError,
+    debug: vi.fn(),
+    fatal: vi.fn(),
+    trace: vi.fn(),
+  },
+}));
+
 const mockDownload = vi.fn();
 const mockGcsSave = vi.fn().mockResolvedValue(undefined);
 const mockGcsFile = vi.fn(() => ({ download: mockDownload, save: mockGcsSave }));
@@ -54,15 +69,12 @@ describe("fine-tune", () => {
   });
 
   describe("checkAndTriggerFineTune", () => {
-    it("skips when Vertex AI is not configured", async () => {
+      it("skips when Vertex AI is not configured", async () => {
       delete process.env.GCP_PROJECT_ID;
       delete process.env.GCP_REGION;
       delete process.env.GCS_TRAINING_BUCKET;
-
-      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       await checkAndTriggerFineTune();
-
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
         expect.stringContaining("Vertex AI not configured"),
       );
     });
@@ -70,13 +82,9 @@ describe("fine-tune", () => {
     it("skips when a fine-tune run is already in progress", async () => {
       const mockExecute = vi.fn()
         .mockResolvedValueOnce([{ cnt: 1 }]);
-
       mockGetDb.mockResolvedValue({ execute: mockExecute } as any);
-
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       await checkAndTriggerFineTune();
-
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.stringContaining("already in progress"),
       );
     });
@@ -85,13 +93,9 @@ describe("fine-tune", () => {
       const mockExecute = vi.fn()
         .mockResolvedValueOnce([{ cnt: 0 }])
         .mockResolvedValueOnce([{ cnt: 25 }]);
-
       mockGetDb.mockResolvedValue({ execute: mockExecute } as any);
-
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       await checkAndTriggerFineTune();
-
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.stringContaining("25 training examples"),
       );
     });
@@ -101,13 +105,9 @@ describe("fine-tune", () => {
         .mockResolvedValueOnce([{ cnt: 0 }])
         .mockResolvedValueOnce([{ cnt: 60 }])
         .mockResolvedValueOnce([]);
-
       mockGetDb.mockResolvedValue({ execute: mockExecute } as any);
-
-      const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       await checkAndTriggerFineTune();
-
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
         expect.stringContaining("No training files found"),
       );
     });

@@ -86,10 +86,11 @@ describe("Attorney Review Pipeline — Source Code Structure", () => {
     readRouterModule(_routersDir, "letters"),
     readRouterModule(_routersDir, "admin"),
   ].join("\n");
-  const reviewModalFile = readFileSync(
-    join(CLIENT_SRC, "components", "shared", "ReviewModal.tsx"),
-    "utf-8"
-  );
+  // ReviewModal was refactored from a flat file to a directory — combine index + hooks
+  const reviewModalFile = [
+    readFileSync(join(CLIENT_SRC, "components", "shared", "ReviewModal", "index.tsx"), "utf-8"),
+    readFileSync(join(CLIENT_SRC, "components", "shared", "ReviewModal", "hooks", "useReviewModal.ts"), "utf-8"),
+  ].join("\n");
   const reviewQueueFile = readFileSync(
     join(CLIENT_SRC, "pages", "attorney", "ReviewQueue.tsx"),
     "utf-8"
@@ -198,7 +199,13 @@ describe("Attorney Review Pipeline — Source Code Structure", () => {
     });
 
     it("filters to review-relevant statuses", () => {
-      expect(reviewQueueFile).toContain("REVIEW_STATUSES");
+      // After the Queue/Centre split, REVIEW_STATUSES was renamed CENTRE_STATUSES
+      // and moved to ReviewCentre.tsx. The queue now filters by status=pending_review directly.
+      const reviewCentreFile = readFileSync(
+        join(CLIENT_SRC, "pages", "attorney", "ReviewCentre.tsx"),
+        "utf-8"
+      );
+      expect(reviewCentreFile).toContain("CENTRE_STATUSES");
     });
   });
 

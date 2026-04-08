@@ -61,7 +61,7 @@ export function registerSignupLoginRoutes(app: Express) {
       });
 
       if (error) {
-        logger.error({ err: error.message }, "[SupabaseAuth] Signup error:");
+        logger.error({ err: error }, "[SupabaseAuth] Signup error:");
         if (error.message.includes("already been registered") || error.message.includes("already exists") || error.message.includes("already registered")) {
           res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
           return;
@@ -178,7 +178,7 @@ export function registerSignupLoginRoutes(app: Express) {
       });
 
       if (error) {
-        logger.error({ err: error.message }, "[SupabaseAuth] Login error:");
+        logger.error({ err: error }, "[SupabaseAuth] Login error:");
         if (error.message.includes("Invalid login credentials")) {
           res.status(401).json({ error: "Invalid email or password" });
           return;

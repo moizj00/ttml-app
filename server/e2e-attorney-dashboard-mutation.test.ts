@@ -239,7 +239,7 @@ describe("Attorney Dashboard Mutation — Queue Visibility After Promotion", () 
 
   it("attorney review detail page exists", () => {
     expect(
-      existsSync(join(CLIENT_SRC, "pages", "attorney", "ReviewDetail.tsx"))
+      existsSync(join(CLIENT_SRC, "pages", "attorney", "ReviewDetail", "index.tsx"))
     ).toBe(true);
   });
 });

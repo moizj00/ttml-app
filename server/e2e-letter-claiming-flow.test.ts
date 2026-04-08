@@ -303,16 +303,16 @@ describe("Letter Claiming Flow — Subscriber Delivery (My Letters Area)", () =>
 // ─── 8. ReviewModal — Claim Button UI ────────────────────────────────────────
 
 describe("Letter Claiming Flow — ReviewModal Claim Button", () => {
-  const reviewModalFile = readClient(
-    "components",
-    "shared",
-    "ReviewModal.tsx"
-  );
+  // ReviewModal was refactored from a flat file to a directory — combine index + hooks
+  const reviewModalFile = [
+    readClient("components", "shared", "ReviewModal", "index.tsx"),
+    readClient("components", "shared", "ReviewModal", "hooks", "useReviewModal.ts"),
+  ].join("\n");
 
   it("ReviewModal file exists", () => {
     expect(
       existsSync(
-        join(CLIENT_SRC, "components", "shared", "ReviewModal.tsx")
+        join(CLIENT_SRC, "components", "shared", "ReviewModal", "index.tsx")
       )
     ).toBe(true);
   });

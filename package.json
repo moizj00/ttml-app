@@ -16,7 +16,9 @@
     "db:check-migrations": "node scripts/check-migrations.mjs",
     "db:backfill-migrations": "node scripts/backfill-migrations.mjs",
     "revalidate": "tsc --noEmit && vitest run && vite build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint": "eslint server/ --ext .ts --max-warnings 0 --rule \"no-restricted-syntax: error\"",
+    "lint:server": "eslint server/ --ext .ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",
@@ -102,10 +104,13 @@
     "@types/node": "^24.7.0",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.27.5",
+    "eslint": "^10.2.0",
     "pnpm": "^10.15.1",
     "postcss": "^8.4.47",
     "prettier": "^3.6.2",

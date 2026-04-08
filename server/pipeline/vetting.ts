@@ -77,7 +77,7 @@ export async function runVettingStage(
     }
     jobId = rawJobId ?? 0;
   } catch (jobCreateErr) {
-    logger.warn({ err: jobCreateErr instanceof Error ? jobCreateErr.message : jobCreateErr }, `[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`);
+    logger.warn({ err: jobCreateErr }, `[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`);
     captureServerException(jobCreateErr, { tags: { component: "pipeline", error_type: "workflow_job_create_failed" }, extra: { letterId } });
   }
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });

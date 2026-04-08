@@ -113,14 +113,19 @@ function getNavItems(role: string): NavItem[] {
   if (role === "attorney") {
     return [
       {
-        label: "Review Center",
+        label: "Dashboard",
         href: "/attorney",
         icon: <LayoutDashboard className="w-4 h-4" />,
       },
       {
-        label: "Queue",
+        label: "Review Queue",
         href: "/attorney/queue",
         icon: <ClipboardList className="w-4 h-4" />,
+      },
+      {
+        label: "Review Centre",
+        href: "/attorney/review-centre",
+        icon: <ClipboardCheck className="w-4 h-4" />,
       },
       {
         label: "Settings",
@@ -147,9 +152,14 @@ function getNavItems(role: string): NavItem[] {
         icon: <Users className="w-4 h-4" />,
       },
       {
-        label: "Attorney Queue",
+        label: "Review Queue",
         href: "/attorney/queue",
         icon: <ClipboardList className="w-4 h-4" />,
+      },
+      {
+        label: "Review Centre",
+        href: "/attorney/review-centre",
+        icon: <ClipboardCheck className="w-4 h-4" />,
       },
       {
         label: "Affiliate Program",

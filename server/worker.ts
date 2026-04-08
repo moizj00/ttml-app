@@ -273,7 +273,7 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
     logger.info(`[Worker] Job ${job.id} completed in ${elapsed}s`);
   } catch (err) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.error({ err: err instanceof Error ? err.message : err }, `[Worker] Job ${job.id} failed after ${elapsed}s:`);
+    logger.error({ err }, `[Worker] Job ${job.id} failed after ${elapsed}s:`);
     throw err;
   }
 }
@@ -367,7 +367,7 @@ async function startWorker() {
   });
 
   worker.on("failed", (job, err) => {
-    logger.error({ err: err.message }, `[Worker] Job ${job?.id} failed:`);
+    logger.error({ err }, `[Worker] Job ${job?.id} failed:`);
     captureServerException(err, {
       tags: { component: "pipeline-worker", error_type: "job_failed" },
       extra: { jobId: job?.id, jobData: job?.data },
@@ -375,7 +375,7 @@ async function startWorker() {
   });
 
   worker.on("error", (err) => {
-    logger.error({ err: err.message }, "[Worker] Worker error:");
+    logger.error({ err }, "[Worker] Worker error:");
   });
 
   const shutdown = async (signal: string) => {
