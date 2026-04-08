@@ -3,6 +3,9 @@ import { getDb } from "../db/core";
 import { letterRequests, trainingLog, users } from "../../drizzle/schema";
 import { captureServerException } from "../sentry";
 import type { IntakeJson } from "../../shared/types";
+import { createLogger } from "../logger";
+
+const tcLogger = createLogger({ module: "TrainingCapture" });
 
 function getGcsBucket(): string {
   const bucket = process.env.GCS_TRAINING_BUCKET;
@@ -98,7 +101,7 @@ export async function captureTrainingExample(
         .limit(1);
       const userId = letter[0]?.userId;
       if (!userId) {
-        console.log(`[TrainingCapture] Skipping letter #${letterId} — letter not found or missing userId`);
+        tcLogger.info({ letterId }, "[TrainingCapture] Skipping — letter not found or missing userId");
         return;
       }
       const user = await db
@@ -107,7 +110,7 @@ export async function captureTrainingExample(
         .where(eq(users.id, userId))
         .limit(1);
       if (!user[0]?.consentToTraining) {
-        console.log(`[TrainingCapture] Skipping letter #${letterId} — user has not consented to training data usage`);
+        tcLogger.info({ letterId }, "[TrainingCapture] Skipping — user has not consented to training data usage");
         return;
       }
     }
@@ -123,16 +126,16 @@ export async function captureTrainingExample(
         const bucket = getGcsBucket();
         await uploadToGcs(gcsPath, jsonlLine + "\n");
         uploadedGcsUri = `gs://${bucket}/${gcsPath}`;
-        console.log(`[TrainingCapture] Uploaded example for letter #${letterId} to ${uploadedGcsUri}`);
+        tcLogger.info({ letterId, uri: uploadedGcsUri }, "[TrainingCapture] Uploaded example to GCS");
       } catch (gcsErr) {
-        console.error(`[TrainingCapture] GCS upload failed for letter #${letterId}:`, gcsErr);
+        tcLogger.error({ err: gcsErr, letterId }, "[TrainingCapture] GCS upload failed");
         captureServerException(gcsErr, {
           tags: { component: "training_capture", error_type: "gcs_upload_failed" },
           extra: { letterId, gcsPath },
         });
       }
     } else {
-      console.warn(`[TrainingCapture] GCS not configured — skipping upload for letter #${letterId}. Set GCS_TRAINING_BUCKET and GCP_PROJECT_ID.`);
+      tcLogger.warn({ letterId }, "[TrainingCapture] GCS not configured — skipping upload. Set GCS_TRAINING_BUCKET and GCP_PROJECT_ID.");
     }
 
     const dbForLog = await getDb();
@@ -144,10 +147,10 @@ export async function captureTrainingExample(
         gcsPath: uploadedGcsUri,
         tokenCount,
       });
-      console.log(`[TrainingCapture] Logged training example for letter #${letterId} (${tokenCount} tokens)`);
+      tcLogger.info({ letterId, tokenCount }, "[TrainingCapture] Logged training example");
     }
   } catch (err) {
-    console.error(`[TrainingCapture] Failed to capture training example for letter #${letterId}:`, err);
+    tcLogger.error({ err, letterId }, "[TrainingCapture] Failed to capture training example");
     captureServerException(err, {
       tags: { component: "training_capture", error_type: "capture_failed" },
       extra: { letterId },

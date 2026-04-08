@@ -11,6 +11,9 @@
 import { getAllLetterRequests, updateLetterStatus, logReviewAction, getUserById, createNotification } from "./db";
 import { sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
+import { createLogger } from "./logger";
+
+const staleLogger = createLogger({ module: "StaleReview" });
 
 const STALE_THRESHOLD_HOURS = 48;
 const STALE_THRESHOLD_MS = STALE_THRESHOLD_HOURS * 60 * 60 * 1000;
@@ -38,9 +41,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
       if (idleMs < STALE_THRESHOLD_MS) continue;
 
       const idleHours = Math.round(idleMs / (1000 * 60 * 60));
-      console.log(
-        `[StaleReview] Letter #${letter.id} has been under_review for ${idleHours}h — releasing back to queue`
-      );
+      staleLogger.info({ letterId: letter.id, idleHours }, "[StaleReview] Letter has been under_review — releasing back to queue");
 
       await updateLetterStatus(letter.id, "pending_review", {
         assignedReviewerId: null,
@@ -72,7 +73,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
             });
           }
         } catch (notifyErr) {
-          console.error(`[StaleReview] Failed to notify attorney for letter #${letter.id}:`, notifyErr);
+          staleLogger.error({ err: notifyErr, letterId: letter.id }, "[StaleReview] Failed to notify attorney");
           captureServerException(notifyErr, { tags: { component: "stale_review", error_type: "attorney_notify_failed" } });
         }
       }
@@ -100,13 +101,13 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
           }
         }
       } catch (notifyErr) {
-        console.error(`[StaleReview] Failed to notify subscriber for letter #${letter.id}:`, notifyErr);
+        staleLogger.error({ err: notifyErr, letterId: letter.id }, "[StaleReview] Failed to notify subscriber");
         captureServerException(notifyErr, { tags: { component: "stale_review", error_type: "subscriber_notify_failed" } });
       }
 
       released++;
     } catch (err) {
-      console.error(`[StaleReview] Failed to release letter #${letter.id}:`, err);
+      staleLogger.error({ err, letterId: letter.id }, "[StaleReview] Failed to release letter");
       captureServerException(err, { tags: { component: "stale_review", error_type: "release_failed" }, extra: { letterId: letter.id } });
       errors++;
     }

@@ -28,6 +28,9 @@ import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
 import { getUserById, isUserFirstLetterEligible } from "./db";
 import { sendPaywallNotificationEmail } from "./email";
+import { createLogger } from "./logger";
+
+const paywallLogger = createLogger({ module: "PaywallEmails" });
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -84,7 +87,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[PaywallEmails] Database not available — skipping");
+    paywallLogger.warn({}, "[PaywallEmails] Database not available — skipping");
     return result;
   }
 
@@ -110,9 +113,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
       )
     );
 
-  console.log(
-    `[PaywallEmails] Found ${eligibleLetters.length} eligible letters for initial paywall email`
-  );
+  paywallLogger.info({ count: eligibleLetters.length }, "[PaywallEmails] Found eligible letters for initial paywall email");
   result.processed = eligibleLetters.length;
 
   const appBaseUrl = getAppBaseUrl();
@@ -165,9 +166,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
 
       result.sent++;
       result.details.push({ letterId: letter.id, status: "sent" });
-      console.log(
-        `[PaywallEmails] Paywall notification email sent for letter #${letter.id} to ${subscriber.email}`
-      );
+      paywallLogger.info({ letterId: letter.id, to: subscriber.email }, "[PaywallEmails] Paywall notification email sent");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors++;
@@ -176,16 +175,11 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         status: "error",
         reason: msg,
       });
-      console.error(
-        `[PaywallEmails] Failed to send paywall email for letter #${letter.id}:`,
-        msg
-      );
+      paywallLogger.error({ letterId: letter.id, err: msg }, "[PaywallEmails] Failed to send paywall email");
     }
   }
 
-  console.log(
-    `[PaywallEmails] Done — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
-  );
+  paywallLogger.info({ sent: result.sent, skipped: result.skipped, errors: result.errors }, "[PaywallEmails] Done");
   return result;
 }
 
@@ -228,13 +222,11 @@ export function registerPaywallEmailRoute(app: Express): void {
         return res.json({ success: true, result });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[PaywallEmails] Cron handler error:", msg);
+        paywallLogger.error({ err: msg }, "[PaywallEmails] Cron handler error");
         return res.status(500).json({ error: msg });
       }
     }
   );
 
-  console.log(
-    "[PaywallEmails] Route registered: POST /api/cron/paywall-emails"
-  );
+  paywallLogger.info({}, "[PaywallEmails] Route registered: POST /api/cron/paywall-emails");
 }

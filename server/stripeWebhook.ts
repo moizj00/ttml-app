@@ -17,6 +17,9 @@ import { sendLetterApprovedEmail, sendLetterUnlockedEmail, sendEmployeeCommissio
 import { users, processedStripeEvents } from "../drizzle/schema";
 import { eq, lt, sql } from "drizzle-orm";
 import { captureServerException, addServerBreadcrumb } from "./sentry";
+import { createLogger } from "./logger";
+
+const stripeLogger = createLogger({ module: "StripeWebhook" });
 
 async function getUserIdFromStripeCustomer(customerId: string): Promise<number | null> {
   const stripe = getStripe();
@@ -27,7 +30,7 @@ async function getUserIdFromStripeCustomer(customerId: string): Promise<number |
     if (meta?.userId) return parseInt(meta.userId, 10);
     return null;
   } catch (err) {
-    console.warn(`[StripeWebhook] Failed to retrieve Stripe customer ${customerId}:`, err);
+    stripeLogger.warn({ err, customerId }, "[StripeWebhook] Failed to retrieve Stripe customer");
     return null;
   }
 }
@@ -50,7 +53,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       ENV.stripeWebhookSecret
     );
   } catch (err: any) {
-    console.error("[StripeWebhook] Signature verification failed:", err.message);
+    stripeLogger.error({ err: err.message }, "[StripeWebhook] Signature verification failed");
     captureServerException(err, {
       tags: { component: "stripe_webhook", error_type: "signature_verification" },
     });
@@ -60,12 +63,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
 
   // ─── Handle test events ───────────────────────────────────────────────────
   if (event.id.startsWith("evt_test_")) {
-    console.log("[StripeWebhook] Test event detected, returning verification response");
+    stripeLogger.info({ eventId: event.id }, "[StripeWebhook] Test event detected, returning verification response");
     res.json({ verified: true });
     return;
   }
 
-  console.log(`[StripeWebhook] Processing event: ${event.type} (${event.id})`);
+  stripeLogger.info({ eventType: event.type, eventId: event.id }, "[StripeWebhook] Processing event");
 
   const db = await getDb();
   if (db) {
@@ -75,7 +78,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       .where(eq(processedStripeEvents.eventId, event.id))
       .limit(1);
     if (existing.length > 0) {
-      console.log(`[StripeWebhook] Duplicate event ${event.id}, skipping`);
+      stripeLogger.info({ eventId: event.id }, "[StripeWebhook] Duplicate event, skipping");
       res.json({ received: true, duplicate: true });
       return;
     }
@@ -91,7 +94,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         const planId = session.metadata?.plan_id ?? "per_letter";
 
         if (!userId) {
-          console.warn("[StripeWebhook] checkout.session.completed: no userId in metadata");
+          stripeLogger.warn({}, "[StripeWebhook] checkout.session.completed: no userId in metadata");
           break;
         }
 
@@ -114,7 +117,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
               currentPeriodStart: new Date(),
               currentPeriodEnd: null, // one-time, no period end
             });
-            console.log(`[StripeWebhook] Per-letter payment activated for user ${userId}`);
+            stripeLogger.info({ userId }, "[StripeWebhook] Per-letter payment activated");
           }
 
           // ─── Letter unlock: transition generated_locked → pending_review ───
@@ -155,9 +158,9 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       subject: letter.subject,
                       letterId,
                       appUrl: origin,
-                    }).catch(console.error);
+                    }).catch((e) => stripeLogger.error({ err: e }, "[StripeWebhook] Failed to send letter unlocked email"));
                   }
-                  console.log(`[StripeWebhook] Letter #${letterId} unlocked → pending_review`);
+                  stripeLogger.info({ letterId }, "[StripeWebhook] Letter unlocked → pending_review");
 
                   try {
                     const adminAppUrl = session.success_url?.split('/letters')[0] ?? "https://www.talk-to-my-lawyer.com";
@@ -176,11 +179,11 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       },
                     });
                   } catch (err) {
-                    console.error("[notifyAdmins] payment_received:", err);
+                    stripeLogger.error({ err }, "[notifyAdmins] payment_received");
                   }
 
                   // ─── Notify all attorneys (email + in-app) that a new letter is ready ───
-                  console.log(`[StripeWebhook] Letter #${letterId} generated_locked → pending_review via payment`);
+                  stripeLogger.info({ letterId }, "[StripeWebhook] Letter generated_locked → pending_review via payment");
                   try {
                     const origin2 = session.success_url?.split('/letters')[0]
                       ?? "https://www.talk-to-my-lawyer.com";
@@ -192,7 +195,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       appUrl: origin2,
                     });
                   } catch (notifyErr) {
-                    console.error(`[StripeWebhook] Failed to notify attorneys for letter #${letterId}:`, notifyErr);
+                    stripeLogger.error({ err: notifyErr, letterId }, "[StripeWebhook] Failed to notify attorneys");
                   }
 
                   // ─── Commission tracking: if a discount code was used ───
@@ -221,7 +224,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                             commissionAmount,
                           });
                           const resolvedEmployeeId = metaEmployeeId ?? discountCode.employeeId;
-                          console.log(`[StripeWebhook] Commission created: $${(commissionAmount / 100).toFixed(2)} for employee #${resolvedEmployeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)})`);
+                          stripeLogger.info({ commissionAmount, resolvedEmployeeId, originalPrice, saleAmount }, "[StripeWebhook] Commission created (per-letter)");
                           try {
                             const employee = await getUserById(resolvedEmployeeId);
                             const subscriber = await getUserById(userId);
@@ -263,19 +266,19 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                               link: `/admin/affiliate`,
                             });
                           } catch (emailErr) {
-                            console.error(`[StripeWebhook] Commission email error (per-letter):`, emailErr);
+                            stripeLogger.error({ err: emailErr }, "[StripeWebhook] Commission email error (per-letter)");
                           }
                         }
                       }
                     } catch (commErr) {
-                      console.error(`[StripeWebhook] Commission tracking error:`, commErr);
+                      stripeLogger.error({ err: commErr }, "[StripeWebhook] Commission tracking error");
                     }
                   }
                 } else {
-                  console.warn(`[StripeWebhook] Letter #${letterId} not in generated_locked (status: ${letter?.status})`);
+                  stripeLogger.warn({ letterId, status: letter?.status }, "[StripeWebhook] Letter not in generated_locked");
                 }
               } catch (unlockErr) {
-                console.error(`[StripeWebhook] Failed to unlock letter #${letterId}:`, unlockErr);
+                stripeLogger.error({ err: unlockErr, letterId }, "[StripeWebhook] Failed to unlock letter");
               }
             }
           }
@@ -320,7 +323,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         subject: flLetter.subject,
                         letterId: flLetterId,
                         appUrl: flOrigin,
-                      }).catch(console.error);
+                      }).catch((e) => stripeLogger.error({ err: e }, "[StripeWebhook] Failed to send first-letter unlock email"));
                     }
                     // Notify admins
                     try {
@@ -340,7 +343,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         },
                       });
                     } catch (err) {
-                      console.error("[notifyAdmins] first_letter_review:", err);
+                      stripeLogger.error({ err }, "[notifyAdmins] first_letter_review");
                     }
                     // Notify all attorneys
                     try {
@@ -354,14 +357,14 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                         appUrl: flOrigin2,
                       });
                     } catch (notifyErr) {
-                      console.error(`[StripeWebhook] Failed to notify attorneys for letter #${flLetterId}:`, notifyErr);
+                      stripeLogger.error({ err: notifyErr, letterId: flLetterId }, "[StripeWebhook] Failed to notify attorneys for first_letter_review");
                     }
-                    console.log(`[StripeWebhook] Letter #${flLetterId} first_letter_review → pending_review via $50 payment`);
+                    stripeLogger.info({ letterId: flLetterId }, "[StripeWebhook] Letter first_letter_review → pending_review via $50 payment");
                   } else {
-                    console.warn(`[StripeWebhook] first_letter_review: letter #${flLetterId} not in generated_locked (status: ${flLetter?.status})`);
+                    stripeLogger.warn({ letterId: flLetterId, status: flLetter?.status }, "[StripeWebhook] first_letter_review: letter not in generated_locked");
                   }
                 } catch (flErr) {
-                  console.error(`[StripeWebhook] Failed to process first_letter_review for letter #${flLetterId}:`, flErr);
+                  stripeLogger.error({ err: flErr, letterId: flLetterId }, "[StripeWebhook] Failed to process first_letter_review");
                 }
               }
             }
@@ -400,7 +403,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                           letterId: revLetterId,
                           subscriberNotes: revisionNotes,
                           appUrl,
-                        }).catch(console.error);
+                        }).catch((e) => stripeLogger.error({ err: e }, "[StripeWebhook] Failed to send revision request email"));
                       }
                       await createNotification({
                         userId: revLetter.assignedReviewerId,
@@ -425,12 +428,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       body: `A subscriber paid $20 for a revision consultation on "${revLetter.subject}".`,
                       link: `/admin/letters/${revLetterId}`,
                     });
-                    console.log(`[StripeWebhook] Revision consultation executed for letter #${revLetterId}`);
+                    stripeLogger.info({ letterId: revLetterId }, "[StripeWebhook] Revision consultation executed");
                   } else {
-                    console.warn(`[StripeWebhook] Revision consultation: letter #${revLetterId} not in client_approval_pending (status: ${revLetter?.status})`);
+                    stripeLogger.warn({ letterId: revLetterId, status: revLetter?.status }, "[StripeWebhook] Revision consultation: letter not in client_approval_pending");
                   }
                 } catch (revErr) {
-                  console.error(`[StripeWebhook] Failed to execute revision consultation for letter #${revLetterId}:`, revErr);
+                  stripeLogger.error({ err: revErr, letterId: revLetterId }, "[StripeWebhook] Failed to execute revision consultation");
                 }
               }
             }
@@ -467,7 +470,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                     commissionAmount,
                   });
                   const resolvedEmployeeId = metaEmployeeId ?? discountCode.employeeId;
-                  console.log(`[StripeWebhook] Subscription commission: $${(commissionAmount / 100).toFixed(2)} for employee #${resolvedEmployeeId} (original: $${(originalPrice / 100).toFixed(2)}, final: $${(saleAmount / 100).toFixed(2)}, plan: ${planId})`);
+                  stripeLogger.info({ commissionAmount, resolvedEmployeeId, originalPrice, saleAmount, planId }, "[StripeWebhook] Subscription commission created");
                   try {
                     const employee = await getUserById(resolvedEmployeeId);
                     const subscriber = await getUserById(userId);
@@ -509,12 +512,12 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       link: `/admin/affiliate`,
                     });
                   } catch (emailErr) {
-                    console.error(`[StripeWebhook] Commission email error (subscription):`, emailErr);
+                    stripeLogger.error({ err: emailErr }, "[StripeWebhook] Commission email error (subscription)");
                   }
                 }
               }
             } catch (commErr) {
-              console.error(`[StripeWebhook] Subscription commission tracking error:`, commErr);
+              stripeLogger.error({ err: commErr }, "[StripeWebhook] Subscription commission tracking error");
             }
           }
         }
@@ -530,7 +533,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         const userId = resolvedUserId || (await getUserIdFromStripeCustomer(customerId)) || 0;
 
         if (!userId) {
-          console.warn(`[StripeWebhook] ${event.type}: could not resolve userId`);
+          stripeLogger.warn({ eventType: event.type }, "[StripeWebhook] could not resolve userId");
           break;
         }
 
@@ -549,7 +552,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           cancelAtPeriodEnd: sub.cancel_at_period_end,
         });
 
-        console.log(`[StripeWebhook] Subscription ${event.type} for user ${userId}, status: ${status}`);
+        stripeLogger.info({ eventType: event.type, userId, status }, "[StripeWebhook] Subscription event processed");
 
         // ─── Auto-submit first letter for new subscribers (waives the $50 fee) ───
         // When a user subscribes and has a generated_locked first letter that hasn't been
@@ -621,18 +624,18 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       letterType: lockedLetter.letterType,
                       jurisdiction: lockedLetter.jurisdictionState ?? "Unknown",
                       appUrl: "https://www.talk-to-my-lawyer.com",
-                    }).catch(console.error);
-                    console.log(`[StripeWebhook] Auto-submitted first letter #${lockedLetter.id} for new subscriber ${userId}`);
+                    }).catch((e) => stripeLogger.error({ err: e }, "[StripeWebhook] Failed to notify attorneys for auto-submit"));
+                    stripeLogger.info({ letterId: lockedLetter.id, userId }, "[StripeWebhook] Auto-submitted first letter for new subscriber");
                   } catch (autoSubmitErr) {
-                    console.error(`[StripeWebhook] Failed to auto-submit letter #${lockedLetter.id}:`, autoSubmitErr);
+                    stripeLogger.error({ err: autoSubmitErr, letterId: lockedLetter.id }, "[StripeWebhook] Failed to auto-submit letter");
                   }
                 }
               } else {
-                console.log(`[StripeWebhook] New subscriber ${userId} has prior unlocked letters — no auto-submit`);
+                stripeLogger.info({ userId }, "[StripeWebhook] New subscriber has prior unlocked letters — no auto-submit");
               }
             }
           } catch (autoSubmitErr) {
-            console.error(`[StripeWebhook] Auto-submit first letter error for user ${userId}:`, autoSubmitErr);
+            stripeLogger.error({ err: autoSubmitErr, userId }, "[StripeWebhook] Auto-submit first letter error");
           }
         }
 
@@ -662,7 +665,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
           cancelAtPeriodEnd: true,
         });
 
-        console.log(`[StripeWebhook] Subscription canceled for user ${userId}`);
+        stripeLogger.info({ userId }, "[StripeWebhook] Subscription canceled");
         break;
       }
 
@@ -693,7 +696,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
               currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
               cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
             });
-            console.log(`[StripeWebhook] Invoice paid, subscription renewed for user ${userId}`);
+            stripeLogger.info({ userId }, "[StripeWebhook] Invoice paid, subscription renewed");
 
             // ─── Recurring commission tracking ───────────────────────────
             const subDiscountCode = sub.metadata?.discount_code as string | undefined;
@@ -719,7 +722,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                     commissionRate,
                     commissionAmount,
                   });
-                  console.log(`[StripeWebhook] Recurring commission: $${(commissionAmount / 100).toFixed(2)} for employee #${subEmployeeId} (plan: ${planId})`);
+                  stripeLogger.info({ commissionAmount, subEmployeeId, planId }, "[StripeWebhook] Recurring commission created");
                   try {
                     const employee = await getUserById(subEmployeeId);
                     const subscriber = await getUserById(userId);
@@ -753,11 +756,11 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                       link: `/admin/affiliate`,
                     });
                   } catch (notifyErr) {
-                    console.error(`[StripeWebhook] Recurring commission notification error:`, notifyErr);
+                    stripeLogger.error({ err: notifyErr }, "[StripeWebhook] Recurring commission notification error");
                   }
                 }
               } catch (commErr) {
-                console.error(`[StripeWebhook] Recurring commission tracking error:`, commErr);
+                stripeLogger.error({ err: commErr }, "[StripeWebhook] Recurring commission tracking error");
               }
             }
           }
@@ -768,7 +771,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       // ─── Invoice payment failed ────────────────────────────────────────────
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        console.warn(`[StripeWebhook] Invoice payment failed: ${invoice.id}`);
+        stripeLogger.warn({ invoiceId: invoice.id }, "[StripeWebhook] Invoice payment failed");
         try {
           const parentSub = (invoice.parent as any)?.subscription_details?.subscription;
           const subId = typeof parentSub === "string" ? parentSub : parentSub?.id;
@@ -786,7 +789,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
                   name: user.name ?? "Subscriber",
                   billingUrl: "https://www.talk-to-my-lawyer.com/subscriber/billing",
                 }).catch(err => {
-                  console.error("[StripeWebhook] Failed to send payment failed email:", err);
+                  stripeLogger.error({ err }, "[StripeWebhook] Failed to send payment failed email");
                   captureServerException(err, {
                     tags: { component: "stripe_webhook", error_type: "payment_failed_email" },
                   });
@@ -795,7 +798,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
             }
           }
         } catch (err) {
-          console.error("[StripeWebhook] Error handling payment_failed:", err);
+          stripeLogger.error({ err }, "[StripeWebhook] Error handling payment_failed");
           captureServerException(err, {
             tags: { component: "stripe_webhook", error_type: "payment_failed_handler" },
           });
@@ -804,7 +807,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       }
 
       default:
-        console.log(`[StripeWebhook] Unhandled event type: ${event.type}`);
+        stripeLogger.info({ eventType: event.type }, "[StripeWebhook] Unhandled event type");
     }
 
     if (db) {
@@ -817,7 +820,7 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
     res.json({ received: true });
     responded = true;
   } catch (err: any) {
-    console.error("[StripeWebhook] Error processing event:", err);
+    stripeLogger.error({ err }, "[StripeWebhook] Error processing event");
     captureServerException(err, {
       tags: { component: "stripe_webhook", event_type: event.type },
       extra: { eventId: event.id, eventType: event.type },

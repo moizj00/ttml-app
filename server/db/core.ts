@@ -3,6 +3,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { captureServerException } from "../sentry";
 import { discountCodes } from "../../drizzle/schema";
+import { createLogger } from "../logger";
+
+const dbLogger = createLogger({ module: "Database" });
 
 /**
  * Re-throws migration errors unless the failure is clearly idempotent
@@ -12,7 +15,7 @@ import { discountCodes } from "../../drizzle/schema";
 function throwIfUnexpectedMigrationError(label: string, err: unknown): void {
   const msg = err instanceof Error ? err.message : String(err);
   if (/already exists/i.test(msg)) {
-    console.log(`[Database] Migration: ${label} already applied — skipping`);
+    dbLogger.info({}, `[Database] Migration: ${label} already applied — skipping`);
     return;
   }
   captureServerException(err, { tags: { component: "database", error_type: "migration_failed", migration: label } });
@@ -38,9 +41,9 @@ export async function getDb() {
         connect_timeout: 10,
       });
       _db = drizzle(client);
-      console.log("[Database] Connected to Supabase (PostgreSQL)");
+      dbLogger.info({}, "[Database] Connected to Supabase (PostgreSQL)");
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      dbLogger.warn({ error }, "[Database] Failed to connect");
       captureServerException(error, { tags: { component: "database", error_type: "connection_failed" } });
       _db = null;
     }
@@ -52,7 +55,7 @@ export async function getDb() {
         .update(discountCodes)
         .set({ maxUses: null })
         .where(eq(discountCodes.maxUses, 1));
-      console.log("[Database] Migration: cleared maxUses:1 from discount codes");
+      dbLogger.info({}, "[Database] Migration: cleared maxUses:1 from discount codes");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("maxUses cleanup", migErr);
     }
@@ -62,7 +65,7 @@ export async function getDb() {
         ALTER TABLE letter_requests
         ADD COLUMN IF NOT EXISTS pipeline_locked_at TIMESTAMPTZ
       `);
-      console.log("[Database] Migration: ensured pipeline_locked_at column exists");
+      dbLogger.info({}, "[Database] Migration: ensured pipeline_locked_at column exists");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("pipeline_locked_at", migErr);
     }
@@ -82,7 +85,7 @@ export async function getDb() {
         CREATE INDEX IF NOT EXISTS idx_pipeline_lessons_type_jurisdiction_active
         ON pipeline_lessons (letter_type, jurisdiction, is_active)
       `);
-      console.log("[Database] Migration: ensured pipeline_lessons hardening columns exist");
+      dbLogger.info({}, "[Database] Migration: ensured pipeline_lessons hardening columns exist");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("pipeline_lessons hardening", migErr);
     }
@@ -95,7 +98,7 @@ export async function getDb() {
           WHEN duplicate_object THEN NULL;
         END $$
       `);
-      console.log("[Database] Migration: ensured 'consolidation' enum value exists");
+      dbLogger.info({}, "[Database] Migration: ensured 'consolidation' enum value exists");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("consolidation enum", migErr);
     }
@@ -115,7 +118,7 @@ export async function getDb() {
           WHEN duplicate_object THEN NULL;
         END $$
       `);
-      console.log("[Database] Migration: ensured client_revision_requested and client_declined enum values exist");
+      dbLogger.info({}, "[Database] Migration: ensured client_revision_requested and client_declined enum values exist");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("client approval statuses", migErr);
     }
@@ -128,7 +131,7 @@ export async function getDb() {
           WHEN duplicate_object THEN NULL;
         END $$
       `);
-      console.log("[Database] Migration: ensured 'assembly' job_type enum value exists");
+      dbLogger.info({}, "[Database] Migration: ensured 'assembly' job_type enum value exists");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("assembly job_type enum", migErr);
     }
@@ -151,7 +154,7 @@ export async function getDb() {
       await _db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_intake_form_templates_letter_type ON intake_form_templates (base_letter_type)
       `);
-      console.log("[Database] Migration: ensured intake_form_templates table exists");
+      dbLogger.info({}, "[Database] Migration: ensured intake_form_templates table exists");
     } catch (migErr) {
       throwIfUnexpectedMigrationError("intake_form_templates", migErr);
     }
@@ -178,10 +181,10 @@ export async function getReadDb() {
     });
     _readDb = drizzle(client);
     await _readDb.execute(sql`SELECT 1`);
-    console.log("[Database] Connected to read replica");
+    dbLogger.info({}, "[Database] Connected to read replica");
     return _readDb;
   } catch (error) {
-    console.warn("[Database] Read replica connection failed, falling back to primary:", error);
+    dbLogger.warn({ error }, "[Database] Read replica connection failed, falling back to primary");
     captureServerException(error, { tags: { component: "database", error_type: "read_replica_failed" } });
     _readDbFailed = true;
     _readDb = null;

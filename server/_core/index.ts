@@ -3,8 +3,10 @@ import "dotenv/config";
 import { initServerSentry, Sentry, captureServerException } from "../sentry";
 initServerSentry();
 
+import { logger } from "../logger";
+
 process.on("unhandledRejection", (reason) => {
-  console.error("[Process] Unhandled promise rejection:", reason);
+  logger.error({ module: "Process", reason }, "[Process] Unhandled promise rejection");
   captureServerException(reason instanceof Error ? reason : new Error(String(reason)), {
     tags: { component: "process", error_type: "unhandled_rejection" },
   });
@@ -15,7 +17,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("[Process] Uncaught exception:", err);
+  logger.error({ module: "Process", err }, "[Process] Uncaught exception");
   captureServerException(err, {
     tags: { component: "process", error_type: "uncaught_exception" },
   });
@@ -28,6 +30,7 @@ process.on("uncaughtException", (err) => {
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import crypto from "crypto";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
 import { registerSupabaseAuthRoutes, authenticateRequest } from "../supabaseAuth";
@@ -78,7 +81,8 @@ async function resolveListenPort(preferredPort: number): Promise<number> {
 
   for (let port = preferredPort + 1; port < preferredPort + 20; port += 1) {
     if (await isPortAvailable(port)) {
-      console.warn(
+      logger.warn(
+        { module: "Startup", preferredPort, fallbackPort: port },
         `[Startup] Port ${preferredPort} is in use, falling back to ${port} for development`
       );
       return port;
@@ -160,6 +164,22 @@ async function startServer() {
     }
     next();
   });
+
+  // ─── Request Logging Middleware ────────────────────────────────────────────
+  app.use((req, res, next) => {
+    const requestId = crypto.randomUUID();
+    const startTime = Date.now();
+    const reqLogger = logger.child({ module: "HTTP", requestId, method: req.method, url: req.url });
+    (req as any).log = reqLogger;
+    (req as any).requestId = requestId;
+    res.on("finish", () => {
+      const duration = Date.now() - startTime;
+      const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+      reqLogger[level]({ statusCode: res.statusCode, duration }, `${req.method} ${req.url} ${res.statusCode} ${duration}ms`);
+    });
+    next();
+  });
+  // ──────────────────────────────────────────────────────────────────────────
 
   // ─── Security Headers ─────────────────────────────────────────────────────
   app.use((_req, res, next) => {
@@ -290,15 +310,15 @@ async function startServer() {
   // which is caught by the top-level .catch(console.error) — the process exits
   // and the server never starts listening.
   await getDb();
-  console.log("[Startup] Database connection and startup migrations complete");
+  logger.info({ module: "Startup" }, "[Startup] Database connection and startup migrations complete");
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    logger.info({ module: "Startup", port }, `Server running on http://localhost:${port}/`);
     // Start in-process cron scheduler (draft reminders, etc.)
     startCronScheduler();
     // Check Cloudflare R2 connectivity
     checkR2Connectivity().catch((err) => {
-      console.error("[Startup] R2 connectivity check failed:", err);
+      logger.error({ module: "Startup", err }, "[Startup] R2 connectivity check failed");
       captureServerException(err, { tags: { component: "startup", error_type: "r2_connectivity_failed" } });
     });
     // Start background health probe (checks all dependencies every 30s)
@@ -307,6 +327,6 @@ async function startServer() {
 }
 
 startServer().catch((err) => {
-  console.error("[Fatal] Server failed to start:", err);
+  logger.error({ module: "Fatal", err }, "[Fatal] Server failed to start");
   process.exit(1);
 });

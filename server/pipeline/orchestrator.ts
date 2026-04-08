@@ -15,6 +15,7 @@ import {
 } from "../intake-normalizer";
 import { sendLetterReadyEmail, sendStatusUpdateEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
+import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode } from "./shared";
 import { createTokenAccumulator, calculateCost } from "./providers";
 import { validateIntakeCompleteness, addValidationResult } from "./validators";
@@ -23,6 +24,8 @@ import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./cita
 import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
+
+const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
 // ═══════════════════════════════════════════════════════
 // INTERMEDIATE CONTENT REGISTRY
@@ -85,9 +88,7 @@ export async function runFullPipeline(
 ): Promise<void> {
   const intakeCheck = validateIntakeCompleteness(intake);
   if (!intakeCheck.valid) {
-    console.error(
-      `[Pipeline] Intake pre-flight failed for letter #${letterId}: ${intakeCheck.errors.join("; ")}`
-    );
+    orchLogger.error({ letterId, errors: intakeCheck.errors }, "[Pipeline] Intake pre-flight failed");
     throw new PipelineError(
       PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
       `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
@@ -107,9 +108,7 @@ export async function runFullPipeline(
     },
     intake
   );
-  console.log(
-    `[Pipeline] Normalized intake for letter #${letterId}: letterType=${normalizedInput.letterType}, jurisdiction=${normalizedInput.jurisdiction.state}`
-  );
+  orchLogger.info({ letterId, letterType: normalizedInput.letterType, jurisdictionState: normalizedInput.jurisdiction.state }, "[Pipeline] Normalized intake");
 
   // ── Try n8n workflow first (primary path) ──────────────────────────────────
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "";
@@ -139,9 +138,7 @@ export async function runFullPipeline(
     await updateLetterStatus(letterId, "researching");
 
     try {
-      console.log(
-        `[Pipeline] Triggering n8n workflow for letter #${letterId}: ${n8nWebhookUrl}`
-      );
+      orchLogger.info({ letterId, url: n8nWebhookUrl }, "[Pipeline] Triggering n8n workflow");
       const callbackUrl = `${process.env.BUILT_IN_FORGE_API_URL ? "" : ""}/api/pipeline/n8n-callback`;
       // We fire-and-forget the n8n webhook — the callback endpoint will handle the result
       const payload = {
@@ -186,7 +183,7 @@ export async function runFullPipeline(
 
       if (response.ok) {
         const ack = await response.json().catch(() => ({}));
-        console.log(`[Pipeline] n8n acknowledged letter #${letterId}:`, ack);
+        orchLogger.info({ letterId, ack }, "[Pipeline] n8n acknowledged");
         await updateWorkflowJob(pipelineJobId, {
           status: "running",
           responsePayloadJson: { ack, mode: "n8n-async" },
@@ -195,9 +192,7 @@ export async function runFullPipeline(
         return;
       } else {
         const errText = await response.text().catch(() => "unknown");
-        console.warn(
-          `[Pipeline] n8n returned ${response.status} for letter #${letterId}: ${errText}. Falling back to in-app pipeline.`
-        );
+        orchLogger.warn({ letterId, status: response.status, errText }, "[Pipeline] n8n returned error — falling back to in-app pipeline");
         await updateWorkflowJob(pipelineJobId, {
           status: "failed",
           errorMessage: formatStructuredError(
@@ -211,21 +206,17 @@ export async function runFullPipeline(
       }
     } catch (n8nErr) {
       const n8nMsg = n8nErr instanceof Error ? n8nErr.message : String(n8nErr);
-      console.warn(
-        `[Pipeline] n8n call failed for letter #${letterId}: ${n8nMsg}. Falling back to in-app pipeline.`
-      );
+      orchLogger.warn({ letterId, err: n8nMsg }, "[Pipeline] n8n call failed — falling back to in-app pipeline");
     }
   } else {
-    console.log(
-      `[Pipeline] N8N_PRIMARY not set — using direct 4-stage pipeline (primary path) for letter #${letterId}`
-    );
+    orchLogger.info({ letterId }, "[Pipeline] N8N_PRIMARY not set — using direct 4-stage pipeline (primary path)");
   }
 
   // ── API key preflight for direct pipeline (only when NOT routing through n8n) ──
   const apiCheck = preflightApiKeyCheck("full");
   if (!apiCheck.ok) {
     const msg = `API key preflight failed: ${apiCheck.missing.join("; ")}`;
-    console.error(`[Pipeline] ${msg} for letter #${letterId}`);
+    orchLogger.error({ letterId, err: msg }, "[Pipeline] API key preflight failed");
     throw new PipelineError(
       PIPELINE_ERROR_CODES.API_KEY_MISSING,
       msg,
@@ -250,7 +241,7 @@ export async function runFullPipeline(
   });
   const rawPipelineJobId = (pipelineJob as any)?.insertId;
   if (rawPipelineJobId == null) {
-    console.warn(`[Pipeline] createWorkflowJob returned nullish insertId for pipeline job (letter #${letterId}), falling back to jobId=0`);
+    orchLogger.warn({ letterId }, "[Pipeline] createWorkflowJob returned nullish insertId for pipeline job, falling back to jobId=0");
   }
   const pipelineJobId = rawPipelineJobId ?? 0;
   await updateWorkflowJob(pipelineJobId, {
@@ -287,9 +278,7 @@ export async function runFullPipeline(
     });
 
     let citationRegistry = buildCitationRegistry(research);
-    console.log(
-      `[Pipeline] Built citation registry for letter #${letterId}: ${citationRegistry.length} citations extracted`
-    );
+    orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
 
     const citationTokens = createTokenAccumulator();
     const researchFromCache = researchProvider === "kv-cache";
@@ -308,9 +297,7 @@ export async function runFullPipeline(
       if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
       if (researchFromCache) reasons.push("research served from KV cache (already validated)");
       if (allHighConfidence) reasons.push("all citations already high confidence");
-      console.log(
-        `[Pipeline] Skipping citation revalidation for letter #${letterId}: ${reasons.join("; ")}`
-      );
+      orchLogger.info({ letterId, reasons }, "[Pipeline] Skipping citation revalidation");
     } else {
       const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
       const revalResult = await revalidateCitationsWithPerplexity(
@@ -341,10 +328,7 @@ export async function runFullPipeline(
       const criticalIssues = vettingResult.vettingReport.jurisdictionIssues
         .concat(vettingResult.vettingReport.citationsFlagged)
         .concat(vettingResult.vettingReport.factualIssuesFound);
-      console.warn(
-        `[Pipeline] Vetting critical issues after ${assemblyRetries} retries for letter #${letterId} — ` +
-        `saving degraded draft and proceeding to generated_locked. Issues: ${criticalIssues.join("; ")}`
-      );
+      orchLogger.warn({ letterId, assemblyRetries, issues: criticalIssues }, "[Pipeline] Vetting critical issues — saving degraded draft and proceeding to generated_locked");
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       pipelineCtx.qualityWarnings.push(...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`));
       pipelineCtx.qualityWarnings.push(`Vetting found critical issues after ${assemblyRetries} assembly retries. Attorney scrutiny required.`);
@@ -381,27 +365,19 @@ export async function runFullPipeline(
         }),
       },
     });
-    console.log(
-      `[Pipeline] Full 4-stage in-app pipeline completed for letter #${letterId} (vetting risk: ${vettingResult.vettingReport.riskLevel}, assembly retries: ${assemblyRetries})`
-    );
+    orchLogger.info({ letterId, vettingRisk: vettingResult.vettingReport.riskLevel, assemblyRetries }, "[Pipeline] Full 4-stage in-app pipeline completed");
 
     // ── Auto-unlock: if the letter was previously unlocked (paid/free),
     // skip generated_locked and go straight to pending_review ──
     try {
       await autoAdvanceIfPreviouslyUnlocked(letterId);
     } catch (autoUnlockErr) {
-      console.error(
-        `[Pipeline] Auto-unlock check failed for letter #${letterId} (pipeline still succeeded):`,
-        autoUnlockErr
-      );
+      orchLogger.error({ err: autoUnlockErr, letterId }, "[Pipeline] Auto-unlock check failed (pipeline still succeeded)");
       captureServerException(autoUnlockErr, { tags: { component: "pipeline", error_type: "auto_unlock_failed" }, extra: { letterId } });
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[Pipeline] Full pipeline failed for letter #${letterId}:`,
-      msg
-    );
+    orchLogger.error({ letterId, err: msg }, "[Pipeline] Full pipeline failed");
     captureServerException(err, {
       tags: { pipeline_stage: "full_pipeline", letter_id: String(letterId) },
       extra: { pipelineJobId, errorMessage: msg },
@@ -425,6 +401,7 @@ export async function runFullPipeline(
 // that import directly from orchestrator (e.g. worker.ts).
 export { bestEffortFallback, autoAdvanceIfPreviouslyUnlocked, FALLBACK_EXCLUDED_CODES } from "./fallback";
 
+
 // ═══════════════════════════════════════════════════════
 // RETRY LOGIC
 // ═══════════════════════════════════════════════════════
@@ -439,7 +416,7 @@ export async function retryPipelineFromStage(
     const letter = await getLetterById(letterId);
     if (letter?.intakeJson && typeof letter.intakeJson === "object") {
       intake = letter.intakeJson as IntakeJson;
-      console.warn(`[Pipeline] Retry for letter #${letterId}: intake was null/invalid in job data — recovered from database`);
+      orchLogger.warn({ letterId }, "[Pipeline] Retry: intake was null/invalid in job data — recovered from database");
     } else {
       throw new PipelineError(
         PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
@@ -453,7 +430,7 @@ export async function retryPipelineFromStage(
   const apiCheck = preflightApiKeyCheck(stage);
   if (!apiCheck.ok) {
     const msg = `API key preflight failed for ${stage} retry: ${apiCheck.missing.join("; ")}`;
-    console.error(`[Pipeline] ${msg} for letter #${letterId}`);
+    orchLogger.error({ letterId, err: msg }, "[Pipeline] API key preflight failed for retry");
     throw new PipelineError(
       PIPELINE_ERROR_CODES.API_KEY_MISSING,
       msg,
@@ -480,7 +457,7 @@ export async function retryPipelineFromStage(
   });
   const rawRetryJobId = (retryJob as any)?.insertId;
   if (rawRetryJobId == null) {
-    console.warn(`[Pipeline] createWorkflowJob returned nullish insertId for retry job (letter #${letterId}), falling back to jobId=0`);
+    orchLogger.warn({ letterId }, "[Pipeline] createWorkflowJob returned nullish insertId for retry job, falling back to jobId=0");
   }
   const retryJobId = rawRetryJobId ?? 0;
   await updateWorkflowJob(retryJobId, {
@@ -513,10 +490,7 @@ export async function retryPipelineFromStage(
       const criticalIssues = vettingResult.vettingReport.jurisdictionIssues
         .concat(vettingResult.vettingReport.citationsFlagged)
         .concat(vettingResult.vettingReport.factualIssuesFound);
-      console.warn(
-        `[Pipeline] Retry vetting critical issues after ${assemblyRetries} retries for letter #${letterId} — ` +
-        `saving degraded draft. Issues: ${criticalIssues.join("; ")}`
-      );
+      orchLogger.warn({ letterId, assemblyRetries, issues: criticalIssues }, "[Pipeline] Retry vetting critical issues — saving degraded draft");
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       pipelineCtx.qualityWarnings.push(...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`));
       pipelineCtx.qualityWarnings.push(`Vetting found critical issues after ${assemblyRetries} assembly retries. Attorney scrutiny required.`);

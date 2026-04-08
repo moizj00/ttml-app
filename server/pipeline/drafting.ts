@@ -12,12 +12,16 @@ import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, Pi
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
+import { createLogger } from "../logger";
+
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
 import { buildDraftingSystemPrompt, buildDraftingUserPrompt } from "./prompts";
+
+const draftLogger = createLogger({ module: "PipelineDrafting" });
 
 // ═══════════════════════════════════════════════════════
 // STAGE 2: OPENAI DRAFT GENERATION
@@ -54,7 +58,7 @@ export async function runDraftingStage(
     noteVisibility: "internal",
     fromStatus: "researching",
     toStatus: "drafting",
-  }).catch(e => console.error(`[Pipeline] Failed to log researching→drafting action for #${letterId}:`, e));
+  }).catch(e => draftLogger.error({ err: e, letterId }, "[Pipeline] Failed to log researching→drafting action"));
   try {
     const { notifyAdmins } = await import("../db");
     await notifyAdmins({
@@ -65,7 +69,7 @@ export async function runDraftingStage(
       link: `/admin/letters/${letterId}`,
     });
   } catch (err) {
-    console.error("[notifyAdmins] pipeline_drafting:", err);
+    draftLogger.error({ err }, "[notifyAdmins] pipeline_drafting");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_drafting" } });
   }
 
@@ -95,7 +99,7 @@ export async function runDraftingStage(
   const isControlRun = controlPct > 0 && Math.random() * 100 < controlPct;
   if (isControlRun) {
     ragAbGroup = "control";
-    console.log(`[Pipeline] Stage 2: A/B control group — skipping RAG injection for letter #${letterId} (controlPct=${controlPct}%)`);
+    draftLogger.info({ letterId, controlPct }, "[Pipeline] Stage 2: A/B control group — skipping RAG injection");
   } else {
     try {
       const { findSimilarLetters } = await import("./embeddings");
@@ -116,11 +120,11 @@ export async function runDraftingStage(
             similarLetters.map((sl: { content: string; similarity: number }, i: number) =>
               `### Example ${i + 1} (similarity: ${(sl.similarity * 100).toFixed(0)}%)\n${sl.content.slice(0, 2000)}`
             ).join("\n\n");
-          console.log(`[Pipeline] Stage 2: Injected ${similarLetters.length} RAG examples for letter #${letterId}`);
+          draftLogger.info({ letterId, count: similarLetters.length }, "[Pipeline] Stage 2: Injected RAG examples");
         }
       }
     } catch (ragErr) {
-      console.warn(`[Pipeline] Stage 2: RAG retrieval failed for letter #${letterId} (non-blocking):`, ragErr);
+      draftLogger.warn({ err: ragErr, letterId }, "[Pipeline] Stage 2: RAG retrieval failed (non-blocking)");
     }
   }
 
@@ -136,9 +140,7 @@ export async function runDraftingStage(
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
-  console.log(
-    `[Pipeline] Stage 2: targetWordCount=${targetWordCount} for letterType=${intake.letterType}`
-  );
+  draftLogger.info({ letterId, targetWordCount, letterType: intake.letterType }, "[Pipeline] Stage 2: target word count determined");
   const draftUserPrompt = buildDraftingUserPrompt(
     normalizedIntake,
     targetWordCount,
@@ -257,9 +259,7 @@ export async function runDraftingStage(
   };
 
   try {
-    console.log(
-      `[Pipeline] Stage 2: Claude structured drafting for letter #${letterId}`
-    );
+    draftLogger.info({ letterId }, "[Pipeline] Stage 2: Claude structured drafting starting");
 
     const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
@@ -286,9 +286,7 @@ export async function runDraftingStage(
     );
 
     if (initialDraftProvider === "groq-oss-fallback") {
-      console.warn(
-        `[Pipeline] Stage 2: Groq Llama 3.3 used as last-resort for letter #${letterId} (DRAFT_OSS_FALLBACK)`
-      );
+      draftLogger.warn({ letterId }, "[Pipeline] Stage 2: Groq Llama 3.3 used as last-resort (DRAFT_OSS_FALLBACK)");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
@@ -296,9 +294,7 @@ export async function runDraftingStage(
         );
       }
     } else if (draftFailover) {
-      console.warn(
-        `[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${draftProvider})`
-      );
+      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini failover");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
@@ -333,9 +329,7 @@ export async function runDraftingStage(
         warnings: [],
         timestamp: new Date().toISOString(),
       });
-      console.warn(
-        `[Pipeline] Stage 2: First attempt failed validation for letter #${letterId}: ${retryErrors.join("; ")}. Retrying (1 of 1)...`
-      );
+      draftLogger.warn({ letterId, errors: retryErrors }, "[Pipeline] Stage 2: First attempt failed validation — retrying (1 of 1)");
       const retryResult = await retryOnValidationFailure(
         async (feedback) => {
           const r = await generateDraft(feedback);
@@ -411,11 +405,7 @@ export async function runDraftingStage(
     });
 
     if (finalConsistency.jurisdictionMismatch) {
-      console.warn(
-        `[Pipeline] Stage 2: Jurisdiction mismatch for letter #${letterId}${needsRetry ? " persists after retry" : ""} — ` +
-        `found "${finalConsistency.foundJurisdiction}", expected "${finalConsistency.expectedJurisdiction}". ` +
-        `Attaching as quality warning and continuing to assembly/vetting.`
-      );
+      draftLogger.warn({ letterId, found: finalConsistency.foundJurisdiction, expected: finalConsistency.expectedJurisdiction }, "[Pipeline] Stage 2: Jurisdiction mismatch — attaching as quality warning and continuing");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
@@ -426,9 +416,7 @@ export async function runDraftingStage(
 
     if (!finalGrounding.passed) {
       draft.groundingWarnings = finalGrounding.ungroundedCitations;
-      console.warn(
-        `[Pipeline] Stage 2: ${finalGrounding.ungroundedCitations.length} ungrounded citations for letter #${letterId}${needsRetry ? " after retry" : ""}. Storing with groundingWarnings.`
-      );
+      draftLogger.warn({ letterId, count: finalGrounding.ungroundedCitations.length }, "[Pipeline] Stage 2: Ungrounded citations found — storing with groundingWarnings");
     }
 
     if (pipelineCtx) {
@@ -484,11 +472,11 @@ export async function runDraftingStage(
       },
     });
 
-    console.log(`[Pipeline] Stage 2 complete for letter #${letterId} (provider: ${draftProvider})`);
+    draftLogger.info({ letterId, provider: draftProvider }, "[Pipeline] Stage 2 complete");
     return draft;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Pipeline] Stage 2 failed for letter #${letterId}:`, msg);
+    draftLogger.error({ err, letterId }, "[Pipeline] Stage 2 failed");
     captureServerException(err, {
       tags: { pipeline_stage: "drafting", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },

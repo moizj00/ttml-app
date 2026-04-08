@@ -8,6 +8,9 @@
 
 import { Resend } from "resend";
 import { ENV } from "../_core/env";
+import { createLogger } from "../logger";
+
+const emailLogger = createLogger({ module: "Email" });
 
 export type EmailPayload = { type: string; [key: string]: unknown };
 
@@ -58,15 +61,15 @@ export async function dispatchToWorker(payload: EmailPayload): Promise<boolean> 
     clearTimeout(timer);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.error(`[Email] Worker returned ${res.status} for type=${payload.type}: ${body}`);
+      emailLogger.error({ status: res.status, type: payload.type, body }, "[Email] Worker returned error");
       return false;
     }
-    console.log(`[Email] Dispatched to Worker, type=${payload.type}`);
+    emailLogger.info({ type: payload.type }, "[Email] Dispatched to Worker");
     return true;
   } catch (err) {
     clearTimeout(timer);
     const label = (err as { name?: string }).name === "AbortError" ? "timed out" : "failed";
-    console.error(`[Email] Worker dispatch ${label} for type=${payload.type}:`, err);
+    emailLogger.error({ err, type: payload.type, label }, "[Email] Worker dispatch failed");
     return false;
   }
 }
@@ -255,9 +258,9 @@ export async function sendEmail(opts: {
       html: opts.html,
       text: opts.text,
     });
-    if (error) console.error("[Email] Resend error:", error);
+    if (error) emailLogger.error({ err: error }, "[Email] Resend error");
   } catch (err) {
-    console.error("[Email] Failed to send:", err);
+    emailLogger.error({ err }, "[Email] Failed to send");
   }
 }
 
@@ -279,20 +282,20 @@ export async function sendWithRetry(opts: {
         text: opts.text,
       });
       if (result.error) {
-        console.error(`[Email] Resend API error (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}:`, JSON.stringify(result.error));
+        emailLogger.error({ attempt: attempt + 1, to: opts.to, err: result.error }, "[Email] Resend API error");
         lastErr = result.error;
       } else {
-        console.log(`[Email] Sent successfully (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}, id=${result.data?.id ?? "unknown"}`);
+        emailLogger.info({ attempt: attempt + 1, to: opts.to, id: result.data?.id ?? "unknown" }, "[Email] Sent successfully");
         return;
       }
     } catch (err) {
       lastErr = err;
-      console.error(`[Email] Send exception (attempt ${attempt + 1}), from=${FROM}, to=${opts.to}:`, err);
+      emailLogger.error({ attempt: attempt + 1, to: opts.to, err }, "[Email] Send exception");
     }
     if (attempt < delays.length) {
       await new Promise(r => setTimeout(r, delays[attempt]));
     }
   }
-  console.error(`[Email] All retry attempts exhausted, from=${FROM}, to=${opts.to}:`, lastErr);
+  emailLogger.error({ to: opts.to, err: lastErr }, "[Email] All retry attempts exhausted");
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }

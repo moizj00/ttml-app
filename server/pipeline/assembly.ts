@@ -8,12 +8,17 @@ import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, Pi
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
 import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
+import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
+
 import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
 import { buildAssemblySystemPrompt, buildAssemblyUserPrompt } from "./prompts";
+
+const assemblyLogger = createLogger({ module: "PipelineAssembly" });
 
 // ═══════════════════════════════════════════════════════
 // STAGE 3: CLAUDE FINAL LETTER ASSEMBLY
@@ -163,9 +168,7 @@ export async function runAssemblyStage(
   const maxWords = Math.floor(targetWordCount * 2.0);
 
   try {
-    console.log(
-      `[Pipeline] Stage 3: Claude final assembly for letter #${letterId}`
-    );
+    assemblyLogger.info({ letterId }, "[Pipeline] Stage 3: Claude final assembly starting");
 
     const { result: firstAssemblyResult, provider: initialAssemblyProvider, failoverTriggered: assemblyFailover } = await withModelFailover(
       "Stage 3 (assembly)",
@@ -206,9 +209,7 @@ export async function runAssemblyStage(
     );
 
     if (initialAssemblyProvider === "groq-oss-fallback") {
-      console.warn(
-        `[Pipeline] Stage 3: Groq Llama 3.3 used as last-resort for letter #${letterId} (ASSEMBLY_OSS_FALLBACK)`
-      );
+      assemblyLogger.warn({ letterId }, "[Pipeline] Stage 3: Groq Llama 3.3 used as last-resort (ASSEMBLY_OSS_FALLBACK)");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
@@ -216,9 +217,7 @@ export async function runAssemblyStage(
         );
       }
     } else if (assemblyFailover) {
-      console.warn(
-        `[Pipeline] Stage 3: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${assemblyProvider})`
-      );
+      assemblyLogger.warn({ letterId, provider: assemblyProvider }, "[Pipeline] Stage 3: Switched to OpenAI GPT-4o-mini failover");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
@@ -243,9 +242,7 @@ export async function runAssemblyStage(
         warnings: [],
         timestamp: new Date().toISOString(),
       });
-      console.warn(
-        `[Pipeline] Stage 3: First attempt failed validation for letter #${letterId}: ${checks.allErrors.join("; ")}. Retrying (1 of 1)...`
-      );
+      assemblyLogger.warn({ letterId, errors: checks.allErrors }, "[Pipeline] Stage 3: First attempt failed validation — retrying (1 of 1)");
       const retryLetter = await retryOnValidationFailure(
         generateAssembly,
         checks.allErrors,
@@ -329,13 +326,11 @@ export async function runAssemblyStage(
       },
     });
 
-    console.log(
-      `[Pipeline] Stage 3 complete for letter #${letterId} — assembled letter ready for vetting (provider: ${assemblyProvider})`
-    );
+    assemblyLogger.info({ letterId, provider: assemblyProvider }, "[Pipeline] Stage 3 complete — assembled letter ready for vetting");
     return rawFinalLetter;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Pipeline] Stage 3 failed for letter #${letterId}:`, msg);
+    assemblyLogger.error({ err, letterId }, "[Pipeline] Stage 3 failed");
     captureServerException(err, {
       tags: { pipeline_stage: "assembly", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
