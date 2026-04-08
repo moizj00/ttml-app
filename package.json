@@ -56,7 +56,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/pdfkit": "^0.17.5",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.36.2",
+    "@upstash/redis": "^1.37.0",
     "ai": "^6.0.38",
     "bullmq": "^5.71.1",
     "class-variance-authority": "^0.7.1",
