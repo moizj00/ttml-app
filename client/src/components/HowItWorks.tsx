@@ -198,8 +198,7 @@ function Step1Panel() {
               ))}
               <div className="flex items-center gap-2 pt-1">
                 <div className="h-2.5 rounded-full" style={{ width: "45%", background: `rgba(37,99,235,0.1)` }} />
-                <motion.div className="w-0.5 h-4 rounded-full" style={{ background: B.primary }}
-                  animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 0.8, repeat: Infinity }} />
+                <div className="w-0.5 h-4 rounded-full animate-pulse" style={{ background: B.primary }} />
               </div>
             </div>
           </div>
@@ -224,6 +223,7 @@ function Step1Panel() {
 }
 
 function Step2Panel() {
+  const prefersReducedMotion = useReducedMotion();
   return (
     <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-12 lg:px-20 py-4 sm:py-0 overflow-y-auto">
       <div className="max-w-5xl w-full grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center">
@@ -232,6 +232,7 @@ function Step2Panel() {
             className="relative rounded-2xl overflow-hidden shadow-2xl"
             style={{ background: "white", border: `1px solid rgba(37,99,235,0.1)`, minHeight: 260, boxShadow: `0 25px 50px -12px rgba(37,99,235,0.1)` }}
           >
+            {!prefersReducedMotion && (
             <motion.div
               className="absolute top-0 left-0 right-0 h-24 z-20 pointer-events-none"
               style={{
@@ -241,6 +242,7 @@ function Step2Panel() {
               animate={{ y: ["-100%", "300%"] }}
               transition={{ duration: 2, ease: "linear", repeat: Infinity }}
             />
+            )}
             <div className="p-6 space-y-3 pt-8">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="h-3 rounded-full"
@@ -445,8 +447,9 @@ function ProgressBar({ scrollProgress }: { scrollProgress: ReturnType<typeof use
 
 export default function HowItWorks() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
   const scrollProgress = useScrollProgress(containerRef);
-  const smoothProgress = useSpring(scrollProgress, { stiffness: 80, damping: 30 });
+  const smoothProgress = useSpring(scrollProgress, prefersReducedMotion ? { stiffness: 300, damping: 50 } : { stiffness: 80, damping: 30 });
   const translateX = useTransform(smoothProgress, [0, 1], ["0%", `-${(PANELS.length - 1) * 100}%`]);
 
   return (
