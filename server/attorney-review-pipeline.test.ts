@@ -20,6 +20,21 @@ import type { TrpcContext } from "./_core/context";
 const SERVER_DIR = join(__dirname);
 const CLIENT_SRC = join(__dirname, "..", "client", "src");
 
+function readAllSupabaseAuth(): string {
+  const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const subDir = join(SERVER_DIR, "supabaseAuth");
+  const subFiles = ["helpers.ts", "jwt.ts", "routes.ts", "index.ts", "client.ts", "user-cache.ts"];
+  const subContents = subFiles
+    .map(f => { try { return readFileSync(join(subDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  const routesSubDir = join(subDir, "routes");
+  const routeSubFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts", "index.ts"];
+  const routeSubContents = routeSubFiles
+    .map(f => { try { return readFileSync(join(routesSubDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  return subContents + "\n" + routeSubContents + "\n" + barrel;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -378,7 +393,7 @@ describe("Attorney Session Refresh — Role Updates Without Logout", () => {
   });
 
   it("verifyToken reads role from DB on every request (not from JWT)", () => {
-    const authFile = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+    const authFile = readAllSupabaseAuth();
     // verifyToken must call getUserByOpenId (DB lookup) not just decode the JWT
     expect(authFile).toContain("getUserByOpenId");
     // verifyToken is defined at line ~338, getUserByOpenId is called at line ~393
@@ -387,7 +402,9 @@ describe("Attorney Session Refresh — Role Updates Without Logout", () => {
   });
 
   it("updateRole sends in-app notification to promoted attorney", () => {
-    const routersFile = readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8");
+    const adminRouter = readFileSync(join(SERVER_DIR, "routers", "admin.ts"), "utf-8");
+    const adminService = (() => { try { return readFileSync(join(SERVER_DIR, "services", "admin.ts"), "utf-8"); } catch { return ""; } })();
+    const routersFile = adminRouter + "\n" + adminService;
     expect(routersFile).toContain("createNotification");
     expect(routersFile).toContain("role_updated");
     expect(routersFile).toContain("Review Center");

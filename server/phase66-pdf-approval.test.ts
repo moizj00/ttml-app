@@ -161,7 +161,7 @@ describe("approval flow", () => {
   it("approve procedure imports generateAndUploadApprovedPdf", () => {
     const routersSource = readAllRouters();
     expect(routersSource).toContain("generateAndUploadApprovedPdf");
-    expect(routersSource).toContain("intakeJson: letter.intakeJson as any");
+    expect(routersSource).toMatch(/intakeJson:\s*letter\.intakeJson/);
   });
 
   it("approve procedure calls updateLetterPdfUrl after PDF generation", () => {

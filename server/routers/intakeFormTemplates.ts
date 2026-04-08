@@ -1,9 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq, and, asc } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db/core";
-import { intakeFormTemplates } from "../../drizzle/schema";
+import {
+  dbListIntakeFormTemplates,
+  dbGetIntakeFormTemplateById,
+  dbCountActiveIntakeFormTemplates,
+  dbCreateIntakeFormTemplate,
+  dbUpdateIntakeFormTemplate,
+  dbDeleteIntakeFormTemplate,
+} from "../db/intake-form-templates";
 
 const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "subscriber" && ctx.user.role !== "admin") {
@@ -43,109 +48,48 @@ const templateInputSchema = z.object({
 
 export const intakeFormTemplatesRouter = router({
   list: subscriberProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-    return db
-      .select()
-      .from(intakeFormTemplates)
-      .where(
-        and(
-          eq(intakeFormTemplates.ownerUserId, ctx.user.id),
-          eq(intakeFormTemplates.active, true),
-        )
-      )
-      .orderBy(asc(intakeFormTemplates.id));
+    return dbListIntakeFormTemplates(ctx.user.id);
   }),
 
   getById: subscriberProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const rows = await db
-        .select()
-        .from(intakeFormTemplates)
-        .where(
-          and(
-            eq(intakeFormTemplates.id, input.id),
-            eq(intakeFormTemplates.ownerUserId, ctx.user.id),
-          )
-        )
-        .limit(1);
-      if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      return rows[0];
+      const template = await dbGetIntakeFormTemplateById(input.id, ctx.user.id);
+      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      return template;
     }),
 
   create: subscriberProcedure
     .input(templateInputSchema)
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const existing = await db
-        .select({ id: intakeFormTemplates.id })
-        .from(intakeFormTemplates)
-        .where(
-          and(
-            eq(intakeFormTemplates.ownerUserId, ctx.user.id),
-            eq(intakeFormTemplates.active, true),
-          )
-        );
-      if (existing.length >= 20) {
+      const count = await dbCountActiveIntakeFormTemplates(ctx.user.id);
+      if (count >= 20) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Maximum of 20 intake form templates allowed" });
       }
-      const result = await db
-        .insert(intakeFormTemplates)
-        .values({
-          ownerUserId: ctx.user.id,
-          title: input.title,
-          baseLetterType: input.baseLetterType,
-          fieldConfig: input.fieldConfig,
-        })
-        .returning();
-      return result[0];
+      const template = await dbCreateIntakeFormTemplate({
+        ownerUserId: ctx.user.id,
+        title: input.title,
+        baseLetterType: input.baseLetterType,
+        fieldConfig: input.fieldConfig,
+      });
+      if (!template) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      return template;
     }),
 
   update: subscriberProcedure
     .input(z.object({ id: z.number() }).merge(templateInputSchema.partial()))
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const { id, ...updates } = input;
-      const result = await db
-        .update(intakeFormTemplates)
-        .set({
-          ...(updates.title !== undefined && { title: updates.title }),
-          ...(updates.baseLetterType !== undefined && { baseLetterType: updates.baseLetterType }),
-          ...(updates.fieldConfig !== undefined && { fieldConfig: updates.fieldConfig }),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(intakeFormTemplates.id, id),
-            eq(intakeFormTemplates.ownerUserId, ctx.user.id),
-          )
-        )
-        .returning();
-      if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      return result[0];
+      const template = await dbUpdateIntakeFormTemplate(id, ctx.user.id, updates);
+      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      return template;
     }),
 
   delete: subscriberProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const result = await db
-        .update(intakeFormTemplates)
-        .set({ active: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(intakeFormTemplates.id, input.id),
-            eq(intakeFormTemplates.ownerUserId, ctx.user.id),
-          )
-        )
-        .returning({ id: intakeFormTemplates.id });
-      if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      const deleted = await dbDeleteIntakeFormTemplate(input.id, ctx.user.id);
+      if (!deleted) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
       return { success: true };
     }),
 });

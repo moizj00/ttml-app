@@ -15,9 +15,23 @@ const readAllRouters = () => {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
   return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
 };
+function readAllSupabaseAuth(): string {
+  const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const subDir = join(SERVER_DIR, "supabaseAuth");
+  const subFiles = ["helpers.ts", "jwt.ts", "routes.ts", "index.ts", "client.ts", "user-cache.ts"];
+  const subContents = subFiles
+    .map(f => { try { return readFileSync(join(subDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  const routesSubDir = join(subDir, "routes");
+  const routeSubFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts", "index.ts"];
+  const routeSubContents = routeSubFiles
+    .map(f => { try { return readFileSync(join(routesSubDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  return subContents + "\n" + routeSubContents + "\n" + barrel;
+}
 
 describe("User Cache Layer — supabaseAuth.ts", () => {
-  const authFile = readServer("supabaseAuth.ts");
+  const authFile = readAllSupabaseAuth();
 
   // ── Cache infrastructure ────────────────────────────────────────────────
 

@@ -1,11 +1,15 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq, asc, and } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db/core";
-import { letterTemplates, letterTypeEnum } from "../../drizzle/schema";
-
-type LetterType = (typeof letterTypeEnum.enumValues)[number];
+import { TRPCError } from "@trpc/server";
+import {
+  dbListActiveTemplates,
+  dbGetTemplateById,
+  dbListAllTemplates,
+  dbCreateTemplate,
+  dbUpdateTemplate,
+  dbToggleTemplateActive,
+  dbDeleteTemplate,
+} from "../db";
 
 const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "subscriber" && ctx.user.role !== "admin") {
@@ -57,109 +61,42 @@ const templateInputSchema = z.object({
 
 export const templatesRouter = router({
   listActive: subscriberProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-    const rows = await db
-      .select()
-      .from(letterTemplates)
-      .where(eq(letterTemplates.active, true))
-      .orderBy(asc(letterTemplates.sortOrder), asc(letterTemplates.id));
-    return rows.map(({ contextualNotes, ...safe }) => safe);
+    return dbListActiveTemplates();
   }),
 
   getById: subscriberProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const isAdmin = ctx.user.role === "admin";
-      const conditions = isAdmin
-        ? eq(letterTemplates.id, input.id)
-        : and(eq(letterTemplates.id, input.id), eq(letterTemplates.active, true));
-      const rows = await db
-        .select()
-        .from(letterTemplates)
-        .where(conditions)
-        .limit(1);
-      if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      const template = rows[0];
-      if (!isAdmin) {
-        const { contextualNotes, ...safeTemplate } = template;
-        return safeTemplate;
-      }
-      return template;
+      return dbGetTemplateById(input.id, isAdmin);
     }),
 
   listAll: adminProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-    return db
-      .select()
-      .from(letterTemplates)
-      .orderBy(asc(letterTemplates.sortOrder), asc(letterTemplates.id));
+    return dbListAllTemplates();
   }),
 
   create: adminProcedure
     .input(templateInputSchema)
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const result = await db
-        .insert(letterTemplates)
-        .values({
-          title: input.title,
-          scenarioDescription: input.scenarioDescription,
-          category: input.category,
-          tags: input.tags,
-          letterType: input.letterType as LetterType,
-          prefillData: input.prefillData,
-          active: input.active,
-          sortOrder: input.sortOrder,
-          contextualNotes: input.contextualNotes ?? null,
-        })
-        .returning();
-      return result[0];
+      return dbCreateTemplate(input as Parameters<typeof dbCreateTemplate>[0]);
     }),
 
   update: adminProcedure
     .input(z.object({ id: z.number() }).merge(templateInputSchema.partial()))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const { id, ...updates } = input;
-      const result = await db
-        .update(letterTemplates)
-        .set({ ...updates, letterType: updates.letterType as LetterType | undefined, updatedAt: new Date() })
-        .where(eq(letterTemplates.id, id))
-        .returning();
-      if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      return result[0];
+      return dbUpdateTemplate(id, updates as Parameters<typeof dbUpdateTemplate>[1]);
     }),
 
   toggleActive: adminProcedure
     .input(z.object({ id: z.number(), active: z.boolean() }))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const result = await db
-        .update(letterTemplates)
-        .set({ active: input.active, updatedAt: new Date() })
-        .where(eq(letterTemplates.id, input.id))
-        .returning();
-      if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      return result[0];
+      return dbToggleTemplateActive(input.id, input.active);
     }),
 
   delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
-      const result = await db
-        .delete(letterTemplates)
-        .where(eq(letterTemplates.id, input.id))
-        .returning({ id: letterTemplates.id });
-      if (!result.length) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
-      return { success: true };
+      return dbDeleteTemplate(input.id);
     }),
 });

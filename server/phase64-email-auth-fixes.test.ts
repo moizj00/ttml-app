@@ -273,8 +273,11 @@ describe("ForgotPassword — redirectTo URL", () => {
   it("redirectTo points to /reset-password (not /login or /verify-email)", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const filePath = path.join(process.cwd(), "server/supabaseAuth.ts");
-    const content = fs.readFileSync(filePath, "utf-8");
+    const serverDir = path.join(process.cwd(), "server");
+    const barrel = fs.readFileSync(path.join(serverDir, "supabaseAuth.ts"), "utf-8");
+    const subFiles = ["client.ts", "user-cache.ts", "helpers.ts", "jwt.ts", "routes.ts", "index.ts"];
+    const routeFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts"];
+    const content = barrel + "\n" + subFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", f), "utf-8"); } catch { return ""; } }).join("\n") + "\n" + routeFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", "routes", f), "utf-8"); } catch { return ""; } }).join("\n");
     // The forgot-password route should redirect to /reset-password
     expect(content).toContain("/reset-password");
     expect(content).toContain("resetPasswordForEmail");
@@ -283,8 +286,11 @@ describe("ForgotPassword — redirectTo URL", () => {
   it("supabaseAuth.ts contains EMAIL_NOT_VERIFIED code in login route", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const filePath = path.join(process.cwd(), "server/supabaseAuth.ts");
-    const content = fs.readFileSync(filePath, "utf-8");
+    const serverDir = path.join(process.cwd(), "server");
+    const barrel = fs.readFileSync(path.join(serverDir, "supabaseAuth.ts"), "utf-8");
+    const subFiles = ["client.ts", "user-cache.ts", "helpers.ts", "jwt.ts", "routes.ts", "index.ts"];
+    const routeFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts"];
+    const content = barrel + "\n" + subFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", f), "utf-8"); } catch { return ""; } }).join("\n") + "\n" + routeFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", "routes", f), "utf-8"); } catch { return ""; } }).join("\n");
     expect(content).toContain("EMAIL_NOT_VERIFIED");
     expect(content).toContain("Email not confirmed");
   });
@@ -292,8 +298,11 @@ describe("ForgotPassword — redirectTo URL", () => {
   it("verify-email route uses record.userId (not stale findValidVerificationToken call)", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const filePath = path.join(process.cwd(), "server/supabaseAuth.ts");
-    const content = fs.readFileSync(filePath, "utf-8");
+    const serverDir = path.join(process.cwd(), "server");
+    const barrel = fs.readFileSync(path.join(serverDir, "supabaseAuth.ts"), "utf-8");
+    const subFiles = ["client.ts", "user-cache.ts", "helpers.ts", "jwt.ts", "routes.ts", "index.ts"];
+    const routeFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts"];
+    const content = barrel + "\n" + subFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", f), "utf-8"); } catch { return ""; } }).join("\n") + "\n" + routeFiles.map(f => { try { return fs.readFileSync(path.join(serverDir, "supabaseAuth", "routes", f), "utf-8"); } catch { return ""; } }).join("\n");
     // The old dead-code pattern should NOT be present
     expect(content).not.toContain("tokenRecord is now null (already consumed)");
     // The new pattern should be present

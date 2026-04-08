@@ -6,10 +6,17 @@ import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
   adminProcedure,
-  protectedProcedure,
   publicProcedure,
   router,
 } from "../_core/trpc";
+import {
+  syncCodeToWorkerAllowlist,
+  intakeJsonSchema,
+  employeeProcedure,
+  attorneyProcedure,
+  subscriberProcedure,
+  getAppUrl,
+} from "./_shared";
 import {
   claimLetterForReview,
   createAttachment,
@@ -128,136 +135,11 @@ import {
   hasEverSubscribed,
 } from "../stripe";
 
-/**
- * Sync a discount code to/from the Cloudflare Worker KV allowlist.
- * Called fire-and-forget (errors are swallowed) — the Worker degrades gracefully
- * to not redirecting unknown codes; any temporary sync failure is non-critical.
- */
-async function syncCodeToWorkerAllowlist(code: string, action: "add" | "remove"): Promise<void> {
-  const workerUrl = process.env.AFFILIATE_WORKER_URL ?? "";
-  const secret = process.env.AFFILIATE_WORKER_SECRET ?? "";
-  if (!workerUrl || !secret) return;
-
-  await fetch(`${workerUrl.replace(/\/$/, "")}/admin/codes`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify({ code, action }),
-    signal: AbortSignal.timeout(5000),
-  });
-}
-
-const intakeJsonSchema = z.object({
-  schemaVersion: z.string().default("1.0"),
-  letterType: z.string(),
-  sender: z.object({
-    name: z.string(),
-    address: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-  }),
-  recipient: z.object({
-    name: z.string(),
-    address: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-  }),
-  jurisdiction: z.object({
-    country: z.string(),
-    state: z.string(),
-    city: z.string().optional(),
-  }),
-  matter: z.object({
-    category: z.string(),
-    subject: z.string(),
-    description: z.string(),
-    incidentDate: z.string().optional(),
-  }),
-  financials: z
-    .object({
-      amountOwed: z.number().optional(),
-      currency: z.string().optional(),
-    })
-    .optional(),
-  desiredOutcome: z.string(),
-  deadlineDate: z.string().optional(),
-  additionalContext: z.string().optional(),
-  tonePreference: z
-    .enum(["firm", "moderate", "aggressive"])
-    .optional(),
-  language: z.string().optional(),
-  priorCommunication: z.string().optional(),
-  deliveryMethod: z.string().optional(),
-  communications: z
-    .object({
-      summary: z.string(),
-      lastContactDate: z.string().optional(),
-      method: z
-        .enum(["email", "phone", "letter", "in-person", "other"])
-        .optional(),
-    })
-    .optional(),
-  toneAndDelivery: z
-    .object({
-      tone: z.enum(["firm", "moderate", "aggressive"]),
-      deliveryMethod: z
-        .enum(["email", "certified-mail", "hand-delivery"])
-        .optional(),
-    })
-    .optional(),
-});
-
-
-// ─── Role Guards ──────────────────────────────────────────────────────────────
-
-const employeeProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "employee" && ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Employee or Admin access required",
-    });
-  }
-  return next({ ctx });
-});
-
-const attorneyProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "attorney" && ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Attorney or Admin access required",
-    });
-  }
-  return next({ ctx });
-});
-
-const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "subscriber") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Subscriber access required",
-    });
-  }
-  return next({ ctx });
-});
-
-function getAppUrl(req: {
-  protocol: string;
-  headers: Record<string, string | string[] | undefined>;
-}): string {
-  const host = req.headers["x-forwarded-host"] ?? req.headers.host;
-  if (host && !String(host).includes("localhost")) {
-    const proto = req.headers["x-forwarded-proto"] ?? req.protocol ?? "https";
-    return `${proto}://${host}`;
-  }
-  return "https://www.talk-to-my-lawyer.com";
-}
-
 // ═══════════════════════════════════════════════════════
 // MAIN ROUTER
 // ═══════════════════════════════════════════════════════
 
+import { changeUserRole, inviteAttorney, retryPipelineJob, forceStatusTransition, diagnoseAndRepairLetterState } from "../services/admin";
 
 export const adminRouter = router({
     stats: adminProcedure.query(async () => getSystemStats()),
@@ -302,11 +184,9 @@ export const adminRouter = router({
           role: z.enum(["subscriber", "employee", "attorney"]),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Business logic lives in server/services/admin.ts → changeUserRole.
         // ── Guard: permanently block promoting any subscriber to attorney ──
-        // Once a user has EVER subscribed (any plan, any status — including canceled),
-        // they can never be promoted to attorney. This is a permanent, irreversible rule:
-        // subscriber → attorney is a forbidden transition to prevent billing/role conflicts.
         if (input.role === "attorney") {
           const everSubscribed = await hasEverSubscribed(input.userId);
           if (everSubscribed) {
@@ -325,14 +205,11 @@ export const adminRouter = router({
         }
 
         // Invalidate the user's auth cache so their next request picks up the new role
-        // immediately instead of waiting for the 30-second TTL to expire.
         const updatedUser = await getUserById(input.userId);
         if (updatedUser?.openId) {
           invalidateUserCache(updatedUser.openId);
         }
 
-        // Notify the user when they are promoted to attorney so they know
-        // to refresh their browser and access the Review Center.
         if (input.role === "attorney") {
           try {
             await createNotification({
@@ -343,15 +220,12 @@ export const adminRouter = router({
               link: "/attorney",
             });
           } catch (err) {
-            // Non-blocking — role update still succeeds even if notification fails
             console.error("[updateRole] Failed to send attorney promotion notification:", err);
             captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
           }
-          // Onboarding awareness: notify new attorney of any existing pending letters
           try {
             const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
             if (pendingLetters.length > 0) {
-              console.log(`[updateRole] Attorney #${input.userId} onboarded — ${pendingLetters.length} pending_review letter(s) already in queue`);
               await createNotification({
                 userId: input.userId,
                 type: "attorney_onboarding_queue",
@@ -390,234 +264,10 @@ export const adminRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
-        const email = input.email.toLowerCase().trim();
-        const name = input.name?.trim() || email.split("@")[0];
-
-        const existingUser = await getUserByEmail(email);
-        if (existingUser) {
-          if (existingUser.role === "attorney") {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "This user is already an attorney.",
-            });
-          }
-          // Permanent block: once a user has EVER subscribed, they cannot become attorney
-          const everSubscribed = await hasEverSubscribed(existingUser.id);
-          if (everSubscribed) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "This user has a subscription history and cannot be promoted to Attorney. The subscriber role is permanent once a plan has been purchased.",
-            });
-          }
-          await updateUserRole(existingUser.id, "attorney");
-          try { await assignRoleId(existingUser.id, "attorney"); } catch (e) {
-            console.error("[inviteAttorney] Role ID assignment failed:", e);
-          }
-          if (existingUser.openId) invalidateUserCache(existingUser.openId);
-          try {
-            await createNotification({
-              userId: existingUser.id,
-              type: "role_updated",
-              title: "Your account has been upgraded to Attorney",
-              body: "You now have access to the Review Center. Please refresh your browser or log out and back in to activate your new role.",
-              link: "/attorney",
-            });
-          } catch (err) {
-            console.error("[inviteAttorney] notification failed:", err);
-          }
-          // Onboarding awareness: notify promoted attorney of existing pending letters
-          try {
-            const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
-            if (pendingLetters.length > 0) {
-              console.log(`[inviteAttorney] Existing user #${existingUser.id} promoted to attorney — ${pendingLetters.length} pending_review letter(s) in queue`);
-              await createNotification({
-                userId: existingUser.id,
-                type: "attorney_onboarding_queue",
-                category: "letters",
-                title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
-                body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
-                link: "/attorney/queue",
-              });
-            }
-          } catch (err) {
-            console.error("[inviteAttorney] Onboarding queue notification failed:", err);
-          }
-          return { success: true, alreadyExisted: true, message: `${email} already had an account and has been promoted to attorney.` };
-        }
-
-        const { createClient } = await import("@supabase/supabase-js");
-        const sbUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-        const sbServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-        if (!sbUrl || !sbServiceKey) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Supabase configuration missing." });
-        }
-        const serviceClient = createClient(sbUrl, sbServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
+        return inviteAttorney(input, {
+          actingAdmin: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
+          req: ctx.req,
         });
-
-        const crypto = await import("crypto");
-        const randomPassword = crypto.randomBytes(32).toString("hex");
-        const { data: createData, error: createError } = await serviceClient.auth.admin.createUser({
-          email,
-          password: randomPassword,
-          email_confirm: true,
-          user_metadata: { name, invited_attorney: true },
-        });
-
-        if (createError) {
-          console.error("[inviteAttorney] Supabase createUser error:", createError.message);
-          if (createError.message.includes("already") || createError.message.includes("exists")) {
-            // User exists in Supabase auth but not in our app DB (first check above
-            // already handled app-level users). Try to recover by generating a recovery
-            // link for the existing auth user and creating the app record.
-            try {
-              const origin2 = getOriginUrl(ctx.req);
-              const { data: linkData2 } = await serviceClient.auth.admin.generateLink({
-                type: "recovery",
-                email,
-                options: { redirectTo: `${origin2}/accept-invitation` },
-              });
-              if (linkData2?.properties?.action_link && linkData2.user) {
-                const authUserId = linkData2.user.id;
-                const { upsertUser: upsertExisting, getUserByOpenId: getByOpenId } = await import("../db");
-                await upsertExisting({
-                  openId: authUserId,
-                  name,
-                  email,
-                  loginMethod: "email",
-                  lastSignedIn: new Date(),
-                  role: "attorney",
-                  emailVerified: true,
-                });
-                invalidateUserCache(authUserId);
-                const existingAppUser = await getByOpenId(authUserId);
-                if (existingAppUser) {
-                  try { await assignRoleId(existingAppUser.id, "attorney"); } catch (e) {
-                    console.error("[inviteAttorney] Role ID assignment for existing auth user:", e);
-                  }
-                }
-                await serviceClient.auth.admin.updateUserById(authUserId, {
-                  user_metadata: { name, invited_attorney: true },
-                });
-                await sendAttorneyInvitationEmail({ to: email, name, setPasswordUrl: linkData2.properties.action_link, invitedByName: ctx.user.name || undefined });
-                // Onboarding awareness: notify recovered attorney of existing pending letters
-                if (existingAppUser) {
-                  try {
-                    const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
-                    if (pendingLetters.length > 0) {
-                      console.log(`[inviteAttorney] Recovered auth user #${existingAppUser.id} set up as attorney — ${pendingLetters.length} pending_review letter(s) in queue`);
-                      await createNotification({
-                        userId: existingAppUser.id,
-                        type: "attorney_onboarding_queue",
-                        category: "letters",
-                        title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
-                        body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
-                        link: "/attorney/queue",
-                      });
-                    }
-                  } catch (err) {
-                    console.error("[inviteAttorney] Onboarding queue notification for recovered attorney failed:", err);
-                  }
-                }
-                return { success: true, alreadyExisted: true, message: `${email} had an auth account and has been set up as an attorney. Invitation sent.` };
-              }
-            } catch (recoveryErr) {
-              console.error("[inviteAttorney] Recovery attempt for existing auth user failed:", recoveryErr);
-            }
-            throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists in the auth system." });
-          }
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: createError.message });
-        }
-
-        if (!createData.user) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create auth user." });
-        }
-
-        const { upsertUser, getUserByOpenId } = await import("../db");
-        await upsertUser({
-          openId: createData.user.id,
-          name,
-          email,
-          loginMethod: "email",
-          lastSignedIn: new Date(),
-          role: "attorney",
-          emailVerified: true,
-        });
-        invalidateUserCache(createData.user.id);
-
-        const appUser = await getUserByOpenId(createData.user.id);
-        if (appUser) {
-          try { await assignRoleId(appUser.id, "attorney"); } catch (e) {
-            console.error("[inviteAttorney] Role ID assignment failed:", e);
-          }
-        }
-
-        const origin = getOriginUrl(ctx.req);
-        const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-          type: "recovery",
-          email,
-          options: { redirectTo: `${origin}/accept-invitation` },
-        });
-
-        if (linkError || !linkData?.properties?.action_link) {
-          console.error("[inviteAttorney] generateLink error:", linkError?.message);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",
-          });
-        }
-
-        const setPasswordUrl = linkData.properties.action_link;
-
-        try {
-          await sendAttorneyInvitationEmail({
-            to: email,
-            name,
-            setPasswordUrl,
-            invitedByName: ctx.user.name || undefined,
-          });
-        } catch (emailErr) {
-          console.error("[inviteAttorney] Failed to send invitation email:", emailErr);
-          captureServerException(emailErr, { tags: { component: "admin", error_type: "attorney_invitation_email_failed" } });
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Attorney account created but invitation email failed to send. They can use 'Forgot Password' to access their account.",
-          });
-        }
-
-        try {
-          await notifyAdmins({
-            category: "users",
-            type: "attorney_invited",
-            title: `Attorney invited: ${name}`,
-            body: `${email} was invited as an attorney by ${ctx.user.name || ctx.user.email || "an admin"}.`,
-            link: `/admin/users`,
-          });
-        } catch (err) {
-          console.error("[notifyAdmins] attorney_invited:", err);
-        }
-
-        // Onboarding awareness: notify new attorney of existing pending letters (if any)
-        if (appUser) {
-          try {
-            const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
-            if (pendingLetters.length > 0) {
-              console.log(`[inviteAttorney] New attorney #${appUser.id} (${email}) created — ${pendingLetters.length} pending_review letter(s) already in queue`);
-              await createNotification({
-                userId: appUser.id,
-                type: "attorney_onboarding_queue",
-                category: "letters",
-                title: `${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} awaiting review in the Review Center`,
-                body: `Welcome! There ${pendingLetters.length !== 1 ? "are" : "is"} already ${pendingLetters.length} letter${pendingLetters.length !== 1 ? "s" : ""} in the queue waiting for attorney review.`,
-                link: "/attorney/queue",
-              });
-            }
-          } catch (err) {
-            console.error("[inviteAttorney] Onboarding queue notification for new attorney failed:", err);
-          }
-        }
-
-        return { success: true, alreadyExisted: false, message: `Invitation sent to ${email}.` };
       }),
 
     allLetters: adminProcedure
@@ -635,44 +285,7 @@ export const adminRouter = router({
           stage: z.enum(["research", "drafting"]),
         })
       )
-      .mutation(async ({ input }) => {
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-        if (!letter.intakeJson)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No intake data found for this letter. Cannot retry.",
-          });
-
-        const { preflightApiKeyCheck } = await import("../pipeline");
-        const apiCheck = preflightApiKeyCheck(input.stage);
-        if (!apiCheck.ok) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: `Cannot retry: ${apiCheck.missing.join("; ")}. Please configure the required API keys first.`,
-          });
-        }
-
-        try {
-          const jobId = await enqueueRetryFromStageJob({
-            type: "retryPipelineFromStage",
-            letterId: input.letterId,
-            intake: letter.intakeJson,
-            stage: input.stage,
-            userId: letter.userId ?? undefined,
-          });
-          return {
-            success: true,
-            message: `Retry started for stage: ${input.stage} (job: ${jobId})`,
-          };
-        } catch (enqueueErr) {
-          console.error(`[Admin] Failed to enqueue retry for letter #${input.letterId}:`, enqueueErr);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: `Failed to enqueue retry job: ${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}`,
-          });
-        }
-      }),
+      .mutation(async ({ input }) => retryPipelineJob(input)),
 
     purgeFailedJobs: adminProcedure.mutation(async () => {
       const result = await purgeFailedJobs();
@@ -806,57 +419,9 @@ export const adminRouter = router({
           reason: z.string().min(5).max(5000),
         })
       )
-      .mutation(async ({ ctx, input }) => {
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-
-        // Guard: prevent forcing to review states without a content version
-        if (input.newStatus === "pending_review" || input.newStatus === "approved") {
-          const versions = await getLetterVersionsByRequestId(input.letterId, true);
-          if (versions.length === 0) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: `Cannot force to "${input.newStatus}": this letter has no content version. Generate a draft first.`,
-            });
-          }
-        }
-
-        await updateLetterStatus(input.letterId, input.newStatus, {
-          force: true,
-        });
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "admin",
-          action: "admin_force_status_transition",
-          noteText: `Admin forced status from ${letter.status} to ${input.newStatus}. Reason: ${input.reason}`,
-          noteVisibility: "internal",
-          fromStatus: letter.status,
-          toStatus: input.newStatus,
-        });
-        if (input.newStatus === "pending_review") {
-          try {
-            const appUrl = getAppUrl(ctx.req);
-            if (letter.assignedReviewerId) {
-              const attorney = await getUserById(letter.assignedReviewerId);
-              if (attorney?.email) {
-                await sendNewReviewNeededEmail({
-                  to: attorney.email,
-                  name: attorney.name ?? "Attorney",
-                  letterSubject: letter.subject,
-                  letterId: input.letterId,
-                  letterType: letter.letterType,
-                  jurisdiction: `${letter.jurisdictionState ?? ""}, ${letter.jurisdictionCountry ?? "US"}`,
-                  appUrl,
-                });
-              }
-            }
-          } catch (_err) {
-            // Non-fatal: email failure should not block the status transition
-          }
-        }
-        return { success: true };
-      }),
+      .mutation(async ({ ctx, input }) =>
+        forceStatusTransition(input, { userId: ctx.user.id, appUrl: getAppUrl(ctx.req) })
+      ),
 
     assignLetter: adminProcedure
       .input(z.object({ letterId: z.number(), employeeId: z.number() }))
@@ -928,53 +493,9 @@ export const adminRouter = router({
 
     repairLetterState: adminProcedure
       .input(z.object({ letterId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-
-        const findings: string[] = [];
-
-        // Check for broken-processing pattern:
-        // status = "processing" or stuck in a pipeline state, with a failed workflowJob,
-        // and no content version (no ai_draft or final_approved)
-        const [versions, jobs] = await Promise.all([
-          getLetterVersionsByRequestId(input.letterId, true),
-          getWorkflowJobsByLetterId(input.letterId),
-        ]);
-
-        const hasContentVersion = versions.some(
-          v => v.versionType === "ai_draft" || v.versionType === "final_approved"
-        );
-        const hasFailed = jobs.some(j => j.status === "failed");
-        const isStuckInPipeline =
-          ["submitted", "researching", "drafting"].includes(letter.status) &&
-          hasFailed &&
-          !hasContentVersion;
-
-        if (isStuckInPipeline) {
-          findings.push(
-            `Detected stuck-processing: status="${letter.status}", has failed job(s), no content version`
-          );
-          await updateLetterStatus(input.letterId, "submitted", { force: true });
-          await logReviewAction({
-            letterRequestId: input.letterId,
-            reviewerId: ctx.user.id,
-            actorType: "admin",
-            action: "admin_repair_letter_state",
-            noteText: `Repaired stuck letter: reset from "${letter.status}" to "submitted". Has failed job(s), no content version.`,
-            noteVisibility: "internal",
-            fromStatus: letter.status,
-            toStatus: "submitted",
-          });
-          findings.push(`Reset status from "${letter.status}" to "submitted"`);
-        } else {
-          findings.push(
-            `No broken-processing pattern detected (status="${letter.status}", hasContentVersion=${hasContentVersion}, hasFailed=${hasFailed}). No changes made.`
-          );
-        }
-
-        return { success: true, findings };
-      }),
+      .mutation(async ({ ctx, input }) =>
+        diagnoseAndRepairLetterState(input.letterId, ctx.user.id)
+      ),
 
     lessons: adminProcedure.query(async () => getAllLessons()),
 

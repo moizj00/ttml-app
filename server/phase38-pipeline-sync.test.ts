@@ -184,8 +184,25 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
 
   // ─── Email: pdfUrl parameter ───────────────────────────────────────
   describe("Email: sendLetterApprovedEmail with pdfUrl", () => {
+    const getEmailTemplateContent = () => {
+      const atomicPath = path.join(SERVER_DIR, "email", "templates", "subscriber", "letter-approved.ts");
+      if (fs.existsSync(atomicPath)) {
+        const dir = path.join(SERVER_DIR, "email", "templates", "subscriber");
+        return fs.readdirSync(dir)
+          .filter((f: string) => f.endsWith(".ts") && f !== "index.ts")
+          .map((f: string) => fs.readFileSync(path.join(dir, f), "utf-8"))
+          .join("\n");
+      }
+      const subPath = path.join(SERVER_DIR, "email", "templates", "subscriber.ts");
+      const barrelPath = path.join(SERVER_DIR, "email", "templates.ts");
+      const emailPath = path.join(SERVER_DIR, "email.ts");
+      if (fs.existsSync(subPath)) return fs.readFileSync(subPath, "utf-8");
+      if (fs.existsSync(barrelPath)) return fs.readFileSync(barrelPath, "utf-8");
+      return fs.readFileSync(emailPath, "utf-8");
+    };
+
     it("sendLetterApprovedEmail accepts optional pdfUrl parameter", () => {
-      const content = fs.readFileSync(path.join(SERVER_DIR, "email.ts"), "utf-8");
+      const content = getEmailTemplateContent();
       const fnSection = content.substring(
         content.indexOf("export async function sendLetterApprovedEmail"),
         content.indexOf("export async function sendNeedsChangesEmail")
@@ -194,7 +211,7 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
     });
 
     it("email includes PDF download link when pdfUrl provided", () => {
-      const content = fs.readFileSync(path.join(SERVER_DIR, "email.ts"), "utf-8");
+      const content = getEmailTemplateContent();
       const fnSection = content.substring(
         content.indexOf("export async function sendLetterApprovedEmail"),
         content.indexOf("export async function sendNeedsChangesEmail")

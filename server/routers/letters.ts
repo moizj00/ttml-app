@@ -1,16 +1,23 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit, getClientIp } from "../rateLimiter";
-import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../../shared/types";
+import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult, type IntakeJson } from "../../shared/types";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
   adminProcedure,
-  emailVerifiedProcedure,
-  protectedProcedure,
   publicProcedure,
   router,
 } from "../_core/trpc";
+import {
+  syncCodeToWorkerAllowlist,
+  intakeJsonSchema,
+  employeeProcedure,
+  attorneyProcedure,
+  subscriberProcedure,
+  verifiedSubscriberProcedure,
+  getAppUrl,
+} from "./_shared";
 import {
   claimLetterForReview,
   createAttachment,
@@ -126,157 +133,11 @@ import {
   hasActiveRecurringSubscription,
 } from "../stripe";
 
-/**
- * Sync a discount code to/from the Cloudflare Worker KV allowlist.
- * Called fire-and-forget (errors are swallowed) — the Worker degrades gracefully
- * to not redirecting unknown codes; any temporary sync failure is non-critical.
- */
-async function syncCodeToWorkerAllowlist(code: string, action: "add" | "remove"): Promise<void> {
-  const workerUrl = process.env.AFFILIATE_WORKER_URL ?? "";
-  const secret = process.env.AFFILIATE_WORKER_SECRET ?? "";
-  if (!workerUrl || !secret) return;
-
-  await fetch(`${workerUrl.replace(/\/$/, "")}/admin/codes`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify({ code, action }),
-    signal: AbortSignal.timeout(5000),
-  });
-}
-
-const intakeJsonSchema = z.object({
-  schemaVersion: z.string().default("1.0"),
-  letterType: z.string(),
-  sender: z.object({
-    name: z.string(),
-    address: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-  }),
-  recipient: z.object({
-    name: z.string(),
-    address: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-  }),
-  jurisdiction: z.object({
-    country: z.string(),
-    state: z.string(),
-    city: z.string().optional(),
-  }),
-  matter: z.object({
-    category: z.string(),
-    subject: z.string(),
-    description: z.string(),
-    incidentDate: z.string().optional(),
-  }),
-  financials: z
-    .object({
-      amountOwed: z.number().optional(),
-      currency: z.string().optional(),
-    })
-    .optional(),
-  desiredOutcome: z.string(),
-  deadlineDate: z.string().optional(),
-  additionalContext: z.string().optional(),
-  tonePreference: z
-    .enum(["firm", "moderate", "aggressive"])
-    .optional(),
-  language: z.string().optional(),
-  priorCommunication: z.string().optional(),
-  deliveryMethod: z.string().optional(),
-  communications: z
-    .object({
-      summary: z.string(),
-      lastContactDate: z.string().optional(),
-      method: z
-        .enum(["email", "phone", "letter", "in-person", "other"])
-        .optional(),
-    })
-    .optional(),
-  toneAndDelivery: z
-    .object({
-      tone: z.enum(["firm", "moderate", "aggressive"]),
-      deliveryMethod: z
-        .enum(["email", "certified-mail", "hand-delivery"])
-        .optional(),
-    })
-    .optional(),
-  situationFields: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-  exhibits: z
-    .array(
-      z.object({
-        label: z.string(),
-        description: z.string().optional(),
-        hasAttachment: z.boolean().optional(),
-      })
-    )
-    .optional(),
-  evidenceSummary: z.string().optional(),
-});
-
-
-// ─── Role Guards ──────────────────────────────────────────────────────────────
-
-const employeeProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "employee" && ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Employee or Admin access required",
-    });
-  }
-  return next({ ctx });
-});
-
-const attorneyProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "attorney" && ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Attorney or Admin access required",
-    });
-  }
-  return next({ ctx });
-});
-
-const subscriberProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "subscriber") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Subscriber access required",
-    });
-  }
-  return next({ ctx });
-});
-
-const verifiedSubscriberProcedure = emailVerifiedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "subscriber") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Subscriber access required",
-    });
-  }
-  return next({ ctx });
-});
-
-function getAppUrl(req: {
-  protocol: string;
-  headers: Record<string, string | string[] | undefined>;
-}): string {
-  const host = req.headers["x-forwarded-host"] ?? req.headers.host;
-  if (host && !String(host).includes("localhost")) {
-    const proto = req.headers["x-forwarded-proto"] ?? req.protocol ?? "https";
-    return `${proto}://${host}`;
-  }
-  return "https://www.talk-to-my-lawyer.com";
-}
-
 // ═══════════════════════════════════════════════════════
 // MAIN ROUTER
 // ═══════════════════════════════════════════════════════
 
+import { submitLetter, processSubscriberFeedback, retryFromRejected, sendLetterToRecipientFlow, clientDeclineLetter } from "../services/letters";
 
 export const lettersRouter = router({
     submit: verifiedSubscriberProcedure
@@ -314,139 +175,12 @@ export const lettersRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
-
-        // ── Step 1: Check entitlement (non-atomic read, fast path) ────────────
-        const entitlement = await checkLetterSubmissionAllowed(ctx.user.id);
-        if (!entitlement.allowed) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: entitlement.reason ?? "You are not allowed to submit a letter at this time.",
-          });
-        }
-
-        // ── Step 2: Atomically claim usage before creating the letter ─────────
-        // This prevents TOCTOU races where two concurrent requests both see
-        // count=0 (for free trial) or lettersUsed < lettersAllowed (for paid).
-        let isFreeTrialSubmission = false;
-        if (entitlement.firstLetterFree) {
-          // Free-trial path: atomically claim the slot via conditional UPDATE
-          isFreeTrialSubmission = true;
-          const claimed = await claimFreeTrialSlot(ctx.user.id);
-          if (!claimed) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Your free first letter has already been used. Please subscribe to continue.",
-            });
-          }
-        } else if (entitlement.subscription) {
-          // Paid subscriber path: atomically increment, reject if exhausted
-          const incremented = await incrementLettersUsed(ctx.user.id);
-          if (!incremented) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: `You have used all letter(s) in your plan. Please upgrade to continue.`,
-            });
-          }
-        }
-
-        // ── Step 3: Create the letter request (compensate usage on failure) ──────
-        let result: any;
-        try {
-          result = await createLetterRequest({
-            userId: ctx.user.id,
-            letterType: input.letterType,
-            subject: input.subject,
-            issueSummary: input.issueSummary,
-            jurisdictionCountry: input.jurisdictionCountry,
-            jurisdictionState: input.jurisdictionState,
-            jurisdictionCity: input.jurisdictionCity,
-            intakeJson: input.intakeJson,
-            priority: input.priority,
-            templateId: input.templateId,
-          });
-        } catch (createErr) {
-          // Usage was already claimed — roll it back before re-throwing
-          try {
-            if (isFreeTrialSubmission) {
-              await refundFreeTrialSlot(ctx.user.id);
-            } else if (entitlement.subscription) {
-              await decrementLettersUsed(ctx.user.id);
-            }
-          } catch (refundErr) {
-            console.error("[Submit] Failed to refund usage after letter creation failure:", refundErr);
-            captureServerException(refundErr, { tags: { component: "letters", error_type: "usage_refund_on_create_failed" } });
-          }
-          throw createErr;
-        }
-        const letterId = (result as any)?.insertId;
-
-        await logReviewAction({
-          letterRequestId: letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "letter_submitted",
-          fromStatus: undefined,
-          toStatus: "submitted",
+        return submitLetter(input, {
+          userId: ctx.user.id,
+          email: ctx.user.email,
+          name: ctx.user.name,
+          req: ctx.req,
         });
-
-        // Send submission confirmation email (non-blocking)
-        const appUrl = getAppUrl(ctx.req);
-        if (ctx.user.email)
-          sendLetterSubmissionEmail({
-            to: ctx.user.email,
-            name: ctx.user.name ?? "Subscriber",
-            subject: input.subject,
-            letterId,
-            letterType: input.letterType,
-            jurisdictionState: input.jurisdictionState,
-            appUrl,
-          }).catch(err =>
-            { console.error("[Email] Submission confirmation failed:", err); captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } }); }
-          );
-
-        try {
-          await enqueuePipelineJob({
-            type: "runPipeline",
-            letterId,
-            intake: input.intakeJson,
-            userId: ctx.user.id,
-            appUrl,
-            label: "submit",
-            usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
-          });
-        } catch (enqueueErr) {
-          console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
-          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-          try {
-            if (isFreeTrialSubmission) {
-              await refundFreeTrialSlot(ctx.user.id);
-            } else if (entitlement.subscription) {
-              await decrementLettersUsed(ctx.user.id);
-            }
-          } catch (refundErr) {
-            console.error("[Queue] Failed to refund usage after enqueue failure:", refundErr);
-            captureServerException(refundErr, { tags: { component: "queue", error_type: "enqueue_refund_failed" } });
-          }
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
-          });
-        }
-
-        try {
-          await notifyAdmins({
-            category: "letters",
-            type: "letter_submitted",
-            title: `New letter submitted (#${letterId})`,
-            body: `${ctx.user.name ?? ctx.user.email ?? "A subscriber"} submitted a ${input.letterType} letter: "${input.subject}"`,
-            link: `/admin/letters/${letterId}`,
-          });
-        } catch (err) {
-          console.error("[notifyAdmins] letter_submitted:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
-        }
-
-        return { letterId, status: "submitted" };
       }),
 
     adminSubmit: adminProcedure
@@ -485,7 +219,7 @@ export const lettersRouter = router({
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("letter", `admin:${ctx.user.id}`, true);
 
-        let result: any;
+        let result: { insertId: number };
         try {
           result = await createLetterRequest({
             userId: ctx.user.id,
@@ -503,7 +237,7 @@ export const lettersRouter = router({
         } catch (createErr) {
           throw createErr;
         }
-        const letterId = (result as any)?.insertId;
+        const letterId = result.insertId;
 
         await logReviewAction({
           letterRequestId: letterId,
@@ -578,122 +312,17 @@ export const lettersRouter = router({
             code: "BAD_REQUEST",
             message: "Letter must be in needs_changes status",
           });
-
-        // Read the retriggerPipeline preference stored in the latest requested_changes review action
-        let retriggerPipeline = true; // default: re-run pipeline
-        try {
-          const reviewActions = await getReviewActions(input.letterId);
-          const latestChangesAction = [...reviewActions]
-            .reverse()
-            .find(a => a.action === "requested_changes" && a.noteVisibility === "internal");
-          if (latestChangesAction?.noteText) {
-            const parsed = JSON.parse(latestChangesAction.noteText);
-            if (typeof parsed.retriggerPipeline === "boolean") {
-              retriggerPipeline = parsed.retriggerPipeline;
-            }
-          }
-        } catch {
-          // If parsing fails, default to pipeline re-run
-          retriggerPipeline = true;
-        }
-
-        const toStatus = retriggerPipeline ? "submitted" : "pending_review";
-
-        // Log the subscriber's response
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "subscriber_updated",
-          noteText: input.additionalContext,
-          noteVisibility: "user_visible",
-          fromStatus: "needs_changes",
-          toStatus,
+        return processSubscriberFeedback(input, {
+          userId: ctx.user.id,
+          req: ctx.req,
+          letter: {
+            userId: letter.userId,
+            intakeJson: (letter.intakeJson as IntakeJson) ?? null,
+            status: letter.status,
+            subject: letter.subject,
+            assignedReviewerId: letter.assignedReviewerId,
+          },
         });
-
-        extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.user.id, "subscriber_update").catch(console.error);
-
-        // If updated intake provided, update the letter request
-        if (input.updatedIntakeJson) {
-          const db = await (await import("../db")).getDb();
-          if (db) {
-            const { letterRequests } = await import("../../drizzle/schema");
-            const { eq } = await import("drizzle-orm");
-            await db
-              .update(letterRequests)
-              .set({
-                intakeJson: input.updatedIntakeJson,
-                updatedAt: new Date(),
-              } as any)
-              .where(eq(letterRequests.id, input.letterId));
-          }
-        }
-
-        if (retriggerPipeline) {
-          // Full pipeline re-run path: transition to submitted and enqueue
-          await updateLetterStatus(input.letterId, "submitted");
-          const intake = input.updatedIntakeJson ?? letter.intakeJson;
-          if (intake) {
-            const appUrl = getAppUrl(ctx.req);
-            try {
-              await enqueuePipelineJob({
-                type: "runPipeline",
-                letterId: input.letterId,
-                intake,
-                userId: letter.userId,
-                appUrl,
-                label: "updateForChanges",
-              });
-            } catch (enqueueErr) {
-              console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
-              captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to start letter reprocessing. Please try again.",
-              });
-            }
-          }
-        } else {
-          // Light-edit path: go back to pending_review so attorney can apply edits manually
-          await updateLetterStatus(input.letterId, "pending_review");
-          // Notify assigned attorney (or admins if none assigned)
-          try {
-            const appUrl = getAppUrl(ctx.req);
-            if (letter.assignedReviewerId) {
-              const attorney = await getUserById(letter.assignedReviewerId);
-              if (attorney?.email) {
-                await sendStatusUpdateEmail({
-                  to: attorney.email,
-                  name: attorney.name ?? "Attorney",
-                  subject: letter.subject,
-                  letterId: input.letterId,
-                  newStatus: "pending_review",
-                  appUrl,
-                });
-              }
-              await createNotification({
-                userId: letter.assignedReviewerId,
-                type: "subscriber_feedback_received",
-                title: "Subscriber responded with feedback",
-                body: `Subscriber provided feedback on "${letter.subject}". Please apply the requested edits.`,
-                link: `/review/${input.letterId}`,
-              });
-            } else {
-              await notifyAdmins({
-                category: "letters",
-                type: "subscriber_feedback_received",
-                title: `Subscriber feedback on letter #${input.letterId}`,
-                body: `Subscriber provided feedback on "${letter.subject}" (light-edit path). Letter is back in the review queue.`,
-                link: `/admin/letters/${input.letterId}`,
-              });
-            }
-          } catch (notifyErr) {
-            console.error("[updateForChanges] Light-edit notification failed:", notifyErr);
-            captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
-          }
-        }
-
-        return { success: true, retriggerPipeline };
       }),
 
     retryFromRejected: subscriberProcedure
@@ -706,106 +335,11 @@ export const lettersRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter || letter.userId !== ctx.user.id)
-          throw new TRPCError({ code: "NOT_FOUND" });
-        if (letter.status !== "rejected")
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Letter must be in rejected status to retry",
-          });
-
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "retry_from_rejected",
-          noteText: input.additionalContext ?? "Subscriber retrying after rejection",
-          noteVisibility: "user_visible",
-          fromStatus: "rejected",
-          toStatus: "submitted",
+        return retryFromRejected(input, {
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          req: ctx.req,
         });
-
-        if (input.additionalContext) {
-          extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.user.id, "subscriber_retry").catch(console.error);
-        }
-
-        if (input.updatedIntakeJson) {
-          const db = await (await import("../db")).getDb();
-          if (db) {
-            const { letterRequests } = await import("../../drizzle/schema");
-            const { eq } = await import("drizzle-orm");
-            await db
-              .update(letterRequests)
-              .set({
-                intakeJson: input.updatedIntakeJson,
-                updatedAt: new Date(),
-              } as any)
-              .where(eq(letterRequests.id, input.letterId));
-          }
-        }
-
-        const intake = input.updatedIntakeJson ?? letter.intakeJson;
-        if (!intake) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No intake data available to re-run the pipeline. Please provide updated details.",
-          });
-        }
-
-        await updateLetterStatus(input.letterId, "submitted");
-
-        const appUrl = getAppUrl(ctx.req);
-        try {
-          await enqueuePipelineJob({
-            type: "runPipeline",
-            letterId: input.letterId,
-            intake,
-            userId: letter.userId,
-            appUrl,
-            label: "retryFromRejected",
-          });
-        } catch (enqueueErr) {
-          console.error("[Queue] Failed to enqueue pipeline job:", enqueueErr);
-          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to start letter reprocessing. Please try again.",
-          });
-        }
-
-        try {
-          const subscriber = await getUserById(ctx.user.id);
-          if (subscriber?.email) {
-            await sendStatusUpdateEmail({
-              to: subscriber.email,
-              name: subscriber.name ?? "Subscriber",
-              subject: letter.subject,
-              newStatus: "submitted",
-              appUrl,
-              letterId: input.letterId,
-            });
-          }
-          await createNotification({
-            userId: ctx.user.id,
-            type: "retry_from_rejected",
-            title: "Letter resubmitted for processing",
-            body: `Your letter "${letter.subject}" has been resubmitted and is being reprocessed.`,
-            link: `/letters/${input.letterId}`,
-          });
-          await notifyAdmins({
-            category: "letters",
-            type: "retry_from_rejected",
-            title: `Subscriber retried rejected letter #${input.letterId}`,
-            body: `${ctx.user.name ?? "A subscriber"} retried "${letter.subject}" after rejection.`,
-            link: `/admin/letters/${input.letterId}`,
-          });
-        } catch (err) {
-          console.error("[retryFromRejected] Notification error:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
-        }
-
-        return { success: true };
       }),
 
     archive: subscriberProcedure
@@ -832,66 +366,14 @@ export const lettersRouter = router({
           note: z.string().max(2000).optional(),
         })
       )
-      .mutation(async ({ ctx, input }) => {
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter || letter.userId !== ctx.user.id)
-          throw new TRPCError({ code: "NOT_FOUND" });
-        if (letter.status !== "approved" && letter.status !== "client_approved" && letter.status !== "sent")
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Only approved or sent letters can be sent to recipients",
-          });
-
-        const versions = await getLetterVersionsByRequestId(input.letterId, false);
-        const finalVersion = versions.find((v) => v.versionType === "final_approved");
-        if (!finalVersion)
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "No approved letter version found",
-          });
-
-        await sendLetterToRecipient({
-          recipientEmail: input.recipientEmail,
-          letterSubject: letter.subject,
-          subjectOverride: input.subjectOverride?.trim() || undefined,
-          note: input.note?.trim() || undefined,
-          pdfUrl: letter.pdfUrl ?? undefined,
-          htmlContent: finalVersion.content,
-        });
-
-        // Mark letter as sent now that delivery succeeded
-        try {
-          await updateLetterStatus(input.letterId, "sent", { force: true });
-          await logReviewAction({
-            letterRequestId: input.letterId,
-            reviewerId: ctx.user.id,
-            actorType: ctx.user.role as any,
-            action: "letter_sent_to_recipient",
-            noteText: `Letter delivered to ${input.recipientEmail}`,
-            noteVisibility: "internal",
-            fromStatus: letter.status,
-            toStatus: "sent",
-          });
-        } catch (err) {
-          console.error("[sendToRecipient] Failed to update status to sent:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
-        }
-
-        try {
-          await notifyAdmins({
-            category: "letters",
-            type: "letter_sent_to_recipient",
-            title: `Letter #${input.letterId} sent to recipient`,
-            body: `Letter "${letter.subject}" was sent to ${input.recipientEmail}.`,
-            link: `/admin/letters/${input.letterId}`,
-          });
-        } catch (err) {
-          console.error("[notifyAdmins] letter_sent_to_recipient:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
-        }
-
-        return { success: true };
-      }),
+      .mutation(async ({ ctx, input }) =>
+        sendLetterToRecipientFlow(input, {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          userName: ctx.user.name,
+          req: ctx.req,
+        })
+      ),
 
     uploadAttachment: subscriberProcedure
       .input(
@@ -1049,7 +531,7 @@ export const lettersRouter = router({
               approvedAt: new Date().toISOString(),
               jurisdictionState: letter.jurisdictionState,
               jurisdictionCountry: letter.jurisdictionCountry,
-              intakeJson: letter.intakeJson as any,
+              intakeJson: letter.intakeJson as Record<string, unknown> | null,
             });
             pdfUrl = pdfResult.pdfUrl;
             await updateLetterPdfUrl(input.letterId, pdfUrl);
@@ -1280,47 +762,11 @@ export const lettersRouter = router({
         letterId: z.number(),
         reason: z.string().max(2000).optional(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        const letter = await getLetterRequestById(input.letterId);
-        if (!letter || letter.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "NOT_FOUND" });
-        }
-        if (letter.status !== "client_approval_pending") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Letter is not awaiting client approval",
-          });
-        }
-        await updateLetterStatus(input.letterId, "client_declined");
-        await logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "client_declined",
-          noteText: input.reason || "Subscriber declined the letter",
-          noteVisibility: "user_visible",
-          fromStatus: "client_approval_pending",
-          toStatus: "client_declined",
-        });
-        try {
-          await notifyAdmins({
-            category: "letters",
-            type: "client_declined",
-            title: `Client declined letter #${input.letterId}`,
-            body: `${ctx.user.name ?? "A subscriber"} declined "${letter.subject}".${input.reason ? ` Reason: ${input.reason}` : ""}`,
-            link: `/admin/letters/${input.letterId}`,
-            emailOpts: {
-              subject: `Client Declined Letter #${input.letterId}`,
-              preheader: `Client declined letter "${letter.subject}"`,
-              bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "A subscriber"}</strong> has declined letter <strong>#${input.letterId}</strong> — "${letter.subject}".</p>${input.reason ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#FEE2E2;border-left:4px solid #EF4444;border-radius:4px;color:#991B1B;">${input.reason}</blockquote>` : ""}`,
-              ctaText: "View Letter",
-              ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
-            },
-          });
-        } catch (err) {
-          console.error("[notifyAdmins] client_declined:", err);
-          captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
-        }
-        return { success: true };
-      }),
+      .mutation(async ({ ctx, input }) =>
+        clientDeclineLetter(input, {
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          req: ctx.req,
+        })
+      ),
 });

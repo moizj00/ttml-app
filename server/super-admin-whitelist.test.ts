@@ -23,6 +23,20 @@ function readAllRouters(): string {
   const files = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
   return files.map(f => readFileSync(join(dir, `${f}.ts`), "utf-8")).join("\n");
 }
+function readAllSupabaseAuth(): string {
+  const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const subDir = join(SERVER_DIR, "supabaseAuth");
+  const subFiles = ["helpers.ts", "jwt.ts", "routes.ts", "index.ts", "client.ts", "user-cache.ts"];
+  const subContents = subFiles
+    .map(f => { try { return readFileSync(join(subDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  const routesSubDir = join(subDir, "routes");
+  const routeSubFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts", "index.ts"];
+  const routeSubContents = routeSubFiles
+    .map(f => { try { return readFileSync(join(routesSubDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  return subContents + "\n" + routeSubContents + "\n" + barrel;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -73,7 +87,7 @@ function makeSubscriberCtx(overrides?: Partial<AuthenticatedUser>): TrpcContext 
 // ─── 1. Whitelist Enforcement in Source Code ─────────────────────────────────
 
 describe("Super Admin Whitelist — Source Code Enforcement", () => {
-  const authFile = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const authFile = readAllSupabaseAuth();
 
   it("defines SUPER_ADMIN_EMAILS with both whitelisted addresses", () => {
     expect(authFile).toContain('"ravivo@homes.land"');
@@ -233,7 +247,7 @@ describe("admin.updateRole — RBAC: Only Admins Can Change Roles", () => {
 describe("Self-Signup — Attorney and Admin Roles Cannot Be Self-Assigned", () => {
   const signupFile = readFileSync(join(CLIENT_SRC, "pages", "Signup.tsx"), "utf-8");
   const onboardingFile = readFileSync(join(CLIENT_SRC, "pages", "Onboarding.tsx"), "utf-8");
-  const authFile = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const authFile = readAllSupabaseAuth();
   const routersFile = readAllRouters();
 
   it("Signup.tsx does not include attorney as a selectable role", () => {

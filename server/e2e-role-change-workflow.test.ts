@@ -29,17 +29,38 @@ function readServer(file: string) {
 
 function readAllRouters() {
   const subRouters = ["review", "letters", "admin", "auth", "billing", "affiliate", "notifications", "profile", "versions", "documents", "blog"];
-  return subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+  const routerContent = subRouters.map(r => readFileSync(join(SERVER_DIR, "routers", `${r}.ts`), "utf-8")).join("\n");
+  const servicesDir = join(SERVER_DIR, "services");
+  const serviceFiles = ["letters.ts", "admin.ts"];
+  const serviceContent = serviceFiles
+    .map(f => { try { return readFileSync(join(servicesDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  return routerContent + "\n" + serviceContent;
 }
 
 function readClient(...segments: string[]) {
   return readFileSync(join(CLIENT_SRC, ...segments), "utf-8");
 }
 
+function readAllSupabaseAuth(): string {
+  const barrel = readFileSync(join(SERVER_DIR, "supabaseAuth.ts"), "utf-8");
+  const subDir = join(SERVER_DIR, "supabaseAuth");
+  const subFiles = ["helpers.ts", "jwt.ts", "routes.ts", "index.ts", "client.ts", "user-cache.ts"];
+  const subContents = subFiles
+    .map(f => { try { return readFileSync(join(subDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  const routesSubDir = join(subDir, "routes");
+  const routeSubFiles = ["signup-login.ts", "admin-2fa.ts", "password.ts", "verification.ts", "oauth.ts", "index.ts"];
+  const routeSubContents = routeSubFiles
+    .map(f => { try { return readFileSync(join(routesSubDir, f), "utf-8"); } catch { return ""; } })
+    .join("\n");
+  return subContents + "\n" + routeSubContents + "\n" + barrel;
+}
+
 // ─── 1. Super Admin Whitelist — Four Enforcement Points ──────────────────────
 
 describe("Super Admin Whitelist — Four Independent Enforcement Points", () => {
-  const authFile = readServer("supabaseAuth.ts");
+  const authFile = readAllSupabaseAuth();
 
   it("defines SUPER_ADMIN_EMAILS containing both whitelisted addresses", () => {
     expect(authFile).toContain('"ravivo@homes.land"');
@@ -289,7 +310,7 @@ describe("Role Enum Lockdown — Admin Role Cannot Be Assigned via Any Surface",
   });
 
   it("Google OAuth flow does not allow attorney as a requested role", () => {
-    const authFile = readServer("supabaseAuth.ts");
+    const authFile = readAllSupabaseAuth();
     expect(authFile).not.toMatch(
       /ALLOWED_SIGNUP_ROLES\s*=\s*\[[\s\S]{0,100}attorney/
     );

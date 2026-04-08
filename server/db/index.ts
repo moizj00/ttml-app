@@ -13,3 +13,5 @@ export * from "./quality";
 export * from "./auth-tokens";
 export * from "./blog";
 export * from "./analytics";
+export * from "./templates";
+export * from "./intake-form-templates";
