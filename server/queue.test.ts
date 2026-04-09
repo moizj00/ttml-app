@@ -1,46 +1,36 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RunPipelineJobData, RetryFromStageJobData } from "./queue";
 
-const { mockQueue } = vi.hoisted(() => {
-  const mockQueue = {
-    add: vi.fn().mockResolvedValue({ id: "job-default-id" }),
-    close: vi.fn().mockResolvedValue(undefined),
-    getJob: vi.fn().mockResolvedValue(null),
+// ─── Mock pg-boss ──────────────────────────────────────────────────────────
+
+const { mockBoss } = vi.hoisted(() => {
+  const mockBoss = {
+    on: vi.fn(),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    send: vi.fn().mockResolvedValue("job-test-id-99"),
+    work: vi.fn().mockResolvedValue("worker-id"),
+    createQueue: vi.fn().mockResolvedValue(undefined),
+    findJobs: vi.fn().mockResolvedValue([]),
+    getQueueStats: vi.fn().mockResolvedValue({ queuedCount: 0, activeCount: 0, deferredCount: 0, totalCount: 0 }),
   };
-  return { mockQueue };
+  return { mockBoss };
 });
 
-vi.mock("bullmq", () => {
-  const Queue = vi.fn(function MockQueue(this: Record<string, unknown>) {
-    Object.assign(this, mockQueue);
+vi.mock("pg-boss", () => {
+  const PgBoss = vi.fn(function MockPgBoss(this: Record<string, unknown>) {
+    Object.assign(this, mockBoss);
     return this;
   });
-  function Worker(this: Record<string, unknown>) {
-    this.on = vi.fn();
-    this.close = vi.fn();
-    return this;
-  }
-  return { Queue, Worker };
-});
-
-vi.mock("ioredis", () => {
-  function IORedis(this: Record<string, unknown>) {
-    this.on = vi.fn();
-    this.connect = vi.fn();
-    this.disconnect = vi.fn();
-    this.status = "ready";
-    return this;
-  }
-  return { default: IORedis };
+  return { PgBoss };
 });
 
 vi.mock("./_core/env", () => ({
   ENV: { isProduction: false, databaseUrl: "postgresql://test/test", stripeSecretKey: "sk_test", sentryDsn: "" },
 }));
 
-process.env.UPSTASH_REDIS_URL = "redis://mock:6379";
+process.env.DATABASE_URL = "postgresql://mock:5432/test";
 
-const { Queue: BullQueue } = await import("bullmq");
 const { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue, QUEUE_NAME } = await import("./queue");
 
 const LETTER_ID = 42;
@@ -63,11 +53,9 @@ const baseRetryData: RetryFromStageJobData = {
   userId: USER_ID,
 };
 
-beforeAll(() => { getPipelineQueue(); });
-
 beforeEach(() => {
-  vi.mocked(mockQueue.add).mockClear();
-  vi.mocked(mockQueue.add).mockResolvedValue({ id: "job-test-id-99" });
+  vi.mocked(mockBoss.send).mockClear();
+  vi.mocked(mockBoss.send).mockResolvedValue("job-test-id-99");
 });
 
 describe("QUEUE_NAME constant", () => {
@@ -76,90 +64,109 @@ describe("QUEUE_NAME constant", () => {
   });
 });
 
-describe("Queue construction options", () => {
-  it("sets defaultJobOptions.attempts to 1 (worker-side retry handles backoff)", () => {
-    const [[, queueOpts]] = vi.mocked(BullQueue).mock.calls;
-    expect((queueOpts as { defaultJobOptions: { attempts: number } }).defaultJobOptions.attempts).toBe(1);
-  });
-
-  it("configures removeOnComplete to keep the last 200 completed jobs", () => {
-    const [[, queueOpts]] = vi.mocked(BullQueue).mock.calls;
-    expect((queueOpts as { defaultJobOptions: { removeOnComplete: { count: number } } }).defaultJobOptions.removeOnComplete).toMatchObject({ count: 200 });
-  });
-
-  it("configures removeOnFail to keep the last 500 failed jobs", () => {
-    const [[, queueOpts]] = vi.mocked(BullQueue).mock.calls;
-    expect((queueOpts as { defaultJobOptions: { removeOnFail: { count: number } } }).defaultJobOptions.removeOnFail).toMatchObject({ count: 500 });
-  });
-});
-
 describe("enqueuePipelineJob", () => {
-  it("calls queue.add once", async () => {
+  it("calls boss.send once", async () => {
     await enqueuePipelineJob(baseRunData);
-    expect(mockQueue.add).toHaveBeenCalledOnce();
+    expect(mockBoss.send).toHaveBeenCalledOnce();
   });
 
-  it("job name contains 'pipeline' and the letterId", async () => {
+  it("sends to the 'pipeline' queue", async () => {
     await enqueuePipelineJob(baseRunData);
-    const [jobName] = vi.mocked(mockQueue.add).mock.calls[0];
-    expect(jobName).toContain("pipeline");
-    expect(jobName).toContain(String(LETTER_ID));
+    const [queueName] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(queueName).toBe("pipeline");
   });
 
   it("passes correct type, letterId, and userId in job data", async () => {
     await enqueuePipelineJob(baseRunData);
-    const [, jobData] = vi.mocked(mockQueue.add).mock.calls[0];
+    const [, jobData] = vi.mocked(mockBoss.send).mock.calls[0];
     expect(jobData).toMatchObject({ type: "runPipeline", letterId: LETTER_ID, userId: USER_ID });
   });
 
   it("passes a string jobId containing the letterId", async () => {
     await enqueuePipelineJob(baseRunData);
-    const [, , jobOpts] = vi.mocked(mockQueue.add).mock.calls[0];
-    expect(typeof (jobOpts as { jobId: string }).jobId).toBe("string");
-    expect((jobOpts as { jobId: string }).jobId).toContain(String(LETTER_ID));
+    const [, , jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(typeof (jobOpts as { id: string }).id).toBe("string");
+    expect((jobOpts as { id: string }).id).toContain(String(LETTER_ID));
   });
 
-  it("returns the job ID from queue.add", async () => {
+  it("returns the job ID from boss.send", async () => {
     const id = await enqueuePipelineJob(baseRunData);
     expect(id).toBe("job-test-id-99");
   });
 });
 
 describe("enqueueRetryFromStageJob", () => {
-  it("calls queue.add once", async () => {
+  it("calls boss.send once", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
-    expect(mockQueue.add).toHaveBeenCalledOnce();
+    expect(mockBoss.send).toHaveBeenCalledOnce();
   });
 
-  it("job name contains 'retry', stage, and letterId", async () => {
+  it("sends to the 'pipeline' queue", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
-    const [jobName] = vi.mocked(mockQueue.add).mock.calls[0];
-    expect(jobName).toContain("retry");
-    expect(jobName).toContain("drafting");
-    expect(jobName).toContain(String(LETTER_ID));
+    const [queueName] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(queueName).toBe("pipeline");
   });
 
   it("passes type='retryPipelineFromStage', correct stage and letterId in data", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
-    const [, jobData] = vi.mocked(mockQueue.add).mock.calls[0];
+    const [, jobData] = vi.mocked(mockBoss.send).mock.calls[0];
     expect(jobData).toMatchObject({ type: "retryPipelineFromStage", letterId: LETTER_ID, stage: "drafting" });
   });
 
-  it("jobId contains 'retry' and the stage name", async () => {
+  it("uses a singletonKey containing 'retry' and the stage name", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
-    const [, , jobOpts] = vi.mocked(mockQueue.add).mock.calls[0];
-    expect((jobOpts as { jobId: string }).jobId).toContain("retry");
-    expect((jobOpts as { jobId: string }).jobId).toContain("drafting");
+    const [, , jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect((jobOpts as { singletonKey: string }).singletonKey).toContain("retry");
+    expect((jobOpts as { singletonKey: string }).singletonKey).toContain("drafting");
   });
 
   it("works correctly for the 'research' stage", async () => {
     await enqueueRetryFromStageJob({ ...baseRetryData, stage: "research" });
-    const [, jobData] = vi.mocked(mockQueue.add).mock.calls[0];
+    const [, jobData] = vi.mocked(mockBoss.send).mock.calls[0];
     expect((jobData as RetryFromStageJobData).stage).toBe("research");
   });
 
-  it("returns the job ID from queue.add", async () => {
+  it("returns the job ID from boss.send", async () => {
     const id = await enqueueRetryFromStageJob(baseRetryData);
     expect(id).toBe("job-test-id-99");
+  });
+
+  it("returns the singletonKey when boss.send returns null (duplicate job)", async () => {
+    vi.mocked(mockBoss.send).mockResolvedValueOnce(null);
+    const id = await enqueueRetryFromStageJob(baseRetryData);
+    expect(id).toContain("retry");
+    expect(id).toContain("drafting");
+  });
+});
+
+describe("getPipelineQueue shim", () => {
+  it("getWaitingCount returns a number", async () => {
+    const queue = getPipelineQueue();
+    const count = await queue.getWaitingCount();
+    expect(typeof count).toBe("number");
+  });
+
+  it("getActiveCount returns a number", async () => {
+    const queue = getPipelineQueue();
+    const count = await queue.getActiveCount();
+    expect(typeof count).toBe("number");
+  });
+
+  it("getFailedCount returns a number", async () => {
+    const queue = getPipelineQueue();
+    const count = await queue.getFailedCount();
+    expect(typeof count).toBe("number");
+  });
+
+  it("getFailed returns an array", async () => {
+    const queue = getPipelineQueue();
+    const jobs = await queue.getFailed(0, 9);
+    expect(Array.isArray(jobs)).toBe(true);
+  });
+
+  it("getCompleted returns an array", async () => {
+    const queue = getPipelineQueue();
+    const jobs = await queue.getCompleted(0, 9);
+    expect(Array.isArray(jobs)).toBe(true);
   });
 });

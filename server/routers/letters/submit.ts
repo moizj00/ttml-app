@@ -1,63 +1,151 @@
-import { z } from "zod";
-import { protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getLetterRequestById, updateLetterStatus } from "../../db";
+import { z } from "zod";
+import { checkTrpcRateLimit } from "../../rateLimiter";
+import { adminProcedure } from "../../_core/trpc";
+import {
+  intakeJsonSchema,
+  verifiedSubscriberProcedure,
+  getAppUrl,
+} from "../_shared";
+import {
+  createLetterRequest,
+  logReviewAction,
+} from "../../db";
+import { captureServerException } from "../../sentry";
 import { enqueuePipelineJob } from "../../queue";
-import { logger } from "../../_core/logger";
+import { submitLetter } from "../../services/letters";
+import { logger } from "../../logger";
 
-export const submitLetter = protectedProcedure
-  .input(z.object({
-    letterId: z.number(),
-    intake: z.any(), // TODO: refine intake schema
-    label: z.string().optional(),
-  }))
-  .mutation(async ({ ctx, input }) => {
-    const { letterId, intake, label } = input;
-    const userId = ctx.session.user.id;
-
-    const letter = await getLetterRequestById(letterId);
-
-    if (!letter || letter.userId !== userId) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Letter not found or not owned by user",
+export const submitProcedures = {
+  submit: verifiedSubscriberProcedure
+    .input(
+      z.object({
+        letterType: z.enum([
+          "demand-letter",
+          "cease-and-desist",
+          "contract-breach",
+          "eviction-notice",
+          "employment-dispute",
+          "consumer-complaint",
+          "general-legal",
+          "pre-litigation-settlement",
+          "debt-collection",
+          "estate-probate",
+          "landlord-tenant",
+          "insurance-dispute",
+          "personal-injury-demand",
+          "intellectual-property",
+          "family-law",
+          "neighbor-hoa",
+        ]),
+        subject: z.string().min(5).max(500),
+        issueSummary: z.string().optional(),
+        jurisdictionCountry: z.string().default("US"),
+        jurisdictionState: z.string().min(2),
+        jurisdictionCity: z.string().optional(),
+        intakeJson: intakeJsonSchema,
+        priority: z
+          .enum(["low", "normal", "high", "urgent"])
+          .default("normal"),
+        templateId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await checkTrpcRateLimit("letter", `user:${ctx.user.id}`, true);
+      return submitLetter(input, {
+        userId: ctx.user.id,
+        email: ctx.user.email,
+        name: ctx.user.name,
+        req: ctx.req,
       });
-    }
+    }),
 
-    if (letter.status !== "draft" && letter.status !== "submitted") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Letter is in status \'${letter.status}\' and cannot be submitted.`, // TODO: better error message
+  adminSubmit: adminProcedure
+    .input(
+      z.object({
+        letterType: z.enum([
+          "demand-letter",
+          "cease-and-desist",
+          "contract-breach",
+          "eviction-notice",
+          "employment-dispute",
+          "consumer-complaint",
+          "general-legal",
+          "pre-litigation-settlement",
+          "debt-collection",
+          "estate-probate",
+          "landlord-tenant",
+          "insurance-dispute",
+          "personal-injury-demand",
+          "intellectual-property",
+          "family-law",
+          "neighbor-hoa",
+        ]),
+        subject: z.string().min(5).max(500),
+        issueSummary: z.string().optional(),
+        jurisdictionCountry: z.string().default("US"),
+        jurisdictionState: z.string().min(2),
+        jurisdictionCity: z.string().optional(),
+        intakeJson: intakeJsonSchema,
+        priority: z
+          .enum(["low", "normal", "high", "urgent"])
+          .default("normal"),
+        templateId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await checkTrpcRateLimit("letter", `admin:${ctx.user.id}`, true);
+
+      let result: { insertId: number };
+      try {
+        result = await createLetterRequest({
+          userId: ctx.user.id,
+          letterType: input.letterType,
+          subject: input.subject,
+          issueSummary: input.issueSummary,
+          jurisdictionCountry: input.jurisdictionCountry,
+          jurisdictionState: input.jurisdictionState,
+          jurisdictionCity: input.jurisdictionCity,
+          intakeJson: input.intakeJson,
+          priority: input.priority,
+          templateId: input.templateId,
+          submittedByAdmin: true,
+        });
+      } catch (createErr) {
+        throw createErr;
+      }
+      const letterId = result.insertId;
+
+      await logReviewAction({
+        letterRequestId: letterId,
+        reviewerId: ctx.user.id,
+        actorType: "admin",
+        action: "letter_submitted",
+        fromStatus: undefined,
+        toStatus: "submitted",
+        noteText: "Letter submitted by admin (bypass billing).",
+        noteVisibility: "internal",
       });
-    }
 
-    // Update status to submitted
-    await updateLetterStatus(letterId, "submitted");
+      const appUrl = getAppUrl(ctx.req);
+      try {
+        await enqueuePipelineJob({
+          type: "runPipeline",
+          letterId,
+          intake: input.intakeJson,
+          userId: ctx.user.id,
+          appUrl,
+          label: "admin_submit",
+        });
+      } catch (enqueueErr) {
+        logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue admin pipeline job:");
+        captureServerException(enqueueErr, { tags: { component: "queue", error_type: "admin_enqueue_failed" } });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to start letter processing. Please try again.",
+        });
+      }
 
-    // Enqueue the pipeline job
-    try {
-      await enqueuePipelineJob({
-        type: "pipeline:submit",
-        letterId,
-        intake,
-        userId,
-        appUrl: ctx.appUrl,
-        label: label || `Letter #${letterId} submission`,
-        usageContext: {
-          shouldRefundOnFailure: true,
-          isFreeTrialSubmission: letter.isFreeTrial,
-        },
-      });
-      logger.info(`[SubmitLetter] Enqueued pipeline job for letter #${letterId}`);
-    } catch (error) {
-      logger.error({ error }, `[SubmitLetter] Failed to enqueue pipeline job for letter #${letterId}`);
-      // If enqueuing fails, revert status to draft
-      await updateLetterStatus(letterId, "draft");
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to submit letter for processing. Please try again.",
-      });
-    }
-
-    return { success: true };
-  });
+      return { letterId, status: "submitted" };
+    }),
+};

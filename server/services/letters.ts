@@ -41,7 +41,7 @@ import {
 } from "../stripe";
 import type { IntakeJson } from "../../shared/types";
 import { getAppUrl } from "../routers/_shared";
-import { logger } from "../_core/logger";
+import { logger } from "../logger";
 
 // ─── Submit Letter (subscriber path) ───────────────────────────────────────
 
@@ -142,14 +142,14 @@ export async function submitLetter(
       jurisdictionState: input.jurisdictionState,
       appUrl,
     }).catch(err => {
-      logger.error({ err: err }, "[Email] Submission confirmation failed:");
+      logger.error("[Email] Submission confirmation failed:", err);
       captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } });
     });
   }
 
   try {
     await enqueuePipelineJob({
-      type: "pipeline:submit",
+      type: "runPipeline",
       letterId,
       intake: input.intakeJson,
       userId: ctx.userId,
@@ -283,7 +283,7 @@ export async function processSubscriberFeedback(
     if (intake) {
       try {
         await enqueuePipelineJob({
-          type: "pipeline:submit",
+          type: "runPipeline",
           letterId,
           intake,
           userId: ctx.letter.userId ?? ctx.userId,
@@ -314,52 +314,280 @@ export async function processSubscriberFeedback(
             appUrl,
           });
         }
+        await createNotification({
+          userId: ctx.letter.assignedReviewerId,
+          type: "subscriber_feedback_received",
+          title: "Subscriber responded with feedback",
+          body: `Subscriber provided feedback on "${ctx.letter.subject}". Please apply the requested edits.`,
+          link: `/review/${letterId}`,
+        });
+      } else {
+        await notifyAdmins({
+          category: "letters",
+          type: "subscriber_feedback_received",
+          title: `Subscriber feedback on letter #${letterId}`,
+          body: `Subscriber provided feedback on "${ctx.letter.subject}" (light-edit path). Letter is back in the review queue.`,
+          link: `/admin/letters/${letterId}`,
+        });
       }
-    } catch (emailErr) {
-      logger.error({ err: emailErr }, "[Email] Failed to send pending_review email to attorney:");
-      captureServerException(emailErr, { tags: { component: "letters", error_type: "pending_review_email_failed" } });
+    } catch (notifyErr) {
+      logger.error({ err: notifyErr }, "[processSubscriberFeedback] Light-edit notification failed:");
+      captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
     }
   }
 
   return { success: true, retriggerPipeline };
 }
 
-// ─── Admin Actions ─────────────────────────────────────────────────────────
+// ─── Retry From Rejected ───────────────────────────────────────────────────
 
-export async function adminEnqueuePipelineJob(
-  letterId: number,
-  intake: IntakeJson,
-  userId: number,
-  appUrl: string,
-  label: string
-): Promise<void> {
-  await enqueuePipelineJob({
-    type: "pipeline:submit",
-    letterId,
-    intake,
-    userId,
-    appUrl,
-    label,
-    usageContext: { shouldRefundOnFailure: false, isFreeTrialSubmission: false },
-  });
+export interface RetryFromRejectedInput {
+  letterId: number;
+  additionalContext?: string;
+  updatedIntakeJson?: IntakeJson;
 }
 
-export async function adminEnqueueRetryFromStageJob(
-  letterId: number,
-  intake: IntakeJson,
-  stage: "researching" | "drafting" | "vetting",
-  userId: number,
-  appUrl: string,
-  label: string
-): Promise<void> {
-  await enqueuePipelineJob({
-    type: "pipeline:retryFromStage",
-    letterId,
-    intake,
-    stage,
-    userId,
-    appUrl,
-    label,
-    usageContext: { shouldRefundOnFailure: false, isFreeTrialSubmission: false },
+interface RetryFromRejectedCtx {
+  userId: number;
+  userName?: string | null;
+  req: Request;
+}
+
+export async function retryFromRejected(
+  input: RetryFromRejectedInput,
+  ctx: RetryFromRejectedCtx,
+) {
+  const letter = await getLetterRequestById(input.letterId);
+  if (!letter || letter.userId !== ctx.userId)
+    throw new TRPCError({ code: "NOT_FOUND" });
+  if (letter.status !== "rejected")
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Letter must be in rejected status to retry" });
+
+  await logReviewAction({
+    letterRequestId: input.letterId,
+    reviewerId: ctx.userId,
+    actorType: "subscriber",
+    action: "retry_from_rejected",
+    noteText: input.additionalContext ?? "Subscriber retrying after rejection",
+    noteVisibility: "user_visible",
+    fromStatus: "rejected",
+    toStatus: "submitted",
   });
+
+  if (input.additionalContext) {
+    extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.userId, "subscriber_retry").catch(logger.error);
+  }
+
+  if (input.updatedIntakeJson) {
+    const db = await (await import("../db")).getDb();
+    if (db) {
+      const { letterRequests } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      await db
+        .update(letterRequests)
+        .set({ intakeJson: input.updatedIntakeJson, updatedAt: new Date() })
+        .where(eq(letterRequests.id, input.letterId));
+    }
+  }
+
+  const intake = input.updatedIntakeJson ?? letter.intakeJson;
+  if (!intake) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "No intake data available to re-run the pipeline. Please provide updated details.",
+    });
+  }
+
+  await updateLetterStatus(input.letterId, "submitted");
+
+  const appUrl = getAppUrl(ctx.req);
+  try {
+    await enqueuePipelineJob({
+      type: "runPipeline",
+      letterId: input.letterId,
+      intake,
+      userId: letter.userId,
+      appUrl,
+      label: "retryFromRejected",
+    });
+  } catch (enqueueErr) {
+    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+    captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to start letter reprocessing. Please try again.",
+    });
+  }
+
+  try {
+    const subscriber = await getUserById(ctx.userId);
+    if (subscriber?.email) {
+      await sendStatusUpdateEmail({
+        to: subscriber.email,
+        name: subscriber.name ?? "Subscriber",
+        subject: letter.subject,
+        newStatus: "submitted",
+        appUrl,
+        letterId: input.letterId,
+      });
+    }
+    await createNotification({
+      userId: ctx.userId,
+      type: "retry_from_rejected",
+      title: "Letter resubmitted for processing",
+      body: `Your letter "${letter.subject}" has been resubmitted and is being reprocessed.`,
+      link: `/letters/${input.letterId}`,
+    });
+    await notifyAdmins({
+      category: "letters",
+      type: "retry_from_rejected",
+      title: `Subscriber retried rejected letter #${input.letterId}`,
+      body: `${ctx.userName ?? "A subscriber"} retried "${letter.subject}" after rejection.`,
+      link: `/admin/letters/${input.letterId}`,
+    });
+  } catch (err) {
+    logger.error({ err: err }, "[retryFromRejected] Notification error:");
+    captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
+  }
+
+  return { success: true };
+}
+
+// ─── Send To Recipient ─────────────────────────────────────────────────────
+
+export interface SendToRecipientInput {
+  letterId: number;
+  recipientEmail: string;
+  subjectOverride?: string;
+  note?: string;
+}
+
+interface SendToRecipientCtx {
+  userId: number;
+  userRole: "subscriber" | "employee" | "admin" | "attorney";
+  userName?: string | null;
+  req: Request;
+}
+
+export async function sendLetterToRecipientFlow(
+  input: SendToRecipientInput,
+  ctx: SendToRecipientCtx,
+) {
+  const letter = await getLetterRequestById(input.letterId);
+  if (!letter || letter.userId !== ctx.userId)
+    throw new TRPCError({ code: "NOT_FOUND" });
+  if (letter.status !== "approved" && letter.status !== "client_approved" && letter.status !== "sent")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only approved or sent letters can be sent to recipients",
+    });
+
+  const versions = await getLetterVersionsByRequestId(input.letterId, false);
+  const finalVersion = versions.find((v) => v.versionType === "final_approved");
+  if (!finalVersion)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "No approved letter version found",
+    });
+
+  await sendLetterToRecipient({
+    recipientEmail: input.recipientEmail,
+    letterSubject: letter.subject,
+    subjectOverride: input.subjectOverride?.trim() || undefined,
+    note: input.note?.trim() || undefined,
+    pdfUrl: letter.pdfUrl ?? undefined,
+    htmlContent: finalVersion.content,
+  });
+
+  try {
+    await updateLetterStatus(input.letterId, "sent", { force: true });
+    await logReviewAction({
+      letterRequestId: input.letterId,
+      reviewerId: ctx.userId,
+      actorType: ctx.userRole,
+      action: "letter_sent_to_recipient",
+      noteText: `Letter delivered to ${input.recipientEmail}`,
+      noteVisibility: "internal",
+      fromStatus: letter.status,
+      toStatus: "sent",
+    });
+  } catch (err) {
+    logger.error({ err: err }, "[sendToRecipient] Failed to update status to sent:");
+    captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
+  }
+
+  try {
+    await notifyAdmins({
+      category: "letters",
+      type: "letter_sent_to_recipient",
+      title: `Letter #${input.letterId} sent to recipient`,
+      body: `Letter "${letter.subject}" was sent to ${input.recipientEmail}.`,
+      link: `/admin/letters/${input.letterId}`,
+    });
+  } catch (err) {
+    logger.error({ err: err }, "[notifyAdmins] letter_sent_to_recipient:");
+    captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
+  }
+
+  return { success: true };
+}
+
+// ─── Client Decline ────────────────────────────────────────────────────────
+
+export interface ClientDeclineInput {
+  letterId: number;
+  reason?: string;
+}
+
+interface ClientDeclineCtx {
+  userId: number;
+  userName?: string | null;
+  req: Request;
+}
+
+export async function clientDeclineLetter(
+  input: ClientDeclineInput,
+  ctx: ClientDeclineCtx,
+) {
+  const letter = await getLetterRequestById(input.letterId);
+  if (!letter || letter.userId !== ctx.userId) {
+    throw new TRPCError({ code: "NOT_FOUND" });
+  }
+  if (letter.status !== "client_approval_pending") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Letter is not awaiting client approval",
+    });
+  }
+  await updateLetterStatus(input.letterId, "client_declined");
+  await logReviewAction({
+    letterRequestId: input.letterId,
+    reviewerId: ctx.userId,
+    actorType: "subscriber",
+    action: "client_declined",
+    noteText: input.reason || "Subscriber declined the letter",
+    noteVisibility: "user_visible",
+    fromStatus: "client_approval_pending",
+    toStatus: "client_declined",
+  });
+  try {
+    await notifyAdmins({
+      category: "letters",
+      type: "client_declined",
+      title: `Client declined letter #${input.letterId}`,
+      body: `${ctx.userName ?? "A subscriber"} declined "${letter.subject}".${input.reason ? ` Reason: ${input.reason}` : ""}`,
+      link: `/admin/letters/${input.letterId}`,
+      emailOpts: {
+        subject: `Client Declined Letter #${input.letterId}`,
+        preheader: `Client declined letter "${letter.subject}"`,
+        bodyHtml: `<p>Hello,</p><p><strong>${ctx.userName ?? "A subscriber"}</strong> has declined letter <strong>#${input.letterId}</strong> — "${letter.subject}".</p>${input.reason ? `<blockquote style="margin:16px 0;padding:12px 16px;background:#FEE2E2;border-left:4px solid #EF4444;border-radius:4px;color:#991B1B;">${input.reason}</blockquote>` : ""}`,
+        ctaText: "View Letter",
+        ctaUrl: `${getAppUrl(ctx.req)}/admin/letters/${input.letterId}`,
+      },
+    });
+  } catch (err) {
+    logger.error({ err: err }, "[notifyAdmins] client_declined:");
+    captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
+  }
+  return { success: true };
 }
