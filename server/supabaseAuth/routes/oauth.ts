@@ -65,7 +65,8 @@ export function registerOAuthRoutes(app: Express) {
       res.cookie("pkce_verifier", codeVerifier, {
         httpOnly: true,
         secure: true,
-        sameSite: "lax",
+        sameSite: "none",
+        secure: true,
         maxAge: 5 * 60 * 1000,
         path: "/",
       });
@@ -188,7 +189,8 @@ export function registerOAuthRoutes(app: Express) {
       res.clearCookie("pkce_verifier", {
         httpOnly: true,
         secure: true,
-        sameSite: "lax",
+        sameSite: "none",
+        secure: true,
         path: "/",
       });
 
@@ -224,7 +226,7 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       if (!tokenResponse.ok || !tokenJson.access_token || !tokenJson.user) {
-        logger.error({ status: tokenResponse.status, error: tokenJson.error, description: tokenJson.error_description, message: tokenJson.message }, "OAuth callback failed");
+        logger.error({ status: tokenResponse.status, tokenJson, body: { auth_code: code, code_verifier: storedVerifier } }, "OAuth callback failed");
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
