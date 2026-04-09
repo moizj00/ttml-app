@@ -1,19 +1,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { RunPipelineJobData, RetryFromStageJobData, PipelineJobData } from "./queue";
-import type { Job } from "bullmq";
+import type { Job } from "pg-boss";
 
 vi.mock("./queue", () => ({
   QUEUE_NAME: "pipeline",
-  getPipelineQueue: vi.fn().mockReturnValue({ add: vi.fn(), close: vi.fn(), getJob: vi.fn().mockResolvedValue(null) }),
+  getPipelineQueue: vi.fn().mockReturnValue({
+    getWaitingCount: vi.fn().mockResolvedValue(0),
+    getActiveCount: vi.fn().mockResolvedValue(0),
+    getCompletedCount: vi.fn().mockResolvedValue(0),
+    getFailedCount: vi.fn().mockResolvedValue(0),
+    getDelayedCount: vi.fn().mockResolvedValue(0),
+    getFailed: vi.fn().mockResolvedValue([]),
+    getCompleted: vi.fn().mockResolvedValue([]),
+  }),
   enqueuePipelineJob: vi.fn().mockResolvedValue("mock-job-id"),
   enqueueRetryFromStageJob: vi.fn().mockResolvedValue("mock-job-id"),
-  buildRedisConnection: vi.fn().mockReturnValue({}),
+  getBoss: vi.fn().mockResolvedValue({
+    on: vi.fn(),
+    work: vi.fn().mockResolvedValue("worker-id"),
+    stop: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
-vi.mock("bullmq", () => {
-  function Queue(this: Record<string, unknown>) { this.add = vi.fn(); this.close = vi.fn(); return this; }
-  function Worker(this: Record<string, unknown>) { this.on = vi.fn(); this.close = vi.fn(); return this; }
-  return { Queue, Worker };
+vi.mock("pg-boss", () => {
+  const PgBoss = vi.fn(function MockPgBoss(this: Record<string, unknown>) {
+    this.on = vi.fn();
+    this.start = vi.fn().mockResolvedValue(undefined);
+    this.stop = vi.fn().mockResolvedValue(undefined);
+    this.send = vi.fn().mockResolvedValue("mock-job-id");
+    this.work = vi.fn().mockResolvedValue("worker-id");
+    this.createQueue = vi.fn().mockResolvedValue(undefined);
+    return this;
+  });
+  return { PgBoss };
 });
 
 vi.mock("./pipeline", () => ({
@@ -48,7 +67,7 @@ vi.mock("./_core/env", () => ({
 
 vi.mock("dotenv/config", () => ({}));
 
-process.env.UPSTASH_REDIS_URL = "redis://mock:6379";
+process.env.DATABASE_URL = "postgresql://mock:5432/test";
 
 const { processRunPipeline, processRetryFromStage, processJob } = await import("./worker");
 const { runFullPipeline, retryPipelineFromStage: retryPipelineFn, bestEffortFallback, consumeIntermediateContent } = await import("./pipeline");

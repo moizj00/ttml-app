@@ -2,10 +2,10 @@ import "dotenv/config";
 import { initServerSentry } from "./sentry";
 initServerSentry();
 
-import { Worker, type Job } from "bullmq";
+import type { Job } from "pg-boss";
 import {
   QUEUE_NAME,
-  buildRedisConnection,
+  getBoss,
   type PipelineJobData,
   type RunPipelineJobData,
   type RetryFromStageJobData,
@@ -349,45 +349,27 @@ async function startWorker() {
     captureServerException(err, { tags: { component: "worker", error_type: "db_warmup_failed" } });
   });
 
-  const connection = buildRedisConnection();
+  const boss = await getBoss();
 
-  const worker = new Worker<PipelineJobData>(QUEUE_NAME, processJob, {
-    connection,
-    concurrency: 1,
-    lockDuration: 600_000,
-    stalledInterval: 300_000,
+  // Register the job handler — pg-boss calls this with an array of jobs
+  await boss.work<PipelineJobData>(QUEUE_NAME, { localConcurrency: 1 }, async (jobs) => {
+    for (const job of jobs) {
+      await processJob(job);
+    }
   });
 
-  worker.on("ready", () => {
-    logger.info("[Worker] Pipeline worker is ready and listening for jobs");
-  });
-
-  worker.on("completed", (job) => {
-    logger.info(`[Worker] Job ${job.id} completed successfully`);
-  });
-
-  worker.on("failed", (job, err) => {
-    logger.error({ err: err.message }, `[Worker] Job ${job?.id} failed:`);
-    captureServerException(err, {
-      tags: { component: "pipeline-worker", error_type: "job_failed" },
-      extra: { jobId: job?.id, jobData: job?.data },
-    });
-  });
-
-  worker.on("error", (err) => {
-    logger.error({ err: err.message }, "[Worker] Worker error:");
+  boss.on("error", (err) => {
+    logger.error({ err: err.message }, "[Worker] pg-boss error:");
   });
 
   const shutdown = async (signal: string) => {
     logger.info(`[Worker] Received ${signal}, shutting down gracefully...`);
-    await worker.close();
+    await boss.stop({ graceful: true, timeout: 30_000 });
     process.exit(0);
   };
-
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
-
-  logger.info(`[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1)`);
+  logger.info(`[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1, backend=pg-boss)`);
 }
 
 startWorker().catch((err) => {

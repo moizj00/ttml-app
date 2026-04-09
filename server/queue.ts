@@ -1,8 +1,23 @@
-import { Queue, type ConnectionOptions } from "bullmq";
-import IORedis from "ioredis";
+/**
+ * Pipeline Queue — pg-boss (PostgreSQL-native job queue)
+ *
+ * Replaces BullMQ + Upstash Redis with pg-boss backed by the existing
+ * Supabase PostgreSQL database. This eliminates the Redis dependency entirely.
+ *
+ * Connection: Uses SUPABASE_DIRECT_URL (direct connection, not the pooler)
+ * because pg-boss needs a persistent connection for its internal polling.
+ *
+ * Exported API is intentionally kept compatible with the old BullMQ-based
+ * queue so callers (services/letters.ts, stalePipelineLockRecovery.ts, etc.)
+ * require no changes.
+ */
+
+import { PgBoss } from "pg-boss";
 import { logger } from "./logger";
 
-const QUEUE_NAME = "pipeline";
+export const QUEUE_NAME = "pipeline";
+
+// ─── Job Data Types ────────────────────────────────────────────────────────
 
 export type PipelineJobType =
   | "runPipeline"
@@ -28,95 +43,210 @@ export interface RetryFromStageJobData {
 
 export type PipelineJobData = RunPipelineJobData | RetryFromStageJobData;
 
-function buildRedisConnection(): ConnectionOptions {
-  const redisUrl = process.env.UPSTASH_REDIS_URL;
-  if (redisUrl) {
-    return new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
-  }
+// ─── pg-boss Singleton ─────────────────────────────────────────────────────
 
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL ?? "";
-  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? "";
+let _boss: PgBoss | null = null;
+let _bossStarting: Promise<PgBoss> | null = null;
 
-  if (!restUrl || !restToken) {
+function getConnectionString(): string {
+  const url =
+    process.env.SUPABASE_DIRECT_URL ||
+    process.env.SUPABASE_DATABASE_URL ||
+    process.env.DATABASE_URL;
+  if (!url) {
     throw new Error(
-      "[Queue] Redis not configured. Set UPSTASH_REDIS_URL (preferred) or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN."
+      "[Queue] No database URL found. Set SUPABASE_DIRECT_URL (direct connection, not pooler) for pg-boss."
     );
   }
-
-  const host = restUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const password = restToken;
-
-  return new IORedis({
-    host,
-    port: 6379,
-    password,
-    tls: {},
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
+  return url;
 }
 
-let _queue: Queue<PipelineJobData> | null = null;
+export async function getBoss(): Promise<PgBoss> {
+  if (_boss) return _boss;
+  if (_bossStarting) return _bossStarting;
 
-export function getPipelineQueue(): Queue<PipelineJobData> {
-  if (!_queue) {
-    _queue = new Queue<PipelineJobData>(QUEUE_NAME, {
-      connection: buildRedisConnection(),
-      defaultJobOptions: {
-        attempts: 1,
-        removeOnComplete: { count: 200 },
-        removeOnFail: { count: 500 },
-      },
+  _bossStarting = (async () => {
+    const connectionString = getConnectionString();
+    const boss = new PgBoss({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      // Disable scheduling (we don't use cron jobs via pg-boss)
+      schedule: false,
+      // Keep completed jobs for 7 days, failed for 30 days (set at queue level)
     });
+
+    boss.on("error", (err) => {
+      logger.error({ err }, "[Queue] pg-boss error:");
+    });
+
+    boss.on("warning", (warning) => {
+      logger.warn({ warning }, "[Queue] pg-boss warning:");
+    });
+
+    await boss.start();
+
+    // Ensure the pipeline queue exists with desired retention settings
+    try {
+      await boss.createQueue(QUEUE_NAME, {
+        // No retries at queue level — worker handles its own retry logic with backoff
+        retryLimit: 0,
+        // Expire active jobs after 30 minutes if not completed
+        expireInSeconds: 30 * 60,
+        // Keep completed jobs for 7 days
+        deleteAfterSeconds: 7 * 24 * 60 * 60,
+        // Keep failed jobs for 30 days
+        retentionSeconds: 30 * 24 * 60 * 60,
+      });
+    } catch (queueErr) {
+      // Queue may already exist — that's fine
+      logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
+    }
+
+    _boss = boss;
+    logger.info("[Queue] pg-boss started successfully (PostgreSQL-native queue)");
+    return boss;
+  })();
+
+  try {
+    return await _bossStarting;
+  } finally {
+    _bossStarting = null;
   }
-  return _queue;
 }
+
+// ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
-  const queue = getPipelineQueue();
-  const job = await queue.add(`pipeline:${data.label}:${data.letterId}`, data, {
-    jobId: `pipeline-${data.letterId}-${Date.now()}`,
+  const boss = await getBoss();
+  const jobId = `pipeline-${data.letterId}-${Date.now()}`;
+  const id = await boss.send(QUEUE_NAME, data as unknown as object, {
+    id: jobId,
+    // No retries at queue level — worker handles its own retry logic with backoff
+    retryLimit: 0,
+    // Expire job after 30 minutes if not picked up
+    expireInSeconds: 30 * 60,
   });
-  logger.info(`[Queue] Enqueued pipeline job ${job.id} for letter #${data.letterId} (${data.label})`);
-  return job.id!;
+  const resolvedId = id ?? jobId;
+  logger.info(`[Queue] Enqueued pipeline job ${resolvedId} for letter #${data.letterId} (${data.label})`);
+  return resolvedId;
 }
 
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
-  const queue = getPipelineQueue();
-  const dedupeId = `retry-${data.letterId}-${data.stage}`;
-  try {
-    const existing = await queue.getJob(dedupeId);
-    if (existing) {
-      const state = await existing.getState();
-      if (state === "waiting" || state === "active" || state === "delayed") {
-        logger.warn(`[Queue] Retry job already queued/active for letter #${data.letterId} stage=${data.stage} (state=${state}) — skipping duplicate`);
-        return existing.id!;
-      }
-      await existing.remove().catch(() => {});
-    }
-  } catch (checkErr) {
-    logger.warn({ err: checkErr }, `[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`);
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
-    });
-    return job.id!;
+  const boss = await getBoss();
+  const dedupeKey = `retry-${data.letterId}-${data.stage}`;
+  // Use singletonKey to deduplicate: only one retry job per letter+stage in queue
+  const id = await boss.send(QUEUE_NAME, data as unknown as object, {
+    singletonKey: dedupeKey,
+    retryLimit: 0,
+    expireInSeconds: 30 * 60,
+  });
+  if (!id) {
+    logger.warn(`[Queue] Retry job already queued for letter #${data.letterId} stage=${data.stage} — skipping duplicate`);
+    return dedupeKey;
   }
-  try {
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: dedupeId,
-    });
-    logger.info(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
-    return job.id!;
-  } catch (addErr) {
-    logger.warn({ err: addErr }, `[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`);
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
-    });
-    return job.id!;
-  }
+  logger.info(`[Queue] Enqueued retry job ${id} for letter #${data.letterId} stage=${data.stage}`);
+  return id;
 }
 
-export { QUEUE_NAME, buildRedisConnection };
+// ─── Queue Health Shim ─────────────────────────────────────────────────────
+//
+// admin/jobs.ts calls getPipelineQueue() and uses BullMQ-specific methods
+// (getWaitingCount, getActiveCount, etc.). We return a shim that maps these
+// to pg-boss equivalents so the admin dashboard still works.
+
+export interface PipelineQueueShim {
+  getWaitingCount(): Promise<number>;
+  getActiveCount(): Promise<number>;
+  getCompletedCount(): Promise<number>;
+  getFailedCount(): Promise<number>;
+  getDelayedCount(): Promise<number>;
+  getFailed(start: number, end: number): Promise<Array<{
+    id: string;
+    name: string;
+    failedReason: string;
+    finishedOn: number | null;
+    data: PipelineJobData;
+  }>>;
+  getCompleted(start: number, end: number): Promise<Array<{
+    id: string;
+    finishedOn: number | null;
+    processedOn: number | null;
+    data: PipelineJobData;
+  }>>;
+}
+
+export function getPipelineQueue(): PipelineQueueShim {
+  return {
+    async getWaitingCount() {
+      try {
+        const boss = await getBoss();
+        const stats = await boss.getQueueStats(QUEUE_NAME);
+        return (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
+      } catch { return 0; }
+    },
+    async getActiveCount() {
+      try {
+        const boss = await getBoss();
+        const stats = await boss.getQueueStats(QUEUE_NAME);
+        return stats?.activeCount ?? 0;
+      } catch { return 0; }
+    },
+    async getCompletedCount() {
+      try {
+        const boss = await getBoss();
+        const stats = await boss.getQueueStats(QUEUE_NAME);
+        return stats?.totalCount ?? 0;
+      } catch { return 0; }
+    },
+    async getFailedCount() {
+      try {
+        const boss = await getBoss();
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        return jobs.filter(j => j.state === "failed").length;
+      } catch { return 0; }
+    },
+    async getDelayedCount() {
+      return 0; // pg-boss doesn't have a separate "delayed" state
+    },
+    async getFailed(start: number, end: number) {
+      try {
+        const boss = await getBoss();
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        return jobs
+          .filter(j => j.state === "failed")
+          .slice(start, end + 1)
+          .map(j => ({
+            id: j.id,
+            name: j.name,
+            failedReason: (j.output as { message?: string } | null)?.message ?? "Unknown error",
+            finishedOn: j.completedOn ? j.completedOn.getTime() : null,
+            data: j.data,
+          }));
+      } catch { return []; }
+    },
+    async getCompleted(start: number, end: number) {
+      try {
+        const boss = await getBoss();
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        return jobs
+          .filter(j => j.state === "completed")
+          .slice(start, end + 1)
+          .map(j => ({
+            id: j.id,
+            finishedOn: j.completedOn ? j.completedOn.getTime() : null,
+            processedOn: j.startedOn ? j.startedOn.getTime() : null,
+            data: j.data,
+          }));
+      } catch { return []; }
+    },
+  };
+}
+
+// ─── Backward-compat stub ──────────────────────────────────────────────────
+
+/** @deprecated No longer used — pg-boss connects via DATABASE_URL directly */
+export function buildRedisConnection(): never {
+  throw new Error(
+    "[Queue] buildRedisConnection() is no longer available — queue has been migrated to pg-boss (PostgreSQL-native)."
+  );
+}

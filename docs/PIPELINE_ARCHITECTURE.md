@@ -98,14 +98,14 @@ This section documents every service pair in the system: what is primary, what t
 | **Stage 1 Research** | Perplexity `sonar-pro` | Anthropic `claude-opus-4-5` | `PERPLEXITY_API_KEY` missing or empty | Research is **not web-grounded**; no live citations; `researchUnverified` flag set on letter |
 | **Rate limiting** | Upstash Redis (`@upstash/ratelimit`) | Fail-open / allow-all (general endpoints); fail-closed / deny (auth endpoints) | Redis credentials missing (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) or Redis unreachable | General endpoints lose abuse protection; auth endpoints remain protected via fail-closed behaviour |
 | **Monitoring** | Sentry (frontend + backend DSN) | `console.error` / `console.warn` | Sentry DSN not configured or Sentry SDK init fails | Errors still surface in server logs but are not aggregated, alerted, or tracked in Sentry dashboard |
-| **Background jobs** | BullMQ + Upstash Redis queue | None — enqueue failure throws `INTERNAL_SERVER_ERROR` and refunds user usage | Redis unavailable when enqueueing | Letter submission fails; usage is automatically refunded; no silent degradation |
+| **Background jobs** | pg-boss (PostgreSQL-native queue) | None — enqueue failure throws `INTERNAL_SERVER_ERROR` and refunds user usage | Database unavailable when enqueueing | Letter submission fails; usage is automatically refunded; no silent degradation |
 
 ### Notes
 
 - **Letter generation routing:** `N8N_PRIMARY` must equal the string `"true"` AND `N8N_WEBHOOK_URL` must be set and start with `https://`. All three conditions must be true simultaneously to activate n8n. The current production environment does not set `N8N_PRIMARY`, so the local pipeline is always used.
 - **Stage 1 research fallback:** When Claude is used for research instead of Perplexity, the letter's `researchUnverified` column is set to `true` and `webGrounded` is `false`. This is surfaced to attorneys in the review UI.
 - **Rate limiter fail-open vs fail-closed:** Auth endpoints (login, signup, forgot-password) use fail-closed (deny) when Redis is down, to prevent unbounded brute-force. All other endpoints use fail-open (allow) to avoid blocking normal usage during Redis outages. See `server/rateLimiter.ts` lines 133–170.
-- **BullMQ / background jobs:** There is no inline fallback for queue failures. If Redis is unavailable and a job cannot be enqueued, the submission is rejected with a user-facing error and any consumed usage credit is refunded.
+- **pg-boss / background jobs:** There is no inline fallback for queue failures. If the database is unavailable and a job cannot be enqueued, the submission is rejected with a user-facing error and any consumed usage credit is refunded. pg-boss uses the existing Supabase PostgreSQL connection — no separate Redis dependency.
 
 ---
 
@@ -205,8 +205,8 @@ Note: `generated_unlocked` still exists in the DB enum for backward compatibilit
 | `server/email.ts` | Email notifications at each status change |
 | `server/db.ts` | All database query helpers |
 | `server/rateLimiter.ts` | Upstash Redis rate limiting (fail-open/fail-closed) |
-| `server/queue.ts` | BullMQ queue setup and job enqueueing |
-| `server/worker.ts` | BullMQ worker — processes pipeline jobs |
+| `server/queue.ts` | pg-boss queue setup and job enqueueing (PostgreSQL-native) |
+| `server/worker.ts` | pg-boss worker — processes pipeline jobs |
 | `drizzle/schema.ts` | Database schema + enums |
 
 ---
@@ -217,9 +217,9 @@ Note: `generated_unlocked` still exists in the DB enum for backward compatibilit
 |----------|----------|---------|
 | `ANTHROPIC_API_KEY` | **Yes** | Stages 2, 3 + 4 (always required) |
 | `PERPLEXITY_API_KEY` | Recommended | Stage 1 research (primary); falls back to Claude if missing |
-| `UPSTASH_REDIS_URL` | Recommended | BullMQ queue connection (IORedis URL form — preferred for BullMQ) |
-| `UPSTASH_REDIS_REST_URL` | Recommended | Rate limiter (`@upstash/ratelimit`) + alternative BullMQ connection when `UPSTASH_REDIS_URL` is absent |
-| `UPSTASH_REDIS_REST_TOKEN` | Recommended | Auth token paired with `UPSTASH_REDIS_REST_URL`; required by both rate limiter and fallback BullMQ connection |
+| `UPSTASH_REDIS_REST_URL` | Recommended | Rate limiter (`@upstash/ratelimit`) — fail-open if absent |
+| `UPSTASH_REDIS_REST_TOKEN` | Recommended | Auth token paired with `UPSTASH_REDIS_REST_URL` for rate limiter |
+| `SUPABASE_DIRECT_URL` | Recommended | Direct PostgreSQL connection for pg-boss queue (falls back to `DATABASE_URL`) |
 | `N8N_WEBHOOK_URL` | No | n8n webhook URL (only used if N8N_PRIMARY=true) |
 | `N8N_CALLBACK_SECRET` | No | n8n auth header secret |
 | `N8N_PRIMARY` | No | Set to `"true"` to activate n8n alternative path (default: off) |
