@@ -1,122 +1,73 @@
-import { Queue, type ConnectionOptions } from "bullmq";
-import IORedis from "ioredis";
-import { logger } from "./logger";
+import { Logger } from "./_core/logger";
+import { db } from "./db";
+import { RunPipelineJobData } from "./types";
+import PgBoss from "pg-boss";
 
-const QUEUE_NAME = "pipeline";
+const logger = Logger.child({ module: "queue" });
 
-export type PipelineJobType =
-  | "runPipeline"
-  | "retryPipelineFromStage";
+export const QUEUE_NAME = "pipeline";
 
-export interface RunPipelineJobData {
-  type: "runPipeline";
-  letterId: number;
-  intake: unknown;
-  userId: number | undefined;
-  appUrl: string;
-  label: string;
-  usageContext?: { shouldRefundOnFailure: true; isFreeTrialSubmission: boolean };
-}
+let boss: PgBoss | null = null;
 
-export interface RetryFromStageJobData {
-  type: "retryPipelineFromStage";
-  letterId: number;
-  intake: unknown;
-  stage: "research" | "drafting";
-  userId: number | undefined;
-}
-
-export type PipelineJobData = RunPipelineJobData | RetryFromStageJobData;
-
-function buildRedisConnection(): ConnectionOptions {
-  const redisUrl = process.env.UPSTASH_REDIS_URL;
-  if (redisUrl) {
-    return new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+export async function initializeQueue() {
+  if (boss) {
+    logger.info("[Queue] PgBoss already initialized.");
+    return;
   }
 
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL ?? "";
-  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? "";
-
-  if (!restUrl || !restToken) {
-    throw new Error(
-      "[Queue] Redis not configured. Set UPSTASH_REDIS_URL (preferred) or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN."
-    );
-  }
-
-  const host = restUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const password = restToken;
-
-  return new IORedis({
-    host,
-    port: 6379,
-    password,
-    tls: {},
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
+  logger.info("[Queue] Initializing PgBoss...");
+  boss = new PgBoss({
+    connectionString: process.env.SUPABASE_DIRECT_URL,
+    schema: "public", // Use the public schema for pg-boss tables
+    // You can add more pg-boss options here, e.g., monitoring
   });
-}
 
-let _queue: Queue<PipelineJobData> | null = null;
+  boss.on("error", (error) => logger.error({ error }, "[Queue] PgBoss error"));
 
-export function getPipelineQueue(): Queue<PipelineJobData> {
-  if (!_queue) {
-    _queue = new Queue<PipelineJobData>(QUEUE_NAME, {
-      connection: buildRedisConnection(),
-      defaultJobOptions: {
-        attempts: 1,
-        removeOnComplete: { count: 200 },
-        removeOnFail: { count: 500 },
-      },
-    });
-  }
-  return _queue;
+  await boss.start();
+  logger.info("[Queue] PgBoss initialized and started.");
 }
 
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
-  const queue = getPipelineQueue();
-  const job = await queue.add(`pipeline:${data.label}:${data.letterId}`, data, {
-    jobId: `pipeline-${data.letterId}-${Date.now()}`,
+  if (!boss) {
+    throw new Error("PgBoss is not initialized. Call initializeQueue() first.");
+  }
+  logger.info({ letterId: data.letterId }, "[Queue] Enqueuing pipeline job...");
+  const jobId = await boss.send(QUEUE_NAME, data, {
+    // PgBoss options for the job, e.g., retry logic
+    retryLimit: 5,
+    retryDelay: 300, // 5 minutes
+    expireInMinutes: 60 * 24, // 24 hours
   });
-  logger.info(`[Queue] Enqueued pipeline job ${job.id} for letter #${data.letterId} (${data.label})`);
-  return job.id!;
+  if (!jobId) {
+    throw new Error("Failed to enqueue job with PgBoss.");
+  }
+  logger.info({ letterId: data.letterId, jobId }, "[Queue] Pipeline job enqueued.");
+  return jobId;
 }
 
-export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
-  const queue = getPipelineQueue();
-  const dedupeId = `retry-${data.letterId}-${data.stage}`;
-  try {
-    const existing = await queue.getJob(dedupeId);
-    if (existing) {
-      const state = await existing.getState();
-      if (state === "waiting" || state === "active" || state === "delayed") {
-        logger.warn(`[Queue] Retry job already queued/active for letter #${data.letterId} stage=${data.stage} (state=${state}) — skipping duplicate`);
-        return existing.id!;
-      }
-      await existing.remove().catch(() => {});
-    }
-  } catch (checkErr) {
-    logger.warn({ err: checkErr }, `[Queue] Dedupe check failed for letter #${data.letterId}, proceeding with timestamped ID:`);
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
-    });
-    return job.id!;
-  }
-  try {
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: dedupeId,
-    });
-    logger.info(`[Queue] Enqueued retry job ${job.id} for letter #${data.letterId} stage=${data.stage}`);
-    return job.id!;
-  } catch (addErr) {
-    logger.warn({ err: addErr }, `[Queue] Dedupe add failed (likely race), using timestamped ID for letter #${data.letterId}:`);
-    const job = await queue.add(`retry:${data.stage}:${data.letterId}`, data, {
-      jobId: `retry-${data.letterId}-${data.stage}-${Date.now()}`,
-    });
-    return job.id!;
-  }
+export async function enqueueRetryFromStageJob(data: RunPipelineJobData): Promise<string> {
+  // For pg-boss, retrying from a stage is handled by the worker logic itself
+  // or by re-enqueuing the job with specific data.
+  // For now, we'll just re-enqueue it as a regular pipeline job.
+  logger.warn({ letterId: data.letterId }, "[Queue] enqueueRetryFromStageJob called, re-enqueuing as standard pipeline job.");
+  return enqueuePipelineJob(data);
 }
 
-export { QUEUE_NAME, buildRedisConnection };
+export async function getPipelineQueue() {
+  if (!boss) {
+    throw new Error("PgBoss is not initialized. Call initializeQueue() first.");
+  }
+  // PgBoss does not expose a direct 'queue' object like BullMQ
+  // You interact directly with the boss instance.
+  return boss;
+}
+
+export async function closeQueue() {
+  if (boss) {
+    logger.info("[Queue] Closing PgBoss...");
+    await boss.stop();
+    boss = null;
+    logger.info("[Queue] PgBoss closed.");
+  }
+}

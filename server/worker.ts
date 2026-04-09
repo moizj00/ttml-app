@@ -2,14 +2,7 @@ import "dotenv/config";
 import { initServerSentry } from "./sentry";
 initServerSentry();
 
-import { Worker, type Job } from "bullmq";
-import {
-  QUEUE_NAME,
-  buildRedisConnection,
-  type PipelineJobData,
-  type RunPipelineJobData,
-  type RetryFromStageJobData,
-} from "./queue";
+import { initializeQueue, QUEUE_NAME } from "./queue";
 import { runFullPipeline, retryPipelineFromStage, bestEffortFallback, consumeIntermediateContent, preflightApiKeyCheck } from "./pipeline";
 import { PipelineError } from "../shared/types";
 import {
@@ -26,11 +19,14 @@ import {
 } from "./db";
 import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
-import { getDb } from "./db";
-import { logger } from "./logger";
+import { logger } from "./_core/logger";
+import PgBoss from "pg-boss";
+import { RunPipelineJobData, RetryFromStageJobData, PipelineJobData } from "./types";
 
 const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
+
+let boss: PgBoss | null = null;
 
 export async function processRunPipeline(data: RunPipelineJobData): Promise<void> {
   const { letterId, intake, userId, appUrl, label, usageContext } = data;
@@ -254,143 +250,41 @@ export async function processRetryFromStage(data: RetryFromStageJobData): Promis
   }
 }
 
-export async function processJob(job: Job<PipelineJobData>): Promise<void> {
-  const startTime = Date.now();
-  logger.info(`[Worker] Processing job ${job.id} (type=${job.data.type}, letterId=${job.data.letterId})`);
-
-  try {
-    switch (job.data.type) {
-      case "runPipeline":
-        await processRunPipeline(job.data);
-        break;
-      case "retryPipelineFromStage":
-        await processRetryFromStage(job.data);
-        break;
-      default:
-        throw new Error(`Unknown job type: ${(job.data as any).type}`);
-    }
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.info(`[Worker] Job ${job.id} completed in ${elapsed}s`);
-  } catch (err) {
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.error({ err }, `[Worker] Job ${job.id} failed after ${elapsed}s:`);
-    throw err;
-  }
-}
-
+// Main worker initialization
 async function startWorker() {
-  // ── OPENAI_API_KEY availability check — required for model failover ──
-  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.trim().length === 0) {
-    logger.warn(
-      "[Worker] WARNING: OPENAI_API_KEY is not set. Model failover is unavailable. " +
-      "If Perplexity or Claude hit rate limits, their errors will be treated as fatal. " +
-      "Set OPENAI_API_KEY to enable automatic failover to GPT-4o."
-    );
-  } else {
-    logger.info("[Worker] OPENAI_API_KEY detected — model failover to GPT-4o is enabled for all pipeline stages.");
+  logger.info("[Worker] Starting PgBoss worker...");
+  boss = await initializeQueue(); // Initialize PgBoss and assign to global boss variable
+
+  if (!boss) {
+    throw new Error("PgBoss instance not available after initialization.");
   }
 
-  // ── GCS/Vertex AI availability checks ──
-  if (!process.env.GCP_PROJECT_ID) {
-    logger.warn(
-      "[Worker] WARNING: GCP_PROJECT_ID is not set. Training capture to GCS and Vertex AI fine-tuning are disabled. " +
-      "Set GCP_PROJECT_ID, GCS_TRAINING_BUCKET, and GCP_REGION to enable."
-    );
-  } else {
-    const gcsOk = !!process.env.GCS_TRAINING_BUCKET;
-    const vertexOk = !!process.env.GCP_REGION;
-    const credentialsOk = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    logger.info(
-      `[Worker] GCP_PROJECT_ID detected — GCS training capture: ${gcsOk ? "enabled" : "DISABLED (set GCS_TRAINING_BUCKET)"}, ` +
-      `Vertex AI fine-tuning: ${vertexOk ? "enabled" : "DISABLED (set GCP_REGION)"}` +
-      (credentialsOk ? ", GOOGLE_APPLICATION_CREDENTIALS: set" : ", GOOGLE_APPLICATION_CREDENTIALS: using ADC (Application Default Credentials)")
-    );
-  }
+  boss.work(QUEUE_NAME, async (job) => {
+    const jobData = job.data as PipelineJobData;
+    const startTime = Date.now();
+    logger.info(`[Worker] Processing job ${job.id} (type=${jobData.type}, letterId=${jobData.letterId})`);
 
-  // ── Vertex AI Vector Search availability check ──
-  {
-    const { isVertexSearchConfigured, getVertexSearchMissingVars } = await import("./pipeline/vertex-search");
-    if (isVertexSearchConfigured()) {
-      logger.info(
-        `[Worker] Vertex AI Vector Search: ENABLED (index=${process.env.VERTEX_SEARCH_INDEX_ID}, ` +
-        `endpoint=${process.env.VERTEX_SEARCH_INDEX_ENDPOINT_ID}, ` +
-        `deployedIndex=${process.env.VERTEX_SEARCH_DEPLOYED_INDEX_ID})`
-      );
-    } else {
-      const missing = getVertexSearchMissingVars();
-      logger.warn(
-        `[Worker] Vertex AI Vector Search: disabled — falling back to pgvector. ` +
-        (missing.length > 0 ? `Missing env vars: ${missing.join(", ")}` : "Unknown configuration issue.")
-      );
-    }
-  }
-
-  // ── Fine-tune status polling (every 30 minutes when GCP is configured) ──
-  if (process.env.GCP_PROJECT_ID && process.env.GCP_REGION && process.env.GCS_TRAINING_BUCKET) {
-    const POLL_INTERVAL_MS = 30 * 60 * 1000;
-    const runPoll = async () => {
-      try {
-        const { pollFineTuneRunStatuses } = await import("./pipeline/fine-tune");
-        await pollFineTuneRunStatuses();
-      } catch (pollErr) {
-        logger.warn({ err: pollErr }, "[Worker] Fine-tune poll error:");
+    try {
+      if (jobData.type === "pipeline:submit") {
+        await processRunPipeline(jobData as RunPipelineJobData);
+      } else if (jobData.type === "pipeline:retryFromStage") {
+        await processRetryFromStage(jobData as RetryFromStageJobData);
+      } else {
+        logger.error(`[Worker] Unknown job type: ${jobData.type}`);
+        throw new Error(`Unknown job type: ${jobData.type}`);
       }
-    };
-    // Initial poll on startup (deferred slightly to let DB warm up)
-    setTimeout(runPoll, 10_000);
-    // Then every 30 minutes
-    setInterval(runPoll, POLL_INTERVAL_MS);
-    logger.info("[Worker] Fine-tune status polling scheduled every 30 minutes.");
-  }
-
-  logger.info("[Worker] Warming up database connection...");
-  await getDb().catch((err) => {
-    logger.error({ err: err }, "[Worker] Database warmup failed:");
-    captureServerException(err, { tags: { component: "worker", error_type: "db_warmup_failed" } });
+      logger.info(`[Worker] Job ${job.id} completed in ${Date.now() - startTime}ms`);
+    } catch (error) {
+      logger.error({ error }, `[Worker] Job ${job.id} failed after ${Date.now() - startTime}ms`);
+      captureServerException(error, { tags: { component: "pipeline-worker", job_id: job.id, job_type: jobData.type } });
+      throw error; // Re-throw to mark job as failed in PgBoss
+    }
   });
 
-  const connection = buildRedisConnection();
-
-  const worker = new Worker<PipelineJobData>(QUEUE_NAME, processJob, {
-    connection,
-    concurrency: 1,
-    lockDuration: 600_000,
-    stalledInterval: 300_000,
-  });
-
-  worker.on("ready", () => {
-    logger.info("[Worker] Pipeline worker is ready and listening for jobs");
-  });
-
-  worker.on("completed", (job) => {
-    logger.info(`[Worker] Job ${job.id} completed successfully`);
-  });
-
-  worker.on("failed", (job, err) => {
-    logger.error({ err }, `[Worker] Job ${job?.id} failed:`);
-    captureServerException(err, {
-      tags: { component: "pipeline-worker", error_type: "job_failed" },
-      extra: { jobId: job?.id, jobData: job?.data },
-    });
-  });
-
-  worker.on("error", (err) => {
-    logger.error({ err }, "[Worker] Worker error:");
-  });
-
-  const shutdown = async (signal: string) => {
-    logger.info(`[Worker] Received ${signal}, shutting down gracefully...`);
-    await worker.close();
-    process.exit(0);
-  };
-
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
-
-  logger.info(`[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1)`);
+  logger.info("[Worker] PgBoss worker is ready and listening for jobs.");
 }
 
-startWorker().catch((err) => {
-  logger.error({ err: err }, "[Worker] Failed to start:");
+startWorker().catch(error => {
+  logger.error({ error }, "[Worker] Failed to start worker");
   process.exit(1);
 });
