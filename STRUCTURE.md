@@ -18,8 +18,8 @@
 - Payments: Stripe (subscriptions + one-time per-letter unlock)
 - AI Pipeline: Perplexity sonar-pro (primary research) → Anthropic Claude Opus for drafting + assembly → Anthropic Claude Sonnet for vetting.
 - Email: Resend
-- Background jobs: BullMQ + Upstash Redis
-- Rate limiting: Upstash Redis via @upstash/ratelimit
+- Background jobs: pg-boss (PostgreSQL-native queue via Supabase)
+- Rate limiting: Upstash Redis via @upstash/ratelimit (fail-open)
 - Monitoring: Sentry (frontend + backend) + Pino logger
 - Deployment: Railway (Docker multi-stage build)
 

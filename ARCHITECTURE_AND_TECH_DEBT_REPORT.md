@@ -14,7 +14,7 @@ Recent refactoring efforts have successfully begun decomposing massive backend f
 
 *   **tRPC Routers:** The previously monolithic `server/routers.ts` (1900+ lines) has been split. Large routers like `admin` and `letters` are now directory modules (`server/routers/admin/`, `server/routers/letters/`) that re-export smaller, domain-specific files via an `index.ts`.
 *   **Database Layer:** The monolithic `server/db.ts` (1300+ lines) has been decomposed into `server/db/`, with separate files for `users`, `letters`, `pipeline-records`, `quality`, etc.
-*   **AI Pipeline:** The pipeline logic is well-encapsulated in `server/pipeline/`, structured into distinct stages (`research.ts`, `drafting.ts`, `assembly.ts`, `vetting.ts`), orchestrated by `orchestrator.ts`, and executed asynchronously via BullMQ (`server/worker.ts`).
+*   **AI Pipeline:** The pipeline logic is well-encapsulated in `server/pipeline/`, structured into distinct stages (`research.ts`, `drafting.ts`, `assembly.ts`, `vetting.ts`), orchestrated by `orchestrator.ts`, and executed asynchronously via pg-boss (`server/worker.ts`).
 *   **Authentication:** Supabase Auth is managed in `server/supabaseAuth/`, with strict JWT validation, role caching, and a hard-coded super-admin whitelist.
 *   **Procedure Guards:** RBAC logic (`attorneyProcedure`, `subscriberProcedure`) has been cleanly centralized in `server/routers/_shared.ts`.
 
@@ -27,7 +27,7 @@ Recent refactoring efforts have successfully begun decomposing massive backend f
 ### 1.3 Database & Infrastructure
 *   **Schema:** 25 tables defined in `drizzle/schema.ts` with 53 indexes.
 *   **Migrations:** Managed via Drizzle Kit (44 migration files in `drizzle/migrations/`).
-*   **Queue & Caching:** Upstash Redis handles the BullMQ job queue and rate limiting.
+*   **Queue & Caching:** pg-boss (PostgreSQL-native) handles the asynchronous job queue, eliminating the Redis dependency for the pipeline. Upstash Redis is retained solely for rate limiting.
 *   **Deployment:** Railway (Docker multi-stage build) with GitHub Actions CI/CD.
 *   **Testing:** 54 test files (Vitest) providing extensive backend coverage (1310 passing tests), plus a Playwright E2E suite (`tests/`).
 
