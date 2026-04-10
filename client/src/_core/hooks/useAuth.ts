@@ -15,11 +15,15 @@ export function useAuth(options?: UseAuthOptions) {
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
-    // Refetch on window focus so that role changes made by an admin
-    // (e.g. subscriber → attorney) are picked up automatically when
-    // the user switches back to their browser tab — no logout required.
+    // staleTime: 0 — always treat auth.me as stale so that role changes
+    // made by an admin (e.g. subscriber → attorney) are reflected
+    // immediately on the next page load or window focus, without the
+    // user needing to log out and back in.
+    // The server-side user cache (30 s TTL) is invalidated by
+    // invalidateUserCache() in the updateRole mutation, so the DB read
+    // always returns the fresh role.
+    staleTime: 0,
     refetchOnWindowFocus: true,
-    staleTime: 30_000, // treat the profile as fresh for 30 s to avoid excessive re-fetches
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
