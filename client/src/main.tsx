@@ -72,14 +72,14 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      headers() {
-        // Send Supabase access token if available
-        const token = localStorage.getItem("sb_access_token");
-        if (token) {
-          return { Authorization: `Bearer ${token}` };
-        }
-        return {};
-      },
+      // Auth is handled exclusively via the httpOnly `sb_session` cookie set by
+      // the server after login/OAuth. We do NOT send a localStorage bearer token
+      // here because a stale/expired token in localStorage would override the
+      // valid cookie on every request, causing spurious auth failures after
+      // Google OAuth sign-in and on page refresh.
+      //
+      // The server's authenticateRequest() reads the cookie first (extractCookieToken),
+      // then falls back to the Authorization header — so cookie-only is correct.
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),

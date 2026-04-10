@@ -87,13 +87,11 @@ export default function Verify2FA() {
     setError(null);
     setLoading(true);
     try {
-      const token = localStorage.getItem("sb_access_token");
       const res = await fetch("/api/auth/admin-2fa/verify", {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ code }),
       });
@@ -120,11 +118,9 @@ export default function Verify2FA() {
     setResending(true);
     setError(null);
     try {
-      const token = localStorage.getItem("sb_access_token");
       const res = await fetch("/api/auth/admin-2fa/resend", {
         method: "POST",
         credentials: "include",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (res.ok) {
