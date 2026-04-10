@@ -115,6 +115,8 @@ export const letterVersions = pgTable("letter_versions", {
 }, (t) => [
   index("idx_letter_versions_letter_request_id").on(t.letterRequestId),
   index("idx_letter_versions_created_by").on(t.createdByUserId),
+  // Hot-path composite for "fetch current ai_draft / final version for letter X".
+  index("idx_letter_versions_request_type").on(t.letterRequestId, t.versionType),
 ]);
 
 export type LetterVersion = typeof letterVersions.$inferSelect;
@@ -137,6 +139,8 @@ export const reviewActions = pgTable("review_actions", {
 }, (t) => [
   index("idx_review_actions_letter_request_id").on(t.letterRequestId),
   index("idx_review_actions_reviewer_id").on(t.reviewerId),
+  // Supports time-ranged analytics aggregations grouping by action.
+  index("idx_review_actions_action_created").on(t.action, t.createdAt),
 ]);
 
 export type ReviewAction = typeof reviewActions.$inferSelect;
@@ -166,6 +170,8 @@ export const workflowJobs = pgTable("workflow_jobs", {
   index("idx_workflow_jobs_letter_request_id").on(t.letterRequestId),
   index("idx_workflow_jobs_status").on(t.status),
   index("idx_workflow_jobs_created_at").on(t.createdAt),
+  // Supports time-ranged stage-timing and failure-rate analytics.
+  index("idx_workflow_jobs_status_created").on(t.status, t.createdAt),
 ]);
 
 export type WorkflowJob = typeof workflowJobs.$inferSelect;
@@ -190,6 +196,8 @@ export const researchRuns = pgTable("research_runs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("idx_research_runs_letter_request_id").on(t.letterRequestId),
+  index("idx_research_runs_status").on(t.status),
+  index("idx_research_runs_cache_hit").on(t.cacheHit),
 ]);
 
 export type ResearchRun = typeof researchRuns.$inferSelect;

@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   attorneyId: varchar("attorney_id", { length: 16 }).unique(),
 }, (t) => [
   index("idx_users_email").on(t.email),
+  index("idx_users_role").on(t.role),
+  index("idx_users_role_active").on(t.role, t.isActive),
 ]);
 
 export type User = typeof users.$inferSelect;
