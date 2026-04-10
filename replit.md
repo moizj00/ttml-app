@@ -50,7 +50,15 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database Architecture**: Uses a primary + read replica topology with transparent fallback.
 - **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
 - **Error Tracking**: Sentry.
-- **Deployment**: Railway.
+- **Deployment**: Railway (previously); now also runs on Replit.
+
+### Replit Environment Configuration
+- **Primary workflow**: `Start application` — runs `npm run dev` on port 5000 (webview)
+- **Database**: Supabase PostgreSQL (via `SUPABASE_DATABASE_URL` direct connection string). SSL is applied conditionally — enabled for Supabase/cloud URLs, skipped for local connections.
+- **Auth**: Supabase Auth (JWT tokens) — requires `SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+- **Required secrets** (set in Replit Secrets): `SUPABASE_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
+- **Optional secrets**: `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `JWT_SECRET`.
+- **Port**: 5000 (configured via `PORT` env var in shared environment).
 
 ### Feature Specifications
 - **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with seed scenarios and admin CRUD panel.
