@@ -148,8 +148,8 @@ export async function runDraftingStage(
   );
 
   const draftTokens = createTokenAccumulator();
-  let draftProvider = "anthropic";
-  let draftModelKey = "claude-sonnet-4";
+  let draftProvider = "openai";
+  let draftModelKey = "gpt-4o-mini";
 
   const callGenerateText = async (prompt: string) => {
     const result = await generateText({
@@ -177,8 +177,8 @@ export async function runDraftingStage(
 
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
     // Reset provider to primary on each retry to avoid tier collapse
-    draftProvider = "anthropic";
-    draftModelKey = "claude-sonnet-4";
+    draftProvider = "openai";
+    draftModelKey = "gpt-4o-mini";
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;

@@ -126,7 +126,7 @@ export async function runFullPipeline(
       provider: "n8n",
       requestPayloadJson: {
         letterId,
-        stages: ["n8n-perplexity-research", "n8n-openai-draft"],
+        stages: ["n8n-sonar-research", "n8n-gpt4o-mini-draft", "n8n-gpt4o-mini-assembly", "n8n-sonnet-vetting"],
         normalizedInput,
       },
     });
@@ -236,7 +236,7 @@ export async function runFullPipeline(
     provider: "multi-provider",
     requestPayloadJson: {
       letterId,
-      stages: ["perplexity-research", "anthropic-draft", "anthropic-assembly", "anthropic-vetting"],
+      stages: ["perplexity-sonar-research", "openai-gpt4o-mini-draft", "openai-gpt4o-mini-assembly", "anthropic-sonnet-vetting"],
       normalizedInput,
     },
   });
