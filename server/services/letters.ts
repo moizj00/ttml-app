@@ -142,7 +142,7 @@ export async function submitLetter(
       jurisdictionState: input.jurisdictionState,
       appUrl,
     }).catch(err => {
-      logger.error("[Email] Submission confirmation failed:", err);
+      logger.error({ err }, "[Email] Submission confirmation failed:");
       captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } });
     });
   }
