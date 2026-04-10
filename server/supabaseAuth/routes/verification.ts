@@ -61,7 +61,7 @@ export function registerVerificationRoutes(app: Express) {
       if (code) {
         const { data, error } = await anonClient.auth.exchangeCodeForSession(code);
         if (error || !data.user) {
-          logger.error({ err: error?.message }, "[SupabaseAuth] Code exchange failed:");
+          logger.error({ err: error }, "[SupabaseAuth] Code exchange failed:");
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -77,7 +77,7 @@ export function registerVerificationRoutes(app: Express) {
         const admin = getAdminClient();
         const { data, error } = await admin.auth.getUser(access_token);
         if (error || !data.user) {
-          logger.error({ err: error?.message }, "[SupabaseAuth] Access token verification failed:");
+          logger.error({ err: error }, "[SupabaseAuth] Access token verification failed:");
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }
@@ -88,7 +88,7 @@ export function registerVerificationRoutes(app: Express) {
           type: type as EmailOtpType,
         });
         if (error || !data.user) {
-          logger.error({ err: error?.message }, "[SupabaseAuth] OTP verification failed:");
+          logger.error({ err: error }, "[SupabaseAuth] OTP verification failed:");
           res.status(400).json({ error: "Verification failed. The link may have expired." });
           return;
         }

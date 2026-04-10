@@ -12,8 +12,13 @@
  * require no changes.
  */
 
+import dns from "node:dns";
 import { PgBoss } from "pg-boss";
 import { logger } from "./logger";
+
+// Force Node.js to prefer IPv4 addresses globally — Railway resolves
+// Supabase pooler hostnames to IPv6 which is unreachable from Railway's network
+dns.setDefaultResultOrder("ipv4first");
 
 export const QUEUE_NAME = "pipeline";
 
@@ -61,19 +66,51 @@ function getConnectionString(): string {
   return url;
 }
 
+/**
+ * Resolve the hostname in a PostgreSQL connection string to an IPv4 address.
+ * This is needed because Railway's network resolves Supabase pooler hostnames
+ * to IPv6 addresses that are unreachable (ENETUNREACH).
+ */
+async function resolveConnectionToIPv4(connectionString: string): Promise<string> {
+  try {
+    const url = new URL(connectionString);
+    const hostname = url.hostname;
+
+    // Skip if already an IP address
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return connectionString;
+    }
+
+    const addresses = await dns.promises.resolve4(hostname);
+    if (addresses.length > 0) {
+      const ipv4 = addresses[0];
+      logger.info({ hostname, ipv4 }, "[Queue] Resolved hostname to IPv4 for pg-boss connection");
+      url.hostname = ipv4;
+      return url.toString();
+    }
+  } catch (err) {
+    logger.warn({ err }, "[Queue] Failed to resolve hostname to IPv4, using original connection string");
+  }
+  return connectionString;
+}
+
 export async function getBoss(): Promise<PgBoss> {
   if (_boss) return _boss;
   if (_bossStarting) return _bossStarting;
 
   _bossStarting = (async () => {
-    const connectionString = getConnectionString();
-    const boss = new PgBoss({
+    const rawConnectionString = getConnectionString();
+    // Resolve hostname to IPv4 to avoid ENETUNREACH on Railway
+    const connectionString = await resolveConnectionToIPv4(rawConnectionString);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pgBossOptions: any = {
       connectionString,
       ssl: { rejectUnauthorized: false },
       // Disable scheduling (we don't use cron jobs via pg-boss)
       schedule: false,
-      // Keep completed jobs for 7 days, failed for 30 days (set at queue level)
-    });
+    };
+    const boss = new PgBoss(pgBossOptions);
 
     boss.on("error", (err) => {
       logger.error({ err }, "[Queue] pg-boss error:");
@@ -133,27 +170,22 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
 
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
   const boss = await getBoss();
-  const dedupeKey = `retry-${data.letterId}-${data.stage}`;
-  // Use singletonKey to deduplicate: only one retry job per letter+stage in queue
+  const jobId = `retry-${data.letterId}-${data.stage}-${Date.now()}`;
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
-    singletonKey: dedupeKey,
+    id: jobId,
     retryLimit: 0,
     expireInSeconds: 30 * 60,
   });
-  if (!id) {
-    logger.warn(`[Queue] Retry job already queued for letter #${data.letterId} stage=${data.stage} — skipping duplicate`);
-    return dedupeKey;
-  }
-  logger.info(`[Queue] Enqueued retry job ${id} for letter #${data.letterId} stage=${data.stage}`);
-  return id;
+  const resolvedId = id ?? jobId;
+  logger.info(`[Queue] Enqueued retry-from-stage job ${resolvedId} for letter #${data.letterId} (stage: ${data.stage})`);
+  return resolvedId;
 }
 
-// ─── Queue Health Shim ─────────────────────────────────────────────────────
-//
+
+// ─── Admin Dashboard Shim ──────────────────────────────────────────────────
 // admin/jobs.ts calls getPipelineQueue() and uses BullMQ-specific methods
 // (getWaitingCount, getActiveCount, etc.). We return a shim that maps these
 // to pg-boss equivalents so the admin dashboard still works.
-
 export interface PipelineQueueShim {
   getWaitingCount(): Promise<number>;
   getActiveCount(): Promise<number>;
@@ -174,7 +206,6 @@ export interface PipelineQueueShim {
     data: PipelineJobData;
   }>>;
 }
-
 export function getPipelineQueue(): PipelineQueueShim {
   return {
     async getWaitingCount() {
@@ -243,7 +274,6 @@ export function getPipelineQueue(): PipelineQueueShim {
 }
 
 // ─── Backward-compat stub ──────────────────────────────────────────────────
-
 /** @deprecated No longer used — pg-boss connects via DATABASE_URL directly */
 export function buildRedisConnection(): never {
   throw new Error(

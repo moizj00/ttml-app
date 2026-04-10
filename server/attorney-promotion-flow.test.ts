@@ -180,7 +180,7 @@ describe("App.tsx — Attorney Routes", () => {
 // ─── 5. ReviewModal — No AI Mentions in User-Visible Strings ─────────────────
 
 describe("ReviewModal — AI Branding Removed", () => {
-  const filePath = join(CLIENT_SRC, "components", "shared", "ReviewModal.tsx");
+  const filePath = join(CLIENT_SRC, "components", "shared", "ReviewModal", "index.tsx");
 
   it("file exists", () => {
     expect(existsSync(filePath)).toBe(true);
@@ -210,9 +210,12 @@ describe("ReviewModal — AI Branding Removed", () => {
   });
 
   it("uses 'ai_draft' as the DB enum comparison value", () => {
-    const content = readFileSync(filePath, "utf-8");
+    // After the component was split into a directory, the enum comparison
+    // moved to the hooks file — check the whole ReviewModal directory
+    const hooksPath = join(CLIENT_SRC, "components", "shared", "ReviewModal", "hooks", "useReviewModal.ts");
+    const hooksContent = readFileSync(hooksPath, "utf-8");
     // The DB enum value must remain ai_draft
-    expect(content).toContain('"ai_draft"');
+    expect(hooksContent).toContain('"ai_draft"');
   });
 
   it("has Claim for Review button", () => {

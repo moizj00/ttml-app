@@ -309,6 +309,13 @@
       "when": 1775597585354,
       "tag": "0043_ordinary_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1775789251107,
+      "tag": "0045_perf_indexes",
+      "breakpoints": true
     }
   ]
 }

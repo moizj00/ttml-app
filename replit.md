@@ -40,15 +40,15 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + `postgres-js`.
-- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE), custom Resend verification emails. Admin 2FA enforced.
+- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE with SameSite=None), custom Resend verification emails. Admin 2FA enforced.
 - **AI Pipeline**: A 4-stage pipeline: Perplexity Research, Claude Opus Drafting, Claude Opus Assembly, Claude Sonnet Vetting. Includes a 5-tier failover chain for research resilience and automatic retry with exponential backoff for overall pipeline resilience.
 - **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback, including AI-powered categorization, deduplication, and effectiveness tracking.
 - **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning. Vector similarity search uses **pgvector** (built into Supabase PostgreSQL) as the active vector store. Vertex AI Vector Search is an optional upgrade path for very large vector volumes (millions of vectors); pgvector handles current scale well and avoids the ~$70–110/month cost of Vertex AI Vector Search.
-- **Pipeline Worker**: Uses BullMQ with Upstash Redis for job queues.
-- **Rate Limiting**: Fine-grained, per-user limits using Upstash Redis.
+- **Pipeline Worker**: Uses pg-boss (PostgreSQL-native) for job queues, eliminating the Redis dependency for processing.
+- **Rate Limiting**: Fine-grained, per-user limits using Upstash Redis (fail-open for general usage).
 - **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
 - **Database Architecture**: Uses a primary + read replica topology with transparent fallback.
-- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis, Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
+- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
 - **Error Tracking**: Sentry.
 - **Deployment**: Railway.
 
@@ -72,8 +72,8 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Stripe**: Payment processing.
 - **Perplexity API**: Legal research for AI pipeline.
 - **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting.
-- **Upstash Redis**: Rate limiting and BullMQ job queue.
-- **BullMQ + ioredis**: Job queue for pipeline worker process.
+- **Upstash Redis**: Rate limiting only (fail-open).
+- **pg-boss**: PostgreSQL-native job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
 - **Cloudflare R2**: S3-compatible object storage.
 - **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data. Note: Vertex AI Vector Search is **not currently active** — the system uses pgvector (via Supabase) for vector similarity search and gracefully falls back to it. Vertex AI Vector Search is an optional upgrade reserved for very high vector volumes.

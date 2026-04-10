@@ -242,7 +242,7 @@ TONE CALIBRATION:
 
 Return ONLY a valid JSON object. Nothing before the opening brace. Nothing after the closing brace.
 No markdown code fences outside the JSON values. No apologies. No commentary.
-The draftLetter value must be plain text with \\n for line breaks �� no markdown inside it.`;
+The draftLetter value must be plain text with \\n for line breaks — no markdown inside it.`;
 }
 
 export function buildDraftingUserPrompt(

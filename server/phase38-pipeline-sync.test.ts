@@ -94,7 +94,8 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
   // ─── Schema: pdfUrl column ─────────────────────────────────────────
   describe("Schema: pdfUrl column", () => {
     it("letter_requests table has pdfUrl column in schema", () => {
-      const schemaPath = path.resolve(__dirname, "../drizzle/schema.ts");
+      // schema.ts is now a barrel — check the letters module where letterRequests lives
+      const schemaPath = path.resolve(__dirname, "../drizzle/schema/letters.ts");
       const content = fs.readFileSync(schemaPath, "utf-8");
       expect(content).toContain('pdfUrl: text("pdf_url")');
     });

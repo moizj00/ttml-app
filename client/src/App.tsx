@@ -85,6 +85,7 @@ const IntakeFormTemplates = lazyRetry(() => import("./pages/subscriber/IntakeFor
 
 const AttorneyDashboard = lazyRetry(() => import("./pages/attorney/Dashboard"));
 const ReviewQueue = lazyRetry(() => import("./pages/attorney/ReviewQueue"));
+const ReviewCentre = lazyRetry(() => import("./pages/attorney/ReviewCentre"));
 const ReviewDetail = lazyRetry(() => import("./pages/attorney/ReviewDetail"));
 
 const EmployeeAffiliateDashboard = lazyRetry(
@@ -287,6 +288,13 @@ function Router() {
           </SuspenseFade>
         </ProtectedRoute>
       </Route>
+      <Route path="/attorney/review-centre">
+        <ProtectedRoute allowedRoles={["attorney", "admin"]}>
+          <SuspenseFade fallback={<ReviewQueueSkeleton />}>
+            <ReviewCentre />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
       {/* /attorney/review/:id — admin "Claim & Review" redirect target (must be before /attorney/:id) */}
       <Route path="/attorney/review/:id">
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
@@ -314,6 +322,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["attorney", "admin"]}>
           <SuspenseFade fallback={<ReviewQueueSkeleton />}>
             <ReviewQueue />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/review/centre">
+        <ProtectedRoute allowedRoles={["attorney", "admin"]}>
+          <SuspenseFade fallback={<ReviewQueueSkeleton />}>
+            <ReviewCentre />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>

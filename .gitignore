@@ -159,7 +159,6 @@ attached_assets/*.md
 
 # ── Infrastructure / deployment config ─────────────────────────────────────
 # These files often contain environment-specific secrets or tokens
-railway.toml
 wrangler.toml
 cloudflare-worker/wrangler.toml
 worker/wrangler.toml

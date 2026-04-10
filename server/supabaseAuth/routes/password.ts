@@ -39,7 +39,7 @@ export function registerPasswordRoutes(app: Express) {
       });
 
       if (error) {
-        logger.error({ err: error.message }, "[SupabaseAuth] Password reset error:");
+        logger.error({ err: error }, "[SupabaseAuth] Password reset error:");
       }
 
       res.json({ success: true, message: "If an account exists with this email, a password reset link has been sent." });
@@ -76,7 +76,7 @@ export function registerPasswordRoutes(app: Express) {
       const { error } = await userClient.auth.updateUser({ password });
 
       if (error) {
-        logger.error({ err: error.message }, "[SupabaseAuth] Password update error:");
+        logger.error({ err: error }, "[SupabaseAuth] Password update error:");
         res.status(400).json({ error: "Failed to reset password. The link may have expired." });
         return;
       }

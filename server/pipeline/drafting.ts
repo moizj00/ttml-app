@@ -176,6 +176,9 @@ export async function runDraftingStage(
   };
 
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
+    // Reset provider to primary on each retry to avoid tier collapse
+    draftProvider = "anthropic";
+    draftModelKey = "claude-sonnet-4";
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;

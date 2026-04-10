@@ -6,7 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardList, Clock, CheckCircle, ArrowRight, FileText, AlertCircle, AlertTriangle, Timer } from "lucide-react";
+import { ClipboardList, ClipboardCheck, Clock, CheckCircle, ArrowRight, FileText, AlertCircle, AlertTriangle, Timer } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
@@ -69,11 +69,17 @@ export default function AttorneyDashboard() {
           <p className="text-purple-100 text-sm mb-4">
             Review drafted letters, edit as needed, and approve or request changes.
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button asChild variant="secondary" size="sm">
               <Link href="/attorney/queue">
                 <ClipboardList className="w-4 h-4 mr-2" />
-                View Full Queue
+                Review Queue
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/attorney/review-centre">
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                My Review Centre
               </Link>
             </Button>
           </div>

@@ -338,21 +338,16 @@ describe("tRPC context Sentry user", () => {
 // ─── 12. MCP Monitoring Sentry instrumentation ───
 
 describe("MCP Monitoring Sentry instrumentation", () => {
-  const mcpPath = path.join(__dirname, "mcp.ts");
   const instrumentPath = path.join(__dirname, "instrument.ts");
 
-  it("server/mcp.ts exists", () => {
-    expect(fs.existsSync(mcpPath)).toBe(true);
+  it("server/instrument.ts exists", () => {
+    expect(fs.existsSync(instrumentPath)).toBe(true);
   });
 
-  it("server/mcp.ts exports wrapMcpServer function", () => {
-    const content = fs.readFileSync(mcpPath, "utf-8");
+  it("server/instrument.ts exports wrapMcpServer that calls Sentry.wrapMcpServerWithSentry", () => {
+    const content = fs.readFileSync(instrumentPath, "utf-8");
     expect(content).toContain("export function wrapMcpServer");
-  });
-
-  it("server/sentry.ts re-exports wrapMcpServer", () => {
-    const content = fs.readFileSync(path.join(__dirname, "sentry.ts"), "utf-8");
-    expect(content).toContain('export { wrapMcpServer } from "./mcp"');
+    expect(content).toContain("Sentry.wrapMcpServerWithSentry");
   });
 
   it("server/instrument.ts uses the provided MCP monitoring DSN", () => {
@@ -370,8 +365,18 @@ describe("MCP Monitoring Sentry instrumentation", () => {
     expect(content).toContain("sendDefaultPii: true");
   });
 
-  it("server/instrument.ts exports wrapMcpServer that calls Sentry.wrapMcpServerWithSentry", () => {
+  it("sentry.ts does not import mcp.ts (no cross-dependency)", () => {
+    const content = fs.readFileSync(path.join(__dirname, "sentry.ts"), "utf-8");
+    expect(content).not.toContain("./mcp");
+  });
+
+  it("server/mcp.ts has been removed (dead code eliminated)", () => {
+    expect(fs.existsSync(path.join(__dirname, "mcp.ts"))).toBe(false);
+  });
+
+  it("server/instrument.ts scrubs PII from request body", () => {
     const content = fs.readFileSync(instrumentPath, "utf-8");
-    expect(content).toContain("Sentry.wrapMcpServerWithSentry");
+    expect(content).toContain("scrubPii");
+    expect(content).toContain("password");
   });
 });

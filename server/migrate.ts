@@ -140,7 +140,7 @@ async function runMigrations() {
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
         const delay = attempt * 2000; // 2s, 4s backoff
-        logger.warn({ err: (err as any)?.cause?.message || (err as any)?.message }, `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`);
+        logger.warn({ err }, `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`);
         await sleep(delay);
         continue;
       }

@@ -139,15 +139,16 @@ export async function runFullPipeline(
 
     try {
       orchLogger.info({ letterId, url: n8nWebhookUrl }, "[Pipeline] Triggering n8n workflow");
-      const callbackUrl = `${process.env.BUILT_IN_FORGE_API_URL ? "" : ""}/api/pipeline/n8n-callback`;
+      const appBaseUrl =
+        process.env.APP_BASE_URL ??
+        "https://www.talk-to-my-lawyer.com";
+      const callbackUrl = `${appBaseUrl}/api/pipeline/n8n-callback`;
       // We fire-and-forget the n8n webhook — the callback endpoint will handle the result
       const payload = {
         letterId,
         letterType: intake.letterType,
         userId: intake.sender?.name ?? "unknown",
-        callbackUrl:
-          callbackUrl ||
-          `https://www.talk-to-my-lawyer.com/api/pipeline/n8n-callback`,
+        callbackUrl,
         callbackSecret: n8nCallbackSecret,
         intakeData: {
           sender: intake.sender,
