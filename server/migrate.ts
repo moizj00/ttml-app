@@ -108,8 +108,15 @@ async function runMigrations() {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     logger.info(`[Migrate] Attempt ${attempt}/${MAX_RETRIES} — connecting to database...`);
 
+    const needsSsl =
+      connectionString.includes("supabase.co") ||
+      connectionString.includes("supabase.com") ||
+      connectionString.includes("amazonaws.com") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("sslmode=require");
+
     const client = postgres(connectionString, {
-      ssl: "require",
+      ssl: needsSsl ? "require" : false,
       max: 1,
       connect_timeout: 15,
       idle_timeout: 5,

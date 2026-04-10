@@ -10,6 +10,16 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _readDb: ReturnType<typeof drizzle> | null = null;
 let _readDbFailed = false;
 
+function needsSsl(url: string): boolean {
+  return (
+    url.includes("supabase.co") ||
+    url.includes("supabase.com") ||
+    url.includes("amazonaws.com") ||
+    url.includes("neon.tech") ||
+    url.includes("sslmode=require")
+  );
+}
+
 export async function getDb() {
   const dbUrl =
     process.env.SUPABASE_DIRECT_URL ||
@@ -18,13 +28,13 @@ export async function getDb() {
   if (!_db && dbUrl) {
     try {
       const client = postgres(dbUrl, {
-        ssl: "require",
+        ssl: needsSsl(dbUrl) ? "require" : false,
         max: parseInt(process.env.DB_POOL_MAX ?? "25", 10),
         idle_timeout: 20,
         connect_timeout: 10,
       });
       _db = drizzle(client);
-      dbLogger.info({}, "[Database] Connected to Supabase (PostgreSQL)");
+      dbLogger.info({}, "[Database] Connected to PostgreSQL");
     } catch (error) {
       dbLogger.warn({ error }, "[Database] Failed to connect");
       captureServerException(error, { tags: { component: "database", error_type: "connection_failed" } });
@@ -44,7 +54,7 @@ export async function getReadDb() {
 
   try {
     const client = postgres(replicaUrl, {
-      ssl: "require",
+      ssl: needsSsl(replicaUrl) ? "require" : false,
       max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
       idle_timeout: 20,
       connect_timeout: 10,

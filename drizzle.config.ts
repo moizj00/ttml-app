@@ -10,13 +10,20 @@ if (!connectionString) {
 
 const migrationUrl = connectionString.replace(/:6543\//, ":5432/");
 
+const needsSsl =
+  migrationUrl.includes("supabase.co") ||
+  migrationUrl.includes("supabase.com") ||
+  migrationUrl.includes("amazonaws.com") ||
+  migrationUrl.includes("neon.tech") ||
+  migrationUrl.includes("sslmode=require");
+
 export default defineConfig({
   schema: "./drizzle/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
     url: migrationUrl,
-    ssl: "require",
+    ssl: needsSsl ? "require" : false,
   },
   migrations: {
     schema: "public",
