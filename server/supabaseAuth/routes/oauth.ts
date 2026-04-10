@@ -21,6 +21,19 @@ import { getSafeRelativePath, getPostAuthRedirectPath, syncGoogleUser, getOrigin
 import { parseCookies } from "../jwt";
 import { logger } from "../../logger";
 
+/**
+ * Cookie options for the PKCE verifier cookie.
+ * SameSite=Lax ensures the cookie is sent on top-level GET navigations
+ * from external sites (the OAuth redirect chain: Supabase → Google → Supabase → our callback).
+ * SameSite=None was being silently blocked by Chrome's third-party cookie deprecation.
+ */
+const PKCE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "lax" as const,
+  path: "/",
+};
+
 export function registerOAuthRoutes(app: Express) {
 
   // POST /api/auth/google — Initiate Google OAuth flow
@@ -63,14 +76,11 @@ export function registerOAuthRoutes(app: Express) {
       supabaseAuthUrl.searchParams.set("code_challenge_method", "s256");
 
       res.cookie("pkce_verifier", codeVerifier, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        secure: true,
+        ...PKCE_COOKIE_OPTIONS,
         maxAge: 5 * 60 * 1000,
-        path: "/",
       });
 
+      logger.info({ origin, redirect_to: redirectUrl.toString(), verifier_length: codeVerifier.length }, "[OAuth] Initiated Google OAuth flow");
       res.json({ url: supabaseAuthUrl.toString() });
     } catch (err) {
       logger.error({ err: err }, "[SupabaseAuth] Google OAuth error:");
@@ -186,16 +196,14 @@ export function registerOAuthRoutes(app: Express) {
       const reqCookies = parseCookies(req.headers.cookie);
       const storedVerifier = reqCookies.get("pkce_verifier") || "";
 
-      res.clearCookie("pkce_verifier", {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        secure: true,
-        path: "/",
-      });
+      // Log all incoming cookies for debugging (names only, not values)
+      const allCookieNames = Array.from(reqCookies.keys());
+      logger.info({ cookie_names: allCookieNames, has_pkce: !!storedVerifier, host: req.headers.host, referer: req.headers.referer }, "[OAuth Callback] Received callback");
+
+      res.clearCookie("pkce_verifier", PKCE_COOKIE_OPTIONS);
 
       if (!storedVerifier) {
-        logger.error("[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
+        logger.error({ cookie_header_present: !!req.headers.cookie, cookie_names: allCookieNames }, "[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
