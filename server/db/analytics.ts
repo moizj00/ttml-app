@@ -30,25 +30,20 @@ export async function getPipelineAnalytics(dateRange: "7d" | "30d" | "90d" | "al
   const db = await getReadDb();
   if (!db) return null;
 
-  const dateFilter = dateRange === "all"
-    ? sql`TRUE`
-    : sql`lr.created_at >= NOW() - INTERVAL '1 day' * ${dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90}`;
+  // Cap "all" at 365 days to prevent unbounded sequential scans as the
+  // letter/workflow history grows. Callers that genuinely need the full
+  // history should build a dedicated, batched/paginated report instead.
+  const rangeDays =
+    dateRange === "7d" ? 7 :
+    dateRange === "30d" ? 30 :
+    dateRange === "90d" ? 90 :
+    365;
 
-  const jobDateFilter = dateRange === "all"
-    ? sql`TRUE`
-    : sql`wj.created_at >= NOW() - INTERVAL '1 day' * ${dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90}`;
-
-  const researchDateFilter = dateRange === "all"
-    ? sql`TRUE`
-    : sql`rr.created_at >= NOW() - INTERVAL '1 day' * ${dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90}`;
-
-  const reviewDateFilter = dateRange === "all"
-    ? sql`TRUE`
-    : sql`ra.created_at >= NOW() - INTERVAL '1 day' * ${dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90}`;
-
-  const qualityDateFilter = dateRange === "all"
-    ? sql`TRUE`
-    : sql`lqs.created_at >= NOW() - INTERVAL '1 day' * ${dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90}`;
+  const dateFilter = sql`lr.created_at >= NOW() - INTERVAL '1 day' * ${rangeDays}`;
+  const jobDateFilter = sql`wj.created_at >= NOW() - INTERVAL '1 day' * ${rangeDays}`;
+  const researchDateFilter = sql`rr.created_at >= NOW() - INTERVAL '1 day' * ${rangeDays}`;
+  const reviewDateFilter = sql`ra.created_at >= NOW() - INTERVAL '1 day' * ${rangeDays}`;
+  const qualityDateFilter = sql`lqs.created_at >= NOW() - INTERVAL '1 day' * ${rangeDays}`;
 
   const [
     successRateResult,
