@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.12", "web", "postgresql-16"]
+modules = ["nodejs-20", "web"]
 [agent]
 expertMode = true
 integrations = ["javascript_database:1.0.0", "github:1.0.0"]
@@ -154,7 +154,7 @@ externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["node", "--import", "./dist/instrument.js", "./dist/index.js"]
+run = ["node", "./dist/index.cjs"]
 build = ["npm", "run", "build"]
 
 [userenv]
