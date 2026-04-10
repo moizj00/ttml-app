@@ -152,6 +152,9 @@ export async function runVettingStage(
   let vettingModelKey = "claude-sonnet-4-20250514";
 
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
+    // Reset provider to primary on each retry to avoid tier collapse
+    vettingProvider = "anthropic";
+    vettingModelKey = "claude-sonnet-4-20250514";
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;

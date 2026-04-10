@@ -66,6 +66,10 @@ export async function runAssemblyStage(
   let assemblyModelKey = "claude-sonnet-4";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
+    // Reset provider to primary on each retry to avoid tier collapse
+    // (previous failover mutations would otherwise make retry start on the fallback model)
+    assemblyProvider = "anthropic";
+    assemblyModelKey = "claude-sonnet-4";
     const promptWithFeedback = errorFeedback
       ? assemblyUser + errorFeedback
       : assemblyUser;
