@@ -48,8 +48,12 @@ export async function runDraftingStage(
   });
   const jobId = (job as any)?.insertId ?? 0;
 
-  await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
-  await updateLetterStatus(letterId, "drafting", { force: true });
+  // Parallelize independent stage-start writes — these have no data dependencies
+  await Promise.all([
+    updateWorkflowJob(jobId, { status: "running", startedAt: new Date() }),
+    updateLetterStatus(letterId, "drafting", { force: true }),
+  ]);
+  // Fire-and-forget: audit log + admin notification (non-blocking)
   logReviewAction({
     letterRequestId: letterId,
     actorType: "system",
@@ -59,19 +63,18 @@ export async function runDraftingStage(
     fromStatus: "researching",
     toStatus: "drafting",
   }).catch(e => draftLogger.error({ err: e, letterId }, "[Pipeline] Failed to log researching→drafting action"));
-  try {
-    const { notifyAdmins } = await import("../db");
-    await notifyAdmins({
+  import("../db").then(({ notifyAdmins }) =>
+    notifyAdmins({
       category: "letters",
       type: "pipeline_drafting",
       title: `Letter #${letterId} entering drafting stage`,
       body: `AI pipeline is now drafting letter #${letterId}.`,
       link: `/admin/letters/${letterId}`,
-    });
-  } catch (err) {
+    })
+  ).catch(err => {
     draftLogger.error({ err }, "[notifyAdmins] pipeline_drafting");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_drafting" } });
-  }
+  });
 
   const normalizedIntake = buildNormalizedPromptInput(
     {

@@ -196,42 +196,47 @@ export async function bestEffortFallback(opts: {
     ];
     fallbackLogger.warn({ letterId, fallbackSource, reasonCount: degradationReasons.length }, "[Pipeline] Saving degraded draft");
 
-    await setLetterQualityDegraded(letterId, true);
-
-    const version = await createLetterVersion({
-      letterRequestId: letterId,
-      versionType: "ai_draft",
-      content: fallbackContent,
-      createdByType: "system",
-      metadataJson: {
-        provider: "anthropic",
-        stage: "best_effort_fallback",
-        fallbackSource,
-        qualityDegraded: true,
-        degradationReasons,
-        pipelineErrorCode,
-        wordCount: fallbackContent.split(/\s+/).filter(w => w.length > 0).length,
-      },
-    });
+    // Parallelize: qualityDegraded flag + version creation are independent
+    const [, version] = await Promise.all([
+      setLetterQualityDegraded(letterId, true),
+      createLetterVersion({
+        letterRequestId: letterId,
+        versionType: "ai_draft",
+        content: fallbackContent,
+        createdByType: "system",
+        metadataJson: {
+          provider: "anthropic",
+          stage: "best_effort_fallback",
+          fallbackSource,
+          qualityDegraded: true,
+          degradationReasons,
+          pipelineErrorCode,
+          wordCount: fallbackContent.split(/\s+/).filter(w => w.length > 0).length,
+        },
+      }),
+    ]);
     const versionId = (version as any)?.insertId ?? 0;
-    await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
 
-    await updateLetterStatus(letterId, "generated_locked", { force: true });
-    await logReviewAction({
-      letterRequestId: letterId,
-      actorType: "system",
-      action: "ai_pipeline_completed",
-      noteText: `Draft produced via best-effort fallback after all retries exhausted (${pipelineErrorCode}). Quality flags raised — attorney scrutiny required. Degradation reasons: ${degradationReasons.join("; ")}`,
-      noteVisibility: "internal",
-      fromStatus: "drafting",
-      toStatus: "generated_locked",
-    });
+    // Parallelize: version pointer + status + review action are independent
+    await Promise.all([
+      updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId }),
+      updateLetterStatus(letterId, "generated_locked", { force: true }),
+      logReviewAction({
+        letterRequestId: letterId,
+        actorType: "system",
+        action: "ai_pipeline_completed",
+        noteText: `Draft produced via best-effort fallback after all retries exhausted (${pipelineErrorCode}). Quality flags raised — attorney scrutiny required. Degradation reasons: ${degradationReasons.join("; ")}`,
+        noteVisibility: "internal",
+        fromStatus: "drafting",
+        toStatus: "generated_locked",
+      }),
+    ]);
 
-    // Notify admins
+    // Notify admins (parallelized fan-out)
     try {
       const admins = await getAllUsers("admin");
       const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-      for (const admin of admins) {
+      await Promise.allSettled(admins.map(async (admin) => {
         if (admin.email) {
           sendAdminAlertEmail({
             to: admin.email,
@@ -251,12 +256,12 @@ export async function bestEffortFallback(opts: {
           body: `Pipeline error (${pipelineErrorCode}) after retries exhausted — best-effort fallback used. Attorney scrutiny needed.`,
           link: `/admin/letters/${letterId}`,
         }).catch(e => fallbackLogger.error({ err: e, letterId }, "[Pipeline] Failed to create degraded-draft notification"));
-      }
+      }));
     } catch (notifyErr) {
       fallbackLogger.error({ err: notifyErr, letterId }, "[Pipeline] Failed to notify admins of degraded draft");
     }
 
-    // Send subscriber "letter ready" email
+    // Send subscriber "letter ready" email (reuse the status-check read from above)
     try {
       const letterRecord = await getLetterById(letterId);
       const wasAlreadyUnlocked = letterRecord ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;

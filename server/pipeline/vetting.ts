@@ -566,32 +566,33 @@ export async function finalizeLetterAfterVetting(
   const qualityWarnings = pipelineCtx?.qualityWarnings ?? [];
   const isDegraded = qualityWarnings.length > 0;
 
-  // Always explicitly set qualityDegraded so a clean re-run resets a previously-degraded letter
-  await setLetterQualityDegraded(letterId, isDegraded);
-
-  const version = await createLetterVersion({
-    letterRequestId: letterId,
-    versionType: "ai_draft",
-    content: vettedLetter,
-    createdByType: "system",
-    metadataJson: {
-      provider: "multi-provider",
-      researchProvider: pipelineCtx?.researchProvider,
-      failoverUsed: qualityWarnings.some(w =>
-        w.includes("_FAILOVER:") || w.includes("FAILOVER")
-      ),
-      stage: "vetted_final",
-      vettingReport,
-      counterArguments: pipelineCtx?.counterArguments,
-      researchUnverified: pipelineCtx?.researchUnverified ?? false,
-      webGrounded: pipelineCtx?.webGrounded ?? true,
-      citationRegistry: pipelineCtx?.citationRegistry ?? [],
-      validationResults: pipelineCtx?.validationResults,
-      wordCount: vettedLetter.split(/\s+/).filter(w => w.length > 0).length,
-      qualityDegraded: isDegraded,
-      qualityWarnings,
-    },
-  });
+  // Parallelize: qualityDegraded flag + version creation are independent
+  const [, version] = await Promise.all([
+    setLetterQualityDegraded(letterId, isDegraded),
+    createLetterVersion({
+      letterRequestId: letterId,
+      versionType: "ai_draft",
+      content: vettedLetter,
+      createdByType: "system",
+      metadataJson: {
+        provider: "multi-provider",
+        researchProvider: pipelineCtx?.researchProvider,
+        failoverUsed: qualityWarnings.some(w =>
+          w.includes("_FAILOVER:") || w.includes("FAILOVER")
+        ),
+        stage: "vetted_final",
+        vettingReport,
+        counterArguments: pipelineCtx?.counterArguments,
+        researchUnverified: pipelineCtx?.researchUnverified ?? false,
+        webGrounded: pipelineCtx?.webGrounded ?? true,
+        citationRegistry: pipelineCtx?.citationRegistry ?? [],
+        validationResults: pipelineCtx?.validationResults,
+        wordCount: vettedLetter.split(/\s+/).filter(w => w.length > 0).length,
+        qualityDegraded: isDegraded,
+        qualityWarnings,
+      },
+    }),
+  ]);
   const versionId = (version as any)?.insertId ?? 0;
   if (!versionId) {
     throw new PipelineError(
@@ -602,34 +603,33 @@ export async function finalizeLetterAfterVetting(
     );
   }
 
-  await updateLetterVersionPointers(letterId, {
-    currentAiDraftVersionId: versionId,
-  });
-
   const finalStatus = "generated_locked" as const;
-  await updateLetterStatus(letterId, finalStatus);
-
   const noteText = isDegraded
     ? `Draft ready with quality warnings. Our AI completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
     : `Draft ready. Our legal team has completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`;
 
-  await logReviewAction({
-    letterRequestId: letterId,
-    actorType: "system",
-    action: "ai_pipeline_completed",
-    noteText,
-    noteVisibility: isDegraded ? "internal" : "user_visible",
-    fromStatus: "drafting",
-    toStatus: finalStatus,
-  });
+  // Parallelize: version pointer update + status transition + review action are independent
+  await Promise.all([
+    updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId }),
+    updateLetterStatus(letterId, finalStatus),
+    logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "ai_pipeline_completed",
+      noteText,
+      noteVisibility: isDegraded ? "internal" : "user_visible",
+      fromStatus: "drafting",
+      toStatus: finalStatus,
+    }),
+  ]);
 
-  // ── Admin alert for degraded drafts (normal completion path) ────────────────
+  // ── Admin alert for degraded drafts (fire-and-forget, parallelized) ────────
   if (isDegraded) {
     (async () => {
       try {
         const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
         const admins = await getAllUsers("admin");
-        for (const admin of admins) {
+        await Promise.allSettled(admins.map(async (admin) => {
           if (admin.email) {
             sendAdminAlertEmail({
               to: admin.email,
@@ -649,18 +649,20 @@ export async function finalizeLetterAfterVetting(
             body: `Vetting quality warnings attached (${qualityWarnings.length}). Extra attorney scrutiny needed.`,
             link: `/admin/letters/${letterId}`,
           }).catch(e => logger.error({ e: e }, `[Pipeline] Failed notification for degraded draft #${letterId}:`));
-        }
+        }));
       } catch (alertErr) {
         logger.error({ err: alertErr }, `[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`);
       }
     })();
   }
 
+  // Single DB read for the letter record — used for both subscriber email and paywall check
   const letterForPaywall = await getLetterById(letterId);
+  // Single unlock check — reused for both subscriber email and paywall logging
+  const wasAlreadyUnlocked = letterForPaywall ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
 
   // ── Subscriber "letter ready" email (normal completion path) ─────────────────
   try {
-    const wasAlreadyUnlocked = letterForPaywall ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
     if (letterForPaywall && !letterForPaywall.submittedByAdmin && !wasAlreadyUnlocked && letterForPaywall.userId != null) {
       const subscriber = await getUserById(letterForPaywall.userId);
       if (subscriber?.email) {
@@ -681,21 +683,19 @@ export async function finalizeLetterAfterVetting(
     logger.error({ err: emailErr }, `[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`);
   }
 
+  // ── Paywall logging (uses cached wasAlreadyUnlocked — no redundant DB read) ──
   if (letterForPaywall?.submittedByAdmin) {
     logger.info(
       `[Pipeline] Skipping paywall email for #${letterId} — admin-submitted letter`
     );
+  } else if (!wasAlreadyUnlocked) {
+    logger.info(
+      `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
+    );
   } else {
-    const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
-    if (!wasAlreadyUnlocked) {
-      logger.info(
-        `[Pipeline] Letter #${letterId} is generated_locked — paywall email will fire via cron in ~10–15 min`
-      );
-    } else {
-      logger.info(
-        `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
-      );
-    }
+    logger.info(
+      `[Pipeline] Skipping paywall email for #${letterId} — previously unlocked`
+    );
   }
 }
 

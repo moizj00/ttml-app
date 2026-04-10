@@ -21,11 +21,66 @@ import { createTokenAccumulator, calculateCost } from "./providers";
 import { validateIntakeCompleteness, addValidationResult } from "./validators";
 import { autoAdvanceIfPreviouslyUnlocked } from "./fallback";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
+import type { CitationRegistryEntry } from "../../shared/types";
 import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
+
+// ═══════════════════════════════════════════════════════
+// SHARED: Citation revalidation + grounding context setup
+// Extracted to eliminate 3× duplication across runFullPipeline
+// and both branches of retryPipelineFromStage.
+// ═══════════════════════════════════════════════════════
+
+const UNGROUNDED_PROVIDERS = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+
+async function applyResearchGroundingAndRevalidate(
+  letterId: number,
+  intake: IntakeJson,
+  researchProvider: string,
+  research: ResearchPacket,
+  pipelineCtx: PipelineContext,
+  opts?: { researchFromCache?: boolean },
+): Promise<void> {
+  pipelineCtx.researchProvider = researchProvider;
+  pipelineCtx.researchUnverified = UNGROUNDED_PROVIDERS.has(researchProvider);
+  pipelineCtx.webGrounded = !UNGROUNDED_PROVIDERS.has(researchProvider);
+  await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
+
+  let citationRegistry = buildCitationRegistry(research);
+  orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
+
+  const citationTokens = createTokenAccumulator();
+  const researchFromCache = opts?.researchFromCache ?? (researchProvider === "kv-cache");
+  const allHighConfidence = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
+  const skipRevalidation =
+    pipelineCtx.researchUnverified ||
+    citationRegistry.length === 0 ||
+    citationRegistry.length < 3 ||
+    researchFromCache ||
+    allHighConfidence;
+
+  if (skipRevalidation) {
+    const reasons: string[] = [];
+    if (pipelineCtx.researchUnverified) reasons.push("research unverified");
+    if (citationRegistry.length === 0) reasons.push("no citations");
+    if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
+    if (researchFromCache) reasons.push("research served from KV cache (already validated)");
+    if (allHighConfidence) reasons.push("all citations already high confidence");
+    orchLogger.info({ letterId, reasons }, "[Pipeline] Skipping citation revalidation");
+  } else {
+    const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
+    const revalResult = await revalidateCitationsWithPerplexity(
+      citationRegistry, jurisdiction, letterId, citationTokens
+    );
+    citationRegistry = revalResult.registry;
+    pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
+  }
+  pipelineCtx.citationRegistry = citationRegistry;
+  pipelineCtx.citationRevalidationTokens = citationTokens;
+}
 
 // ═══════════════════════════════════════════════════════
 // INTERMEDIATE CONTENT REGISTRY
@@ -261,13 +316,6 @@ export async function runFullPipeline(
     pipelineCtx.validationResults = [];
 
     const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
-    pipelineCtx.researchProvider = researchProvider;
-    // openai-failover and openai-stored-prompt use web search — still web-grounded.
-    // anthropic-fallback (Claude, no web access), groq-oss-fallback, and synthetic-intake-fallback are ungrounded.
-    const ungroundedProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
-    pipelineCtx.researchUnverified = ungroundedProviders.has(researchProvider);
-    pipelineCtx.webGrounded = !ungroundedProviders.has(researchProvider);
-    await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
 
     addValidationResult(pipelineCtx, {
       stage: "intake",
@@ -278,39 +326,7 @@ export async function runFullPipeline(
       timestamp: new Date().toISOString(),
     });
 
-    let citationRegistry = buildCitationRegistry(research);
-    orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
-
-    const citationTokens = createTokenAccumulator();
-    const researchFromCache = researchProvider === "kv-cache";
-    const allHighConfidence = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
-    const skipRevalidation =
-      pipelineCtx.researchUnverified ||
-      citationRegistry.length === 0 ||
-      citationRegistry.length < 3 ||
-      researchFromCache ||
-      allHighConfidence;
-
-    if (skipRevalidation) {
-      const reasons: string[] = [];
-      if (pipelineCtx.researchUnverified) reasons.push("research unverified");
-      if (citationRegistry.length === 0) reasons.push("no citations");
-      if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
-      if (researchFromCache) reasons.push("research served from KV cache (already validated)");
-      if (allHighConfidence) reasons.push("all citations already high confidence");
-      orchLogger.info({ letterId, reasons }, "[Pipeline] Skipping citation revalidation");
-    } else {
-      const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-      const revalResult = await revalidateCitationsWithPerplexity(
-        citationRegistry, jurisdiction, letterId, citationTokens
-      );
-      citationRegistry = revalResult.registry;
-      pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
-    }
-    pipelineCtx.citationRegistry = citationRegistry;
-    if (pipelineCtx) {
-      pipelineCtx.citationRevalidationTokens = citationTokens;
-    }
+    await applyResearchGroundingAndRevalidate(letterId, intake, researchProvider, research, pipelineCtx);
 
     const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
     // Capture the initial draft for best-effort fallback (both in-context and registry)
@@ -385,12 +401,15 @@ export async function runFullPipeline(
     });
     const pipelineErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
 
-    await updateWorkflowJob(pipelineJobId, {
-      status: "failed",
-      errorMessage: formatStructuredError(pipelineErrCode, msg, "pipeline"),
-      completedAt: new Date(),
-    });
-    await updateLetterStatus(letterId, "submitted"); // revert to allow retry
+    // Parallelize: workflow job failure + status revert are independent
+    await Promise.all([
+      updateWorkflowJob(pipelineJobId, {
+        status: "failed",
+        errorMessage: formatStructuredError(pipelineErrCode, msg, "pipeline"),
+        completedAt: new Date(),
+      }),
+      updateLetterStatus(letterId, "submitted"), // revert to allow retry
+    ]);
     throw err instanceof PipelineError ? err : new PipelineError(pipelineErrCode, msg, "pipeline");
   }
 }
@@ -504,26 +523,7 @@ export async function retryPipelineFromStage(
     if (stage === "research") {
       await updateLetterStatus(letterId, "submitted", { force: true });
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
-      pipelineCtx.researchProvider = researchProvider;
-      const ungroundedRetryProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
-      pipelineCtx.researchUnverified = ungroundedRetryProviders.has(researchProvider);
-      pipelineCtx.webGrounded = !ungroundedRetryProviders.has(researchProvider);
-      await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
-      let citationRegistry = buildCitationRegistry(research);
-      const citationTokensResearch = createTokenAccumulator();
-      const researchFromCacheRetry = researchProvider === "kv-cache";
-      const allHighConfRetry = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
-      const skipRevalRetry =
-        pipelineCtx.researchUnverified || citationRegistry.length === 0 ||
-        citationRegistry.length < 3 || researchFromCacheRetry || allHighConfRetry;
-      if (!skipRevalRetry) {
-        const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        const revalResult = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensResearch);
-        citationRegistry = revalResult.registry;
-        pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
-      }
-      pipelineCtx.citationRegistry = citationRegistry;
-      pipelineCtx.citationRevalidationTokens = citationTokensResearch;
+      await applyResearchGroundingAndRevalidate(letterId, intake, researchProvider, research, pipelineCtx);
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
     } else {
@@ -531,26 +531,10 @@ export async function retryPipelineFromStage(
       if (!latestResearch?.resultJson)
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;
-      pipelineCtx.researchProvider = latestResearch.provider ?? "perplexity";
-      const ungroundedDraftProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
-      pipelineCtx.researchUnverified = ungroundedDraftProviders.has(latestResearch.provider ?? "");
-      pipelineCtx.webGrounded = !pipelineCtx.researchUnverified;
-      await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
-      let citationRegistry = buildCitationRegistry(research);
-      const citationTokensDrafting = createTokenAccumulator();
-      const researchFromCacheDraft = latestResearch.cacheHit === true;
-      const allHighConfDraft = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
-      const skipRevalDraft =
-        pipelineCtx.researchUnverified || citationRegistry.length === 0 ||
-        citationRegistry.length < 3 || researchFromCacheDraft || allHighConfDraft;
-      if (!skipRevalDraft) {
-        const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-        const revalResult = await revalidateCitationsWithPerplexity(citationRegistry, jurisdiction, letterId, citationTokensDrafting);
-        citationRegistry = revalResult.registry;
-        pipelineCtx.citationRevalidationModelKey = revalResult.modelKey;
-      }
-      pipelineCtx.citationRegistry = citationRegistry;
-      pipelineCtx.citationRevalidationTokens = citationTokensDrafting;
+      const provider = latestResearch.provider ?? "perplexity";
+      await applyResearchGroundingAndRevalidate(letterId, intake, provider, research, pipelineCtx, {
+        researchFromCache: latestResearch.cacheHit === true,
+      });
       await updateLetterStatus(letterId, "drafting", { force: true });
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
