@@ -198,6 +198,8 @@ export default function Verify2FA() {
                 {digits.map((digit, i) => (
                   <Input
                     key={i}
+                    id={`otp-digit-${i}`}
+                    name={`otp-digit-${i}`}
                     ref={el => { inputRefs.current[i] = el; }}
                     type="text"
                     inputMode="numeric"

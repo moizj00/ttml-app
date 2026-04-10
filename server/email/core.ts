@@ -297,5 +297,16 @@ export async function sendWithRetry(opts: {
     }
   }
   emailLogger.error({ to: opts.to, err: lastErr }, "[Email] All retry attempts exhausted");
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  // Resend SDK returns error as a plain object { name, message, statusCode } — not an
+  // Error instance — so String(lastErr) would produce "[object Object]".  Extract the
+  // human-readable message explicitly before wrapping.
+  if (lastErr instanceof Error) throw lastErr;
+  const resendMsg =
+    lastErr !== null &&
+    typeof lastErr === "object" &&
+    "message" in lastErr &&
+    typeof (lastErr as Record<string, unknown>).message === "string"
+      ? (lastErr as { message: string }).message
+      : JSON.stringify(lastErr);
+  throw new Error(resendMsg);
 }
