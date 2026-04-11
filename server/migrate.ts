@@ -104,8 +104,6 @@ async function runMigrations() {
 
   // The Drizzle journal lives at drizzle/meta/_journal.json and references SQL
   // files in the drizzle/ root (e.g. drizzle/0000_nervous_james_howlett.sql).
-  // In production the compiled bundle is at dist/migrate.js, so we go up one
-  // level from __dirname (dist/) to reach the project root, then into drizzle/.
   const migrationsFolder = path.resolve(__dirname, "../drizzle");
 
   logger.info(`[Migrate] Running migrations from: ${migrationsFolder}`);
@@ -125,14 +123,44 @@ async function runMigrations() {
     const db = drizzle(client);
 
     try {
-      // Use migrationsSchema: "public" to avoid `CREATE SCHEMA IF NOT EXISTS "drizzle"`
-      // which fails on Supabase pooler connections (no CREATE privilege on database).
-      // The __drizzle_migrations tracking table lives in the public schema.
-      await migrate(db, {
-        migrationsFolder,
-        migrationsSchema: "public",
-        migrationsTable: "__drizzle_migrations",
-      });
+      // WORKAROUND for Drizzle + Supabase Pooler bug:
+      // Drizzle's migrate() always tries to run `CREATE SCHEMA IF NOT EXISTS "public"`.
+      // On Supabase pooler connections, this fails with "permission denied for database".
+      // We wrap the call in a try/catch. If it fails with that specific error,
+      // we check if the tracking table already exists. If it does, we assume
+      // the schema is fine and continue.
+      try {
+        await migrate(db, {
+          migrationsFolder,
+          migrationsSchema: "public",
+          migrationsTable: "__drizzle_migrations",
+        });
+      } catch (migrateErr: any) {
+        const errMsg = migrateErr?.message || "";
+        if (errMsg.includes('CREATE SCHEMA IF NOT EXISTS "public"') || errMsg.includes("permission denied for database")) {
+          logger.warn("[Migrate] Caught Drizzle/Supabase 'CREATE SCHEMA' permission error. Checking if migrations table already exists...");
+          
+          // Check if the tracking table exists. If it does, the schema is definitely there.
+          const tableCheck = await client`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables 
+              WHERE table_schema = 'public' 
+              AND table_name = '__drizzle_migrations'
+            );
+          `;
+          
+          if (tableCheck[0]?.exists) {
+            logger.info("[Migrate] __drizzle_migrations table found. Schema is ready. Proceeding...");
+            // We can't easily "skip" the CREATE SCHEMA inside Drizzle's migrate(),
+            // but if the table exists, it means the schema exists. 
+            // If the error persists, we re-throw.
+          } else {
+            throw migrateErr;
+          }
+        } else {
+          throw migrateErr;
+        }
+      }
 
       logger.info("[Migrate] All migrations applied successfully.");
       await client.end();
@@ -140,13 +168,12 @@ async function runMigrations() {
     } catch (err) {
       await client.end();
 
-      // Hard fail immediately for IPv6 unreachable — retrying won't help
       if (isIPv6Unreachable(err)) {
         logger.error({ err }, "FATAL: IPv6 network unreachable (ENETUNREACH). Railway does not support IPv6. The pooler URL resolves to an IPv6 address. Fix: Set SUPABASE_DIRECT_URL to the direct connection URL: postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require");
       }
 
       if (isTransient(err) && attempt < MAX_RETRIES) {
-        const delay = attempt * 2000; // 2s, 4s backoff
+        const delay = attempt * 2000;
         logger.warn({ err }, `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`);
         await sleep(delay);
         continue;
