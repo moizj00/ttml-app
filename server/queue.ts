@@ -49,15 +49,36 @@ let _boss: PgBoss | null = null;
 let _bossStarting: Promise<PgBoss> | null = null;
 
 function getConnectionString(): string {
+  const envSource = process.env.SUPABASE_DIRECT_URL
+    ? "SUPABASE_DIRECT_URL"
+    : process.env.SUPABASE_DATABASE_URL
+      ? "SUPABASE_DATABASE_URL"
+      : process.env.DATABASE_URL
+        ? "DATABASE_URL"
+        : null;
+
   const url =
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
     process.env.DATABASE_URL;
-  if (!url) {
+
+  if (!url || !envSource) {
     throw new Error(
       "[Queue] No database URL found. Set SUPABASE_DIRECT_URL (direct connection, not pooler) for pg-boss."
     );
   }
+
+  const masked = url.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
+  logger.info(`[Queue] Using ${envSource} for pg-boss connection: ${masked}`);
+
+  if (url.includes(":6543") || url.includes("pooler.supabase.com") || url.includes("pgbouncer=true")) {
+    logger.warn(
+      `[Queue] WARNING: ${envSource} appears to be a connection pooler URL. ` +
+      `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
+      `Set SUPABASE_DIRECT_URL to the direct connection string.`
+    );
+  }
+
   return url;
 }
 
@@ -70,9 +91,7 @@ export async function getBoss(): Promise<PgBoss> {
     const boss = new PgBoss({
       connectionString,
       ssl: { rejectUnauthorized: false },
-      // Disable scheduling (we don't use cron jobs via pg-boss)
       schedule: false,
-      // Keep completed jobs for 7 days, failed for 30 days (set at queue level)
     });
 
     boss.on("error", (err) => {
@@ -83,22 +102,21 @@ export async function getBoss(): Promise<PgBoss> {
       logger.warn({ warning }, "[Queue] pg-boss warning:");
     });
 
-    await boss.start();
+    try {
+      await boss.start();
+    } catch (startErr) {
+      logger.error({ err: startErr }, "[Queue] pg-boss failed to start — database connection issue");
+      throw startErr;
+    }
 
-    // Ensure the pipeline queue exists with desired retention settings
     try {
       await boss.createQueue(QUEUE_NAME, {
-        // No retries at queue level — worker handles its own retry logic with backoff
         retryLimit: 0,
-        // Expire active jobs after 30 minutes if not completed
         expireInSeconds: 30 * 60,
-        // Keep completed jobs for 7 days
         deleteAfterSeconds: 7 * 24 * 60 * 60,
-        // Keep failed jobs for 30 days
         retentionSeconds: 30 * 24 * 60 * 60,
       });
     } catch (queueErr) {
-      // Queue may already exist — that's fine
       logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
     }
 
@@ -109,21 +127,27 @@ export async function getBoss(): Promise<PgBoss> {
 
   try {
     return await _bossStarting;
-  } finally {
+  } catch (err) {
     _bossStarting = null;
+    throw err;
   }
 }
 
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
-  const boss = await getBoss();
+  let boss: PgBoss;
+  try {
+    boss = await getBoss();
+  } catch (firstErr) {
+    logger.warn({ err: firstErr }, "[Queue] First getBoss() attempt failed, retrying once...");
+    _boss = null;
+    boss = await getBoss();
+  }
   const jobId = `pipeline-${data.letterId}-${Date.now()}`;
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     id: jobId,
-    // No retries at queue level — worker handles its own retry logic with backoff
     retryLimit: 0,
-    // Expire job after 30 minutes if not picked up
     expireInSeconds: 30 * 60,
   });
   const resolvedId = id ?? jobId;
