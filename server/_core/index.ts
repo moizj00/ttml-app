@@ -106,6 +106,24 @@ async function startServer() {
   if (process.env.NODE_ENV === "production") {
     validateRequiredEnv();
   }
+  // Warn early if supabaseAnonKey is missing — an empty key causes the PKCE
+  // token exchange in GET /api/auth/callback to fail with a 500, surfacing as
+  // "A server error interrupted Google sign-in" on the client.
+  // VITE_SUPABASE_ANON_KEY is a Vite build-time var baked into the frontend
+  // bundle; it is NOT available as a server runtime env var on Railway.
+  // The canonical server-side var is SUPABASE_ANON_KEY.
+  const _anonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+  if (!_anonKey) {
+    logger.warn(
+      { module: "Startup" },
+      "[Startup] SUPABASE_ANON_KEY is not set. Google OAuth PKCE token exchange will fail. " +
+      "Set SUPABASE_ANON_KEY in Railway environment variables."
+    );
+  }
 
   const app = express();
   // CRITICAL: Trust Railway's proxy to correctly identify HTTPS protocol (X-Forwarded-Proto).
