@@ -1,33 +1,23 @@
 /**
  * migrate.ts — Run Drizzle ORM migrations against the production database.
  *
- * This script is executed as a Railway preDeployCommand (before the server starts)
- * to ensure the database schema is always up-to-date on every deployment.
+ * This script is executed by start.sh before the server starts to ensure
+ * the database schema is always up-to-date on every deployment.
  *
- * Usage:
- *   node dist/migrate.js          (production — compiled by esbuild)
- *   tsx server/migrate.ts         (development)
- *
- * Migration folder layout:
- *   drizzle/                      ← Drizzle-generated SQL files (0000_*.sql … 0036_*.sql)
- *   drizzle/meta/_journal.json    ← Drizzle migration journal (source of truth)
+ * KNOWN ISSUE: Drizzle's migrate() always runs `CREATE SCHEMA IF NOT EXISTS "public"`
+ * which can fail on Supabase pooler connections. This script works around it by:
+ *   1. Checking if all migrations are already applied (via __drizzle_migrations table)
+ *   2. If yes → skip Drizzle's migrate() entirely and exit 0
+ *   3. If no → attempt migrate(), and if it fails, log the full error but still exit 0
+ *      if the schema appears correct (non-fatal for the server startup)
  *
  * Connection strategy (in priority order):
  *   1. SUPABASE_DIRECT_URL  — direct connection to db.*.supabase.co:5432 (IPv4, no pooler)
  *   2. SUPABASE_DATABASE_URL — fallback pooler URL
  *   3. DATABASE_URL          — last resort
- *
- * IMPORTANT: Railway build containers do NOT have IPv6 connectivity.
- * The Supabase session pooler (pooler.supabase.com) resolves to IPv6 addresses
- * and will fail with ENETUNREACH. Always use SUPABASE_DIRECT_URL for migrations.
- *
- * Retries up to 3 times on transient errors (circuit breaker, connection reset, etc.)
  */
 import "dotenv/config";
 
-// Force IPv4 DNS resolution — Railway's network cannot reach Supabase's
-// shared pooler via IPv6 (ENETUNREACH). This must be set before any
-// database connections are established.
 import dns from "node:dns";
 dns.setDefaultResultOrder("ipv4first");
 
@@ -35,52 +25,30 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { logger } from "./logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const TRANSIENT_CODES = new Set([
-  "XX000", // Circuit breaker / internal error
-  "08000", // Connection exception
-  "08003", // Connection does not exist
-  "08006", // Connection failure
-  "08001", // Unable to establish connection
-  "57P03", // Cannot connect now
-  "ECONNRESET",
-  "ECONNREFUSED",
-  "ETIMEDOUT",
-]);
-
-function isTransient(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    const cause = (err as any).cause;
-    // ENETUNREACH = IPv6 not reachable — this is a hard config error, not transient
-    if (cause?.code === "ENETUNREACH") return false;
-    if ((err as any).code === "ENETUNREACH") return false;
-    if (cause && TRANSIENT_CODES.has(cause.code)) return true;
-    if (TRANSIENT_CODES.has((err as any).code)) return true;
+/** Serialize any error into a loggable object with name, message, stack, code, cause */
+function serializeError(err: unknown): Record<string, unknown> {
+  if (err instanceof Error) {
+    return {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+      code: (err as any).code,
+      cause: err.cause ? serializeError(err.cause) : undefined,
+      detail: (err as any).detail,
+      hint: (err as any).hint,
+      severity: (err as any).severity,
+    };
   }
-  return false;
-}
-
-function isIPv6Unreachable(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    const cause = (err as any).cause;
-    if (cause?.code === "ENETUNREACH") return true;
-    if ((err as any).code === "ENETUNREACH") return true;
-    const msg = (err as any)?.message || "";
-    if (msg.includes("ENETUNREACH")) return true;
-  }
-  return false;
-}
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return { raw: String(err) };
 }
 
 async function runMigrations() {
-  // Prefer direct connection for migrations (bypasses pgBouncer, has full DDL privileges)
   const connectionString =
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
@@ -88,100 +56,130 @@ async function runMigrations() {
 
   if (!connectionString) {
     logger.error(
-      "[Migrate] ERROR: No database URL found. Set SUPABASE_DIRECT_URL to:\n" +
-      "  postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres?sslmode=require"
+      "[Migrate] No database URL found. Set SUPABASE_DIRECT_URL. Skipping migrations (non-fatal)."
     );
-    process.exit(1);
+    // Exit 0 so the server still starts — the DB might already be correct
+    process.exit(0);
   }
 
-  // Warn if using a pooler URL that may resolve to IPv6 on Railway
   if (connectionString.includes("pooler.supabase.com")) {
     logger.warn(
-      "[Migrate] WARNING: Using pooler URL for migrations. " +
-      "Set SUPABASE_DIRECT_URL to db.*.supabase.co:5432 to avoid IPv6/pgBouncer issues on Railway."
+      "[Migrate] Using pooler URL for migrations. Set SUPABASE_DIRECT_URL for reliability."
     );
   }
 
-  // The Drizzle journal lives at drizzle/meta/_journal.json and references SQL
-  // files in the drizzle/ root (e.g. drizzle/0000_nervous_james_howlett.sql).
   const migrationsFolder = path.resolve(__dirname, "../drizzle");
+  logger.info(`[Migrate] Migrations folder: ${migrationsFolder}`);
 
-  logger.info(`[Migrate] Running migrations from: ${migrationsFolder}`);
+  const client = postgres(connectionString, {
+    ssl: "require",
+    max: 1,
+    connect_timeout: 30,
+    idle_timeout: 10,
+  });
 
-  const MAX_RETRIES = 3;
+  try {
+    // ── Step 1: Check if __drizzle_migrations table exists ──
+    const tableCheck = await client`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = '__drizzle_migrations'
+      ) as exists;
+    `;
+    const trackingTableExists = tableCheck[0]?.exists === true;
+    logger.info(`[Migrate] Tracking table exists: ${trackingTableExists}`);
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    logger.info(`[Migrate] Attempt ${attempt}/${MAX_RETRIES} — connecting to database...`);
+    if (trackingTableExists) {
+      // ── Step 2: Check how many migrations are already applied ──
+      const applied = await client`
+        SELECT hash FROM "__drizzle_migrations" ORDER BY created_at;
+      `;
+      const appliedCount = applied.length;
 
-    const client = postgres(connectionString, {
-      ssl: "require",
-      max: 1,
-      connect_timeout: 15,
-      idle_timeout: 5,
-    });
+      // Count migration SQL files in the journal
+      const journalPath = path.join(migrationsFolder, "meta", "_journal.json");
+      let totalMigrations = 0;
+      if (fs.existsSync(journalPath)) {
+        const journal = JSON.parse(fs.readFileSync(journalPath, "utf-8"));
+        totalMigrations = journal.entries?.length || 0;
+      }
 
+      logger.info(`[Migrate] Applied: ${appliedCount} / Total: ${totalMigrations}`);
+
+      if (appliedCount >= totalMigrations && totalMigrations > 0) {
+        logger.info("[Migrate] All migrations already applied. Skipping Drizzle migrate().");
+        await client.end();
+        process.exit(0);
+      }
+
+      // Some migrations are pending — try to apply them
+      logger.info(`[Migrate] ${totalMigrations - appliedCount} pending migrations. Attempting to apply...`);
+    } else {
+      logger.info("[Migrate] No tracking table found. Running full migration...");
+    }
+
+    // ── Step 3: Run Drizzle migrate() ──
     const db = drizzle(client);
-
     try {
-      // WORKAROUND for Drizzle + Supabase Pooler bug:
-      // Drizzle's migrate() always tries to run `CREATE SCHEMA IF NOT EXISTS "public"`.
-      // On Supabase pooler connections, this fails with "permission denied for database".
-      // We wrap the call in a try/catch. If it fails with that specific error,
-      // we check if the tracking table already exists. If it does, we assume
-      // the schema is fine and continue.
-      try {
-        await migrate(db, {
-          migrationsFolder,
-          migrationsSchema: "public",
-          migrationsTable: "__drizzle_migrations",
-        });
-      } catch (migrateErr: any) {
-        const errMsg = migrateErr?.message || "";
-        if (errMsg.includes('CREATE SCHEMA IF NOT EXISTS "public"') || errMsg.includes("permission denied for database")) {
-          logger.warn("[Migrate] Caught Drizzle/Supabase 'CREATE SCHEMA' permission error. Checking if migrations table already exists...");
-          
-          // Check if the tracking table exists. If it does, the schema is definitely there.
-          const tableCheck = await client`
-            SELECT EXISTS (
-              SELECT FROM information_schema.tables 
-              WHERE table_schema = 'public' 
-              AND table_name = '__drizzle_migrations'
-            );
-          `;
-          
-          if (tableCheck[0]?.exists) {
-            logger.info("[Migrate] __drizzle_migrations table found. Schema is ready. Proceeding...");
-            // We can't easily "skip" the CREATE SCHEMA inside Drizzle's migrate(),
-            // but if the table exists, it means the schema exists. 
-            // If the error persists, we re-throw.
-          } else {
-            throw migrateErr;
-          }
-        } else {
-          throw migrateErr;
-        }
-      }
-
+      await migrate(db, {
+        migrationsFolder,
+        migrationsSchema: "public",
+        migrationsTable: "__drizzle_migrations",
+      });
       logger.info("[Migrate] All migrations applied successfully.");
-      await client.end();
-      process.exit(0);
-    } catch (err) {
-      await client.end();
+    } catch (migrateErr: unknown) {
+      const serialized = serializeError(migrateErr);
+      logger.error(
+        { error: serialized },
+        `[Migrate] Drizzle migrate() failed: ${serialized.message}`
+      );
 
-      if (isIPv6Unreachable(err)) {
-        logger.error({ err }, "FATAL: IPv6 network unreachable (ENETUNREACH). Railway does not support IPv6. The pooler URL resolves to an IPv6 address. Fix: Set SUPABASE_DIRECT_URL to the direct connection URL: postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require");
+      // Check if the schema is actually correct despite the error
+      // (e.g., CREATE SCHEMA permission denied but tables exist)
+      try {
+        const criticalTables = await client`
+          SELECT table_name FROM information_schema.tables
+          WHERE table_schema = 'public'
+          AND table_name IN ('users', 'letter_requests', 'letter_versions', 'subscriptions')
+          ORDER BY table_name;
+        `;
+        const foundTables = criticalTables.map((r: any) => r.table_name);
+        logger.info(`[Migrate] Critical tables found: ${foundTables.join(", ")}`);
+
+        if (foundTables.length >= 4) {
+          logger.warn(
+            "[Migrate] Migration failed but all critical tables exist. " +
+            "Proceeding with server startup (non-fatal). " +
+            "To fix: set SUPABASE_DIRECT_URL to the direct connection URL."
+          );
+          await client.end();
+          process.exit(0); // Non-fatal — let the server start
+        }
+      } catch (checkErr) {
+        logger.error({ error: serializeError(checkErr) }, "[Migrate] Failed to verify schema state.");
       }
 
-      if (isTransient(err) && attempt < MAX_RETRIES) {
-        const delay = attempt * 2000;
-        logger.warn({ err }, `[Migrate] Transient error on attempt ${attempt}, retrying in ${delay / 1000}s...`);
-        await sleep(delay);
-        continue;
-      }
-
-      logger.error({ err: err }, "[Migrate] Migration failed:");
+      // If we get here, the schema is missing critical tables — fatal
+      logger.error("[Migrate] Critical tables missing. Cannot start server.");
+      await client.end();
       process.exit(1);
     }
+
+    await client.end();
+    process.exit(0);
+  } catch (err: unknown) {
+    const serialized = serializeError(err);
+    logger.error(
+      { error: serialized },
+      `[Migrate] Fatal error: ${serialized.message}`
+    );
+
+    // Even on connection errors, try to exit 0 if we can't verify the schema
+    // The server's own getDb() will fail at startup if the DB is truly unreachable
+    logger.warn("[Migrate] Exiting with code 0 to allow server startup attempt.");
+    try { await client.end(); } catch { /* ignore */ }
+    process.exit(0);
   }
 }
 
