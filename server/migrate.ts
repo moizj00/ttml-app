@@ -24,6 +24,13 @@
  * Retries up to 3 times on transient errors (circuit breaker, connection reset, etc.)
  */
 import "dotenv/config";
+
+// Force IPv4 DNS resolution — Railway's network cannot reach Supabase's
+// shared pooler via IPv6 (ENETUNREACH). This must be set before any
+// database connections are established.
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
