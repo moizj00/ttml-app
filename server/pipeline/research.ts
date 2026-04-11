@@ -7,15 +7,42 @@ import {
   updateLetterStatus,
   logReviewAction,
 } from "../db";
-import type { IntakeJson, ResearchPacket, PipelineContext, TokenUsage, PipelineErrorCode, ValidationResult } from "../../shared/types";
+import type {
+  IntakeJson,
+  ResearchPacket,
+  PipelineContext,
+  TokenUsage,
+  PipelineErrorCode,
+  ValidationResult,
+} from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
+import {
+  buildNormalizedPromptInput,
+  type NormalizedPromptInput,
+} from "../intake-normalizer";
 import { captureServerException } from "../sentry";
-import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
+import {
+  buildCacheKey,
+  getCachedResearch,
+  setCachedResearch,
+} from "../kvCache";
 import { formatStructuredError, classifyErrorCode } from "./shared";
-import { getResearchModel, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
-import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
-import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
+import {
+  getResearchModel,
+  RESEARCH_TIMEOUT_MS,
+  createTokenAccumulator,
+  accumulateTokens,
+  calculateCost,
+} from "./providers";
+import {
+  validateResearchPacket,
+  retryOnValidationFailure,
+  addValidationResult,
+} from "./validators";
+import {
+  buildCitationRegistry,
+  revalidateCitationsWithPerplexity,
+} from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
 import { logger } from "../logger";
 
@@ -65,19 +92,31 @@ export async function runResearchStage(
     noteVisibility: "internal",
     fromStatus: "submitted",
     toStatus: "researching",
-  }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to log submitted→researching action for #${letterId}:`));
-  import("../db").then(({ notifyAdmins }) =>
-    notifyAdmins({
-      category: "letters",
-      type: "pipeline_researching",
-      title: `Letter #${letterId} entering research stage`,
-      body: `AI pipeline has started researching for letter #${letterId}.`,
-      link: `/admin/letters/${letterId}`,
-    })
-  ).catch(err => {
-    logger.error({ err: err }, "[notifyAdmins] pipeline_researching:");
-    captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
-  });
+  }).catch(e =>
+    logger.error(
+      { e: e },
+      `[Pipeline] Failed to log submitted→researching action for #${letterId}:`
+    )
+  );
+  import("../db")
+    .then(({ notifyAdmins }) =>
+      notifyAdmins({
+        category: "letters",
+        type: "pipeline_researching",
+        title: `Letter #${letterId} entering research stage`,
+        body: `AI pipeline has started researching for letter #${letterId}.`,
+        link: `/admin/letters/${letterId}`,
+      })
+    )
+    .catch(err => {
+      logger.error({ err: err }, "[notifyAdmins] pipeline_researching:");
+      captureServerException(err, {
+        tags: {
+          component: "pipeline",
+          error_type: "notify_admins_researching",
+        },
+      });
+    });
 
   const normalizedIntake = buildNormalizedPromptInput(
     {
@@ -101,7 +140,11 @@ export async function runResearchStage(
     intake.matter?.subject ?? "",
     intake.desiredOutcome ?? "",
   ].join(" ");
-  const kvCacheKey = buildCacheKey(intake.letterType, intake.jurisdiction ?? {}, situationText);
+  const kvCacheKey = buildCacheKey(
+    intake.letterType,
+    intake.jurisdiction ?? {},
+    situationText
+  );
 
   try {
     const cachedPacket = await getCachedResearch(kvCacheKey);
@@ -112,21 +155,29 @@ export async function runResearchStage(
           `[KVCache] Cached packet for key ${kvCacheKey} failed validation (treating as miss): ${cacheValidation.errors.join("; ")}`
         );
       } else {
-        logger.info(`[Pipeline] Stage 1: KV cache hit for letter #${letterId} (key: ${kvCacheKey}) — skipping Perplexity API call`);
+        logger.info(
+          `[Pipeline] Stage 1: KV cache hit for letter #${letterId} (key: ${kvCacheKey}) — skipping Perplexity API call`
+        );
 
         const cacheHitResult: ValidationResult = {
           stage: "research",
           check: "research_packet_validation",
           passed: true,
           errors: [],
-          warnings: ["Research served from KV cache (Perplexity API call skipped)"],
+          warnings: [
+            "Research served from KV cache (Perplexity API call skipped)",
+          ],
           timestamp: new Date().toISOString(),
         };
 
         await updateResearchRun(runId, {
           status: "completed",
           resultJson: cachedPacket,
-          validationResultJson: { ...cacheHitResult, webGrounded: true, fromCache: true },
+          validationResultJson: {
+            ...cacheHitResult,
+            webGrounded: true,
+            fromCache: true,
+          },
           cacheHit: true,
           cacheKey: kvCacheKey,
         });
@@ -149,11 +200,17 @@ export async function runResearchStage(
       }
     }
   } catch (cacheErr) {
-    logger.warn({ err: cacheErr }, `[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`);
+    logger.warn(
+      { err: cacheErr },
+      `[Pipeline] Stage 1: KV cache check error for letter #${letterId} (non-fatal):`
+    );
   }
   // ── End KV Cache check ──
 
-  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar" : "gpt-4o";
+  // Declare provider-tracking variables at function scope so the catch block
+  // can read the active model key for accurate cost reporting after failover.
+  let researchModelKey =
+    researchConfig.provider === "perplexity" ? "sonar" : "gpt-4o";
 
   try {
     logger.info(
@@ -176,14 +233,17 @@ export async function runResearchStage(
 
     const parseResearchJson = (raw: string): ResearchPacket => {
       const jsonMatch =
-        raw.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-        raw.match(/(\{[\s\S]*\})/);
+        raw.match(/```(?:json)?\s*([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
       const jsonStr = jsonMatch ? jsonMatch[1] : raw;
       return JSON.parse(jsonStr);
     };
 
-    const generateResearch = async (errorFeedback?: string): Promise<string> => {
-      const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
+    const generateResearch = async (
+      errorFeedback?: string
+    ): Promise<string> => {
+      const promptWithFeedback = errorFeedback
+        ? userPrompt + errorFeedback
+        : userPrompt;
       const retryResult = await callPerplexity(promptWithFeedback);
       accumulateTokens(researchTokens, retryResult.usage);
       return retryResult.text;
@@ -202,7 +262,9 @@ export async function runResearchStage(
       try {
         const retryText = await retryOnValidationFailure(
           generateResearch,
-          ["Response was not valid JSON. Return ONLY a JSON object starting with { and ending with }. No markdown, no explanation."],
+          [
+            "Response was not valid JSON. Return ONLY a JSON object starting with { and ending with }. No markdown, no explanation.",
+          ],
           "Stage 1 (JSON parse)"
         );
         researchPacket = parseResearchJson(retryText);
@@ -211,7 +273,9 @@ export async function runResearchStage(
           stage: "research",
           check: "json_parse",
           passed: false,
-          errors: ["Research response could not be parsed as valid JSON after 2 attempts"],
+          errors: [
+            "Research response could not be parsed as valid JSON after 2 attempts",
+          ],
           warnings: [],
           timestamp: new Date().toISOString(),
         };
@@ -280,7 +344,11 @@ export async function runResearchStage(
           completedAt: new Date(),
           responsePayloadJson: { validationResult: failedResult },
         });
-        throw new PipelineError(PIPELINE_ERROR_CODES.JSON_PARSE_FAILED, "Research retry response could not be parsed as JSON", "research");
+        throw new PipelineError(
+          PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+          "Research retry response could not be parsed as JSON",
+          "research"
+        );
       }
       validation = validateResearchPacket(researchPacket);
     }
@@ -333,7 +401,11 @@ export async function runResearchStage(
     await updateResearchRun(runId, {
       status: "completed",
       resultJson: researchPacket,
-      validationResultJson: { ...successResult, webGrounded: true, provider: "perplexity" },
+      validationResultJson: {
+        ...successResult,
+        webGrounded: true,
+        provider: "perplexity",
+      },
       cacheHit: false,
       cacheKey: kvCacheKey,
     });
@@ -354,17 +426,23 @@ export async function runResearchStage(
 
     await setCachedResearch(kvCacheKey, researchPacket);
 
-    logger.info(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: perplexity)`);
+    logger.info(
+      `[Pipeline] Stage 1 complete for letter #${letterId} (provider: perplexity)`
+    );
     return { packet: researchPacket, provider: "perplexity" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ msg: msg }, `[Pipeline] Stage 1 failed for letter #${letterId} (fail-hard):`);
+    logger.error(
+      { msg: msg },
+      `[Pipeline] Stage 1 failed for letter #${letterId} (fail-hard):`
+    );
     captureServerException(err, {
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },
     });
 
-    const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
+    const stageErrCode =
+      err instanceof PipelineError ? err.code : classifyErrorCode(err);
 
     addValidationResult(pipelineCtx, {
       stage: "research",
@@ -385,9 +463,14 @@ export async function runResearchStage(
       completedAt: new Date(),
       promptTokens: researchTokens.promptTokens,
       completionTokens: researchTokens.completionTokens,
-      estimatedCostUsd: researchTokens.promptTokens > 0 ? calculateCost(researchModelKey, researchTokens) : "0",
+      estimatedCostUsd:
+        researchTokens.promptTokens > 0
+          ? calculateCost(researchModelKey, researchTokens)
+          : "0",
     });
 
-    throw err instanceof PipelineError ? err : new PipelineError(stageErrCode, msg, "research");
+    throw err instanceof PipelineError
+      ? err
+      : new PipelineError(stageErrCode, msg, "research");
   }
 }

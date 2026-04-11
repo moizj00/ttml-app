@@ -146,16 +146,31 @@ export async function getBoss(): Promise<PgBoss> {
       logger.error({ err: startErr }, "[Queue] pg-boss failed to start — database connection issue");
       throw startErr;
     }
-
     try {
       await boss.createQueue(QUEUE_NAME, {
         policy: "key_strict_fifo",
+    // Ensure the pipeline queue exists with desired retention settings.
+    // policy: 'key_strict_fifo' — blocks processing of jobs with the same
+    // singletonKey while any job with that key is active, in retry, or failed.
+    // Combined with singletonKey = `letter-{id}` on every send() call, this
+    // guarantees at most one active pipeline run per letter at any time.
+    try {
+      await boss.createQueue(QUEUE_NAME, {
+        // key_strict_fifo: only one job per singletonKey can be active/queued/failed
+        // at a time. Duplicate submissions for the same letter are silently dropped.
+        policy: "key_strict_fifo",
+        // No retries at queue level — worker handles its own retry logic with backoff
+
         retryLimit: 0,
         expireInSeconds: 30 * 60,
         deleteAfterSeconds: 7 * 24 * 60 * 60,
         retentionSeconds: 30 * 24 * 60 * 60,
       });
     } catch (queueErr) {
+
+      // Queue may already exist — that's fine. Policy is set at createQueue time;
+      // updateQueue does not allow changing policy on an existing queue.
+
       logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
     }
 
@@ -190,6 +205,9 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     id: jobId,
     singletonKey: `letter-${data.letterId}`,
+
+    // No retries at queue level — worker handles its own retry logic with backoff
+
     retryLimit: 0,
     expireInSeconds: 30 * 60,
   });
