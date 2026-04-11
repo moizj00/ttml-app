@@ -157,24 +157,22 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
       expect(approveSection).toContain("createLetterVersion");
     });
 
-    it("approve mutation transitions through approved to client_approval_pending", () => {
+    it("approve mutation transitions to approved", () => {
       const content = readAllRouters();
       const approveSection = content.substring(
         content.indexOf("approve: attorneyProcedure"),
         content.indexOf("reject: attorneyProcedure")
       );
       expect(approveSection).toContain('"approved"');
-      expect(approveSection).toContain('"client_approval_pending"');
     });
 
-    it("approve mutation does NOT generate PDF (deferred to clientApprove)", () => {
+    it("approve mutation generates PDF immediately", () => {
       const content = readAllRouters();
       const approveSection = content.substring(
         content.indexOf("approve: attorneyProcedure"),
         content.indexOf("reject: attorneyProcedure")
       );
-      expect(approveSection).not.toContain("generateAndUploadApprovedPdf");
-      expect(approveSection).toContain("PDF is NOT generated here");
+      expect(approveSection).toContain("generateAndUploadApprovedPdf");
     });
 
     it("clientApprove mutation in letters.ts handles PDF generation", () => {

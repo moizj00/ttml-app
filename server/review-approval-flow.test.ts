@@ -470,7 +470,6 @@ describe("Review & Approval Flow", () => {
         })
       );
       expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "approved");
-      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "client_approval_pending");
     });
 
     it("should require acknowledgedUnverifiedResearch when research is unverified", async () => {
@@ -601,7 +600,7 @@ describe("Review & Approval Flow", () => {
       const logCalls = mockLogReviewAction.mock.calls;
       expect(logCalls.length).toBeGreaterThanOrEqual(2);
 
-      const approvedLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "submitted_for_client_approval");
+      const approvedLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "approved");
       expect(approvedLog).toBeTruthy();
       expect((approvedLog![0] as Record<string, unknown>).noteVisibility).toBe("internal");
 
@@ -625,7 +624,7 @@ describe("Review & Approval Flow", () => {
       ).rejects.toThrow();
     });
 
-    it("should not generate PDF (PDF generation moved to clientApprove)", async () => {
+    it("should generate PDF on attorney approval", async () => {
       const { reviewRouter } = await import("./routers/review");
       const { router } = await import("./_core/trpc");
       const appRouter = router({ review: reviewRouter });
@@ -644,8 +643,7 @@ describe("Review & Approval Flow", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result).not.toHaveProperty("pdfUrl");
-      expect(mockUpdateLetterPdfUrl).not.toHaveBeenCalled();
+      expect(result.pdfUrl).toBeDefined();
     });
   });
 

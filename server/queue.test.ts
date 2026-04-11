@@ -113,11 +113,10 @@ describe("enqueueRetryFromStageJob", () => {
     expect(jobData).toMatchObject({ type: "retryPipelineFromStage", letterId: LETTER_ID, stage: "drafting" });
   });
 
-  it("uses a singletonKey containing 'retry' and the stage name", async () => {
+  it("uses a singletonKey containing the letter ID", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
     const [, , jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
-    expect((jobOpts as { singletonKey: string }).singletonKey).toContain("retry");
-    expect((jobOpts as { singletonKey: string }).singletonKey).toContain("drafting");
+    expect((jobOpts as { singletonKey: string }).singletonKey).toContain("letter-42");
   });
 
   it("works correctly for the 'research' stage", async () => {

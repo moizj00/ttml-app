@@ -81,9 +81,9 @@ describe("Attorney Dashboard Mutation — Session Refresh via useAuth", () => {
     expect(useAuthFile).toContain("refetchOnWindowFocus: true");
   });
 
-  it("staleTime is set to prevent excessive re-fetches (30 seconds)", () => {
+  it("staleTime is set to 0 for immediate role change reflection", () => {
     expect(useAuthFile).toContain("staleTime");
-    expect(useAuthFile).toMatch(/staleTime\s*:\s*30[_,]?000/);
+    expect(useAuthFile).toMatch(/staleTime\s*:\s*0/);
   });
 
   it("useAuth exposes a refresh() function for manual re-fetch", () => {
