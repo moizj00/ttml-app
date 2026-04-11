@@ -8,23 +8,23 @@ import {
   getLatestResearchRun,
   logReviewAction,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, PipelineContext, TokenUsage, PipelineErrorCode } from "../../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
+import { buildNormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getDraftModel, getDraftModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
-import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
+import { buildCitationRegistryPromptBlock } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
 import { buildDraftingSystemPrompt, buildDraftingUserPrompt } from "./prompts";
 
 const draftLogger = createLogger({ module: "PipelineDrafting" });
 
 // ═══════════════════════════════════════════════════════
-// STAGE 2: OPENAI DRAFT GENERATION
+// STAGE 2: OPENAI DRAFT GENERATION (OpenAI primary, Claude fallback)
 // ═══════════════════════════════════════════════════════
 
 export async function runDraftingStage(
@@ -36,7 +36,7 @@ export async function runDraftingStage(
   const job = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "draft_generation",
-    provider: "anthropic",
+    provider: "openai",
     requestPayloadJson: {
       letterId,
       userId: pipelineCtx?.userId,
@@ -94,7 +94,6 @@ export async function runDraftingStage(
   let ragSimilarityScores: number[] = [];
   let ragAbGroup: "test" | "control" = "test";
 
-  // A/B testing: RAG_AB_TEST_CONTROL_PCT (0-100) determines % of runs that skip RAG
   const controlPct = Math.max(0, Math.min(100, parseInt(process.env.RAG_AB_TEST_CONTROL_PCT ?? "0", 10)));
   const isControlRun = controlPct > 0 && Math.random() * 100 < controlPct;
   if (isControlRun) {
@@ -128,7 +127,6 @@ export async function runDraftingStage(
     }
   }
 
-  // Store RAG metadata on pipelineCtx for access by orchestrator
   if (pipelineCtx) {
     pipelineCtx.ragExampleCount = ragExampleCount;
     pipelineCtx.ragSimilarityScores = ragSimilarityScores;
@@ -136,7 +134,6 @@ export async function runDraftingStage(
   }
 
   const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
-  // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
@@ -148,10 +145,10 @@ export async function runDraftingStage(
   );
 
   const draftTokens = createTokenAccumulator();
-  let draftProvider = "anthropic";
-  let draftModelKey = "claude-sonnet-4";
+  let draftProvider = "openai";
+  let draftModelKey = "gpt-4o";
 
-  const callGenerateText = async (prompt: string) => {
+  const callPrimary = async (prompt: string) => {
     const result = await generateText({
       model: getDraftModel(),
       system: draftSystemPrompt,
@@ -163,7 +160,7 @@ export async function runDraftingStage(
     return result;
   };
 
-  const callGenerateTextFallback = async (prompt: string) => {
+  const callFallback = async (prompt: string) => {
     const result = await generateText({
       model: getDraftModelFallback(),
       system: draftSystemPrompt,
@@ -183,8 +180,9 @@ export async function runDraftingStage(
       "Stage 2 (drafting retry)",
       letterId,
       async () => {
+        const model = draftProvider === "anthropic-failover" ? getDraftModelFallback() : getDraftModel();
         const r = await generateText({
-          model: draftProvider === "openai-failover" ? getDraftModelFallback() : draftProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getDraftModel(),
+          model,
           system: draftSystemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 8000,
@@ -194,8 +192,8 @@ export async function runDraftingStage(
         return r;
       },
       async () => {
-        draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o-mini";
+        draftProvider = "anthropic-failover";
+        draftModelKey = "claude-sonnet-4";
         const r = await generateText({
           model: getDraftModelFallback(),
           system: draftSystemPrompt,
@@ -206,32 +204,12 @@ export async function runDraftingStage(
         accumulateTokens(draftTokens, r.usage);
         return r;
       },
-      async () => {
-        draftProvider = "groq-oss-fallback";
-        draftModelKey = "llama-3.3-70b-versatile";
-        const r = await generateText({
-          model: getFreeOSSModelFallback(),
-          system: draftSystemPrompt,
-          prompt: promptWithFeedback,
-          maxOutputTokens: 8000,
-          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
-        });
-        accumulateTokens(draftTokens, r.usage);
-        return r;
-      }
     );
-    if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
-      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFT_OSS_FALLBACK"))) {
-        pipelineCtx.qualityWarnings.push(
-          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for draft retry (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (retryFailover && pipelineCtx) {
+    if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Switched to OpenAI GPT-4o-mini during draft retry due to rate limit on primary model.`
+          `DRAFTING_FAILOVER: Switched to Claude Sonnet during draft retry due to rate limit on primary OpenAI model.`
         );
       }
     }
@@ -259,46 +237,25 @@ export async function runDraftingStage(
   };
 
   try {
-    draftLogger.info({ letterId }, "[Pipeline] Stage 2: Claude structured drafting starting");
+    draftLogger.info({ letterId }, "[Pipeline] Stage 2: OpenAI structured drafting starting");
 
     const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
       letterId,
-      () => callGenerateText(draftUserPrompt),
+      () => callPrimary(draftUserPrompt),
       () => {
-        draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o-mini";
-        return callGenerateTextFallback(draftUserPrompt);
+        draftProvider = "anthropic-failover";
+        draftModelKey = "claude-sonnet-4";
+        return callFallback(draftUserPrompt);
       },
-      async () => {
-        draftProvider = "groq-oss-fallback";
-        draftModelKey = "llama-3.3-70b-versatile";
-        const r = await generateText({
-          model: getFreeOSSModelFallback(),
-          system: draftSystemPrompt,
-          prompt: draftUserPrompt,
-          maxOutputTokens: 8000,
-          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
-        });
-        accumulateTokens(draftTokens, r.usage);
-        return r;
-      }
     );
 
-    if (initialDraftProvider === "groq-oss-fallback") {
-      draftLogger.warn({ letterId }, "[Pipeline] Stage 2: Groq Llama 3.3 used as last-resort (DRAFT_OSS_FALLBACK)");
+    if (draftFailover) {
+      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to Claude Sonnet fallback");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for drafting (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (draftFailover) {
-      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini failover");
-      if (pipelineCtx) {
-        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-        pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Primary drafting model (Claude) was rate-limited. Draft generated by OpenAI GPT-4o-mini. Legal tone and structure may differ from Claude standard.`
+          `DRAFTING_FAILOVER: Primary drafting model (OpenAI GPT-4o) was rate-limited. Draft generated by Claude Sonnet fallback.`
         );
       }
     }
@@ -432,7 +389,7 @@ export async function runDraftingStage(
       metadataJson: {
         provider: draftProvider,
         stage: "draft_generation",
-        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
+        failoverUsed: draftProvider === "anthropic-failover",
         attorneyReviewSummary: draft.attorneyReviewSummary,
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
@@ -461,7 +418,7 @@ export async function runDraftingStage(
       responsePayloadJson: {
         versionId,
         provider: draftProvider,
-        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
+        failoverUsed: draftProvider === "anthropic-failover",
         groundingReport: pipelineCtx?.groundingReport,
         consistencyReport: pipelineCtx?.consistencyReport,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),

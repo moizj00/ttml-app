@@ -22,6 +22,9 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   approved: "Your letter has been approved and is being prepared for delivery.",
   client_approved: "You have approved this letter. Your PDF is ready or being generated.",
   sent: "Your letter has been sent. The process is complete.",
+  pipeline_failed: "We encountered an issue processing your request. Our team has been notified and will follow up shortly.",
+  rejected: "This letter request was not accepted for processing.",
+  client_declined: "You declined the finalized letter.",
 };
 
 // ─── Compact: 5-segment horizontal bar (for My Letters rows) ──────────────────

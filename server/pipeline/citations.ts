@@ -164,42 +164,10 @@ export async function revalidateCitationsWithPerplexity(
 ): Promise<CitationRevalidationResult> {
   const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
 
-  const groqApiKey = process.env.GROQ_API_KEY;
-  if (groqApiKey && groqApiKey.trim().length > 0) {
-    try {
-      const groq = createOpenAI({
-        apiKey: groqApiKey,
-        baseURL: "https://api.groq.com/openai/v1",
-        name: "groq",
-      });
-      logger.info(
-        `[Pipeline] Revalidating ${registry.length} citations with Groq (free) for letter #${letterId}`
-      );
-      const { text, usage: citationUsage } = await generateText({
-        model: groq("llama-3.3-70b-versatile"),
-        prompt,
-        maxOutputTokens: 1000,
-        abortSignal: AbortSignal.timeout(30_000),
-      });
-      if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
-
-      const updatedRegistry = parseCitationRevalidationResponse(text, registry);
-      logger.info(
-        `[Pipeline] Citation revalidation complete (Groq) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
-      );
-      return { registry: updatedRegistry, modelKey: "llama-3.3-70b-versatile" };
-    } catch (groqErr) {
-      const groqMsg = groqErr instanceof Error ? groqErr.message : String(groqErr);
-      logger.warn(
-        `[Pipeline] Groq citation revalidation failed for letter #${letterId}: ${groqMsg}. Falling back to Perplexity sonar.`
-      );
-    }
-  }
-
   const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
   if (!perplexityApiKey || perplexityApiKey.trim().length === 0) {
     logger.warn(
-      `[Pipeline] No citation revalidation provider available (GROQ_API_KEY and PERPLEXITY_API_KEY both missing) — skipping for letter #${letterId}`
+      `[Pipeline] PERPLEXITY_API_KEY not set — skipping citation revalidation for letter #${letterId}`
     );
     return { registry, modelKey: "none" };
   }
@@ -212,7 +180,7 @@ export async function revalidateCitationsWithPerplexity(
 
   try {
     logger.info(
-      `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar (fallback) for letter #${letterId}`
+      `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
       model: perplexity.chat("sonar"),
@@ -224,7 +192,7 @@ export async function revalidateCitationsWithPerplexity(
 
     const updatedRegistry = parseCitationRevalidationResponse(text, registry);
     logger.info(
-      `[Pipeline] Citation revalidation complete (Perplexity fallback) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+      `[Pipeline] Citation revalidation complete (Perplexity) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
     );
     return { registry: updatedRegistry, modelKey: "sonar" };
   } catch (err) {

@@ -52,13 +52,11 @@ vi.mock("@ai-sdk/anthropic", () => ({
 
 vi.mock("./providers", () => ({
   getResearchModel: vi.fn(() => ({ provider: "perplexity", model: "sonar-pro" })),
-  getResearchModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-3-5-haiku-20241022" })),
-  getDraftModel: vi.fn(() => ({ provider: "anthropic", model: "claude-sonnet-4" })),
-  getDraftModelFallback: vi.fn(() => ({ provider: "openai-fallback", model: "gpt-4o-mini" })),
+  getDraftModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
+  getDraftModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4" })),
   getAssemblyModel: vi.fn(() => ({ provider: "anthropic", model: "claude-sonnet-4" })),
   getAssemblyModelFallback: vi.fn(() => ({ provider: "openai-fallback", model: "gpt-4o-mini" })),
   getVettingModelFallback: vi.fn(() => ({ provider: "openai-fallback", model: "gpt-4o-mini" })),
-  getFreeOSSModelFallback: vi.fn(() => null),
   createTokenAccumulator: vi.fn(() => ({ inputTokens: 0, outputTokens: 0 })),
   accumulateTokens: vi.fn(),
   calculateCost: vi.fn(() => "0.00"),
@@ -66,7 +64,6 @@ vi.mock("./providers", () => ({
   DRAFT_TIMEOUT_MS: 120_000,
   ASSEMBLY_TIMEOUT_MS: 120_000,
   isOpenAIFailoverAvailable: vi.fn(() => false),
-  isGroqFallbackAvailable: vi.fn(() => false),
   getAnthropicClient: vi.fn(() => ({})),
   getOpenAIClient: vi.fn(() => ({})),
 }));

@@ -57,16 +57,15 @@ export function preflightApiKeyCheck(stage: "research" | "drafting" | "full"): {
   const hasPerplexity = !!(process.env.PERPLEXITY_API_KEY?.trim());
   const hasOpenAI = !!(process.env.OPENAI_API_KEY?.trim());
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY?.trim());
-  const hasGroq = !!(process.env.GROQ_API_KEY?.trim());
 
-  const canResearch = hasPerplexity || hasOpenAI || hasAnthropic || hasGroq;
-  const canDraft = hasAnthropic || hasOpenAI || hasGroq;
+  const canResearch = hasPerplexity;
+  const canDraft = hasOpenAI || hasAnthropic;
 
   if (!canResearch) {
-    missing.push("No research provider available (need PERPLEXITY_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY)");
+    missing.push("Research provider unavailable (PERPLEXITY_API_KEY required — Perplexity is the sole research provider)");
   }
   if ((stage === "drafting" || stage === "full") && !canDraft) {
-    missing.push("No drafting provider available (need ANTHROPIC_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY)");
+    missing.push("No drafting provider available (need OPENAI_API_KEY or ANTHROPIC_API_KEY)");
   }
 
   const ok = stage === "research" ? canResearch : stage === "drafting" ? canDraft : (canResearch && canDraft);
@@ -262,8 +261,7 @@ export async function runFullPipeline(
     const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
     pipelineCtx.researchProvider = researchProvider;
     // openai-failover and openai-stored-prompt use web search — still web-grounded.
-    // anthropic-fallback (Claude, no web access), groq-oss-fallback, and synthetic-intake-fallback are ungrounded.
-    const ungroundedProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+    const ungroundedProviders = new Set(["anthropic-fallback", "synthetic-intake-fallback"]);
     pipelineCtx.researchUnverified = ungroundedProviders.has(researchProvider);
     pipelineCtx.webGrounded = !ungroundedProviders.has(researchProvider);
     await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
@@ -344,7 +342,7 @@ export async function runFullPipeline(
       promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
       completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
       estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", citationRevalidationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "sonar", citationRevalidationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
@@ -504,7 +502,7 @@ export async function retryPipelineFromStage(
       await updateLetterStatus(letterId, "submitted", { force: true });
       const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
       pipelineCtx.researchProvider = researchProvider;
-      const ungroundedRetryProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+      const ungroundedRetryProviders = new Set(["anthropic-fallback", "synthetic-intake-fallback"]);
       pipelineCtx.researchUnverified = ungroundedRetryProviders.has(researchProvider);
       pipelineCtx.webGrounded = !ungroundedRetryProviders.has(researchProvider);
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
@@ -531,7 +529,7 @@ export async function retryPipelineFromStage(
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;
       pipelineCtx.researchProvider = latestResearch.provider ?? "perplexity";
-      const ungroundedDraftProviders = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+      const ungroundedDraftProviders = new Set(["anthropic-fallback", "synthetic-intake-fallback"]);
       pipelineCtx.researchUnverified = ungroundedDraftProviders.has(latestResearch.provider ?? "");
       pipelineCtx.webGrounded = !pipelineCtx.researchUnverified;
       await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
@@ -562,7 +560,7 @@ export async function retryPipelineFromStage(
       promptTokens: retryCitationTokens?.promptTokens ?? 0,
       completionTokens: retryCitationTokens?.completionTokens ?? 0,
       estimatedCostUsd: retryCitationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", retryCitationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "sonar", retryCitationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,

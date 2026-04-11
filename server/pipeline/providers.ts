@@ -1,9 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, type ToolSet } from "ai";
-import OpenAI from "openai";
 import type { TokenUsage } from "../../shared/types";
-import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // MODEL PROVIDERS
@@ -37,20 +34,14 @@ export function isOpenAIFailoverAvailable(): boolean {
   return !!(apiKey && apiKey.trim().length > 0);
 }
 
-/** Stage 1: Perplexity sonar-pro — web-grounded legal research (direct API) */
+/** Stage 1: Perplexity sonar-pro — web-grounded legal research (fail-hard, no fallback) */
 export function getResearchModel() {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
-    logger.warn(
-      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to Claude for research"
+    throw new Error(
+      "[Pipeline] PERPLEXITY_API_KEY is not set — research stage requires Perplexity (fail-hard, no fallback)"
     );
-    const anthropic = getAnthropicClient();
-    return {
-      model: anthropic("claude-sonnet-4"),
-      provider: "anthropic-fallback",
-    };
   }
-  // Perplexity is OpenAI-compatible — use @ai-sdk/openai with custom baseURL
   const perplexity = createOpenAI({
     apiKey,
     baseURL: "https://api.perplexity.ai",
@@ -59,37 +50,17 @@ export function getResearchModel() {
   return { model: perplexity.chat("sonar-pro"), provider: "perplexity" };
 }
 
-/**
- * Stage 1 failover: OpenAI gpt-4o-search-preview via the Responses API.
- * The Responses API + webSearchPreview tool provides real-time web grounding,
- * matching Perplexity's core capability.
- *
- * Returns both the LanguageModel and a properly-typed ToolSet so callers can
- * spread directly into generateText({ model, tools }) without casts.
- */
-export function getResearchModelFallback(): {
-  model: ReturnType<ReturnType<typeof createOpenAI>["responses"]>;
-  tools: ToolSet;
-  provider: string;
-} {
+
+/** Stage 2: OpenAI gpt-4o — primary drafting model */
+export function getDraftModel() {
   const openai = getOpenAIClient();
-  return {
-    model: openai.responses("gpt-4o-search-preview"),
-    tools: { webSearch: openai.tools.webSearchPreview({}) } as ToolSet,
-    provider: "openai-failover",
-  };
+  return openai("gpt-4o");
 }
 
-/** Stage 2: Anthropic claude-sonnet-4 — initial legal draft (direct Anthropic API) */
-export function getDraftModel() {
+/** Stage 2 failover: Anthropic claude-sonnet-4 */
+export function getDraftModelFallback() {
   const anthropic = getAnthropicClient();
   return anthropic("claude-sonnet-4");
-}
-
-/** Stage 2 failover: OpenAI gpt-4o-mini */
-export function getDraftModelFallback() {
-  const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
 }
 
 /** Stage 3: Anthropic claude-sonnet-4 — final polished letter assembly (direct Anthropic API) */
@@ -110,28 +81,6 @@ export function getVettingModelFallback() {
   return openai("gpt-4o-mini");
 }
 
-// ── Groq — free OSS last-resort fallback for all stages ──
-/** Returns Groq Llama 3.3 70B model (free-tier, OpenAI-compatible) for use as OSS last resort */
-export function getFreeOSSModelFallback() {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    throw new Error(
-      "[Pipeline] GROQ_API_KEY is not set — Groq OSS fallback is unavailable"
-    );
-  }
-  const groq = createOpenAI({
-    apiKey,
-    baseURL: "https://api.groq.com/openai/v1",
-    name: "groq",
-  });
-  return groq("llama-3.3-70b-versatile");
-}
-
-/** Returns true if Groq OSS fallback is available (GROQ_API_KEY is set) */
-export function isGroqFallbackAvailable(): boolean {
-  const apiKey = process.env.GROQ_API_KEY;
-  return !!(apiKey && apiKey.trim().length > 0);
-}
 
 // Timeout constants (ms)
 export const RESEARCH_TIMEOUT_MS = 90_000; // 90s — Perplexity web search can be slow
@@ -149,7 +98,6 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },
-  "llama-3.3-70b-versatile": { inputPerMillion: 0, outputPerMillion: 0 },
 };
 
 export function createTokenAccumulator(): TokenUsage {
@@ -175,48 +123,3 @@ export function calculateCost(modelKey: string, usage: TokenUsage): string {
   return (inputCost + outputCost).toFixed(6);
 }
 
-const OPENAI_STORED_RESEARCH_PROMPT_ID = "pmpt_69ce00ac398081948f6d0a08e4f3eae206666fe163342fa9";
-const OPENAI_STORED_RESEARCH_PROMPT_VERSION = "1";
-
-export function getNativeOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    throw new Error("[Pipeline] OPENAI_API_KEY is not set — native OpenAI client unavailable");
-  }
-  return new OpenAI({ apiKey });
-}
-
-export async function runOpenAIStoredPromptResearch(userPrompt: string): Promise<{
-  text: string;
-  usage: { promptTokens: number; completionTokens: number };
-}> {
-  const client = getNativeOpenAIClient();
-  const response = await client.responses.create({
-    prompt: {
-      id: OPENAI_STORED_RESEARCH_PROMPT_ID,
-      version: OPENAI_STORED_RESEARCH_PROMPT_VERSION,
-    },
-    input: userPrompt,
-    tools: [{ type: "web_search_preview" }],
-  } as any);
-
-  const outputText = typeof response.output_text === "string"
-    ? response.output_text
-    : Array.isArray(response.output)
-      ? response.output
-          .filter((item: any) => item.type === "message")
-          .flatMap((item: any) => item.content ?? [])
-          .filter((c: any) => c.type === "output_text")
-          .map((c: any) => c.text)
-          .join("\n")
-      : "";
-
-  const usage = (response as any).usage ?? {};
-  return {
-    text: outputText,
-    usage: {
-      promptTokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
-      completionTokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
-    },
-  };
-}

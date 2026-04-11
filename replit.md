@@ -41,7 +41,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + `postgres-js`.
 - **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE with SameSite=None), custom Resend verification emails. Admin 2FA enforced.
-- **AI Pipeline**: A 4-stage pipeline: Perplexity Research, Claude Opus Drafting, Claude Opus Assembly, Claude Sonnet Vetting. Includes a 5-tier failover chain for research resilience and automatic retry with exponential backoff for overall pipeline resilience.
+- **AI Pipeline**: A 4-stage pipeline: (1) Perplexity Research (fail-hard, no fallback), (2) OpenAI GPT-4o Drafting (Claude Sonnet fallback), (3) Claude Sonnet Assembly (OpenAI GPT-4o-mini fallback), (4) Claude Sonnet Vetting (OpenAI GPT-4o-mini fallback). Two-tier failover (primary + fallback). Groq OSS tier removed. Automatic retry with exponential backoff for overall pipeline resilience.
 - **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback, including AI-powered categorization, deduplication, and effectiveness tracking.
 - **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning. Vector similarity search uses **pgvector** (built into Supabase PostgreSQL) as the active vector store. Vertex AI Vector Search is an optional upgrade path for very large vector volumes (millions of vectors); pgvector handles current scale well and avoids the ~$70–110/month cost of Vertex AI Vector Search.
 - **Pipeline Worker**: Uses pg-boss (PostgreSQL-native) for job queues, eliminating the Redis dependency for processing.
@@ -57,7 +57,8 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database**: Supabase PostgreSQL (via `SUPABASE_DATABASE_URL` direct connection string). SSL is applied conditionally — enabled for Supabase/cloud URLs, skipped for local connections.
 - **Auth**: Supabase Auth (JWT tokens) — requires `SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **Required secrets** (set in Replit Secrets): `SUPABASE_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
-- **Optional secrets**: `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `JWT_SECRET`.
+- **Pipeline AI secrets** (required for pipeline): `PERPLEXITY_API_KEY` (research, fail-hard), `OPENAI_API_KEY` (primary drafter), `ANTHROPIC_API_KEY` (assembly/vetting + draft fallback).
+- **Optional secrets**: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `JWT_SECRET`.
 - **Port**: 5000 (configured via `PORT` env var in shared environment).
 
 ### Feature Specifications

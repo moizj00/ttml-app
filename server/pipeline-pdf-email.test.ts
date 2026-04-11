@@ -137,7 +137,6 @@ describe("Pipeline Orchestration", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
     process.env.ANTHROPIC_API_KEY = "test-key";
     process.env.OPENAI_API_KEY = "test-key";
-    process.env.GROQ_API_KEY = "test-key";
     delete process.env.N8N_PRIMARY;
 
     mockCreateWorkflowJob.mockResolvedValue({ insertId: 1 });
@@ -170,7 +169,6 @@ describe("Pipeline Orchestration", () => {
       delete process.env.PERPLEXITY_API_KEY;
       delete process.env.OPENAI_API_KEY;
       delete process.env.ANTHROPIC_API_KEY;
-      delete process.env.GROQ_API_KEY;
 
       const { preflightApiKeyCheck } = await import("./pipeline/orchestrator");
       const result = preflightApiKeyCheck("full");
@@ -181,7 +179,6 @@ describe("Pipeline Orchestration", () => {
     it("should pass research-only check when only Perplexity key exists", async () => {
       delete process.env.OPENAI_API_KEY;
       delete process.env.ANTHROPIC_API_KEY;
-      delete process.env.GROQ_API_KEY;
 
       const { preflightApiKeyCheck } = await import("./pipeline/orchestrator");
       const result = preflightApiKeyCheck("research");
@@ -204,7 +201,7 @@ describe("Pipeline Orchestration", () => {
           { text: "CCP § 1005", confidence: "high", url: "https://leginfo.ca.gov/yyy" },
           { text: "CCP § 1013", confidence: "high", url: "https://leginfo.ca.gov/zzz" },
         ],
-        modelKey: "llama-3.3-70b-versatile",
+        modelKey: "sonar",
       });
       mockRunDraftingStage.mockResolvedValue(MOCK_DRAFT);
       mockRunAssemblyVettingLoop.mockResolvedValue({
@@ -334,7 +331,7 @@ describe("Pipeline Orchestration", () => {
           { text: "Citation 2", confidence: "high" },
           { text: "Citation 3", confidence: "high" },
         ],
-        modelKey: "llama-3.3-70b-versatile",
+        modelKey: "sonar",
       });
       mockRunDraftingStage.mockResolvedValue(MOCK_DRAFT);
       mockRunAssemblyVettingLoop.mockResolvedValue({
@@ -418,8 +415,8 @@ describe("Pipeline Orchestration", () => {
       expect(completedCall).toBeTruthy();
     });
 
-    it("should mark groq-oss-fallback research as unverified", async () => {
-      mockRunResearchStage.mockResolvedValue({ packet: MOCK_RESEARCH_PACKET, provider: "groq-oss-fallback" });
+    it("should mark anthropic-fallback research as unverified", async () => {
+      mockRunResearchStage.mockResolvedValue({ packet: MOCK_RESEARCH_PACKET, provider: "anthropic-fallback" });
       mockBuildCitationRegistry.mockReturnValue([]);
       mockRunDraftingStage.mockResolvedValue(MOCK_DRAFT);
       mockRunAssemblyVettingLoop.mockResolvedValue({
