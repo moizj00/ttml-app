@@ -264,11 +264,8 @@ export function registerSignupLoginRoutes(app: Express) {
           name,
           role: userRole,
         },
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_in: data.session.expires_in,
-        },
+        // NOTE: session tokens are NOT returned in the body — they are stored in the
+        // httpOnly sb_session cookie set above. This prevents token exposure to JavaScript.
       });
     } catch (err) {
       logger.error({ err: err }, "[SupabaseAuth] Login error:");
@@ -349,11 +346,8 @@ export function registerSignupLoginRoutes(app: Express) {
 
       res.json({
         success: true,
-        session: {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_in: data.session.expires_in,
-        },
+        // NOTE: session tokens are NOT returned in the body — they are stored in the
+        // httpOnly sb_session cookie set above. This prevents token exposure to JavaScript.
       });
     } catch (err) {
       logger.error({ err: err }, "[SupabaseAuth] Refresh error:");

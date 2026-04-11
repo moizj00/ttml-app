@@ -34,6 +34,12 @@ const PKCE_COOKIE_OPTIONS = {
   path: "/",
 };
 
+/** Serialize any error value to a loggable string for Railway log visibility */
+function serializeError(err: unknown): string {
+  if (err instanceof Error) return `${err.name}: ${err.message}${err.stack ? `\n${err.stack}` : ""}`;
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
+
 export function registerOAuthRoutes(app: Express) {
 
   // POST /api/auth/google — Initiate Google OAuth flow
@@ -80,10 +86,19 @@ export function registerOAuthRoutes(app: Express) {
         maxAge: 5 * 60 * 1000,
       });
 
-      logger.info({ origin, redirect_to: redirectUrl.toString(), verifier_length: codeVerifier.length }, "[OAuth] Initiated Google OAuth flow");
+      logger.info(
+        {
+          origin,
+          redirect_to: redirectUrl.toString(),
+          verifier_length: codeVerifier.length,
+          supabase_url_set: !!supabaseUrl,
+          anon_key_set: !!supabaseAnonKey,
+        },
+        "[OAuth] Initiated Google OAuth flow"
+      );
       res.json({ url: supabaseAuthUrl.toString() });
     } catch (err) {
-      logger.error({ err: err }, "[SupabaseAuth] Google OAuth error:");
+      logger.error({ err: serializeError(err) }, "[SupabaseAuth] Google OAuth initiation error");
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -113,7 +128,7 @@ export function registerOAuthRoutes(app: Express) {
       const admin = getAdminClient();
       const { data, error } = await admin.auth.getUser(access_token);
       if (error || !data.user) {
-        logger.error({ err: error }, "[SupabaseAuth] Google finalize failed:");
+        logger.error({ err: serializeError(error), supabase_error: error?.message }, "[SupabaseAuth] Google finalize — getUser failed");
         res.status(401).json({ error: "Google sign-in session is invalid or expired" });
         return;
       }
@@ -153,7 +168,7 @@ export function registerOAuthRoutes(app: Express) {
           });
           logger.info(`[SupabaseAuth] Admin 2FA code dispatched, to=${data.user.email} (Google OAuth)`);
         } catch (err) {
-          logger.error({ err: err }, `[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth):`);
+          logger.error({ err: serializeError(err) }, `[SupabaseAuth] Failed to send admin 2FA code, to=${data.user.email} (Google OAuth)`);
           emailFailed = true;
         }
       }
@@ -170,7 +185,7 @@ export function registerOAuthRoutes(app: Express) {
         redirectPath: finalRole === "admin" ? "/admin/verify" : getPostAuthRedirectPath(finalRole, safeNext),
       });
     } catch (err) {
-      logger.error({ err: err }, "[SupabaseAuth] Google finalize error:");
+      logger.error({ err: serializeError(err) }, "[SupabaseAuth] Google finalize error");
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -198,17 +213,39 @@ export function registerOAuthRoutes(app: Express) {
 
       // Log all incoming cookies for debugging (names only, not values)
       const allCookieNames = Array.from(reqCookies.keys());
-      logger.info({ cookie_names: allCookieNames, has_pkce: !!storedVerifier, host: req.headers.host, referer: req.headers.referer }, "[OAuth Callback] Received callback");
+      logger.info(
+        {
+          cookie_names: allCookieNames,
+          has_pkce: !!storedVerifier,
+          verifier_length: storedVerifier.length,
+          host: req.headers.host,
+          referer: req.headers.referer,
+          anon_key_set: !!supabaseAnonKey,
+          anon_key_length: supabaseAnonKey.length,
+        },
+        "[OAuth Callback] Received callback"
+      );
 
       res.clearCookie("pkce_verifier", PKCE_COOKIE_OPTIONS);
 
       if (!storedVerifier) {
-        logger.error({ cookie_header_present: !!req.headers.cookie, cookie_names: allCookieNames }, "[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)");
+        logger.error(
+          {
+            cookie_header_present: !!req.headers.cookie,
+            cookie_names: allCookieNames,
+            host: req.headers.host,
+          },
+          "[SupabaseAuth] PKCE verifier cookie missing — browser may have blocked the cookie (check sameSite/secure settings and HTTPS)"
+        );
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
 
-      logger.info({ storedVerifier_length: storedVerifier.length }, "[PKCE] Exchanging code directly via REST | verifier length:");
+      logger.info(
+        { verifier_length: storedVerifier.length, anon_key_length: supabaseAnonKey.length },
+        "[PKCE] Exchanging code via REST"
+      );
+
       const tokenResponse = await fetch(
         `${supabaseUrl}/auth/v1/token?grant_type=pkce`,
         {
@@ -234,7 +271,16 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       if (!tokenResponse.ok || !tokenJson.access_token || !tokenJson.user) {
-        logger.error({ status: tokenResponse.status, tokenJson, body: { auth_code: code, code_verifier: storedVerifier } }, "OAuth callback failed");
+        logger.error(
+          {
+            status: tokenResponse.status,
+            supabase_error: tokenJson.error,
+            supabase_error_description: tokenJson.error_description,
+            supabase_message: tokenJson.message,
+            anon_key_length: supabaseAnonKey.length,
+          },
+          "[SupabaseAuth] PKCE token exchange failed"
+        );
         res.redirect(`${intent === "signup" ? "/signup" : "/login"}?error=auth_failed`);
         return;
       }
@@ -249,6 +295,8 @@ export function registerOAuthRoutes(app: Express) {
       };
 
       const user = data.user;
+
+      logger.info({ user_id: user.id, email: user.email }, "[SupabaseAuth] PKCE token exchange succeeded — syncing user");
 
       const { dbUser, resolvedRole } = await syncGoogleUser({
         req,
@@ -278,7 +326,7 @@ export function registerOAuthRoutes(app: Express) {
           });
           logger.info(`[SupabaseAuth] Admin 2FA code dispatched, to=${user.email} (Google callback)`);
         } catch (err2) {
-          logger.error({ err: err2 }, `[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback):`);
+          logger.error({ err: serializeError(err2) }, `[SupabaseAuth] Failed to send admin 2FA code, to=${user.email} (Google callback)`);
           emailFailed = true;
         }
         res.redirect(emailFailed ? "/admin/verify?emailFailed=1" : "/admin/verify");
@@ -287,7 +335,15 @@ export function registerOAuthRoutes(app: Express) {
         res.redirect(redirectPath);
       }
     } catch (err) {
-      logger.error({ err: err }, "[SupabaseAuth] Google callback error:");
+      logger.error(
+        {
+          err: serializeError(err),
+          error_message: err instanceof Error ? err.message : String(err),
+          error_name: err instanceof Error ? err.name : "unknown",
+          stack: err instanceof Error ? err.stack : undefined,
+        },
+        "[SupabaseAuth] Google callback error — full details"
+      );
       res.redirect("/login?error=server_error");
     }
   });

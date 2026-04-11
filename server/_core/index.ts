@@ -169,7 +169,7 @@ async function startServer() {
       origin &&
       (STATIC_ALLOWED_ORIGINS.has(origin) ||
         (isDev && localhostOrigin) ||
-        (isDev && railwayOrigin) ||
+        railwayOrigin || // Allow Railway preview deployments in all environments (staging/testing)
         (isDev && replitOrigin))
     ) {
       res.setHeader("Access-Control-Allow-Origin", origin);
