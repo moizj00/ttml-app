@@ -1,9 +1,17 @@
 # Pipeline Architecture — Talk to My Lawyer
 
-> **Last confirmed:** March 16, 2026 (Phase 86)  
+> **Last confirmed:** April 2026
 > **Status:** Production-verified
 
 ---
+
+## Orchestration & Side-Effect Optimizations
+
+The pipeline orchestrator (`server/pipeline/orchestrator.ts`) and individual stages are optimized for high throughput:
+- **Parallel DB Writes:** Independent database writes (e.g., updating workflow job status, updating letter status, and logging review actions) are executed in parallel using `Promise.allSettled()` instead of sequentially.
+- **Batched Notifications:** Admin and attorney notifications are fanned out in parallel.
+- **Reduced DB Reads:** Database records are passed through function parameters to eliminate redundant queries in hot paths.
+- **Shared Citation Revalidation:** Citation verification logic is centralized and reused across the orchestrator to keep the code DRY.
 
 ## Active Pipeline Path
 
@@ -35,7 +43,7 @@ Stage 4: Anthropic claude-sonnet (vetting)
 Status: generated_locked
          (subscriber must pay to unlock)
     │
-    ▼ (Stripe payment)
+    ▼ (Stripe payment or Active Subscription)
 Status: pending_review
          (enters Letter Review Center)
     │
@@ -45,9 +53,13 @@ Attorney: claim → under_review
           approve / reject / request_changes
     │
     ▼ (on approve)
+Status: client_approval_pending
+         (auto-forwards to subscriber for sign-off)
+    │
+    ▼ (on client approve)
 PDF generated via PDFKit → uploaded to S3
 Subscriber notified via email (with PDF link)
-Status: approved
+Status: client_approved → sent
 PDF available in subscriber's "My Letters"
 ```
 
@@ -174,7 +186,7 @@ submitted → researching → drafting → generated_locked
     pipeline_failed → submitted (admin retry)
 ```
 
-Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
+Exact transitions from `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`:
 - `submitted → researching | pipeline_failed`
 - `researching → drafting | submitted | pipeline_failed`
 - `drafting → generated_locked | submitted | pipeline_failed`
@@ -188,9 +200,10 @@ Exact transitions from `shared/types.ts` → `ALLOWED_TRANSITIONS`:
 - `client_approved → sent`
 - `sent → (terminal)`
 - `rejected → submitted` (subscriber retry from scratch)
+- `client_declined → (terminal)`
 - `pipeline_failed → submitted` (admin-triggered retry)
 
-Note: `generated_unlocked` still exists in the DB enum for backward compatibility but is NOT part of the active status machine (removed in Phase 69).
+Note: `generated_unlocked` still exists in the DB enum for backward compatibility but is NOT part of the active status machine.
 
 ---
 
@@ -198,12 +211,12 @@ Note: `generated_unlocked` still exists in the DB enum for backward compatibilit
 
 | File | Purpose |
 |------|---------|
-| `server/pipeline.ts` | 4-stage orchestrator + prompt builders |
+| `server/pipeline/` | 4-stage orchestrator + prompt builders + RAG logic |
 | `server/n8nCallback.ts` | n8n webhook handler (dormant alternative path) |
-| `server/pdfGenerator.ts` | PDFKit-based PDF generation on approval |
-| `server/routers.ts` | tRPC procedures that trigger pipeline |
+| `server/pdfGenerator.ts` | PDFKit-based PDF generation on client approval |
+| `server/routers/` | tRPC procedures that trigger pipeline and review actions |
 | `server/email.ts` | Email notifications at each status change |
-| `server/db.ts` | All database query helpers |
+| `server/db/` | All database query helpers |
 | `server/rateLimiter.ts` | Upstash Redis rate limiting (fail-open/fail-closed) |
 | `server/queue.ts` | pg-boss queue setup and job enqueueing (PostgreSQL-native) |
 | `server/worker.ts` | pg-boss worker — processes pipeline jobs |

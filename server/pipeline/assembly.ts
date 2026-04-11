@@ -62,10 +62,14 @@ export async function runAssemblyStage(
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
 
   const assemblyTokens = createTokenAccumulator();
-  let assemblyProvider = "anthropic";
-  let assemblyModelKey = "claude-sonnet-4";
+  let assemblyProvider = "openai";
+  let assemblyModelKey = "gpt-4o-mini";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
+    // Reset provider to primary on each retry to avoid tier collapse
+    // (previous failover mutations would otherwise make retry start on the fallback model)
+    assemblyProvider = "openai";
+    assemblyModelKey = "gpt-4o-mini";
     const promptWithFeedback = errorFeedback
       ? assemblyUser + errorFeedback
       : assemblyUser;

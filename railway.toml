@@ -5,6 +5,8 @@ dockerfilePath = "Dockerfile"
 [deploy]
 startCommand = "./start.sh"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 90
+# Increase start timeout to allow migrations to complete before health check.
+# Default is 60s; migrations on first deploy can take 30-60s.
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

@@ -26,7 +26,10 @@ export function parseCookies(cookieHeader: string | undefined): Map<string, stri
   cookieHeader.split(";").forEach(pair => {
     const [key, ...rest] = pair.split("=");
     if (key) {
-      map.set(key.trim(), decodeURIComponent(rest.join("=").trim()));
+      const rawVal = rest.join("=").trim();
+      let decoded = rawVal;
+      try { decoded = decodeURIComponent(rawVal); } catch { /* malformed percent-encoding — use raw value */ }
+      map.set(key.trim(), decoded);
     }
   });
   return map;

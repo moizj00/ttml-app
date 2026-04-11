@@ -273,6 +273,7 @@ export function AddressAutocomplete({
         <Input
           ref={inputRef}
           id={id}
+          name={id}
           value={value}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}

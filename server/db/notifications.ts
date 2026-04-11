@@ -52,6 +52,13 @@ export async function createNotification(data: {
 
 export type NotificationCategory = "users" | "letters" | "employee" | "general";
 
+/**
+ * Notify all admins with in-app notifications and optional emails.
+ *
+ * Optimized: fan-out is parallelized with Promise.allSettled so that
+ * individual failures don't block other admins and the total wall-clock
+ * time is bounded by the slowest single notification, not the sum.
+ */
 export async function notifyAdmins(opts: {
   category: NotificationCategory;
   type: string;
@@ -68,7 +75,20 @@ export async function notifyAdmins(opts: {
 }) {
   try {
     const admins = await getAllUsers("admin");
-    for (const admin of admins) {
+
+    // Pre-import email module once (outside the loop) when email is needed
+    let sendAdminAlertEmail: ((opts: any) => Promise<any>) | undefined;
+    if (opts.emailOpts) {
+      try {
+        const emailModule = await import("../email");
+        sendAdminAlertEmail = emailModule.sendAdminAlertEmail;
+      } catch (importErr) {
+        logger.error({ err: importErr }, "[notifyAdmins] Failed to import email module");
+      }
+    }
+
+    const tasks = admins.map(async (admin) => {
+      // In-app notification
       await createNotification({
         userId: admin.id,
         type: opts.type,
@@ -77,8 +97,8 @@ export async function notifyAdmins(opts: {
         body: opts.body,
         link: opts.link,
       });
-      if (opts.emailOpts && admin.email) {
-        const { sendAdminAlertEmail } = await import("../email");
+      // Email (if configured and available)
+      if (sendAdminAlertEmail && opts.emailOpts && admin.email) {
         await sendAdminAlertEmail({
           to: admin.email,
           name: admin.name ?? "Admin",
@@ -86,6 +106,13 @@ export async function notifyAdmins(opts: {
         }).catch((err: unknown) =>
           logger.error({ err: err }, `[notifyAdmins] Email to ${admin.email} failed:`)
         );
+      }
+    });
+
+    const results = await Promise.allSettled(tasks);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.error({ err: result.reason }, "[notifyAdmins] Individual admin notification failed:");
       }
     }
   } catch (err) {
@@ -98,6 +125,10 @@ export async function notifyAdmins(opts: {
  * Centralized helper — notify every attorney about a new letter entering the review queue.
  * Sends both an email and an in-app notification to each attorney.
  * Used by: pipeline orchestrator, Stripe webhook, billing (free unlock + subscription submit).
+ *
+ * Optimized: fan-out is parallelized with Promise.allSettled so that
+ * individual failures don't block other attorneys and the total wall-clock
+ * time is bounded by the slowest single notification, not the sum.
  */
 export async function notifyAllAttorneys(opts: {
   letterId: number;
@@ -110,7 +141,8 @@ export async function notifyAllAttorneys(opts: {
     const { sendNewReviewNeededEmail } = await import("../email");
     const attorneys = await getAllUsers("attorney");
     logger.info(`[notifyAllAttorneys] Notifying ${attorneys.length} attorney(s) for letter #${opts.letterId}`);
-    for (const attorney of attorneys) {
+
+    const tasks = attorneys.map(async (attorney) => {
       // Email: attempt independently — failure does not block in-app notification
       if (attorney.email) {
         try {
@@ -141,6 +173,13 @@ export async function notifyAllAttorneys(opts: {
       } catch (notifErr) {
         logger.error({ err: notifErr }, `[notifyAllAttorneys] In-app notification failed for attorney #${attorney.id}:`);
         captureServerException(notifErr, { tags: { component: "notifications", error_type: "notify_attorney_inapp_failed" } });
+      }
+    });
+
+    const results = await Promise.allSettled(tasks);
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.error({ err: result.reason }, "[notifyAllAttorneys] Individual attorney notification failed:");
       }
     }
   } catch (err) {
@@ -190,4 +229,3 @@ export async function markAllNotificationsRead(userId: number) {
     .set({ readAt: new Date() })
     .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
 }
-

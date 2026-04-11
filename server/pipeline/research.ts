@@ -50,9 +50,13 @@ export async function runResearchStage(
   });
   const runId = (researchRun as any)?.insertId ?? 0;
 
-  await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
-  await updateResearchRun(runId, { status: "running" });
-  await updateLetterStatus(letterId, "researching", { force: true });
+  // Parallelize independent stage-start writes — these have no data dependencies
+  await Promise.all([
+    updateWorkflowJob(jobId, { status: "running", startedAt: new Date() }),
+    updateResearchRun(runId, { status: "running" }),
+    updateLetterStatus(letterId, "researching", { force: true }),
+  ]);
+  // Fire-and-forget: audit log + admin notification (non-blocking)
   logReviewAction({
     letterRequestId: letterId,
     actorType: "system",
@@ -62,19 +66,18 @@ export async function runResearchStage(
     fromStatus: "submitted",
     toStatus: "researching",
   }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to log submitted→researching action for #${letterId}:`));
-  try {
-    const { notifyAdmins } = await import("../db");
-    await notifyAdmins({
+  import("../db").then(({ notifyAdmins }) =>
+    notifyAdmins({
       category: "letters",
       type: "pipeline_researching",
       title: `Letter #${letterId} entering research stage`,
       body: `AI pipeline has started researching for letter #${letterId}.`,
       link: `/admin/letters/${letterId}`,
-    });
-  } catch (err) {
+    })
+  ).catch(err => {
     logger.error({ err: err }, "[notifyAdmins] pipeline_researching:");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
-  }
+  });
 
   const normalizedIntake = buildNormalizedPromptInput(
     {
@@ -150,7 +153,7 @@ export async function runResearchStage(
   }
   // ── End KV Cache check ──
 
-  const researchModelKey = "sonar-pro";
+  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar" : "gpt-4o";
 
   try {
     logger.info(

@@ -38,13 +38,13 @@ function getQuickActions(letter: any) {
     actions.push({ label: "Review & Approve", icon: Eye, href: `/letters/${letter.id}`, variant: "default", color: "bg-blue-600 hover:bg-blue-700 text-white" });
   }
 
-  // PDF is ready after subscriber approval
-  if ((letter.status === "client_approved" || letter.status === "sent") && (letter as any).pdfUrl) {
+  // PDF is ready after attorney approval
+  if ((letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && (letter as any).pdfUrl) {
     actions.push({ label: "Download PDF", icon: Download, href: (letter as any).pdfUrl, variant: "default", color: "bg-green-600 hover:bg-green-700 text-white" });
   }
 
   // PDF still generating after approval
-  if ((letter.status === "client_approved" || letter.status === "sent") && !(letter as any).pdfUrl) {
+  if ((letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && !(letter as any).pdfUrl) {
     actions.push({ label: "View Letter", icon: Eye, href: `/letters/${letter.id}`, variant: "secondary" });
   }
 
@@ -90,7 +90,7 @@ export default function MyLetters() {
     sort,
   );
 
-  const approvedCount = (letters ?? []).filter((l) => ["client_approved", "sent"].includes(l.status)).length;
+  const approvedCount = (letters ?? []).filter((l) => ["approved", "client_approved", "sent"].includes(l.status)).length;
   const pendingCount = (letters ?? []).filter((l) => ["pending_review", "under_review"].includes(l.status)).length;
   const approvalPendingCount = (letters ?? []).filter((l) => l.status === "client_approval_pending").length;
   const actionCount = (letters ?? []).filter((l) => NEEDS_ACTION_STATUSES.includes(l.status)).length;
@@ -144,7 +144,8 @@ export default function MyLetters() {
               <SelectItem value="needs_changes">Needs Changes</SelectItem>
               <SelectItem value="client_approval_pending">Awaiting Your Approval</SelectItem>
               <SelectItem value="client_revision_requested">Revision Requested</SelectItem>
-              <SelectItem value="client_approved">Approved</SelectItem>
+              <SelectItem value="approved">Attorney Approved</SelectItem>
+              <SelectItem value="client_approved">Client Approved (Legacy)</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="client_declined">Declined</SelectItem>
@@ -193,8 +194,8 @@ export default function MyLetters() {
         ) : (
           <div className="space-y-2">
             {filtered.map((letter) => {
-              const hasPdf = (letter.status === "client_approved" || letter.status === "sent") && !!(letter as any).pdfUrl;
-              const isApproved = letter.status === "client_approved" || letter.status === "sent";
+              const hasPdf = (letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && !!(letter as any).pdfUrl;
+              const isApproved = letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent";
               const isLocked = letter.status === "generated_locked";
               const isAwaitingApproval = letter.status === "client_approval_pending";
               const needsAction = NEEDS_ACTION_STATUSES.includes(letter.status);

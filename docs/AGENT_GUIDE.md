@@ -64,7 +64,7 @@ Talk to My Lawyer is an AI-powered legal letter platform. Users submit details a
 - Custom CSS properties for Tailwind must use `H S% L%` format (space-separated, percentages on S and L), WITHOUT wrapping in `hsl()`.
 
 ### 3.4 The Letter Status State Machine
-The status flow is defined in `shared/types.ts` → `ALLOWED_TRANSITIONS`. This is the SINGLE SOURCE OF TRUTH:
+The status flow is defined in `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`. This is the SINGLE SOURCE OF TRUTH:
 
 ```
 submitted → researching → drafting → generated_locked → pending_review → under_review → approved (transient) → client_approval_pending → client_approved → sent
@@ -75,7 +75,7 @@ submitted → researching → drafting → generated_locked → pending_review �
 - `under_review` can go to `rejected`, `needs_changes`, or `approved` (which auto-forwards to `client_approval_pending`)
 - `client_approval_pending` can go to `client_approved`, `client_declined`, or `client_revision_requested` (which goes back to `pending_review`)
 - `needs_changes` and `rejected` loop back to `submitted`
-- `pipeline_failed` loops back to `submitted`
+- `pipeline_failed` loops back to `submitted` (admin triggered)
 - Admin can force ANY transition (bypasses the map with `force=true`)
 
 **GOTCHA:** `generated_locked` is the PAYWALL status. The subscriber sees a blurred preview. They must pay (via Stripe checkout) to move to `pending_review`. Never skip this state.
@@ -110,7 +110,7 @@ Auth is a HYBRID system:
 - Use `text().array()` for array columns — NOT `array(text())`
 - Types are inferred: `typeof users.$inferSelect` for select types, `$inferInsert` for inserts
 - Insert schemas use `createInsertSchema` from `drizzle-zod` with `.omit` for auto-generated fields
-- The data access layer is `server/db.ts` — all DB operations go through semantic functions here, not raw queries in routers
+- The data access layer is `server/db/` — all DB operations go through semantic functions here, not raw queries in routers
 - Drizzle config reads `SUPABASE_DATABASE_URL` or `DATABASE_URL`
 
 ### 3.8 Pricing — Single Source of Truth
@@ -118,6 +118,7 @@ All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
 - Single Letter: $200 one-time (1 letter)
 - Monthly: $200/month (4 letters)
 - Yearly: $2,000/year (4 letters/month, 2 months free)
+- Paid Revision: $20 (after the first free revision)
 - Affiliate discount: 20% (constant `AFFILIATE_DISCOUNT_PERCENT`)
 - Stripe amounts are in CENTS (multiply by 100)
 
@@ -132,7 +133,7 @@ All env vars are accessed through `server/_core/env.ts` → `ENV` object. Requir
 - `RESEND_API_KEY` — Email
 
 **Optional but used:**
-- `OPENAI_API_KEY` — Document analysis (GPT-4o)
+- `OPENAI_API_KEY` — Document analysis (GPT-4o) and RAG embeddings
 - `ANTHROPIC_API_KEY` — Letter drafting/vetting (Claude)
 - `PERPLEXITY_API_KEY` — Legal research
 - `N8N_WEBHOOK_URL`, `N8N_CALLBACK_SECRET` — External pipeline
@@ -165,7 +166,7 @@ Express is configured with `express.json({ limit: "12mb" })` to accommodate larg
 
 ## 4. THE AI PIPELINE (4 stages)
 
-Defined in `server/pipeline.ts`. Each stage has strict validators.
+Defined in `server/pipeline/orchestrator.ts`. Each stage has strict validators.
 
 | Stage | Model | Purpose | Output |
 |-------|-------|---------|--------|
@@ -176,7 +177,7 @@ Defined in `server/pipeline.ts`. Each stage has strict validators.
 
 **Key behaviors:**
 - If a stage fails validation, it retries with error feedback injected into the prompt.
-- "Lessons" from past attorney edits (`pipeline_lessons` table) are injected into prompts to improve future quality.
+- "Lessons" from past attorney edits (`pipeline_lessons` table) are injected into prompts to improve future quality via RAG.
 - The pipeline uses the Vercel AI SDK for model calls.
 - Intake data is normalized before entering the pipeline (`server/intake-normalizer.ts`).
 
@@ -188,7 +189,7 @@ Defined in `server/pipeline.ts`. Each stage has strict validators.
 - If n8n returns a legacy "flat" draft (no assembly), the server automatically runs local Stage 3
 
 ### Document Analyzer (separate system)
-- Located in `server/routers.ts` under `documents.analyze`
+- Located in `server/routers/documents.ts` under `documents.analyze`
 - Uses GPT-4o to analyze uploaded legal docs (PDF, DOCX, TXT)
 - Extracts: summary, action items, risks, deadlines, emotional intelligence (tone, manipulation tactics)
 - Can prefill the letter submission form with extracted data
@@ -204,7 +205,7 @@ Schema at `drizzle/schema.ts`. 19+ tables. Key ones:
 | `users` | Central user registry. Has `role` (subscriber/employee/attorney/admin) and role-specific IDs |
 | `letter_requests` | The core entity. Full lifecycle from intake to sent. Has `intake_json` (JSONB), `status`, `jurisdiction`, `pdf_url` |
 | `letter_versions` | Immutable history of every draft/edit. Each row = one version |
-| `workflow_jobs` | Logs for AI pipeline runs (stage, status, payload, errors) |
+| `workflow_jobs` | Logs every pipeline stage execution, tokens, and errors |
 | `research_runs` | Stores Perplexity research results per letter |
 | `subscriptions` | Stripe billing state: plan, letters_allowed, letters_used |
 | `review_actions` | Audit trail for every status change and review note |
@@ -221,7 +222,7 @@ Schema at `drizzle/schema.ts`. 19+ tables. Key ones:
 
 **Enums defined via `pgEnum`:**
 - `userRoleEnum`: subscriber, employee, attorney, admin
-- `letterStatusEnum`: 13 statuses (see state machine above)
+- `letterStatusEnum`: 14 statuses (see state machine above)
 - `letterTypeEnum`: demand-letter, cease-and-desist, eviction-notice, contract-breach, employment-dispute, consumer-complaint, other
 - `pipelineStageEnum`: research, drafting, assembly, vetting
 
@@ -229,13 +230,13 @@ Schema at `drizzle/schema.ts`. 19+ tables. Key ones:
 
 ## 6. ROUTER STRUCTURE (tRPC)
 
-Root router in `server/routers.ts` → `appRouter`. Sub-routers:
+Root router in `server/routers/index.ts` → `appRouter`. Sub-routers:
 
 | Sub-Router | Auth Level | Key Procedures |
 |------------|-----------|----------------|
 | `system` | Public | `healthCheck`, `stats` |
 | `auth` | Public/Protected | `me`, `logout`, `completeOnboarding` |
-| `letters` | Subscriber | `submit`, `myLetters`, `detail`, `updateForChanges` |
+| `letters` | Subscriber | `submit`, `myLetters`, `detail`, `clientApprove`, `clientRequestRevision` |
 | `review` | Attorney | `queue`, `claim`, `approve`, `reject`, `requestChanges` |
 | `admin` | Admin + 2FA | `updateRole`, `allLetters`, `users`, `payouts` |
 | `billing` | Protected | `checkout`, `portal`, `subscriptionStatus` |
@@ -259,7 +260,7 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 
 **Auth:** `/login`, `/signup`, `/forgot-password`, `/verify-email`, `/reset-password`
 
-**Subscriber (protected):** `/dashboard`, `/submit`, `/letters`, `/letters/:id`, `/subscriber/billing`, `/profile`
+**Subscriber (protected):** `/dashboard`, `/submit`, `/letters`, `/letters/:id`, `/subscriber/billing`, `/subscriber/receipts`, `/profile`
 
 **Attorney (protected):** `/attorney`, `/attorney/queue`, `/attorney/review/:id`
 
@@ -295,11 +296,11 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 9. Attorney edits in Tiptap, submits → `approved` (transient) → `client_approval_pending`
 10. Subscriber reviews, approves → `client_approved` (PDF generated) → `sent`
 11. OR Subscriber requests revision (first free, then $20 each) → `client_revision_requested` → `pending_review`
-10. Server generates branded PDF, sends email
-11. After client approval → `sent`
+12. Server generates branded PDF, sends email
+13. After client approval → `sent`
 
 ### Recursive Learning System
-- When attorneys edit AI drafts, the system extracts "lessons" (`server/learning.ts`)
+- When attorneys edit AI drafts, the system extracts "lessons" (`server/learning/`)
 - Lessons are stored in `pipeline_lessons` table with jurisdiction + letter type tags
 - Future pipeline runs query active lessons and inject them into AI prompts
 - Admin manages lessons at `/admin/learning`
@@ -350,13 +351,14 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 │   │   ├── cookies.ts             # Cookie helpers
 │   │   ├── vite.ts                # Vite dev/prod integration
 │   │   └── systemRouter.ts        # Health check router
-│   ├── routers.ts                 # ALL tRPC sub-routers
-│   ├── db.ts                      # Data Access Layer (Drizzle helpers)
-│   ├── pipeline.ts                # 4-stage AI pipeline orchestrator
+│   ├── routers/                   # ALL tRPC sub-routers
+│   ├── db/                        # Data Access Layer (Drizzle helpers)
+│   ├── pipeline/                  # 4-stage AI pipeline orchestrator
+│   ├── learning/                  # Recursive learning system
+│   ├── stripe/                    # Stripe checkout/billing
+│   ├── emailPreview/              # Email templates
 │   ├── n8nCallback.ts             # n8n webhook handler
 │   ├── intake-normalizer.ts       # Intake data standardization
-│   ├── learning.ts                # Recursive learning system
-│   ├── stripe.ts                  # Stripe checkout/billing
 │   ├── stripeWebhook.ts           # Stripe webhook handler
 │   ├── email.ts                   # Resend transactional emails
 │   ├── pdfGenerator.ts            # PDFKit letter generation
@@ -366,9 +368,10 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 │   ├── storage.ts                 # Storage interface
 │   ├── cronScheduler.ts           # Background cron jobs
 │   ├── staleReviewReleaser.ts     # Auto-release unclaimed reviews
-│   └── draftReminders.ts          # Email reminders for pending drafts
+│   ├── stalePipelineLockRecovery.ts # Auto-release stuck pipeline locks
+│   └── worker.ts                  # pg-boss worker
 ├── shared/
-│   ├── types.ts                   # Status machine, type exports, Zod schemas
+│   ├── types/                     # Status machine, Zod schemas
 │   ├── pricing.ts                 # Pricing constants (single source of truth)
 │   └── const.ts                   # Error messages
 ├── drizzle/
@@ -385,9 +388,9 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 
 1. **Don't create a new REST endpoint when tRPC already covers it.** Almost everything goes through tRPC. Only add REST for webhooks, streaming, or external callbacks.
 
-2. **Don't skip the storage/db layer.** All DB operations go through `server/db.ts`. Never write raw Drizzle queries in routers.
+2. **Don't skip the storage/db layer.** All DB operations go through `server/db/`. Never write raw Drizzle queries in routers.
 
-3. **Don't hardcode status strings.** Import from `shared/types.ts` → `ALLOWED_TRANSITIONS` or `STATUS_CONFIG`.
+3. **Don't hardcode status strings.** Import from `shared/types/letter.ts` → `ALLOWED_TRANSITIONS` or `STATUS_CONFIG`.
 
 4. **Don't forget cache invalidation after mutations.** Every tRPC mutation that changes data must call `queryClient.invalidateQueries()` with the right key.
 
@@ -417,9 +420,9 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 
 17. **Superjson is the tRPC serializer.** Dates and other complex types are handled automatically.
 
-18. **The `runPipelineWithRetry` function is called from `letters.submit`.** Don't call pipeline stages manually from routers.
+18. **The pipeline worker is separate from the API.** `server/worker.ts` handles the pg-boss queue. Don't call pipeline stages manually from routers.
 
-19. **PDF generation happens on subscriber approval.** `generateAndUploadApprovedPdf` is triggered when the subscriber approves the attorney's submitted draft — not when the attorney submits it.
+19. **PDF generation happens on subscriber approval.** `generateAndUploadApprovedPdf` is triggered when the subscriber approves the attorney's submitted draft (`clientApprove` mutation) — not when the attorney submits it.
 
 20. **Supabase Realtime is used for live pipeline progress.** The `useLetterRealtime` hook subscribes to letter status changes.
 
@@ -456,7 +459,7 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 - Supabase RLS policies protect database-level access
 
 ## Relevant files
-- `shared/types.ts`
+- `shared/types/letter.ts`
 - `shared/pricing.ts`
 - `shared/const.ts`
 - `server/_core/env.ts`
@@ -464,13 +467,13 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 - `server/_core/context.ts`
 - `server/_core/index.ts`
 - `server/_core/admin2fa.ts`
-- `server/routers.ts`
-- `server/db.ts`
-- `server/pipeline.ts`
+- `server/routers/index.ts`
+- `server/db/index.ts`
+- `server/pipeline/orchestrator.ts`
 - `server/n8nCallback.ts`
 - `server/intake-normalizer.ts`
-- `server/learning.ts`
-- `server/stripe.ts`
+- `server/learning/index.ts`
+- `server/stripe/`
 - `server/stripeWebhook.ts`
 - `server/email.ts`
 - `server/pdfGenerator.ts`

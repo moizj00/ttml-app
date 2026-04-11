@@ -142,7 +142,7 @@ export async function submitLetter(
       jurisdictionState: input.jurisdictionState,
       appUrl,
     }).catch(err => {
-      logger.error("[Email] Submission confirmation failed:", err);
+      logger.error({ err }, "[Email] Submission confirmation failed:");
       captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } });
     });
   }
@@ -167,18 +167,17 @@ export async function submitLetter(
     });
   }
 
-  try {
-    await notifyAdmins({
-      category: "letters",
-      type: "letter_submitted",
-      title: `New letter submitted (#${letterId})`,
-      body: `${ctx.name ?? ctx.email ?? "A subscriber"} submitted a ${input.letterType} letter: "${input.subject}"`,
-      link: `/admin/letters/${letterId}`,
-    });
-  } catch (err) {
+  // Fire-and-forget: admin notification is non-blocking after successful enqueue
+  notifyAdmins({
+    category: "letters",
+    type: "letter_submitted",
+    title: `New letter submitted (#${letterId})`,
+    body: `${ctx.name ?? ctx.email ?? "A subscriber"} submitted a ${input.letterType} letter: "${input.subject}"`,
+    link: `/admin/letters/${letterId}`,
+  }).catch(err => {
     logger.error({ err: err }, "[notifyAdmins] letter_submitted:");
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
-  }
+  });
 
   return { letterId, status: "submitted" };
 }
@@ -419,32 +418,35 @@ export async function retryFromRejected(
     });
   }
 
+  // Parallelize post-enqueue notifications — subscriber email, in-app, and admin are independent
   try {
-    const subscriber = await getUserById(ctx.userId);
-    if (subscriber?.email) {
-      await sendStatusUpdateEmail({
-        to: subscriber.email,
-        name: subscriber.name ?? "Subscriber",
-        subject: letter.subject,
-        newStatus: "submitted",
-        appUrl,
-        letterId: input.letterId,
-      });
-    }
-    await createNotification({
+    const subscriberPromise = getUserById(ctx.userId).then(async (subscriber) => {
+      if (subscriber?.email) {
+        await sendStatusUpdateEmail({
+          to: subscriber.email,
+          name: subscriber.name ?? "Subscriber",
+          subject: letter.subject,
+          newStatus: "submitted",
+          appUrl,
+          letterId: input.letterId,
+        });
+      }
+    });
+    const notifPromise = createNotification({
       userId: ctx.userId,
       type: "retry_from_rejected",
       title: "Letter resubmitted for processing",
       body: `Your letter "${letter.subject}" has been resubmitted and is being reprocessed.`,
       link: `/letters/${input.letterId}`,
     });
-    await notifyAdmins({
+    const adminPromise = notifyAdmins({
       category: "letters",
       type: "retry_from_rejected",
       title: `Subscriber retried rejected letter #${input.letterId}`,
       body: `${ctx.userName ?? "A subscriber"} retried "${letter.subject}" after rejection.`,
       link: `/admin/letters/${input.letterId}`,
     });
+    await Promise.allSettled([subscriberPromise, notifPromise, adminPromise]);
   } catch (err) {
     logger.error({ err: err }, "[retryFromRejected] Notification error:");
     captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
@@ -499,35 +501,37 @@ export async function sendLetterToRecipientFlow(
     htmlContent: finalVersion.content,
   });
 
+  // Parallelize: status update + review action are independent
   try {
-    await updateLetterStatus(input.letterId, "sent", { force: true });
-    await logReviewAction({
-      letterRequestId: input.letterId,
-      reviewerId: ctx.userId,
-      actorType: ctx.userRole,
-      action: "letter_sent_to_recipient",
-      noteText: `Letter delivered to ${input.recipientEmail}`,
-      noteVisibility: "internal",
-      fromStatus: letter.status,
-      toStatus: "sent",
-    });
+    await Promise.all([
+      updateLetterStatus(input.letterId, "sent", { force: true }),
+      logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.userId,
+        actorType: ctx.userRole,
+        action: "letter_sent_to_recipient",
+        noteText: `Letter delivered to ${input.recipientEmail}`,
+        noteVisibility: "internal",
+        fromStatus: letter.status,
+        toStatus: "sent",
+      }),
+    ]);
   } catch (err) {
     logger.error({ err: err }, "[sendToRecipient] Failed to update status to sent:");
     captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
   }
 
-  try {
-    await notifyAdmins({
-      category: "letters",
-      type: "letter_sent_to_recipient",
-      title: `Letter #${input.letterId} sent to recipient`,
-      body: `Letter "${letter.subject}" was sent to ${input.recipientEmail}.`,
-      link: `/admin/letters/${input.letterId}`,
-    });
-  } catch (err) {
+  // Fire-and-forget: admin notification is non-blocking
+  notifyAdmins({
+    category: "letters",
+    type: "letter_sent_to_recipient",
+    title: `Letter #${input.letterId} sent to recipient`,
+    body: `Letter "${letter.subject}" was sent to ${input.recipientEmail}.`,
+    link: `/admin/letters/${input.letterId}`,
+  }).catch(err => {
     logger.error({ err: err }, "[notifyAdmins] letter_sent_to_recipient:");
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
-  }
+  });
 
   return { success: true };
 }
@@ -559,17 +563,20 @@ export async function clientDeclineLetter(
       message: "Letter is not awaiting client approval",
     });
   }
-  await updateLetterStatus(input.letterId, "client_declined");
-  await logReviewAction({
-    letterRequestId: input.letterId,
-    reviewerId: ctx.userId,
-    actorType: "subscriber",
-    action: "client_declined",
-    noteText: input.reason || "Subscriber declined the letter",
-    noteVisibility: "user_visible",
-    fromStatus: "client_approval_pending",
-    toStatus: "client_declined",
-  });
+  // Parallelize: status update + review action are independent
+  await Promise.all([
+    updateLetterStatus(input.letterId, "client_declined"),
+    logReviewAction({
+      letterRequestId: input.letterId,
+      reviewerId: ctx.userId,
+      actorType: "subscriber",
+      action: "client_declined",
+      noteText: input.reason || "Subscriber declined the letter",
+      noteVisibility: "user_visible",
+      fromStatus: "client_approval_pending",
+      toStatus: "client_declined",
+    }),
+  ]);
   try {
     await notifyAdmins({
       category: "letters",

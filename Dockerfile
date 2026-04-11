@@ -60,6 +60,8 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # top-level package.json reads in the bundle.
 COPY --from=builder /app/package.json ./
 
+# Startup script: runs Drizzle migrations, then starts the server.
+# Migrations must complete before the server accepts traffic.
 COPY start.sh ./
 RUN chmod +x start.sh
 

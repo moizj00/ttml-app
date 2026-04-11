@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { getRoleDashboard } from "@/components/ProtectedRoute";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
@@ -62,9 +63,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading && isAuthenticated && user) {
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "employee") navigate("/review");
-      else navigate("/dashboard");
+      navigate(getRoleDashboard(user.role));
     }
   }, [loading, isAuthenticated, user]);
 

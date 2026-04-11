@@ -19,7 +19,7 @@ import { NeedsChangesPanel } from "./letter-detail/NeedsChangesPanel";
 import { ApprovedLetterPanel } from "./letter-detail/ApprovedLetterPanel";
 import { LetterContentRenderer } from "./letter-detail/LetterContentRenderer";
 
-const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested", "client_approved"];
+const POLLING_STATUSES = ["submitted", "researching", "drafting", "pending_review", "under_review", "client_approval_pending", "client_revision_requested", "client_approved", "approved"];
 
 const STATUS_LABELS: Record<string, string> = {
   researching: "Our team is researching your legal situation...",
@@ -27,7 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
   generated_locked: "Your letter draft is ready!",
   pending_review: "Sent to attorney review queue.",
   under_review: "An attorney is reviewing your letter.",
-  approved: "Your letter has been approved!",
+  approved: "Your letter has been approved by an attorney! Your PDF is ready.",
   client_approval_pending: "Your letter is ready for your final approval.",
   client_revision_requested: "Your revision request has been submitted.",
   client_approved: "You approved the letter for delivery.",
@@ -75,7 +75,7 @@ export default function LetterDetail() {
       invalidate();
       const label = STATUS_LABELS[newStatus];
       if (label) {
-        if (newStatus === "approved" || newStatus === "client_approved") toast.success(label);
+        if (["approved", "client_approved", "sent"].includes(newStatus)) toast.success(label);
         else if (["rejected", "needs_changes", "client_declined"].includes(newStatus)) toast.warning(label);
         else toast.info(label);
       }
@@ -157,7 +157,7 @@ export default function LetterDetail() {
   const userVisibleActions = actions?.filter((a) => a.noteVisibility === "user_visible" && a.noteText);
   const isPolling = POLLING_STATUSES.includes(letter.status);
   const isGeneratedLocked = (letter.status === "generated_locked" || letter.status === "generated_unlocked") && !(letter as any).submittedByAdmin;
-  const isApproved = letter.status === "client_approved" || letter.status === "sent";
+  const isApproved = letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent";
   const pdfUrl = (letter as any).pdfUrl as string | null | undefined;
 
   return (
@@ -221,7 +221,7 @@ export default function LetterDetail() {
                   </Button>
                 </>
               )}
-              {["client_approved", "sent", "rejected", "client_declined"].includes(letter.status) && (
+              {["approved", "client_approved", "sent", "rejected", "client_declined"].includes(letter.status) && (
                 <Button onClick={handleArchive} size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={archiveMutation.isPending}>
                   <Trash2 className="w-4 h-4" />
                 </Button>

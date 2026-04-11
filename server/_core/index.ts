@@ -1,4 +1,11 @@
 import "dotenv/config";
+
+// Force IPv4 DNS resolution — Railway's network cannot reach Supabase's
+// shared pooler via IPv6 (ENETUNREACH). This must be set before any
+// database connections are established.
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 // Sentry must be initialized before other imports
 import { initServerSentry, Sentry, captureServerException } from "../sentry";
 initServerSentry();
@@ -57,6 +64,7 @@ import {
 import { validateRequiredEnv } from "./env";
 import { checkR2Connectivity } from "../storage";
 import { startHealthProbe, getPublicHealth, getDetailedHealth } from "../healthCheck";
+import { getBoss } from "../queue";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -98,6 +106,24 @@ async function startServer() {
   // Fail fast in production if required secrets are missing
   if (process.env.NODE_ENV === "production") {
     validateRequiredEnv();
+  }
+  // Warn early if supabaseAnonKey is missing — an empty key causes the PKCE
+  // token exchange in GET /api/auth/callback to fail with a 500, surfacing as
+  // "A server error interrupted Google sign-in" on the client.
+  // VITE_SUPABASE_ANON_KEY is a Vite build-time var baked into the frontend
+  // bundle; it is NOT available as a server runtime env var on Railway.
+  // The canonical server-side var is SUPABASE_ANON_KEY.
+  const _anonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+  if (!_anonKey) {
+    logger.warn(
+      { module: "Startup" },
+      "[Startup] SUPABASE_ANON_KEY is not set. Google OAuth PKCE token exchange will fail. " +
+      "Set SUPABASE_ANON_KEY in Railway environment variables."
+    );
   }
 
   const app = express();
@@ -144,7 +170,7 @@ async function startServer() {
       origin &&
       (STATIC_ALLOWED_ORIGINS.has(origin) ||
         (isDev && localhostOrigin) ||
-        (isDev && railwayOrigin) ||
+        railwayOrigin || // Allow Railway preview deployments in all environments (staging/testing)
         (isDev && replitOrigin))
     ) {
       res.setHeader("Access-Control-Allow-Origin", origin);
@@ -311,6 +337,16 @@ async function startServer() {
   // and the server never starts listening.
   await getDb();
   logger.info({ module: "Startup" }, "[Startup] Database connection and startup migrations complete");
+
+  // Warm up pg-boss so the first letter submission doesn't cold-start it
+  // under a live HTTP request (which can time out). Non-fatal — if it fails,
+  // the queue will cold-start on first use and the error is already logged.
+  getBoss().then(() => {
+    logger.info({ module: "Startup" }, "[Startup] pg-boss queue connection warmed up");
+  }).catch((err) => {
+    logger.error({ module: "Startup", err }, "[Startup] pg-boss warmup failed — queue will cold-start on first use");
+    captureServerException(err, { tags: { component: "startup", error_type: "pgboss_warmup_failed" } });
+  });
 
   server.listen(port, () => {
     logger.info({ module: "Startup", port }, `Server running on http://localhost:${port}/`);

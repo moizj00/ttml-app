@@ -64,8 +64,16 @@ export function validateRequiredEnv(): void {
     missing.push("SUPABASE_URL / VITE_SUPABASE_URL");
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
     missing.push("SUPABASE_SERVICE_ROLE_KEY");
-  if (!process.env.VITE_SUPABASE_ANON_KEY && !process.env.VITE_SUPABASE_PUBLISHABLE_KEY)
-    missing.push("VITE_SUPABASE_ANON_KEY / VITE_SUPABASE_PUBLISHABLE_KEY");
+  // SUPABASE_ANON_KEY is the canonical server-side runtime var (Railway).
+  // VITE_SUPABASE_ANON_KEY / VITE_SUPABASE_PUBLISHABLE_KEY are Vite build-time
+  // vars for the frontend — they are NOT available as server runtime env vars
+  // on Railway unless explicitly set. Accept any of the three.
+  if (
+    !process.env.SUPABASE_ANON_KEY &&
+    !process.env.VITE_SUPABASE_ANON_KEY &&
+    !process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  )
+    missing.push("SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY for local dev)");
   if (!ENV.stripeSecretKey) missing.push("STRIPE_SECRET_KEY");
   if (!ENV.stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
   if (!ENV.resendApiKey) missing.push("RESEND_API_KEY");

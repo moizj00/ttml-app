@@ -48,15 +48,16 @@ export const LETTER_STAGES: LetterStage[] = [
       "needs_changes",
       "client_approval_pending",
       "client_revision_requested",
+      "client_approved",
     ],
   },
   {
     key: "complete",
     label: "Complete",
     shortLabel: "Done",
-    description: "Your letter has been approved and is ready.",
+    description: "Your letter has been approved by an attorney. Your PDF is ready.",
     icon: CheckCircle2,
-    statuses: ["approved", "client_approved", "sent"],
+    statuses: ["approved", "sent"],
   },
 ];
 
@@ -73,7 +74,7 @@ export function getStageForStatus(status: string): { stageIndex: number; stage: 
 
 export function getStageProgress(status: string): number {
   if (TERMINAL_ERROR_STATUSES.includes(status)) return 0;
-  if (status === "sent" || status === "client_approved" || status === "approved") return 100;
+  if (status === "sent" || status === "approved") return 100;
 
   const { stageIndex } = getStageForStatus(status);
   if (stageIndex < 0) return 0;

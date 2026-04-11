@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { TokenUsage } from "../../shared/types";
+import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
 // MODEL PROVIDERS
@@ -34,45 +35,56 @@ export function isOpenAIFailoverAvailable(): boolean {
   return !!(apiKey && apiKey.trim().length > 0);
 }
 
-/** Stage 1: Perplexity sonar-pro — web-grounded legal research (fail-hard, no fallback) */
+/** Stage 1: Perplexity sonar (base) — concise web-grounded legal research (direct API) */
 export function getResearchModel() {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
-    throw new Error(
-      "[Pipeline] PERPLEXITY_API_KEY is not set — research stage requires Perplexity (fail-hard, no fallback)"
+    logger.warn(
+      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to OpenAI gpt-4o for research"
     );
+    const openai = getOpenAIClient();
+    return {
+      model: openai("gpt-4o"),
+      provider: "openai-fallback",
+    };
   }
   const perplexity = createOpenAI({
     apiKey,
     baseURL: "https://api.perplexity.ai",
     name: "perplexity",
   });
-  return { model: perplexity.chat("sonar-pro"), provider: "perplexity" };
+  return { model: perplexity.chat("sonar"), provider: "perplexity" };
 }
 
 
-/** Stage 2: OpenAI gpt-4o — primary drafting model */
+/** Stage 2: OpenAI gpt-4o-mini — initial legal draft (cost-optimized) */
 export function getDraftModel() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o");
+  return openai("gpt-4o-mini");
 }
 
-/** Stage 2 failover: Anthropic claude-sonnet-4 */
+/** Stage 2 failover: OpenAI gpt-4o-mini */
 export function getDraftModelFallback() {
-  const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4");
+  const openai = getOpenAIClient();
+  return openai("gpt-4o-mini");
 }
 
-/** Stage 3: Anthropic claude-sonnet-4 — final polished letter assembly (direct Anthropic API) */
+/** Stage 3: OpenAI gpt-4o-mini — final polished letter assembly (cost-optimized) */
 export function getAssemblyModel() {
-  const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4");
+  const openai = getOpenAIClient();
+  return openai("gpt-4o-mini");
 }
 
 /** Stage 3 failover: OpenAI gpt-4o-mini */
 export function getAssemblyModelFallback() {
   const openai = getOpenAIClient();
   return openai("gpt-4o-mini");
+}
+
+/** Stage 4: Anthropic claude-sonnet-4-6 — the ONE premium vetting call (cost-optimized from Opus) */
+export function getVettingModel() {
+  const anthropic = getAnthropicClient();
+  return anthropic("claude-sonnet-4-6-20250514");
 }
 
 /** Stage 4 vetting failover: OpenAI gpt-4o-mini */
@@ -91,8 +103,9 @@ export const SONNET_PRICING = { inputPerMillion: 3, outputPerMillion: 15 };
 export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
+  "claude-opus-4-6-20250612": { inputPerMillion: 15, outputPerMillion: 75 },
+  "claude-sonnet-4-6-20250514": { inputPerMillion: 3, outputPerMillion: 15 },
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
-  // Support both full and short model IDs to avoid drift when model IDs change
   "claude-sonnet-4-20250514": SONNET_PRICING,
   "claude-sonnet-4": SONNET_PRICING,
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },

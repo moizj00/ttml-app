@@ -19,7 +19,7 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   needs_changes: "The reviewing attorney has requested additional information or corrections from you.",
   client_approval_pending: "The attorney has finalized your letter. Please review and approve it.",
   client_revision_requested: "Your revision request has been sent. The attorney will revise and return the letter.",
-  approved: "Your letter has been approved and is being prepared for delivery.",
+  approved: "Your letter has been approved by an attorney. Your PDF is ready to download.",
   client_approved: "You have approved this letter. Your PDF is ready or being generated.",
   sent: "Your letter has been sent. The process is complete.",
   pipeline_failed: "We encountered an issue processing your request. Our team has been notified and will follow up shortly.",

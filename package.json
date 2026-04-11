@@ -7,6 +7,7 @@
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite && esbuild server/instrument.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --out-extension:.js=.js && esbuild server/worker.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/migrate.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node --import ./dist/instrument.js dist/index.js",
+    "start:worker": "NODE_ENV=production node --import ./dist/instrument.js dist/worker.js",
     "db:migrate": "node dist/migrate.js",
     "start:migrate": "node dist/migrate.js && NODE_ENV=production node --import ./dist/instrument.js dist/index.js",
     "check": "tsc --noEmit",

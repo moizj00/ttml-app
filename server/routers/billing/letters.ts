@@ -122,53 +122,46 @@ export const billingLettersRouter = router({
         });
       }
 
-      await updateLetterStatus(input.letterId, "pending_review");
-      await logReviewAction({
-        letterRequestId: input.letterId,
-        reviewerId: ctx.user.id,
-        actorType: "subscriber",
-        action: "subscription_submit",
-        noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
-        noteVisibility: "internal",
-        fromStatus: "generated_locked",
-        toStatus: "pending_review",
-      });
+      // Parallelize: status update + review action are independent
+      await Promise.all([
+        updateLetterStatus(input.letterId, "pending_review"),
+        logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.user.id,
+          actorType: "subscriber",
+          action: "subscription_submit",
+          noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
+          noteVisibility: "internal",
+          fromStatus: "generated_locked",
+          toStatus: "pending_review",
+        }),
+      ]);
 
-      try {
-        await sendLetterUnlockedEmail({
+      // Parallelize: subscriber email + attorney fan-out + admin notification are independent
+      const appUrl = getAppUrl(ctx.req);
+      await Promise.allSettled([
+        sendLetterUnlockedEmail({
           to: ctx.user.email ?? "",
           name: ctx.user.name ?? "Subscriber",
           subject: letter.subject,
           letterId: input.letterId,
-          appUrl: getAppUrl(ctx.req),
-        });
-      } catch (e) {
-        captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
-      }
-
-      try {
-        await notifyAllAttorneys({
+          appUrl,
+        }).catch(e => captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } })),
+        notifyAllAttorneys({
           letterId: input.letterId,
           letterSubject: letter.subject,
           letterType: letter.letterType,
           jurisdiction: letter.jurisdictionState ?? "Unknown",
-          appUrl: getAppUrl(ctx.req),
-        });
-      } catch (notifyErr) {
-        captureServerException(notifyErr, { tags: { component: "billing", error_type: "notify_attorneys_subscription_submit_failed" } });
-      }
-
-      try {
-        await notifyAdmins({
+          appUrl,
+        }).catch(notifyErr => captureServerException(notifyErr, { tags: { component: "billing", error_type: "notify_attorneys_subscription_submit_failed" } })),
+        notifyAdmins({
           category: "letters",
           type: "subscription_submit",
           title: `Subscription submit — letter #${input.letterId} enters review queue`,
           body: `${ctx.user.name ?? "A subscriber"} submitted "${letter.subject}" via active subscription. Now pending review.`,
           link: `/admin/letters/${input.letterId}`,
-        });
-      } catch (err) {
-        captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
-      }
+        }).catch(err => captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } })),
+      ]);
 
       return { ok: true as const };
     }),
