@@ -119,18 +119,27 @@ export function useReviewDetail() {
   });
 
   const approveMutation = trpc.review.approve.useMutation({
-    onSuccess: () => {
-      toast.success("Letter submitted for client approval", {
-        description:
-          "The subscriber has been notified and can now review and approve the letter.",
-      });
+    onSuccess: (data) => {
+      if (data.recipientSent) {
+        toast.success("Letter approved and sent", {
+          description: "The PDF has been generated and the letter has been delivered to the recipient.",
+        });
+      } else if (data.recipientSendError) {
+        toast.success("Letter approved", {
+          description: `PDF generated. Delivery to recipient failed: ${data.recipientSendError}. The subscriber can retry from their letter page.`,
+        });
+      } else {
+        toast.success("Letter approved", {
+          description: "The subscriber has been notified and their PDF is ready.",
+        });
+      }
       setApproveDialog(false);
       setEditMode(false);
       setHasUnsavedChanges(false);
       setSaveStatus("idle");
       invalidate();
     },
-    onError: e => toast.error("Submission failed", { description: e.message }),
+    onError: e => toast.error("Approval failed", { description: e.message }),
   });
 
   const rejectMutation = trpc.review.reject.useMutation({
@@ -382,13 +391,16 @@ export function useReviewDetail() {
     highlightCitationsInHtml,
     handleClaim: () => claimMutation.mutate({ letterId }),
     handleUnclaim: () => unclaimMutation.mutate({ letterId }),
-    handleApprove: () =>
+    handleApprove: (opts?: { recipientEmail?: string; subjectOverride?: string; deliveryNote?: string }) =>
       approveMutation.mutate({
         letterId,
         finalContent: approveContent,
         ...(isResearchUnverified
           ? { acknowledgedUnverifiedResearch: acknowledgedUnverified }
           : {}),
+        ...(opts?.recipientEmail ? { recipientEmail: opts.recipientEmail } : {}),
+        ...(opts?.subjectOverride ? { subjectOverride: opts.subjectOverride } : {}),
+        ...(opts?.deliveryNote ? { deliveryNote: opts.deliveryNote } : {}),
       }),
     handleReject: () => rejectMutation.mutate({ letterId, reason: rejectReason }),
     handleRequestChanges: () =>

@@ -348,7 +348,8 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
         if (!isNaN(revLetterId)) {
           try {
             const revLetter = await getLetterRequestById(revLetterId);
-            if (revLetter && revLetter.status === "client_approval_pending") {
+            const allowedRevisionStatuses = ["client_approval_pending", "approved", "client_approved", "sent"];
+            if (revLetter && allowedRevisionStatuses.includes(revLetter.status)) {
               await updateLetterStatus(revLetterId, "client_revision_requested");
               await logReviewAction({
                 letterRequestId: revLetterId,
@@ -357,7 +358,7 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
                 action: "client_revision_requested",
                 noteText: revisionNotes,
                 noteVisibility: "user_visible",
-                fromStatus: "client_approval_pending",
+                fromStatus: revLetter.status,
                 toStatus: "client_revision_requested",
               });
               if (revLetter.assignedReviewerId) {
@@ -396,7 +397,7 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
               });
               stripeLogger.info({ letterId: revLetterId }, "[StripeWebhook] Revision consultation executed");
             } else {
-              stripeLogger.warn({ letterId: revLetterId, status: revLetter?.status }, "[StripeWebhook] Revision consultation: letter not in client_approval_pending");
+              stripeLogger.warn({ letterId: revLetterId, status: revLetter?.status }, "[StripeWebhook] Revision consultation: letter not in an allowed revision status");
             }
           } catch (revErr) {
             stripeLogger.error({ err: revErr, letterId: revLetterId }, "[StripeWebhook] Failed to execute revision consultation");

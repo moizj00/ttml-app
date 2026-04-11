@@ -431,7 +431,7 @@ export default function ReviewDetail() {
         acknowledgedUnverified={rd.acknowledgedUnverified}
         onAcknowledgeChange={rd.setAcknowledgedUnverified}
         isPending={rd.approvePending}
-        onConfirm={rd.handleApprove}
+        onConfirm={(opts) => rd.handleApprove(opts)}
       />
       <RejectDialog
         open={rd.rejectDialog}

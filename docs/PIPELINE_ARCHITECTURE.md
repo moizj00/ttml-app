@@ -5,6 +5,14 @@
 
 ---
 
+## Orchestration & Side-Effect Optimizations
+
+The pipeline orchestrator (`server/pipeline/orchestrator.ts`) and individual stages are optimized for high throughput:
+- **Parallel DB Writes:** Independent database writes (e.g., updating workflow job status, updating letter status, and logging review actions) are executed in parallel using `Promise.allSettled()` instead of sequentially.
+- **Batched Notifications:** Admin and attorney notifications are fanned out in parallel.
+- **Reduced DB Reads:** Database records are passed through function parameters to eliminate redundant queries in hot paths.
+- **Shared Citation Revalidation:** Citation verification logic is centralized and reused across the orchestrator to keep the code DRY.
+
 ## Active Pipeline Path
 
 **Primary path: DIRECT 4-stage API calls. n8n is dormant (fallback/alternative, not active).**

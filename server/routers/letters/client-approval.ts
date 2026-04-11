@@ -279,7 +279,7 @@ export const clientApprovalProcedures = {
       if (!letter || letter.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      const allowedStatuses = ["client_approval_pending", "client_approved", "sent"];
+      const allowedStatuses = ["client_approval_pending", "approved", "client_approved", "sent"];
       if (!allowedStatuses.includes(letter.status)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -287,7 +287,7 @@ export const clientApprovalProcedures = {
         });
       }
 
-      const isPostApproval = letter.status === "client_approved" || letter.status === "sent";
+      const isPostApproval = letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent";
 
       // Revision limit guardrail
       const allActions = await getReviewActions(input.letterId);
@@ -308,7 +308,7 @@ export const clientApprovalProcedures = {
       // Post-approval: first post-approval edit is free, second+ cost $20.
       // We count post-approval edits separately for the fee trigger.
       const postApprovalEditCount = isPostApproval
-        ? allActions.filter(a => a.action === "client_revision_requested" && (a.fromStatus === "client_approved" || a.fromStatus === "sent")).length
+        ? allActions.filter(a => a.action === "client_revision_requested" && (a.fromStatus === "approved" || a.fromStatus === "client_approved" || a.fromStatus === "sent")).length
         : 0;
       const requiresPayment = isPostApproval ? postApprovalEditCount >= 1 : revisionCount >= 1;
       if (requiresPayment) {

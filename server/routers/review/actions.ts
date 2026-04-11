@@ -14,17 +14,22 @@ import {
   createNotification,
   notifyAdmins,
   getLetterRequestById,
+  getLetterVersionsByRequestId,
   getUserById,
   logReviewAction,
   updateLetterStatus,
+  updateLetterPdfUrl,
   updateLetterVersionPointers,
 } from "../../db";
 import {
   sendLetterRejectedEmail,
+  sendLetterApprovedEmail,
   sendNeedsChangesEmail,
   sendStatusUpdateEmail,
   sendReviewAssignedEmail,
+  sendLetterToRecipient,
 } from "../../email";
+import { generateAndUploadApprovedPdf } from "../../pdfGenerator";
 import { captureServerException } from "../../sentry";
 import {
   extractLessonFromApproval,
@@ -194,6 +199,10 @@ export const reviewActionsRouter = router({
         internalNote: z.string().optional(),
         userVisibleNote: z.string().optional(),
         acknowledgedUnverifiedResearch: z.boolean().optional(),
+        // Optional: send letter directly to recipient in one step
+        recipientEmail: z.string().email().optional(),
+        subjectOverride: z.string().max(500).optional(),
+        deliveryNote: z.string().max(2000).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -238,13 +247,13 @@ export const reviewActionsRouter = router({
       await updateLetterVersionPointers(input.letterId, {
         currentFinalVersionId: versionId,
       });
-      // Transition through approved (transient) then auto-forward to client_approval_pending
+      // Transition to approved (now the final attorney-approved state)
       await updateLetterStatus(input.letterId, "approved");
       await logReviewAction({
         letterRequestId: input.letterId,
         reviewerId: ctx.user.id,
         actorType: ctx.user.role as any,
-        action: "submitted_for_client_approval",
+        action: "approved",
         noteText: input.internalNote,
         noteVisibility: "internal",
         fromStatus: "under_review",
@@ -260,39 +269,82 @@ export const reviewActionsRouter = router({
           noteVisibility: "user_visible",
         });
       }
-      // Auto-forward to client_approval_pending (approved is transient)
-      await updateLetterStatus(input.letterId, "client_approval_pending");
-      await logReviewAction({
-        letterRequestId: input.letterId,
-        reviewerId: ctx.user.id,
-        actorType: ctx.user.role as any,
-        action: "requested_client_approval",
-        noteText: "Attorney submitted letter for client approval",
-        noteVisibility: "user_visible",
-        fromStatus: "approved",
-        toStatus: "client_approval_pending",
-      });
-      // ── PDF is NOT generated here — it will be generated when the subscriber approves ──
-      // ── Notify subscriber: letter ready for their final approval ──
+      // ── Generate PDF immediately upon attorney approval ──
+      let pdfUrl: string | undefined;
+      try {
+        const pdfResult = await generateAndUploadApprovedPdf({
+          letterId: input.letterId,
+          letterType: letter.letterType,
+          subject: input.subjectOverride ?? letter.subject,
+          content: input.finalContent,
+          approvedBy: ctx.user.name ?? undefined,
+          approvedAt: new Date().toISOString(),
+          jurisdictionState: letter.jurisdictionState,
+          jurisdictionCountry: letter.jurisdictionCountry,
+          intakeJson: letter.intakeJson as Record<string, unknown> | null,
+        });
+        pdfUrl = pdfResult.pdfUrl;
+        await updateLetterPdfUrl(input.letterId, pdfUrl);
+        logger.info(`[Approve] PDF generated for letter #${input.letterId}: ${pdfUrl}`);
+      } catch (pdfErr) {
+        captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
+        logger.error({ err: pdfErr }, `[Approve] PDF generation failed for letter #${input.letterId} (non-blocking):`);
+        // Non-blocking: approval still succeeds even if PDF generation fails
+      }
+      // ── Optionally send letter directly to recipient in one step ──
+      let recipientSent = false;
+      let recipientSendError: string | undefined;
+      if (input.recipientEmail) {
+        try {
+          const versions = await getLetterVersionsByRequestId(input.letterId, false);
+          const finalVer = versions.find((v) => v.versionType === "final_approved");
+          await sendLetterToRecipient({
+            recipientEmail: input.recipientEmail,
+            letterSubject: letter.subject,
+            subjectOverride: input.subjectOverride?.trim() || undefined,
+            note: input.deliveryNote?.trim() || undefined,
+            pdfUrl: pdfUrl ?? undefined,
+            htmlContent: finalVer?.content ?? input.finalContent,
+          });
+          recipientSent = true;
+          await updateLetterStatus(input.letterId, "sent", { force: true });
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: ctx.user.role as any,
+            action: "letter_sent_to_recipient",
+            noteText: `Letter approved and delivered to ${input.recipientEmail}.`,
+            noteVisibility: "user_visible",
+            fromStatus: "approved",
+            toStatus: "sent",
+          });
+          logger.info(`[Approve] Letter #${input.letterId} sent to ${input.recipientEmail}`);
+        } catch (sendErr) {
+          recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
+          captureServerException(sendErr, { tags: { component: "review", error_type: "approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });
+          logger.error({ err: sendErr }, `[Approve] Failed to send letter #${input.letterId} to recipient:`);
+        }
+      }
+      // ── Notify subscriber: letter has been approved ──
       try {
         if (letter.userId != null) {
           const appUrl = getAppUrl(ctx.req);
           const subscriber = await getUserById(letter.userId);
           if (subscriber?.email) {
-            await sendStatusUpdateEmail({
+            await sendLetterApprovedEmail({
               to: subscriber.email,
               name: subscriber.name ?? "Subscriber",
               subject: letter.subject,
               letterId: input.letterId,
-              newStatus: "client_approval_pending",
               appUrl,
+              pdfUrl,
             });
           }
           await createNotification({
             userId: letter.userId,
-            type: "client_approval_pending",
-            title: "Your letter is ready for final approval",
-            body: `Your letter "${letter.subject}" has been reviewed by an attorney and is ready for your approval.`,
+            type: "approved",
+            title: "Your letter has been approved!",
+            body: `Your letter "${letter.subject}" has been reviewed and approved by an attorney. Your PDF is ready.${recipientSent ? ` It has been sent to ${input.recipientEmail}.` : ""}`,
             link: `/letters/${input.letterId}`,
           });
         }
@@ -337,23 +389,23 @@ export const reviewActionsRouter = router({
         const appUrl2 = getAppUrl(ctx.req);
         await notifyAdmins({
           category: "letters",
-          type: "letter_submitted_for_client_approval",
-          title: `Letter #${input.letterId} submitted for client approval`,
-          body: `${ctx.user.name ?? "An attorney"} submitted "${letter.subject}" for client approval.`,
+          type: "letter_approved",
+          title: `Letter #${input.letterId} approved by attorney`,
+          body: `${ctx.user.name ?? "An attorney"} approved "${letter.subject}".${recipientSent ? ` Letter sent to ${input.recipientEmail}.` : ""}${pdfUrl ? " PDF generated." : ""}`,
           link: `/admin/letters/${input.letterId}`,
           emailOpts: {
-            subject: `Letter #${input.letterId} Submitted for Client Approval`,
-            preheader: `Attorney submitted letter "${letter.subject}" for client approval`,
-            bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An attorney"}</strong> has submitted letter <strong>#${input.letterId}</strong> — "${letter.subject}" for client approval.</p>`,
+            subject: `Letter #${input.letterId} Approved`,
+            preheader: `Attorney approved letter "${letter.subject}"`,
+            bodyHtml: `<p>Hello,</p><p><strong>${ctx.user.name ?? "An attorney"}</strong> has approved letter <strong>#${input.letterId}</strong> — "${letter.subject}".${recipientSent ? ` Letter was sent to ${input.recipientEmail}.` : ""}</p>`,
             ctaText: "View Letter",
             ctaUrl: `${appUrl2}/admin/letters/${input.letterId}`,
           },
         });
       } catch (err) {
-        logger.error({ err: err }, "[notifyAdmins] letter_submitted_for_client_approval:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_submitted" } });
+        logger.error({ err: err }, "[notifyAdmins] letter_approved:");
+        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_approved" } });
       }
-      return { success: true, versionId };
+      return { success: true, versionId, pdfUrl, recipientSent, recipientSendError };
     }),
 
   reject: attorneyProcedure

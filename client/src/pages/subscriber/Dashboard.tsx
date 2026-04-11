@@ -253,6 +253,7 @@ export default function SubscriberDashboard() {
       letters?.filter(l => !["approved", "rejected", "client_approved", "client_declined", "sent"].includes(l.status))
         .length ?? 0,
     approved: letters?.filter(l => ["approved", "client_approved", "sent"].includes(l.status)).length ?? 0,
+    // Note: 'approved' is now the final attorney-approved state (no client approval step)
     needsAttention:
       letters?.filter(l =>
         ["needs_changes", "generated_locked", "client_approval_pending"].includes(

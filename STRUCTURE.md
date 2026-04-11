@@ -14,11 +14,12 @@
 **Tech Stack:**
 - Frontend: React 19 + Vite 7, TailwindCSS 4.1, shadcn/ui, TanStack Query, wouter
 - Backend: Express 4.21, tRPC 11.6, Drizzle ORM 0.44
-- Database: Supabase PostgreSQL + Supabase Auth
+- Database: Supabase PostgreSQL + Supabase Auth (via `sb_session` httpOnly cookie; localStorage bearer tokens are strictly avoided)
 - Payments: Stripe (subscriptions + one-time per-letter unlock)
 - AI Pipeline: Perplexity sonar-pro (primary research) → Anthropic Claude Opus for drafting + assembly → Anthropic Claude Sonnet for vetting.
 - Email: Resend
 - Background jobs: pg-boss (PostgreSQL-native queue via Supabase)
+- Orchestration: Optimized with parallelized DB writes, batched notifications, and reduced redundant DB reads
 - Rate limiting: Upstash Redis via @upstash/ratelimit (fail-open)
 - Monitoring: Sentry (frontend + backend) + Pino logger
 - Deployment: Railway (Docker multi-stage build)
@@ -59,7 +60,7 @@ The server is decomposed into logical directory modules under `server/` to avoid
 
 ### Core Backend Services
 - **Logging**: Powered by **Pino**. All `console.log/warn/error` have been replaced with structured `logger` calls: `logger.info({ data }, "message")`.
-- **Migrations**: Database migrations are handled via Drizzle. Startup migrations (raw SQL) were extracted from `server/db/core.ts` into `drizzle/0044_startup_migrations_extraction.sql`.
+- **Migrations**: Database migrations are handled via Drizzle. The production Docker container uses `start.sh` to run `node dist/migrate.js` (applying all pending migrations) *before* starting the Express server. The Docker `HEALTHCHECK` has a `90s` start-period to accommodate the migration window on the first deploy.
 - **Crons**: `server/cronScheduler.ts` manages scheduled tasks, including the new **Stale Pipeline Lock Recovery** (`server/stalePipelineLockRecovery.ts`) which resets stuck letters every 15 minutes.
 
 ---
