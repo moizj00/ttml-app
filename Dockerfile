@@ -67,7 +67,7 @@ RUN chmod +x start.sh
 
 EXPOSE ${PORT:-3000}
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider \
   "http://localhost:${PORT:-3000}/api/health" || exit 1
 
