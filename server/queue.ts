@@ -122,9 +122,16 @@ export async function getBoss(): Promise<PgBoss> {
 
     await boss.start();
 
-    // Ensure the pipeline queue exists with desired retention settings
+    // Ensure the pipeline queue exists with desired retention settings.
+    // policy: 'key_strict_fifo' — blocks processing of jobs with the same
+    // singletonKey while any job with that key is active, in retry, or failed.
+    // Combined with singletonKey = `letter-{id}` on every send() call, this
+    // guarantees at most one active pipeline run per letter at any time.
     try {
       await boss.createQueue(QUEUE_NAME, {
+        // key_strict_fifo: only one job per singletonKey can be active/queued/failed
+        // at a time. Duplicate submissions for the same letter are silently dropped.
+        policy: "key_strict_fifo",
         // No retries at queue level — worker handles its own retry logic with backoff
         retryLimit: 0,
         // Expire active jobs after 30 minutes if not completed
@@ -135,7 +142,8 @@ export async function getBoss(): Promise<PgBoss> {
         retentionSeconds: 30 * 24 * 60 * 60,
       });
     } catch (queueErr) {
-      // Queue may already exist — that's fine
+      // Queue may already exist — that's fine. Policy is set at createQueue time;
+      // updateQueue does not allow changing policy on an existing queue.
       logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
     }
 
@@ -156,13 +164,23 @@ export async function getBoss(): Promise<PgBoss> {
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
   const boss = await getBoss();
   const jobId = `pipeline-${data.letterId}-${Date.now()}`;
+  // singletonKey ensures key_strict_fifo policy deduplicates at the queue level:
+  // if a job with the same key is already active/queued/failed, this send() is
+  // a no-op and returns null. We treat null as "already queued" — not an error.
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     id: jobId,
+    singletonKey: `letter-${data.letterId}`,
     // No retries at queue level — worker handles its own retry logic with backoff
     retryLimit: 0,
     // Expire job after 30 minutes if not picked up
     expireInSeconds: 30 * 60,
   });
+  if (id === null) {
+    // Duplicate suppressed by key_strict_fifo — a job for this letter is already
+    // active or queued. This is intentional and not an error.
+    logger.warn(`[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`);
+    return `pipeline-${data.letterId}-deduplicated`;
+  }
   const resolvedId = id ?? jobId;
   logger.info(`[Queue] Enqueued pipeline job ${resolvedId} for letter #${data.letterId} (${data.label})`);
   return resolvedId;
@@ -171,11 +189,17 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
   const boss = await getBoss();
   const jobId = `retry-${data.letterId}-${data.stage}-${Date.now()}`;
+  // singletonKey deduplicates at the queue level — same as enqueuePipelineJob
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     id: jobId,
+    singletonKey: `letter-${data.letterId}`,
     retryLimit: 0,
     expireInSeconds: 30 * 60,
   });
+  if (id === null) {
+    logger.warn(`[Queue] Duplicate retry-from-stage job suppressed for letter #${data.letterId} (stage: ${data.stage}) — already active/queued`);
+    return `retry-${data.letterId}-${data.stage}-deduplicated`;
+  }
   const resolvedId = id ?? jobId;
   logger.info(`[Queue] Enqueued retry-from-stage job ${resolvedId} for letter #${data.letterId} (stage: ${data.stage})`);
   return resolvedId;

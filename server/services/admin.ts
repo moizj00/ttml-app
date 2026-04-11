@@ -364,6 +364,17 @@ export async function retryPipelineJob(input: RetryJobInput) {
       message: "No intake data found for this letter. Cannot retry.",
     });
 
+  // Guard: refuse to enqueue if the pipeline lock is still held (active run).
+  // The singletonKey on send() is a second line of defence, but this gives
+  // the admin a clear CONFLICT error instead of a silent no-op.
+  const STALE_LOCK_MS = 30 * 60 * 1000; // 30 minutes — matches worker
+  if (letter.pipelineLockedAt && (Date.now() - new Date(letter.pipelineLockedAt).getTime()) < STALE_LOCK_MS) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `Letter #${input.letterId} is currently being processed (pipeline lock held since ${new Date(letter.pipelineLockedAt).toISOString()}). Wait for it to finish or use the stale-lock recovery tool.`,
+    });
+  }
+
   const { preflightApiKeyCheck } = await import("../pipeline");
   const apiCheck = preflightApiKeyCheck(input.stage);
   if (!apiCheck.ok) {
