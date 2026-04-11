@@ -90,7 +90,15 @@ export async function getLetterRequestsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db
-    .select()
+    .select({
+      id: letterRequests.id,
+      letterType: letterRequests.letterType,
+      subject: letterRequests.subject,
+      status: letterRequests.status,
+      jurisdictionState: letterRequests.jurisdictionState,
+      pdfUrl: letterRequests.pdfUrl,
+      createdAt: letterRequests.createdAt,
+    })
     .from(letterRequests)
     .where(
       and(eq(letterRequests.userId, userId), isNull(letterRequests.archivedAt))
