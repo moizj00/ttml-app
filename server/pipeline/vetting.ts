@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText } from "./langchain";
 import {
   createLetterVersion,
   createWorkflowJob,
@@ -21,7 +21,7 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { sendNewReviewNeededEmail, sendAdminAlertEmail, sendLetterReadyEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
-import { getAnthropicClient, getVettingModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
+import { getVettingModel, getVettingModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { runCitationAudit, replaceUnverifiedCitations, buildCitationRegistry } from "./citations";
 import { runAssemblyStage } from "./assembly";
@@ -173,9 +173,8 @@ export async function runVettingStage(
           accumulateTokens(vettingTokens, vettingUsage);
           return text;
         }
-        const anthropic = getAnthropicClient();
         const { text, usage: vettingUsage } = await generateText({
-          model: anthropic("claude-sonnet-4-6"),
+          model: getVettingModel(),
           system: systemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 16000,
@@ -218,9 +217,8 @@ export async function runVettingStage(
       "Stage 4 (vetting)",
       letterId,
       () => {
-        const anthropic = getAnthropicClient();
         return generateText({
-          model: anthropic("claude-sonnet-4-6"),
+          model: getVettingModel(),
           system: systemPrompt,
           prompt: userPrompt,
           maxOutputTokens: 16000,
@@ -702,4 +700,3 @@ export async function runAssemblyVettingLoop(
 
   return { vettingResult, assemblyRetries };
 }
-
