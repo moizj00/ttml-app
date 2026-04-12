@@ -34,7 +34,7 @@ export async function runAssemblyStage(
   const job = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "assembly",
-    provider: "anthropic",
+    provider: "openai",
     requestPayloadJson: {
       letterId,
       userId: pipelineCtx?.userId,

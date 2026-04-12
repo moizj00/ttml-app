@@ -102,7 +102,7 @@ export async function categorizeFromNote(
       .map(([key, desc]) => `- ${key}: ${desc}`)
       .join("\n");
     const result = await generateText({
-      model: anthropic("claude-sonnet-4-20250514"),
+      model: anthropic("claude-sonnet-4-6"),
       maxOutputTokens: 50,
       system:
         "You are a classifier. Respond with ONLY the category name, nothing else.",

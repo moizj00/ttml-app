@@ -147,21 +147,22 @@ export async function getBoss(): Promise<PgBoss> {
       throw startErr;
     }
     // Ensure the pipeline queue exists with desired retention settings.
-    // policy: 'standard' — allows new jobs to be enqueued even when a previous
-    // job for the same letter is in a failed state, so retries are never blocked.
-    // Duplicate concurrent runs are prevented at the application level via
-    // acquirePipelineLock() in worker.ts (DB-backed advisory lock per letter).
+    // We use 'standard' policy (the default) because 'key_strict_fifo' blocks
+    // ALL new sends for a singletonKey if any prior job with that key is in
+    // 'failed' state — which permanently blocks retries for that letter.
+    // Deduplication is handled at the application layer (pipeline lock).
+    const DESIRED_QUEUE_OPTIONS = {
+      policy: "standard" as const,
+      retryLimit: 0,
+      expireInSeconds: 30 * 60,
+      deleteAfterSeconds: 7 * 24 * 60 * 60,
+      retentionSeconds: 30 * 24 * 60 * 60,
+    };
     try {
-      await boss.createQueue(QUEUE_NAME, {
-        policy: "standard",
-        retryLimit: 0,
-        expireInSeconds: 30 * 60,
-        deleteAfterSeconds: 7 * 24 * 60 * 60,
-        retentionSeconds: 30 * 24 * 60 * 60,
-      });
+      await boss.createQueue(QUEUE_NAME, DESIRED_QUEUE_OPTIONS);
+      logger.info(`[Queue] Created queue "${QUEUE_NAME}" with policy=${DESIRED_QUEUE_OPTIONS.policy}`);
     } catch (queueErr) {
-      // Queue may already exist — that's fine. Policy is set at createQueue time;
-      // updateQueue does not allow changing policy on an existing queue.
+      // Queue already exists — that's fine.
       logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
     }
 
@@ -190,21 +191,20 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
     boss = await getBoss();
   }
   const jobId = `pipeline-${data.letterId}-${Date.now()}`;
-  // singletonKey ensures key_strict_fifo policy deduplicates at the queue level:
-  // if a job with the same key is already active/queued/failed, this send() is
-  // a no-op and returns null. We treat null as "already queued" — not an error.
+  // singletonKey provides application-level deduplication hint.
+  // With 'standard' policy, pg-boss does NOT block on failed jobs with the same key.
+  // Actual deduplication is enforced by the pipeline lock (acquirePipelineLock).
+  logger.info(`[Queue] Sending pipeline job for letter #${data.letterId} (${data.label})...`);
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     id: jobId,
     singletonKey: `letter-${data.letterId}`,
 
     // No retries at queue level — worker handles its own retry logic with backoff
-
     retryLimit: 0,
     expireInSeconds: 30 * 60,
   });
   if (id === null) {
-    // Duplicate suppressed by key_strict_fifo — a job for this letter is already
-    // active or queued. This is intentional and not an error.
+    // Duplicate suppressed — a job for this letter is already active or queued.
     logger.warn(`[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`);
     return `pipeline-${data.letterId}-deduplicated`;
   }
