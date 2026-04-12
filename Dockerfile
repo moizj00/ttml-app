@@ -13,7 +13,7 @@ RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 COPY package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy all source files needed for the build
 COPY client/ ./client/
@@ -39,7 +39,7 @@ RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 # Install production-only dependencies
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/patches/ ./patches/
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy the compiled server bundle + client assets
 # dist/index.js    — esbuild server bundle
