@@ -1,5 +1,22 @@
 #!/bin/sh
-# start.sh — Production startup script.
+# start.sh — LEGACY single-container startup script.
+#
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │  LEGACY MODE: This script runs migrate + worker + web in ONE       │
+# │  container. For the recommended multi-service model, use:          │
+# │                                                                    │
+# │    pnpm start:migrate   # one-shot migration job                   │
+# │    pnpm start:app       # web server only                          │
+# │    pnpm start:worker    # pg-boss worker only                      │
+# │                                                                    │
+# │  Or via Docker Compose:                                            │
+# │    docker compose run --rm migrate                                 │
+# │    docker compose up app worker                                    │
+# │                                                                    │
+# │  See README.md → "Deployment" for full instructions.               │
+# └─────────────────────────────────────────────────────────────────────┘
+#
+# What this script does:
 # 1. Run Drizzle migrations to ensure the DB schema is up-to-date.
 # 2. Start the pipeline worker in the background (consumes pg-boss jobs).
 # 3. Start the Express server in the background and wait on it (captures exit code).

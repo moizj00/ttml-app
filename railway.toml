@@ -1,11 +1,33 @@
+# railway.toml — Configuration for the TTML app service on Railway.
+#
+# MULTI-SERVICE DEPLOYMENT MODEL
+# ──────────────────────────────
+# This repo produces one Docker image that supports three roles:
+#
+#   Service      │ Railway startCommand                                                               │ Notes
+#   ─────────────┼────────────────────────────────────────────────────────────────────────────────────┼──────────────────────
+#   app (web)    │ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js      │ Receives HTTP traffic
+#   worker       │ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js     │ No domain needed
+#   migrate      │ node --dns-result-order=ipv4first dist/migrate.js                                  │ One-shot per deploy
+#
+# Create three Railway services from the same repo. Each uses the same
+# Dockerfile build but a different startCommand. Only the app service
+# needs a domain and health check.
+#
+# LEGACY SINGLE-CONTAINER MODE
+# ─────────────────────────────
+# To run everything in one container (migrate + worker + web), set:
+#   startCommand = "./start.sh"
+# This is simpler but couples all processes and prevents independent scaling.
+
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+
 [deploy]
-startCommand = "./start.sh"
+# App service: web server only (recommended decoupled model)
+startCommand = "node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js"
 healthcheckPath = "/api/health"
-# Increase start timeout to allow migrations to complete before health check.
-# Default is 60s; migrations on first deploy can take 30-60s.
-healthcheckTimeout = 120
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

@@ -2,31 +2,28 @@
 
 AI-powered legal letter drafting with mandatory attorney review.
 
-## Architecture
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the definitive architecture reference — tech stack, module map, status machine, database schema, and documentation ownership index.
-
 ## Documentation Index
 
 | Document | Purpose |
 |----------|---------|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Architecture, tech stack, module map, roles, status machine, doc ownership |
-| [`CLAUDE.md`](CLAUDE.md) | Agent behavioral rules and architectural invariant pointers |
-| [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Developer workflow, gotchas, conventions, common pitfalls |
+| [`STRUCTURE.md`](STRUCTURE.md) | Primary architecture reference — schema, routes, status machine, pipeline |
+| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–86+) |
 | [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: Perplexity → Opus × 2 → Sonnet vetting) |
-| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (all phases) |
+| [`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md) | Spec compliance tracking |
+| [`docs/CODE_REVIEW_VERIFIED.md`](docs/CODE_REVIEW_VERIFIED.md) | Code review issue tracker |
+| [`docs/AUDIT_REPORT_PHASE74.md`](docs/AUDIT_REPORT_PHASE74.md) | Phase 74 full platform audit |
+| [`docs/SUPABASE_MCP_CAPABILITIES.md`](docs/SUPABASE_MCP_CAPABILITIES.md) | Supabase MCP connector reference |
+| [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | Historical gap analysis — all 9 gaps completed |
+| [`docs/TTML_REMAINING_FEATURES_PROMPT.md`](docs/TTML_REMAINING_FEATURES_PROMPT.md) | Historical feature gap prompt (Phase 48) |
+| [`docs/REVALIDATION_REPORT_PHASE62.md`](docs/REVALIDATION_REPORT_PHASE62.md) | Phase 62 validation snapshot (historical) |
+| [`docs/VALIDATION_REPORT_PHASE73.md`](docs/VALIDATION_REPORT_PHASE73.md) | Phase 73 validation snapshot (historical) |
+| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Phase 0 audit (historical) |
 | [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar, keyword map |
 | [`todo.md`](todo.md) | Full feature and bug tracking (all phases) |
-| [`docs/workflow_summary.md`](docs/workflow_summary.md) | Letter lifecycle end-to-end walkthrough |
-| [`docs/QA_ROLE_MATRIX.md`](docs/QA_ROLE_MATRIX.md) | QA test matrix and test credentials |
-| [`docs/INTELLIGENCE_ROADMAP.md`](docs/INTELLIGENCE_ROADMAP.md) | Product strategy and competitive analysis |
-| [`skills/architectural-patterns/`](skills/architectural-patterns/) | Enforcement rules for core invariants |
-
-Historical audit reports and point-in-time snapshots are archived in `docs/archive/`.
 
 ## Tech Stack
 
-- **Frontend:** Vite · React 19 · Wouter · Tailwind CSS v4 · shadcn/ui
+- **Frontend:** Vite · React 19 · Wouter · Tailwind CSS · shadcn/ui
 - **Backend:** Express · tRPC · Drizzle ORM
 - **Database:** Supabase (PostgreSQL + RLS)
 - **Auth:** Supabase Auth (JWT)
@@ -34,29 +31,108 @@ Historical audit reports and point-in-time snapshots are archived in `docs/archi
 - **Email:** Resend (transactional, 17 templates)
 - **AI Pipeline:** Perplexity `sonar-pro` (primary research; Claude fallback if key missing) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting); local 4-stage pipeline is primary, n8n is dormant alternative
 
-## Quick Start
+## Development
 
 ```bash
 pnpm install        # install dependencies
-pnpm dev            # start dev server (port 5000)
+pnpm dev            # start dev server (port 3000)
 pnpm test           # run Vitest suite
-pnpm tsc --noEmit   # type-check
-pnpm build          # production build
+pnpm tsc --noEmit   # TypeScript check
 ```
 
-## Tech Stack
+## Deployment
+
+### Architecture
+
+The app is split into three independently runnable roles from a **single Docker image**:
+
+| Role | Command | Purpose |
+|------|---------|---------|
+| **app** | `pnpm start:app` | Express + tRPC web server, serves the React client |
+| **worker** | `pnpm start:worker` | pg-boss pipeline worker (consumes letter generation jobs) |
+| **migrate** | `pnpm start:migrate` | One-shot Drizzle ORM migration runner |
+
+All three roles read from the same `.env` / environment variables. Only `app` receives HTTP traffic; `worker` and `migrate` are headless.
+
+**Deploy flow:**
+1. Build the image (`docker build .`)
+2. Run `migrate` (once, fail-fast if migrations fail)
+3. Start `app` and `worker` using the same image
+
+### Docker Compose (local / staging)
+
+```bash
+# Build the image
+docker compose build
+
+# Run migrations (one-shot, then exits)
+docker compose run --rm migrate
+
+# Start web server + worker
+docker compose up app worker
+
+# Or start everything including migrations:
+docker compose --profile ops up
+```
+
+The `migrate` service is under the `ops` profile so it doesn't run on every `docker compose up`. Run it explicitly before starting `app` and `worker`.
+
+For production-like settings with resource limits and replica counts:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app worker
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale app=3 --scale worker=2
+```
+
+### Railway (production)
+
+Create **three Railway services** from the same GitHub repo (`moibftj/ttml-app`). All use the same Dockerfile build — only the start command differs.
+
+| Railway Service | Start Command | Domain? | Health Check? |
+|----------------|---------------|---------|---------------|
+| `ttml-app` | `node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js` | Yes (port 8080) | `/api/health` |
+| `ttml-worker` | `node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js` | No | None |
+| `ttml-migrate` | `node --dns-result-order=ipv4first dist/migrate.js` | No | None |
+
+**Setup steps:**
+1. Create all three services from the `moibftj/ttml-app` repo.
+2. Set the same environment variables on all three (copy from `.env.example`).
+3. Set `PORT=8080` on the `ttml-app` service.
+4. Configure the start command for each (see table above).
+5. Add your custom domain to `ttml-app` only — set `targetPort: 8080`.
+6. On the `ttml-migrate` service, set **Restart Policy** to `Never` so it runs once per deploy and exits.
+7. On `ttml-worker`, disable the health check (it's headless, no HTTP).
+
+**Deploy order:** trigger `ttml-migrate` first. Once it exits successfully, deploy `ttml-app` and `ttml-worker`.
+
+> **Tip:** The `railway.toml` in this repo is pre-configured for the `ttml-app` service. For worker and migrate, override the start command in the Railway dashboard — `railway.toml` only applies to the primary service.
+
+### Legacy single-container mode
+
+For simple platforms that don't support multi-service orchestration, `start.sh` runs all three roles in one container:
+
+```bash
+# In Dockerfile or platform config:
+./start.sh
+```
+
+This runs migrations, starts the worker in the background, then starts the web server. It works but couples all processes — a crash in the worker kills the web server too.
+
+### Package scripts reference
+
+| Script | Purpose |
+|--------|---------|
+| `pnpm start:app` | Production web server only (no migrations, no worker) |
+| `pnpm start:worker` | Production pg-boss worker only |
+| `pnpm start:migrate` | One-shot migration runner (exits after completion) |
+| `pnpm start` | Alias for web server (same as `start:app` without IPv4 flag) |
+| `pnpm start:legacy` | Migrations + web server (no worker) — legacy compatibility |
+| `pnpm dev` | Development server with hot reload |
+| `pnpm build` | Build client (Vite) + server (esbuild) for production |
+
+## Validation Gate
 
 After every implementation:
-1. `pnpm test` — all tests must pass
+1. `pnpm test` — all ~1300 tests must pass (54 test files)
 2. `pnpm tsc --noEmit` — 0 TypeScript errors
 3. `pnpm build` — production build must succeed
-4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types/letter.ts`
-
-React 19 · Vite · Express · tRPC · Drizzle ORM · Supabase (Postgres + Auth) · Stripe · Resend · Sentry · Pino  
-AI pipeline: Perplexity → Claude Opus (draft + assembly) → Claude Sonnet (vetting)
-
-## Docs
-
-- [`STRUCTURE.md`](STRUCTURE.md) — architecture, schema, status machine, routes
-- [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) — full feature inventory
-- [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) — AI pipeline deep-dive
+4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types.ts`

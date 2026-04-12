@@ -60,15 +60,27 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # top-level package.json reads in the bundle.
 COPY --from=builder /app/package.json ./
 
-# Startup script: runs Drizzle migrations, then starts the server.
-# Migrations must complete before the server accepts traffic.
+# Legacy startup script: runs migrations + worker + server in one container.
+# Kept for single-container platforms that want the old behavior.
 COPY start.sh ./
 RUN chmod +x start.sh
 
 EXPOSE ${PORT:-3000}
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+# ─── Multi-service usage ────────────────────────────────────────────────────
+# This image supports three roles via different commands:
+#
+#   App (web server):   node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js
+#   Worker (pg-boss):   node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js
+#   Migrate (one-shot): node --dns-result-order=ipv4first dist/migrate.js
+#
+# Override CMD in docker-compose.yml, Railway service config, or K8s pod spec.
+# The default CMD below starts the web server only (decoupled model).
+# Use ./start.sh for the legacy single-container model (migrate + worker + web).
+# ────────────────────────────────────────────────────────────────────────────
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider \
   "http://localhost:${PORT:-3000}/api/health" || exit 1
 
-CMD ["./start.sh"]
+CMD ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
