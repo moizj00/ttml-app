@@ -1,7 +1,9 @@
 # Talk-to-My-Lawyer — Comprehensive Feature Map
 
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — complete feature inventory
+
 **Version:** 3.0 — April 2026  
-**Author:** Manus AI  
 **Scope:** Complete inventory of all implemented features, including the new modular architecture and subscriber preview modal.
 
 ---

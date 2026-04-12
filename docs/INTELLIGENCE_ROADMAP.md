@@ -1,8 +1,11 @@
 # Talk to My Lawyer — Intelligence Roadmap
 
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — strategic intelligence roadmap
+
 > Making this the most intelligent letter generation application of all time.
 
-**Created:** April 4, 2026
+**Created:** April 4, 2026  
 **Research basis:** Competitive analysis (DocDraft, DoNotPay, Harvey AI, AI Lawyer, LawChatGPT, Spellbook, PettyLawsuit), deep research on legal tech AI features, content marketing frameworks, and legal contract intelligence patterns.
 
 ---

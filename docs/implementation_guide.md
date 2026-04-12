@@ -1,5 +1,8 @@
 # Implementation Guide: Timed Email Notification and Paywall System
 
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — paywall email system implementation reference
+
 ## Overview
 
 This guide provides step-by-step implementation instructions for integrating a timed email notification system (10-15 minutes post-generation) with the existing paywall mechanism in the TTML platform. The implementation leverages existing infrastructure while introducing minimal new components.

@@ -1,5 +1,8 @@
 # TTML Letter Generation and Attorney Review Workflow: Complete Summary
 
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — complete workflow reference
+
 ## Executive Summary
 
 The Talk-To-My-Lawyer (TTML) platform implements a sophisticated letter generation and attorney review pipeline. This document provides a comprehensive overview of the current workflow, including the new modular architecture, the stale pipeline lock recovery system, and the subscriber preview modal.

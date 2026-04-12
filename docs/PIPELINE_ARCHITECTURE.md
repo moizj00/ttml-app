@@ -1,7 +1,7 @@
 # Pipeline Architecture — Talk to My Lawyer
 
-> **Last confirmed:** April 2026
-> **Status:** Production-verified
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — production-verified
 
 ---
 

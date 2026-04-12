@@ -1,5 +1,8 @@
 # TTML Agent Guide — Complete Repository Reference
 
+> **Last updated:** April 12, 2026  
+> **Status:** Canonical — authoritative reference for all agents and developers
+
 > **Purpose:** This document captures every architectural decision, gotcha, convention, and critical detail of the Talk to My Lawyer (TTML) platform so that any agent or developer can work on the codebase with full context.
 
 ---
@@ -434,6 +437,25 @@ Defined in `client/src/App.tsx`. All pages are lazy-loaded.
 - Test runner: Vitest (config at `vitest.config.ts`)
 - Always add `data-testid` to new UI elements for E2E testing
 - Test reports are in `test_reports/`
+
+### Test Credentials (seeded via `scripts/seed-test-users.ts`)
+
+| Role | Email | Password |
+|------|-------|----------|
+| subscriber | test-subscriber@ttml.dev | TestPass123! |
+| employee | test-employee@ttml.dev | TestPass123! |
+| attorney | test-attorney@ttml.dev | TestPass123! |
+| admin | test-admin@ttml.dev | TestPass123! |
+
+The seed script is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
+
+### Route Protection (ProtectedRoute)
+
+The `ProtectedRoute` component enforces RBAC on all protected routes:
+- **Unauthenticated** → redirects to `/login?next=<returnPath>`
+- **Email unverified** (non-admin) → redirects to `/verify-email`
+- **Admin without 2FA cookie** → redirects to `/admin/verify`
+- **Wrong role** → redirects to user's own role dashboard (via `getRoleDashboard()`)
 
 ---
 
