@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText } from "./langchain";
 import {
   createResearchRun,
   createWorkflowJob,
@@ -26,9 +26,10 @@ import {
   getCachedResearch,
   setCachedResearch,
 } from "../kvCache";
-import { formatStructuredError, classifyErrorCode } from "./shared";
+import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 import {
   getResearchModel,
+  getResearchModelFallback,
   RESEARCH_TIMEOUT_MS,
   createTokenAccumulator,
   accumulateTokens,
@@ -210,16 +211,17 @@ export async function runResearchStage(
   // Declare provider-tracking variables at function scope so the catch block
   // can read the active model key for accurate cost reporting after failover.
   let researchModelKey =
-    researchConfig.provider === "perplexity" ? "sonar" : "gpt-4o";
+    researchConfig.provider === "perplexity" ? "sonar" : "claude-opus-4-6-20250612";
+  let activeProvider = researchConfig.provider;
 
   try {
     logger.info(
-      `[Pipeline] Stage 1: Perplexity deep research for letter #${letterId} (fail-hard, no fallback)`
+      `[Pipeline] Stage 1: Research for letter #${letterId} (primary: ${researchConfig.provider}, failover: Claude Opus 4.6)`
     );
 
-    const callPerplexity = async (prompt: string) => {
+    const callResearchModel = async (prompt: string, model?: any) => {
       return generateText({
-        model: researchConfig.model,
+        model: model ?? researchConfig.model,
         system: systemPrompt,
         prompt,
         maxOutputTokens: 4000,
@@ -227,7 +229,24 @@ export async function runResearchStage(
       });
     };
 
-    const initialResult = await callPerplexity(userPrompt);
+    // Wrap the initial research call with failover: if Perplexity is rate-limited
+    // or credits are exhausted, automatically retry with Claude Opus 4.6.
+    const { result: initialResult, failoverTriggered } = await withModelFailover(
+      "research",
+      letterId,
+      async () => callResearchModel(userPrompt),
+      async () => {
+        const fallbackConfig = getResearchModelFallback();
+        researchModelKey = "claude-opus-4-6-20250612";
+        activeProvider = fallbackConfig.provider;
+        return callResearchModel(userPrompt, fallbackConfig.model);
+      },
+    );
+    if (failoverTriggered) {
+      logger.warn(
+        `[Pipeline] Stage 1: Perplexity unavailable for letter #${letterId} — research completed via Claude Opus 4.6 (ungrounded)`
+      );
+    }
     const { text, usage: initialUsage } = initialResult;
     accumulateTokens(researchTokens, initialUsage);
 
@@ -244,7 +263,7 @@ export async function runResearchStage(
       const promptWithFeedback = errorFeedback
         ? userPrompt + errorFeedback
         : userPrompt;
-      const retryResult = await callPerplexity(promptWithFeedback);
+      const retryResult = await callResearchModel(promptWithFeedback);
       accumulateTokens(researchTokens, retryResult.usage);
       return retryResult.text;
     };
@@ -398,13 +417,15 @@ export async function runResearchStage(
       timestamp: new Date().toISOString(),
     };
 
+    const isWebGrounded = activeProvider === "perplexity" || activeProvider === "kv-cache";
+
     await updateResearchRun(runId, {
       status: "completed",
       resultJson: researchPacket,
       validationResultJson: {
         ...successResult,
-        webGrounded: true,
-        provider: "perplexity",
+        webGrounded: isWebGrounded,
+        provider: activeProvider,
       },
       cacheHit: false,
       cacheKey: kvCacheKey,
@@ -417,19 +438,23 @@ export async function runResearchStage(
       estimatedCostUsd: calculateCost(researchModelKey, researchTokens),
       responsePayloadJson: {
         researchRunId: runId,
-        webGrounded: true,
-        provider: "perplexity",
-        failoverUsed: false,
+        webGrounded: isWebGrounded,
+        provider: activeProvider,
+        failoverUsed: failoverTriggered,
         validationResult: successResult,
       },
     });
 
-    await setCachedResearch(kvCacheKey, researchPacket);
+    // Only cache web-grounded research (Perplexity); Claude fallback is ungrounded
+    // and should not be served from cache as if it were web-verified.
+    if (isWebGrounded) {
+      await setCachedResearch(kvCacheKey, researchPacket);
+    }
 
     logger.info(
-      `[Pipeline] Stage 1 complete for letter #${letterId} (provider: perplexity)`
+      `[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${activeProvider}, webGrounded: ${isWebGrounded})`
     );
-    return { packet: researchPacket, provider: "perplexity" };
+    return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(
