@@ -167,7 +167,7 @@ export async function consolidateLessonsForScope(
     .map((l) => `[ID:${l.id}] [${l.category}] ${l.lessonText}`)
     .join("\n");
   const result = await generateText({
-    model: anthropic("claude-sonnet-4-20250514"),
+    model: anthropic("claude-sonnet-4-6"),
     maxOutputTokens: 4000,
     system: `You are a legal operations AI. You consolidate overlapping lessons into cleaner, non-redundant combined lessons. Output ONLY valid JSON.`,
     prompt: `Given these lessons for "${letterType}" letters${jurisdiction ? ` in ${jurisdiction}` : ""}:\n\n${lessonList}\n\nGroup semantically similar lessons and write one improved, combined lesson per group. Lessons that are unique should remain as-is.\n\nReturn JSON array:\n[\n  {\n    "combinedText": "the merged lesson text",\n    "category": "one of: citation_error, jurisdiction_error, tone_issue, structure_issue, factual_error, bloat_detected, missing_section, style_preference, legal_accuracy, general",\n    "sourceIds": [1, 2, 3],\n    "weight": 60\n  }\n]\n\nOnly group lessons that truly overlap. Keep unique lessons separate (sourceIds will have one ID).`,

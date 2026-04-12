@@ -149,12 +149,12 @@ export async function runVettingStage(
 
   const vettingTokens = createTokenAccumulator();
   let vettingProvider = "anthropic";
-  let vettingModelKey = "claude-sonnet-4-6-20250514";
+  let vettingModelKey = "claude-sonnet-4-6";
 
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
     // Reset provider to primary on each retry to avoid tier collapse
     vettingProvider = "anthropic";
-    vettingModelKey = "claude-sonnet-4-6-20250514";
+    vettingModelKey = "claude-sonnet-4-6";
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
@@ -175,7 +175,7 @@ export async function runVettingStage(
         }
         const anthropic = getAnthropicClient();
         const { text, usage: vettingUsage } = await generateText({
-          model: anthropic("claude-sonnet-4-6-20250514"),
+          model: anthropic("claude-sonnet-4-6"),
           system: systemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 16000,
@@ -220,7 +220,7 @@ export async function runVettingStage(
       () => {
         const anthropic = getAnthropicClient();
         return generateText({
-          model: anthropic("claude-sonnet-4-6-20250514"),
+          model: anthropic("claude-sonnet-4-6"),
           system: systemPrompt,
           prompt: userPrompt,
           maxOutputTokens: 16000,

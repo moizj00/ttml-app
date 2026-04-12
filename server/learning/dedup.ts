@@ -57,7 +57,7 @@ export async function checkForDuplicateAndMerge(
       .map((l) => `[ID:${l.id}] ${l.lessonText}`)
       .join("\n");
     const result = await generateText({
-      model: anthropic("claude-sonnet-4-20250514"),
+      model: anthropic("claude-sonnet-4-6"),
       maxOutputTokens: 30,
       system:
         "You compare lesson texts for semantic similarity. Respond with ONLY the ID number of the matching lesson, or 'NONE' if no match. Nothing else.",

@@ -84,7 +84,7 @@ export function getAssemblyModelFallback() {
 /** Stage 4: Anthropic claude-sonnet-4-6 — the ONE premium vetting call (cost-optimized from Opus) */
 export function getVettingModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-6-20250514");
+  return anthropic("claude-sonnet-4-6");
 }
 
 /** Stage 4 vetting failover: OpenAI gpt-4o-mini */
@@ -105,6 +105,7 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
   "claude-opus-4-6-20250612": { inputPerMillion: 15, outputPerMillion: 75 },
   "claude-sonnet-4-6-20250514": { inputPerMillion: 3, outputPerMillion: 15 },
+  "claude-sonnet-4-6": { inputPerMillion: 3, outputPerMillion: 15 },
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
   "claude-sonnet-4-20250514": SONNET_PRICING,
   "claude-sonnet-4": SONNET_PRICING,
