@@ -174,7 +174,6 @@ N8N_PRIMARY = "true"
 [userenv.production]
 
 [userenv.development]
-APP_BASE_URL = "https://856c9990-1741-4223-a980-b8ceaa1225aa-00-21lxshxoluum.spock.replit.dev"
 
 [postMerge]
 path = "scripts/post-merge.sh"
