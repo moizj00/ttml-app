@@ -2,6 +2,8 @@
 
 > **Last updated:** April 12, 2026  
 > **Status:** Canonical — production-verified
+> **Authoritative file for:** AI pipeline deep-dive — stages, RAG, resilience, n8n, and model configuration.
+> For the high-level architecture overview, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ---
 

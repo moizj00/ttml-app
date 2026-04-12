@@ -2,6 +2,8 @@
 
 > **Last updated:** April 12, 2026  
 > **Status:** Canonical — complete feature inventory
+> **Authoritative file for:** Complete inventory of all implemented features across all development phases.
+> For architecture and module map, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 **Version:** 3.0 — April 2026  
 **Scope:** Complete inventory of all implemented features, including the new modular architecture and subscriber preview modal.

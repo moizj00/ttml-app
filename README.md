@@ -2,28 +2,31 @@
 
 AI-powered legal letter drafting with mandatory attorney review.
 
+## Architecture
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the definitive architecture reference — tech stack, module map, status machine, database schema, and documentation ownership index.
+
 ## Documentation Index
 
 | Document | Purpose |
 |----------|---------|
-| [`STRUCTURE.md`](STRUCTURE.md) | Primary architecture reference — schema, routes, status machine, pipeline |
-| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–86+) |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Architecture, tech stack, module map, roles, status machine, doc ownership |
+| [`CLAUDE.md`](CLAUDE.md) | Agent behavioral rules and architectural invariant pointers |
+| [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Developer workflow, gotchas, conventions, common pitfalls |
 | [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: Perplexity → Opus × 2 → Sonnet vetting) |
-| [`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md) | Spec compliance tracking |
-| [`docs/CODE_REVIEW_VERIFIED.md`](docs/CODE_REVIEW_VERIFIED.md) | Code review issue tracker |
-| [`docs/AUDIT_REPORT_PHASE74.md`](docs/AUDIT_REPORT_PHASE74.md) | Phase 74 full platform audit |
-| [`docs/SUPABASE_MCP_CAPABILITIES.md`](docs/SUPABASE_MCP_CAPABILITIES.md) | Supabase MCP connector reference |
-| [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | Historical gap analysis — all 9 gaps completed |
-| [`docs/TTML_REMAINING_FEATURES_PROMPT.md`](docs/TTML_REMAINING_FEATURES_PROMPT.md) | Historical feature gap prompt (Phase 48) |
-| [`docs/REVALIDATION_REPORT_PHASE62.md`](docs/REVALIDATION_REPORT_PHASE62.md) | Phase 62 validation snapshot (historical) |
-| [`docs/VALIDATION_REPORT_PHASE73.md`](docs/VALIDATION_REPORT_PHASE73.md) | Phase 73 validation snapshot (historical) |
-| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Phase 0 audit (historical) |
+| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (all phases) |
 | [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar, keyword map |
 | [`todo.md`](todo.md) | Full feature and bug tracking (all phases) |
+| [`docs/workflow_summary.md`](docs/workflow_summary.md) | Letter lifecycle end-to-end walkthrough |
+| [`docs/QA_ROLE_MATRIX.md`](docs/QA_ROLE_MATRIX.md) | QA test matrix and test credentials |
+| [`docs/INTELLIGENCE_ROADMAP.md`](docs/INTELLIGENCE_ROADMAP.md) | Product strategy and competitive analysis |
+| [`skills/architectural-patterns/`](skills/architectural-patterns/) | Enforcement rules for core invariants |
+
+Historical audit reports and point-in-time snapshots are archived in `docs/archive/`.
 
 ## Tech Stack
 
-- **Frontend:** Vite · React 19 · Wouter · Tailwind CSS · shadcn/ui
+- **Frontend:** Vite · React 19 · Wouter · Tailwind CSS v4 · shadcn/ui
 - **Backend:** Express · tRPC · Drizzle ORM
 - **Database:** Supabase (PostgreSQL + RLS)
 - **Auth:** Supabase Auth (JWT)
@@ -43,7 +46,7 @@ pnpm tsc --noEmit   # TypeScript check
 ## Validation Gate
 
 After every implementation:
-1. `pnpm test` — all ~617 tests must pass (41 test files)
+1. `pnpm test` — all tests must pass
 2. `pnpm tsc --noEmit` — 0 TypeScript errors
 3. `pnpm build` — production build must succeed
-4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types.ts`
+4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types/letter.ts`

@@ -2,6 +2,8 @@
 
 > **Last updated:** April 12, 2026  
 > **Status:** Canonical — complete workflow reference
+> **Authoritative file for:** End-to-end letter lifecycle and business logic walkthrough.
+> For architecture details, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ## Executive Summary
 
