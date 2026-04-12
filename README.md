@@ -34,19 +34,29 @@ Historical audit reports and point-in-time snapshots are archived in `docs/archi
 - **Email:** Resend (transactional, 17 templates)
 - **AI Pipeline:** Perplexity `sonar-pro` (primary research; Claude fallback if key missing) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting); local 4-stage pipeline is primary, n8n is dormant alternative
 
-## Development
+## Quick Start
 
 ```bash
 pnpm install        # install dependencies
 pnpm dev            # start dev server (port 5000)
 pnpm test           # run Vitest suite
-pnpm tsc --noEmit   # TypeScript check
+pnpm tsc --noEmit   # type-check
+pnpm build          # production build
 ```
 
-## Validation Gate
+## Tech Stack
 
 After every implementation:
 1. `pnpm test` — all tests must pass
 2. `pnpm tsc --noEmit` — 0 TypeScript errors
 3. `pnpm build` — production build must succeed
 4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types/letter.ts`
+
+React 19 · Vite · Express · tRPC · Drizzle ORM · Supabase (Postgres + Auth) · Stripe · Resend · Sentry · Pino  
+AI pipeline: Perplexity → Claude Opus (draft + assembly) → Claude Sonnet (vetting)
+
+## Docs
+
+- [`STRUCTURE.md`](STRUCTURE.md) — architecture, schema, status machine, routes
+- [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) — full feature inventory
+- [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) — AI pipeline deep-dive
