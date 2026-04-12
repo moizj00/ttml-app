@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "wouter";
 import {
@@ -9,14 +8,14 @@ import {
   Briefcase,
   UserCheck,
   Scale,
-  Menu,
-  X,
   Gavel,
   ShieldCheck,
   Copyright,
   AlertTriangle,
 } from "lucide-react";
 import BrandLogo from "@/components/shared/BrandLogo";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 import { SERVICES } from "./serviceData";
 
 const SERVICE_ICONS: Record<string, typeof FileText> = {
@@ -31,51 +30,6 @@ const SERVICE_ICONS: Record<string, typeof FileText> = {
   "intellectual-property-infringement-letter": Copyright,
   "small-claims-demand-letter": Gavel,
 };
-
-function ServicesNav() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const goToLogin = () => { window.location.href = "/login"; };
-
-  return (
-    <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 h-[64px] md:h-[72px] flex items-center justify-between">
-        <BrandLogo href="/" size="lg" hideWordmarkOnMobile />
-        <div className="hidden md:flex items-center gap-7">
-          <Link href="/" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-home">Home</Link>
-          <Link href="/services" className="text-[13px] font-semibold text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-services">Services</Link>
-          <Link href="/pricing" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-pricing">Pricing</Link>
-          <Link href="/blog" className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors" data-testid="nav-blog">Blog</Link>
-          <Link href="/analyze" className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors" data-testid="nav-analyze">Doc Analyzer</Link>
-          <div className="w-px h-4 bg-slate-200" />
-          <button onClick={goToLogin} className="text-[13px] font-semibold text-slate-600 hover:text-slate-900 transition-colors" data-testid="nav-signin">Sign In</button>
-          <button onClick={goToLogin} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full text-[13px] font-bold transition-all shadow-md shadow-blue-600/20 inline-flex items-center gap-1.5" data-testid="nav-cta">
-            Get Started <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <button
-          className="md:hidden p-2 text-slate-600 hover:text-slate-900"
-          onClick={() => setMobileMenuOpen((v) => !v)}
-          aria-label="Toggle menu"
-          data-testid="nav-mobile-toggle"
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-      </div>
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-slate-100 px-6 py-4 shadow-lg">
-          <div className="flex flex-col gap-3">
-            <Link href="/" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 py-2 uppercase tracking-wide" data-testid="mobile-home">Home</Link>
-            <Link href="/services" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-900 py-2 uppercase tracking-wide" data-testid="mobile-services">Services</Link>
-            <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 py-2 uppercase tracking-wide" data-testid="mobile-pricing">Pricing</Link>
-            <Link href="/blog" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 py-2 uppercase tracking-wide" data-testid="mobile-blog">Blog</Link>
-            <div className="h-px bg-slate-100 my-1" />
-            <button onClick={goToLogin} className="bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-bold w-full text-center" data-testid="mobile-cta">Get Started</button>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
-}
 
 export default function ServicesIndex() {
   const goToLogin = () => { window.location.href = "/login"; };
@@ -114,11 +68,12 @@ export default function ServicesIndex() {
       </Helmet>
 
       <div className="min-h-screen bg-white font-['Inter'] text-slate-900">
-        <ServicesNav />
+        <PublicNav activeLink="/services" />
+        <PublicBreadcrumb items={[{ label: "Services" }]} />
 
         <main>
           {/* Hero */}
-          <section className="pt-[100px] md:pt-[112px] pb-16 px-4 sm:px-6 lg:px-12 bg-gradient-to-b from-slate-50 to-white" data-testid="services-hero">
+          <section className="pb-16 pt-8 px-4 sm:px-6 lg:px-12 bg-gradient-to-b from-slate-50 to-white" data-testid="services-hero">
             <div className="max-w-7xl mx-auto text-center">
               <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-full px-4 py-1.5 mb-6 text-sm text-blue-700 font-medium">
                 <Scale className="w-4 h-4" />

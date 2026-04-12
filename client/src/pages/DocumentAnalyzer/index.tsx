@@ -1,10 +1,10 @@
 import { Helmet } from "react-helmet-async";
-import { Link } from "wouter";
-import { FileText, ShieldAlert, ArrowLeft } from "lucide-react";
-import { AnalyzerNav } from "./AnalyzerNav";
+import { FileText, ShieldAlert } from "lucide-react";
 import { FileUploadZone } from "./FileUploadZone";
 import { AnalysisResults } from "./AnalysisResults";
 import { useDocumentAnalyzer } from "./hooks/useDocumentAnalyzer";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 
 const analyzerJsonLd = {
   "@context": "https://schema.org",
@@ -90,19 +90,10 @@ export default function DocumentAnalyzer() {
         <script type="application/ld+json">{JSON.stringify(analyzerJsonLd)}</script>
       </Helmet>
 
-      <AnalyzerNav me={me} />
+      <PublicNav activeLink="/analyze" />
+      <PublicBreadcrumb items={[{ label: "Document Analyzer" }]} />
 
-      <main className="pt-20 pb-16 px-4 max-w-4xl mx-auto">
-        {/* Back link */}
-        <div className="pt-6 mb-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
-            data-testid="link-back-home"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Home
-          </Link>
-        </div>
+      <main className="pb-16 px-4 max-w-4xl mx-auto">
 
         {/* Header */}
         <div className="text-center mb-10">

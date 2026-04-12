@@ -1,11 +1,12 @@
-import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 
 export default function Terms() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <PublicNav />
+      <PublicBreadcrumb items={[{ label: "Terms of Service" }]} />
       <Helmet>
         <title>Terms of Service | Talk to My Lawyer</title>
         <meta name="description" content="Read the Terms of Service for Talk to My Lawyer. Understand your rights and obligations when using our professional attorney-reviewed legal letter service." />
@@ -24,12 +25,6 @@ export default function Terms() {
       {/* Header */}
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-6">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </Button>
-          </Link>
           <h1 className="text-4xl font-bold">Terms of Service</h1>
           <p className="text-muted-foreground mt-2">
             Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}

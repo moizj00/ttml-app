@@ -18,6 +18,8 @@ import { trpc } from "@/lib/trpc";
 import { CheckCircle2, Loader2, Scale, Shield, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 import { PRICING } from "../../../shared/pricing";
 
 const PLANS = [
@@ -158,6 +160,8 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PublicNav activeLink="/pricing" />
+      <PublicBreadcrumb items={[{ label: "Pricing" }]} />
       <Helmet>
         <title>Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My Lawyer</title>
         <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $299, monthly $299/month (4 letters), or yearly $2,400 (8 letters). All plans include attorney review and PDF delivery." />

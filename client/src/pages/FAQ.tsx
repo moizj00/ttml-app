@@ -8,8 +8,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ArrowRight, HelpCircle } from "lucide-react";
-import BrandLogo from "@/components/shared/BrandLogo";
 import Footer from "@/components/shared/Footer";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 
 const FAQ_CATEGORIES = [
   {
@@ -170,33 +171,12 @@ export default function FAQ() {
         <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
       </Helmet>
 
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
-          <BrandLogo href="/" size="sm" hideWordmarkOnMobile />
-          <div className="flex items-center gap-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="text-slate-600"
-            >
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Link href="/signup">Get Started</Link>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <PublicNav />
+      <PublicBreadcrumb items={[{ label: "FAQ" }]} />
 
       {/* Header */}
       <section
-        className="pt-24 pb-12 px-4"
+        className="pb-12 px-4"
         style={{
           background:
             "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 40%, #dbeafe 100%)",

@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "wouter";
 import { Mail, ArrowRight, BookOpen, TrendingUp, Star, FileText, ExternalLink } from "lucide-react";
-import BrandLogo from "@/components/shared/BrandLogo";
 import Footer from "@/components/shared/Footer";
+import PublicNav from "@/components/shared/PublicNav";
+import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
 
 const SAMPLE_NEWSLETTER = {
   hookHeadline: "Demand Letters Settle 60% of Disputes — Here's How to Make Yours Work",
@@ -43,17 +44,10 @@ export default function NewsletterTemplate() {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
-          <BrandLogo href="/" size="sm" hideWordmarkOnMobile />
-          <div className="flex items-center gap-3">
-            <Link href="/content-calendar" className="text-sm font-medium text-slate-600 hover:text-slate-900" data-testid="link-calendar">Content Calendar</Link>
-            <Link href="/" className="text-sm font-medium text-blue-600 hover:text-blue-800" data-testid="link-home">Home</Link>
-          </div>
-        </div>
-      </nav>
+      <PublicNav />
+      <PublicBreadcrumb items={[{ label: "Newsletter Template" }]} />
 
-      <section className="pt-24 pb-12 px-4" style={{ background: "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 40%, #dbeafe 100%)" }}>
+      <section className="pb-12 px-4" style={{ background: "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 40%, #dbeafe 100%)" }}>
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
             <Mail className="w-4 h-4" />
