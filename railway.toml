@@ -9,7 +9,3 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-
-# Increase start timeout to allow migrations to complete before health check.
-# Default is 60s; migrations on first deploy can take 30-60s.
-healthcheckTimeout = 120
