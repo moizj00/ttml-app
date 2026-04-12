@@ -1,5 +1,5 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { ChatOpenAI } from "@langchain/openai";
+import { generateText } from "./langchain";
 import type { ResearchPacket, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, TokenUsage } from "../../shared/types";
 import { accumulateTokens } from "./providers";
 import { captureServerException } from "../sentry";
@@ -172,10 +172,10 @@ export async function revalidateCitationsWithPerplexity(
     return { registry, modelKey: "none" };
   }
 
-  const perplexity = createOpenAI({
+  const perplexityModel = new ChatOpenAI({
+    model: "sonar",
     apiKey: perplexityApiKey,
-    baseURL: "https://api.perplexity.ai",
-    name: "perplexity",
+    configuration: { baseURL: "https://api.perplexity.ai" },
   });
 
   try {
@@ -183,7 +183,8 @@ export async function revalidateCitationsWithPerplexity(
       `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
-      model: perplexity.chat("sonar"),
+      model: perplexityModel,
+      system: "You are a legal citation verification assistant.",
       prompt,
       maxOutputTokens: 1000,
       abortSignal: AbortSignal.timeout(60_000),
@@ -297,4 +298,3 @@ export function replaceUnverifiedCitations(
   }
   return result;
 }
-
