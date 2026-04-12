@@ -34,20 +34,16 @@ vi.mock("../sentry", () => ({
   captureServerException: vi.fn(),
 }));
 
-vi.mock("ai", () => ({
+vi.mock("./langchain", () => ({
   generateText: vi.fn(),
 }));
 
-vi.mock("@ai-sdk/openai", () => ({
-  createOpenAI: vi.fn(() => ({
-    chat: vi.fn(),
-  })),
-  openai: vi.fn(),
+vi.mock("@langchain/anthropic", () => ({
+  ChatAnthropic: vi.fn(() => ({ invoke: vi.fn() })),
 }));
 
-vi.mock("@ai-sdk/anthropic", () => ({
-  createAnthropic: vi.fn(() => vi.fn()),
-  anthropic: vi.fn(),
+vi.mock("@langchain/openai", () => ({
+  ChatOpenAI: vi.fn(() => ({ invoke: vi.fn() })),
 }));
 
 vi.mock("./providers", () => ({
