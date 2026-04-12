@@ -175,14 +175,17 @@ submitted → researching → drafting → generated_locked
     │            │            │           ▼
     │            │            │     pending_review → under_review → approved
     │            │            │                   ↻ (release)      → rejected → submitted
-    │            │            │                                     → needs_changes → submitted
+    │            │            │                                     → needs_changes → submitted | pending_review
     │            │            │
     │            │            └→ submitted (pipeline failure reset)
     │            └→ submitted (pipeline failure reset)
     └→ pipeline_failed (any stage failure after retries)
     
-    approved (transient) → client_approval_pending → client_approved → sent
-                                                   → client_revision_requested → pending_review
+    approved → sent
+    approved → client_revision_requested → pending_review | under_review
+    approved → client_approval_pending → client_approved → sent
+                                       → client_revision_requested → pending_review | under_review
+                                       → client_declined (terminal)
     pipeline_failed → submitted (admin retry)
 ```
 
@@ -193,17 +196,19 @@ Exact transitions from `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`:
 - `generated_locked → pending_review` ($200 per-letter paywall or subscription)
 - `pending_review → under_review`
 - `under_review → approved | rejected | needs_changes | pending_review` (release claim)
-- `needs_changes → submitted`
-- `approved → client_approval_pending`
+- `needs_changes → submitted | pending_review`
+- `approved → sent | client_revision_requested | client_approval_pending`
 - `client_approval_pending → client_approved | client_declined | client_revision_requested`
-- `client_revision_requested → pending_review`
+- `client_revision_requested → pending_review | under_review`
 - `client_approved → sent`
 - `sent → (terminal)`
 - `rejected → submitted` (subscriber retry from scratch)
 - `client_declined → (terminal)`
 - `pipeline_failed → submitted` (admin-triggered retry)
 
-Note: `generated_unlocked` still exists in the DB enum for backward compatibility but is NOT part of the active status machine.
+Legacy pgEnum-only values (not part of the active state machine):
+- `generated_unlocked → pending_review` (legacy transition preserved for backward compatibility)
+- `upsell_dismissed` — no transitions, legacy pgEnum value only
 
 ---
 

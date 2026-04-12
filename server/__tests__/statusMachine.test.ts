@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { ALLOWED_TRANSITIONS, isValidTransition } from "../../shared/types";
-import { LETTER_STATUSES } from "../../drizzle/schema";
+import { ALLOWED_TRANSITIONS, isValidTransition, STATUS_CONFIG } from "../../shared/types";
+import {
+  LETTER_STATUSES,
+  JOB_TYPES,
+  LESSON_SOURCES,
+  jobTypeEnum,
+  lessonSourceEnum,
+  letterStatusEnum,
+} from "../../drizzle/schema";
+import { LETTER_STAGES, TERMINAL_ERROR_STATUSES } from "../../client/src/lib/letterStages";
+
+const LEGACY_STATUSES = ["generated_unlocked", "upsell_dismissed"];
 
 describe("Status Machine", () => {
   it("every status in LETTER_STATUSES has an entry in ALLOWED_TRANSITIONS", () => {
@@ -15,9 +25,7 @@ describe("Status Machine", () => {
   it("every transition target is a valid status", () => {
     const validStatuses = new Set<string>([
       ...LETTER_STATUSES,
-      // Legacy statuses kept for backward compatibility
-      "generated_unlocked",
-      "upsell_dismissed",
+      ...LEGACY_STATUSES,
     ]);
     for (const [from, targets] of Object.entries(ALLOWED_TRANSITIONS)) {
       for (const to of targets) {
@@ -72,6 +80,96 @@ describe("Status Machine", () => {
       expect(
         reachable.has(status),
         `Status "${status}" is not reachable from "submitted"`
+      ).toBe(true);
+    }
+  });
+});
+
+describe("Enum Drift Detection", () => {
+  it("every key in ALLOWED_TRANSITIONS exists in LETTER_STATUSES or is explicitly legacy", () => {
+    const validStatuses = new Set<string>([...LETTER_STATUSES, ...LEGACY_STATUSES]);
+    for (const key of Object.keys(ALLOWED_TRANSITIONS)) {
+      expect(
+        validStatuses.has(key),
+        `ALLOWED_TRANSITIONS key "${key}" is not in LETTER_STATUSES or LEGACY_STATUSES`
+      ).toBe(true);
+    }
+  });
+
+  it("every status in LETTER_STATUSES has an entry in STATUS_CONFIG", () => {
+    for (const status of LETTER_STATUSES) {
+      expect(
+        STATUS_CONFIG,
+        `Missing STATUS_CONFIG entry for status: ${status}`
+      ).toHaveProperty(status);
+    }
+  });
+
+  it("jobTypeEnum values match JOB_TYPES", () => {
+    const pgValues = new Set<string>(jobTypeEnum.enumValues);
+    const tsValues = new Set<string>(JOB_TYPES);
+    for (const val of pgValues) {
+      expect(
+        tsValues.has(val),
+        `jobTypeEnum value "${val}" is missing from JOB_TYPES`
+      ).toBe(true);
+    }
+    for (const val of tsValues) {
+      expect(
+        pgValues.has(val),
+        `JOB_TYPES value "${val}" is missing from jobTypeEnum`
+      ).toBe(true);
+    }
+  });
+
+  it("lessonSourceEnum values match LESSON_SOURCES", () => {
+    const pgValues = new Set<string>(lessonSourceEnum.enumValues);
+    const tsValues = new Set<string>(LESSON_SOURCES);
+    for (const val of pgValues) {
+      expect(
+        tsValues.has(val),
+        `lessonSourceEnum value "${val}" is missing from LESSON_SOURCES`
+      ).toBe(true);
+    }
+    for (const val of tsValues) {
+      expect(
+        pgValues.has(val),
+        `LESSON_SOURCES value "${val}" is missing from lessonSourceEnum`
+      ).toBe(true);
+    }
+  });
+
+  it("letterStatusEnum values match LETTER_STATUSES plus explicitly listed legacy values", () => {
+    const expectedPgValues = new Set<string>([...LETTER_STATUSES, ...LEGACY_STATUSES]);
+    const actualPgValues = new Set(letterStatusEnum.enumValues);
+    for (const val of actualPgValues) {
+      expect(
+        expectedPgValues.has(val),
+        `letterStatusEnum value "${val}" is not in LETTER_STATUSES or LEGACY_STATUSES`
+      ).toBe(true);
+    }
+    for (const val of expectedPgValues) {
+      expect(
+        actualPgValues.has(val),
+        `Expected pgEnum value "${val}" is missing from letterStatusEnum`
+      ).toBe(true);
+    }
+  });
+
+  it("letterStages stage mappings plus TERMINAL_ERROR_STATUSES cover every value in LETTER_STATUSES", () => {
+    const coveredStatuses = new Set<string>();
+    for (const stage of LETTER_STAGES) {
+      for (const status of stage.statuses) {
+        coveredStatuses.add(status);
+      }
+    }
+    for (const status of TERMINAL_ERROR_STATUSES) {
+      coveredStatuses.add(status);
+    }
+    for (const status of LETTER_STATUSES) {
+      expect(
+        coveredStatuses.has(status),
+        `LETTER_STATUSES value "${status}" is not covered by any letterStage or TERMINAL_ERROR_STATUSES`
       ).toBe(true);
     }
   });

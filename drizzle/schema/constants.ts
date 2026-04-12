@@ -72,7 +72,7 @@ export const JOB_STATUSES = ["queued", "running", "completed", "failed"] as cons
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 // ─── Job Types ───
-export const JOB_TYPES = ["research", "draft_generation", "generation_pipeline", "retry", "vetting"] as const;
+export const JOB_TYPES = ["research", "draft_generation", "generation_pipeline", "retry", "vetting", "assembly"] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 // ─── Research Statuses ───
@@ -86,8 +86,10 @@ export type Priority = (typeof PRIORITIES)[number];
 // ─── PostgreSQL Enums ───
 export const userRoleEnum = pgEnum("user_role", ["subscriber", "employee", "admin", "attorney"]);
 export const letterStatusEnum = pgEnum("letter_status", [
-  "submitted", "researching", "drafting", "generated_locked", "generated_unlocked",
-  "upsell_dismissed", "pipeline_failed",
+  "submitted", "researching", "drafting", "generated_locked",
+  "generated_unlocked", // legacy: kept in pgEnum for backward compatibility, not in active state machine
+  "upsell_dismissed", // legacy: kept in pgEnum for backward compatibility, not in active state machine
+  "pipeline_failed",
   "pending_review", "under_review", "needs_changes", "approved",
   "client_approval_pending", "client_revision_requested", "client_declined", "client_approved", "sent",
   "rejected",
@@ -124,7 +126,7 @@ export type LessonCategory = (typeof LESSON_CATEGORIES)[number];
 
 export const LESSON_SOURCES = [
   "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
-  "subscriber_update", "subscriber_retry",
+  "subscriber_update", "subscriber_retry", "consolidation",
 ] as const;
 export type LessonSource = (typeof LESSON_SOURCES)[number];
 

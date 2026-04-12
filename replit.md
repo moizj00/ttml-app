@@ -107,3 +107,9 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - Requires test user accounts (env vars `E2E_SUBSCRIBER_EMAIL`, etc.)
 - CI: runs as separate `e2e` job in `.github/workflows/ci.yml`
 - Does NOT interfere with vitest — completely separate test directories and configs
+
+### Enum Drift Prevention
+- Canonical reference: `docs/LIFECYCLE_AND_ENUMS.md`
+- Source of truth for enum values: `drizzle/schema/constants.ts`
+- Drift-detection tests: `server/__tests__/statusMachine.test.ts` — verifies TS consts match pgEnums, `ALLOWED_TRANSITIONS` keys match `LETTER_STATUSES`, `STATUS_CONFIG` covers all statuses, and `letterStages.ts` stage mappings cover all statuses
+- Legacy pgEnum-only values (`generated_unlocked`, `upsell_dismissed`) are marked with inline comments in `constants.ts`
