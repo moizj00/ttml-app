@@ -25,30 +25,27 @@ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js &
 WORKER_PID=$!
 echo "[start.sh] Pipeline worker started (PID=$WORKER_PID)"
 
-# On SIGTERM/SIGINT, forward the signal to both child processes so they can
-# shut down cleanly. Without this, only the shell exits and the children are
-# left running (or orphaned) when the container stops.
-cleanup() {
-  echo "[start.sh] Shutdown signal received — stopping server (PID: $SERVER_PID) and worker (PID: $WORKER_PID)..."
-  kill "$SERVER_PID" 2>/dev/null || true
-  kill "$WORKER_PID" 2>/dev/null || true
-}
-trap cleanup SIGTERM SIGINT
-
 # ── Start the Express server in the background ──
 echo "[start.sh] Starting Express server..."
 node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js &
 SERVER_PID=$!
 echo "[start.sh] Express server started (PID=$SERVER_PID)"
 
+# On SIGTERM/SIGINT/EXIT, forward the signal to both child processes so they
+# shut down cleanly. EXIT trap ensures cleanup runs even on set -e failures.
+cleanup() {
+  echo "[start.sh] Shutdown signal received — stopping server (PID: $SERVER_PID) and worker (PID: $WORKER_PID)..."
+  kill "$SERVER_PID" 2>/dev/null || true
+  kill "$WORKER_PID" 2>/dev/null || true
+  wait "$SERVER_PID" 2>/dev/null || true
+  wait "$WORKER_PID" 2>/dev/null || true
+}
+trap cleanup EXIT SIGTERM SIGINT
+
 # Wait for the server; capture its exit code safely past set -e.
 # Using `wait pid || EXIT_CODE=$?` avoids set -e terminating the script when
 # the server exits non-zero (e.g. uncaught exception, OOM).
 wait "$SERVER_PID" || EXIT_CODE=$?
 EXIT_CODE=${EXIT_CODE:-0}
-echo "[start.sh] Express server exited (code=$EXIT_CODE) — shutting down worker..."
-
-# Server exited — ensure worker is also stopped
-kill "$WORKER_PID" 2>/dev/null || true
-wait "$WORKER_PID" 2>/dev/null || true
+echo "[start.sh] Express server exited (code=$EXIT_CODE)"
 exit "$EXIT_CODE"
