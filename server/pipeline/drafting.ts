@@ -199,7 +199,7 @@ export async function runDraftingStage(
       },
       async () => {
         draftProvider = "anthropic-failover";
-        draftModelKey = "claude-sonnet-4";
+        draftModelKey = "gpt-4o-mini";
         const r = await generateText({
           model: getDraftModelFallback(),
           system: draftSystemPrompt,
@@ -251,7 +251,7 @@ export async function runDraftingStage(
       () => callPrimary(draftUserPrompt),
       () => {
         draftProvider = "anthropic-failover";
-        draftModelKey = "claude-sonnet-4";
+        draftModelKey = "gpt-4o-mini";
         return callFallback(draftUserPrompt);
       },
     );

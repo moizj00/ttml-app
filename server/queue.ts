@@ -147,13 +147,13 @@ export async function getBoss(): Promise<PgBoss> {
       throw startErr;
     }
     // Ensure the pipeline queue exists with desired retention settings.
-    // policy: 'key_strict_fifo' — blocks processing of jobs with the same
-    // singletonKey while any job with that key is active, in retry, or failed.
-    // Combined with singletonKey = `letter-{id}` on every send() call, this
-    // guarantees at most one active pipeline run per letter at any time.
+    // policy: 'standard' — allows new jobs to be enqueued even when a previous
+    // job for the same letter is in a failed state, so retries are never blocked.
+    // Duplicate concurrent runs are prevented at the application level via
+    // acquirePipelineLock() in worker.ts (DB-backed advisory lock per letter).
     try {
       await boss.createQueue(QUEUE_NAME, {
-        policy: "key_strict_fifo",
+        policy: "standard",
         retryLimit: 0,
         expireInSeconds: 30 * 60,
         deleteAfterSeconds: 7 * 24 * 60 * 60,
