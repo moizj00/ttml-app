@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText } from "./langchain";
 import {
   createWorkflowJob,
   createLetterVersion,
