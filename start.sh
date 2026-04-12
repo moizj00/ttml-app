@@ -1,8 +1,8 @@
 #!/bin/sh
 # start.sh — Production startup script.
 # 1. Run Drizzle migrations to ensure the DB schema is up-to-date.
-# 2. Start the pipeline worker (pg-boss consumer) in the background.
-# 3. Start the Express server with Sentry instrumentation (foreground).
+# 2. Start the pipeline worker in the background (consumes pg-boss jobs).
+# 3. Start the Express server in the background and wait on it (captures exit code).
 #
 # migrate.js exits with code 0 on success, non-zero on failure.
 # If migrations fail, neither the worker nor the server starts (fail-fast).
@@ -25,27 +25,30 @@ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js &
 WORKER_PID=$!
 echo "[start.sh] Pipeline worker started (PID=$WORKER_PID)"
 
-# ── Trap signals to gracefully shut down both processes ──
+# On SIGTERM/SIGINT, forward the signal to both child processes so they can
+# shut down cleanly. Without this, only the shell exits and the children are
+# left running (or orphaned) when the container stops.
 cleanup() {
-  echo "[start.sh] Shutting down..."
-  kill $WORKER_PID 2>/dev/null || true
-  kill $SERVER_PID 2>/dev/null || true
-  wait $WORKER_PID 2>/dev/null || true
-  wait $SERVER_PID 2>/dev/null || true
-  exit 0
+  echo "[start.sh] Shutdown signal received — stopping server (PID: $SERVER_PID) and worker (PID: $WORKER_PID)..."
+  kill "$SERVER_PID" 2>/dev/null || true
+  kill "$WORKER_PID" 2>/dev/null || true
 }
 trap cleanup SIGTERM SIGINT
 
-# ── Start the Express server (foreground) ──
+# ── Start the Express server in the background ──
 echo "[start.sh] Starting Express server..."
 node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js &
 SERVER_PID=$!
 echo "[start.sh] Express server started (PID=$SERVER_PID)"
 
-# ── Wait for either process to exit ──
-# If either the server or worker dies, we want to know about it.
-# Railway will restart the container based on restartPolicyType.
-wait -n $WORKER_PID $SERVER_PID 2>/dev/null || wait $WORKER_PID $SERVER_PID 2>/dev/null || true
-EXIT_CODE=$?
-echo "[start.sh] A process exited with code $EXIT_CODE — shutting down all processes"
-cleanup
+# Wait for the server; capture its exit code safely past set -e.
+# Using `wait pid || EXIT_CODE=$?` avoids set -e terminating the script when
+# the server exits non-zero (e.g. uncaught exception, OOM).
+wait "$SERVER_PID" || EXIT_CODE=$?
+EXIT_CODE=${EXIT_CODE:-0}
+echo "[start.sh] Express server exited (code=$EXIT_CODE) — shutting down worker..."
+
+# Server exited — ensure worker is also stopped
+kill "$WORKER_PID" 2>/dev/null || true
+wait "$WORKER_PID" 2>/dev/null || true
+exit "$EXIT_CODE"

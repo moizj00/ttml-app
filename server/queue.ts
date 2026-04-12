@@ -150,7 +150,8 @@ export async function getBoss(): Promise<PgBoss> {
     // We use 'standard' policy (the default) because 'key_strict_fifo' blocks
     // ALL new sends for a singletonKey if any prior job with that key is in
     // 'failed' state — which permanently blocks retries for that letter.
-    // Deduplication is handled at the application layer (pipeline lock).
+    // Deduplication is handled at the application layer via
+    // acquirePipelineLock() in worker.ts (conditional UPDATE on letter_requests.pipeline_locked_at).
     const DESIRED_QUEUE_OPTIONS = {
       policy: "standard" as const,
       retryLimit: 0,
