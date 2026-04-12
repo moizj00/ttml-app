@@ -1,7 +1,7 @@
 modules = ["nodejs-20", "web"]
 [agent]
 expertMode = true
-integrations = ["javascript_database:1.0.0", "github:1.0.0"]
+integrations = ["javascript_database:1.0.0", "github:1.0.0", "custom-mcp:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
@@ -168,6 +168,8 @@ R2_BUCKET_NAME = "talk-to-my-lawyer"
 SENTRY_ORG = "gnzsolutions"
 SENTRY_PROJECT = "node-express"
 GOOGLE_APPLICATION_CREDENTIALS = "/home/runner/workspace/server/gcp-credentials.json"
+N8N_MCP_URL = "https://designtec.app.n8n.cloud/mcp-server/http"
+N8N_PRIMARY = "true"
 
 [userenv.production]
 

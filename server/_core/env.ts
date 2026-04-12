@@ -10,6 +10,10 @@ export const ENV = {
   // n8n Integration
   n8nWebhookUrl: process.env.N8N_WEBHOOK_URL ?? "",
   n8nCallbackSecret: process.env.N8N_CALLBACK_SECRET ?? "",
+  // n8n MCP Integration (primary pipeline path)
+  n8nMcpUrl: process.env.N8N_MCP_URL ?? "",
+  n8nMcpBearerToken: process.env.N8N_MCP_BEARER_TOKEN ?? "",
+  n8nPrimary: process.env.N8N_PRIMARY === "true",
   // Email
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "noreply@talk-to-my-lawyer.com",
