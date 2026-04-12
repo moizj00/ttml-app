@@ -1,13 +1,13 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
+import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatOpenAI } from "@langchain/openai";
 import type { TokenUsage } from "../../shared/types";
 import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
-// MODEL PROVIDERS
+// MODEL PROVIDERS (LangChain + LangSmith)
 // ═══════════════════════════════════════════════════════
 
-// ── Anthropic (Claude) — direct API, used for Stage 2 (draft) and Stage 3 (assembly) ──
+// ── Anthropic (Claude) — returns a factory: call with model name to get a LangChain model ──
 export function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -15,10 +15,11 @@ export function getAnthropicClient() {
       "[Pipeline] ANTHROPIC_API_KEY is not set — cannot run drafting or assembly stages"
     );
   }
-  return createAnthropic({ apiKey });
+  return (modelName: string) =>
+    new ChatAnthropic({ model: modelName, anthropicApiKey: apiKey });
 }
 
-// ── OpenAI — used as backup/failover model for all stages ──
+// ── OpenAI — returns a factory: call with model name to get a LangChain model ──
 export function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -26,7 +27,8 @@ export function getOpenAIClient() {
       "[Pipeline] OPENAI_API_KEY is not set — OpenAI failover is unavailable"
     );
   }
-  return createOpenAI({ apiKey });
+  return (modelName: string) =>
+    new ChatOpenAI({ model: modelName, apiKey });
 }
 
 /** Returns true if OpenAI failover is available (API key is set) */
@@ -40,20 +42,29 @@ export function getResearchModel() {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
     logger.warn(
-      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to OpenAI gpt-4o for research"
+      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to Claude Opus 4.6 for research (ungrounded)"
     );
-    const openai = getOpenAIClient();
+    const anthropic = getAnthropicClient();
     return {
-      model: openai("gpt-4o"),
-      provider: "openai-fallback",
+      model: anthropic("claude-opus-4-6-20250612"),
+      provider: "claude-opus-fallback",
     };
   }
-  const perplexity = createOpenAI({
+  const model = new ChatOpenAI({
+    model: "sonar",
     apiKey,
-    baseURL: "https://api.perplexity.ai",
-    name: "perplexity",
+    configuration: { baseURL: "https://api.perplexity.ai" },
   });
-  return { model: perplexity.chat("sonar"), provider: "perplexity" };
+  return { model, provider: "perplexity" };
+}
+
+/** Stage 1 failover: Claude Opus 4.6 — used when Perplexity is rate-limited or credits exhausted */
+export function getResearchModelFallback() {
+  const anthropic = getAnthropicClient();
+  return {
+    model: anthropic("claude-opus-4-6-20250612"),
+    provider: "claude-opus-fallback",
+  };
 }
 
 
@@ -120,7 +131,8 @@ export function createTokenAccumulator(): TokenUsage {
 
 export function accumulateTokens(
   acc: TokenUsage,
-  // AI SDK v6 uses inputTokens/outputTokens; accept both shapes for compatibility
+  // LangChain uses inputTokens/outputTokens; Vercel AI SDK uses the same.
+  // Accept both shapes for compatibility during migration.
   usage: { inputTokens?: number; outputTokens?: number; promptTokens?: number; completionTokens?: number } | undefined
 ) {
   if (!usage) return;
@@ -136,4 +148,3 @@ export function calculateCost(modelKey: string, usage: TokenUsage): string {
   const outputCost = (usage.completionTokens / 1_000_000) * pricing.outputPerMillion;
   return (inputCost + outputCost).toFixed(6);
 }
-
