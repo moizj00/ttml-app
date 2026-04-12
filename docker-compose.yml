@@ -1,0 +1,55 @@
+# docker-compose.yml — Local/dev orchestration for TTML
+#
+# Usage:
+#   docker compose up app worker          # start web + worker
+#   docker compose run --rm migrate       # run migrations (one-shot)
+#   docker compose up --build             # rebuild and start app + worker
+#
+# This assumes external managed services (Supabase, Stripe, Resend, etc.)
+# configured via .env. No local Postgres or Redis is needed.
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  environment:
+    - NODE_ENV=production
+
+services:
+  # ── Migrations (one-shot job) ────────────────────────────────────────────
+  # Run before starting app and worker:
+  #   docker compose run --rm migrate
+  migrate:
+    <<: *common
+    command: ["node", "--dns-result-order=ipv4first", "dist/migrate.js"]
+    profiles: ["ops"]
+    restart: "no"
+
+  # ── Web server (Express + tRPC + static client) ─────────────────────────
+  app:
+    <<: *common
+    command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3000}/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        required: false
+
+  # ── Pipeline worker (pg-boss consumer) ──────────────────────────────────
+  worker:
+    <<: *common
+    command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/worker.js"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+        required: false
