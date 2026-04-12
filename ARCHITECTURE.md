@@ -45,6 +45,8 @@
 | Attorney | `attorney` | Review Center (queue + detail), SLA dashboard | `/attorney` |
 | Super Admin | `admin` | Full platform access, user management, jobs, letters, affiliate oversight | `/admin` |
 
+> **Full access matrix →** [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md)
+
 ---
 
 ## Status Machine (Letter Lifecycle)
