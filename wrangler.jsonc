@@ -1,0 +1,34 @@
+/**
+ * Cloudflare Workers configuration — static frontend + API proxy.
+ *
+ * This file exists so Cloudflare Workers Builds skips its Vite auto-setup
+ * flow (which tries and fails to modify vite.config.ts with @cloudflare/vite-plugin).
+ *
+ * Deploys:
+ *   - dist/public (Vite-built React client) → Cloudflare edge static assets
+ *   - cloudflare/worker.ts                  → minimal Worker that proxies /api/* to Railway
+ *
+ * The Express + pg-boss backend still runs on Railway. This deployment serves
+ * the client from Cloudflare's global edge and transparently forwards API calls
+ * to Railway so the client can keep using relative /api/trpc paths (same-origin,
+ * no CORS, cookies flow through).
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ttml-app",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "RAILWAY_BACKEND_URL": "https://www.talk-to-my-lawyer.com"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
