@@ -39,7 +39,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 ### Technical Implementations
 - **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
-- **Database**: PostgreSQL via Supabase, accessed with Drizzle ORM + `postgres-js`.
+- **Database**: PostgreSQL via Replit's built-in database (migrated from Supabase), accessed with Drizzle ORM + `postgres-js`. All 24 schema tables are applied via the migrations in `drizzle/migrations/` and `drizzle/*.sql`.
 - **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE with SameSite=None), custom Resend verification emails. Admin 2FA enforced.
 - **AI Pipeline**: A 4-stage pipeline: (1) Perplexity Research (fail-hard, no fallback), (2) OpenAI GPT-4o Drafting (Claude Sonnet fallback), (3) Claude Sonnet Assembly (OpenAI GPT-4o-mini fallback), (4) Claude Sonnet Vetting (OpenAI GPT-4o-mini fallback). Two-tier failover (primary + fallback). Groq OSS tier removed. Automatic retry with exponential backoff for overall pipeline resilience.
 - **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback, including AI-powered categorization, deduplication, and effectiveness tracking.
