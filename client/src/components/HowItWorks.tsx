@@ -69,26 +69,166 @@ function IconCheckmark({ className }: { className?: string }) {
 
 function useScrollProgress(containerRef: React.RefObject<HTMLDivElement | null>) {
   const scrollYProgress = useMotionValue(0);
+  const lockedRef = useRef(false);
+  const virtualProgressRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const prevBodyOverflowRef = useRef("");
+  const prevBodyTouchActionRef = useRef("");
+  const scrollSpeedFactor = 0.0008;
+  const touchSpeedFactor = 0.002;
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    const isStickyActive = () => {
+      const rect = el.getBoundingClientRect();
+      return rect.top <= 0 && rect.bottom >= window.innerHeight;
+    };
+
+    const lockScroll = () => {
+      if (!lockedRef.current) {
+        prevBodyOverflowRef.current = document.body.style.overflow;
+        prevBodyTouchActionRef.current = document.body.style.touchAction;
+        lockedRef.current = true;
+        document.body.style.overflow = "hidden";
+        document.body.style.touchAction = "none";
+      }
+    };
+
+    const unlockScroll = () => {
+      if (lockedRef.current) {
+        lockedRef.current = false;
+        document.body.style.overflow = prevBodyOverflowRef.current;
+        document.body.style.touchAction = prevBodyTouchActionRef.current;
+      }
+    };
+
+    const repositionAndUnlock = (atEnd: boolean) => {
+      unlockScroll();
+      const scrollableHeight = el.scrollHeight - window.innerHeight;
+      const rect = el.getBoundingClientRect();
+      const targetScrollTop = atEnd
+        ? window.scrollY + rect.top + scrollableHeight
+        : window.scrollY + rect.top;
+      window.scrollTo({ top: targetScrollTop, behavior: "auto" });
+    };
+
+    const shouldLock = (progress: number, delta: number) => {
+      if (progress > 0 && progress < 1) return true;
+      if (progress <= 0 && delta > 0) return true;
+      if (progress >= 1 && delta < 0) return true;
+      return false;
+    };
+
     const onScroll = () => {
+      if (lockedRef.current) return;
+
+      if (!isStickyActive()) return;
+
       const rect = el.getBoundingClientRect();
       const scrollableHeight = el.scrollHeight - window.innerHeight;
-      if (scrollableHeight <= 0) {
-        scrollYProgress.set(0);
-        return;
-      }
+      if (scrollableHeight <= 0) return;
       const scrolled = -rect.top;
       const progress = Math.max(0, Math.min(1, scrolled / scrollableHeight));
+      virtualProgressRef.current = progress;
       scrollYProgress.set(progress);
+
+      if (progress > 0 && progress < 1) {
+        lockScroll();
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!lockedRef.current) {
+        if (!isStickyActive()) return;
+
+        const rect = el.getBoundingClientRect();
+        const scrollableHeight = el.scrollHeight - window.innerHeight;
+        if (scrollableHeight <= 0) return;
+        const scrolled = -rect.top;
+        const progress = Math.max(0, Math.min(1, scrolled / scrollableHeight));
+        virtualProgressRef.current = progress;
+        scrollYProgress.set(progress);
+
+        if (shouldLock(progress, e.deltaY)) {
+          lockScroll();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      e.preventDefault();
+
+      const delta = e.deltaY * scrollSpeedFactor;
+      const newProgress = Math.max(0, Math.min(1, virtualProgressRef.current + delta));
+      virtualProgressRef.current = newProgress;
+      scrollYProgress.set(newProgress);
+
+      if (newProgress <= 0 && delta < 0) {
+        repositionAndUnlock(false);
+      } else if (newProgress >= 1 && delta > 0) {
+        repositionAndUnlock(true);
+      }
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartYRef.current = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const touchY = e.touches[0].clientY;
+      const touchDelta = touchStartYRef.current - touchY;
+
+      if (!lockedRef.current) {
+        if (!isStickyActive()) return;
+
+        const rect = el.getBoundingClientRect();
+        const scrollableHeight = el.scrollHeight - window.innerHeight;
+        if (scrollableHeight <= 0) return;
+        const scrolled = -rect.top;
+        const progress = Math.max(0, Math.min(1, scrolled / scrollableHeight));
+        virtualProgressRef.current = progress;
+        scrollYProgress.set(progress);
+
+        if (shouldLock(progress, touchDelta)) {
+          lockScroll();
+          e.preventDefault();
+        }
+        touchStartYRef.current = touchY;
+        return;
+      }
+
+      e.preventDefault();
+
+      const delta = touchDelta * touchSpeedFactor;
+      touchStartYRef.current = touchY;
+
+      const newProgress = Math.max(0, Math.min(1, virtualProgressRef.current + delta));
+      virtualProgressRef.current = newProgress;
+      scrollYProgress.set(newProgress);
+
+      if (newProgress <= 0 && delta < 0) {
+        repositionAndUnlock(false);
+      } else if (newProgress >= 1 && delta > 0) {
+        repositionAndUnlock(true);
+      }
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      unlockScroll();
+    };
   }, [containerRef, scrollYProgress]);
 
   return scrollYProgress;
