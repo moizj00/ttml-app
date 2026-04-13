@@ -72,7 +72,7 @@ export async function runSimplePipeline(
     logger.info({ letterId, userId }, "[Simple] Starting simple pipeline");
 
     // Update status to indicate pipeline started
-    await updateLetterStatus(letterId, "generating");
+    await updateLetterStatus(letterId, "drafting");
 
     // Build the prompt
     const prompt = buildPrompt(intake);
@@ -108,12 +108,13 @@ export async function runSimplePipeline(
       "[Simple] Claude generated letter"
     );
 
-    // Save to database
+    // Save as ai_draft version (this is what the paywall expects)
     await createLetterVersion({
       letterRequestId: letterId,
-      versionType: "final",
+      versionType: "ai_draft",
       content: letterContent,
-      createdByUserId: userId ?? null,
+      createdByType: "system",
+      createdByUserId: userId,
     });
 
     // Mark as complete
