@@ -35,6 +35,8 @@ import {
 import { captureServerException } from "../sentry";
 import { enqueuePipelineJob } from "../queue";
 import { extractLessonFromSubscriberFeedback } from "../learning";
+import { runSimplePipeline } from "../pipeline/simple";
+import type { NotificationCategory } from "../db/notifications";
 import {
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
@@ -147,24 +149,65 @@ export async function submitLetter(
     });
   }
 
-  try {
-    await enqueuePipelineJob({
-      type: "runPipeline",
-      letterId,
-      intake: input.intakeJson,
-      userId: ctx.userId,
-      appUrl,
-      label: "submit",
-      usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
-    });
-  } catch (enqueueErr) {
-    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-    captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-    await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
-    });
+  // ── Simple Pipeline Mode ─────────────────────────────────────────────────
+  // When PIPELINE_MODE=simple, run the pipeline with a configurable delay.
+  // Default: 5 minutes delay to show the progress timeline to users.
+  // Set PIPELINE_DELAY_MS=0 to run immediately (for testing).
+  const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+  if (useSimplePipeline) {
+    const delayMs = parseInt(process.env.PIPELINE_DELAY_MS ?? "300000", 10); // Default 5 minutes
+    logger.info({ letterId, delayMs }, "[Submit] Scheduling simple pipeline (PIPELINE_MODE=simple)");
+    
+    // Run pipeline after delay (fire-and-forget, user sees progress timeline)
+    setTimeout(async () => {
+      try {
+        logger.info({ letterId }, "[Submit] Starting delayed simple pipeline execution");
+        const result = await runSimplePipeline(letterId, input.intakeJson, ctx.userId);
+        if (!result.success) {
+          logger.error({ letterId, error: result.error }, "[Submit] Delayed simple pipeline failed:");
+          await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+          // Notify user of failure
+          await createNotification({
+            userId: ctx.userId,
+            type: "letter_failed",
+            title: "Letter generation failed",
+            body: "We could not generate your letter. Your usage has been refunded. Please try again.",
+            link: `/dashboard/letters/${letterId}`,
+            category: "letters" satisfies NotificationCategory,
+          }).catch(() => {});
+        } else {
+          logger.info({ letterId }, "[Submit] Delayed simple pipeline completed successfully");
+        }
+      } catch (pipelineErr) {
+        logger.error({ err: pipelineErr, letterId }, "[Submit] Delayed simple pipeline threw an error:");
+        captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "delayed_pipeline_failed" } });
+        await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      }
+    }, delayMs);
+    
+    // Return immediately - user sees "submitted" status and progress timeline
+    logger.info({ letterId, delayMs }, "[Submit] Pipeline scheduled, returning to user");
+  } else {
+    // ── Standard Queue-Based Pipeline ────────────────────────────────────────
+    try {
+      await enqueuePipelineJob({
+        type: "runPipeline",
+        letterId,
+        intake: input.intakeJson,
+        userId: ctx.userId,
+        appUrl,
+        label: "submit",
+        usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+      });
+    } catch (enqueueErr) {
+      logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+      captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+      await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
+      });
+    }
   }
 
   // Fire-and-forget: admin notification is non-blocking after successful enqueue
