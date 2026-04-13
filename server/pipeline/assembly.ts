@@ -11,7 +11,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 
-import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getAssemblyModel, getAssemblyModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock } from "./citations";
@@ -62,22 +62,22 @@ export async function runAssemblyStage(
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
 
   const assemblyTokens = createTokenAccumulator();
-  let assemblyProvider = "openai";
-  let assemblyModelKey = "gpt-4o-mini";
+  let assemblyProvider = "anthropic";
+  let assemblyModelKey = "claude-sonnet-4-6-20250514";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
     // Reset provider to primary on each retry to avoid tier collapse
     // (previous failover mutations would otherwise make retry start on the fallback model)
-    assemblyProvider = "openai";
-    assemblyModelKey = "gpt-4o-mini";
+    assemblyProvider = "anthropic";
+    assemblyModelKey = "claude-sonnet-4-6-20250514";
     const promptWithFeedback = errorFeedback
       ? assemblyUser + errorFeedback
       : assemblyUser;
-    const { result: assemblyResult, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
+    const { result: assemblyResult, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 3 (assembly retry)",
       letterId,
       async () => {
-        const model = assemblyProvider === "openai-failover" ? getAssemblyModelFallback() : assemblyProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getAssemblyModel();
+        const model = assemblyProvider === "openai-failover" ? getAssemblyModelFallback() : getAssemblyModel();
         const r = await generateText({
           model,
           system: assemblySystem,
@@ -100,33 +100,13 @@ export async function runAssemblyStage(
         });
         accumulateTokens(assemblyTokens, r.usage);
         return r;
-      },
-      async () => {
-        assemblyProvider = "groq-oss-fallback";
-        assemblyModelKey = "llama-3.3-70b-versatile";
-        const r = await generateText({
-          model: getFreeOSSModelFallback(),
-          system: assemblySystem,
-          prompt: promptWithFeedback,
-          maxOutputTokens: 10000,
-          abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
-        });
-        accumulateTokens(assemblyTokens, r.usage);
-        return r;
       }
     );
-    if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
-      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("ASSEMBLY_OSS_FALLBACK"))) {
-        pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during assembly retry (both Claude and OpenAI were unavailable). Legal structure and tone may differ significantly. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (retryFailover && pipelineCtx) {
+    if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("ASSEMBLY_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_FAILOVER: Switched to OpenAI GPT-4o-mini during assembly retry due to rate limit on primary model.`
+          `ASSEMBLY_FAILOVER: Claude was rate-limited during assembly retry. Switched to OpenAI GPT-4o-mini. Legal structure and tone may differ slightly. Heightened attorney scrutiny recommended.`
         );
       }
     }
@@ -174,7 +154,7 @@ export async function runAssemblyStage(
   try {
     assemblyLogger.info({ letterId }, "[Pipeline] Stage 3: Claude final assembly starting");
 
-    const { result: firstAssemblyResult, provider: initialAssemblyProvider, failoverTriggered: assemblyFailover } = await withModelFailover(
+    const { result: firstAssemblyResult, failoverTriggered: assemblyFailover } = await withModelFailover(
       "Stage 3 (assembly)",
       letterId,
       () => {
@@ -198,34 +178,15 @@ export async function runAssemblyStage(
           maxOutputTokens: 10000,
           abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
         });
-      },
-      async () => {
-        assemblyProvider = "groq-oss-fallback";
-        assemblyModelKey = "llama-3.3-70b-versatile";
-        return generateText({
-          model: getFreeOSSModelFallback(),
-          system: assemblySystem,
-          prompt: assemblyUser,
-          maxOutputTokens: 10000,
-          abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
-        });
       }
     );
 
-    if (initialAssemblyProvider === "groq-oss-fallback") {
-      assemblyLogger.warn({ letterId }, "[Pipeline] Stage 3: Groq Llama 3.3 used as last-resort (ASSEMBLY_OSS_FALLBACK)");
+    if (assemblyFailover) {
+      assemblyLogger.warn({ letterId, provider: assemblyProvider }, "[Pipeline] Stage 3: Claude rate-limited — switched to OpenAI GPT-4o-mini");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for assembly (both Claude and OpenAI were unavailable). Legal structure and tone may differ significantly. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (assemblyFailover) {
-      assemblyLogger.warn({ letterId, provider: assemblyProvider }, "[Pipeline] Stage 3: Switched to OpenAI GPT-4o-mini failover");
-      if (pipelineCtx) {
-        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-        pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_FAILOVER: Primary assembly model (Claude) was rate-limited. Final assembly generated by OpenAI GPT-4o-mini. Legal structure and tone may differ from Claude standard.`
+          `ASSEMBLY_FAILOVER: Primary assembly model (Claude) was rate-limited. Final assembly generated by OpenAI GPT-4o-mini. Legal structure and tone may differ slightly. Heightened attorney scrutiny recommended.`
         );
       }
     }
@@ -322,7 +283,7 @@ export async function runAssemblyStage(
       estimatedCostUsd: calculateCost(assemblyModelKey, assemblyTokens),
       responsePayloadJson: {
         provider: assemblyProvider,
-        failoverUsed: assemblyProvider === "openai-failover" || assemblyProvider === "groq-oss-fallback",
+        failoverUsed: assemblyProvider === "openai-failover",
         consistencyReport: checks.consistency,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
         wordCount: rawFinalLetter.split(/\s+/).filter(w => w.length > 0).length,

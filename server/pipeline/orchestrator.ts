@@ -34,7 +34,8 @@ const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 // and both branches of retryPipelineFromStage.
 // ═══════════════════════════════════════════════════════
 
-const UNGROUNDED_PROVIDERS = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+// Perplexity-only research: always web-grounded, fail-hard if unavailable.
+// No fallback providers — researchUnverified is always false.
 
 async function applyResearchGroundingAndRevalidate(
   letterId: number,
@@ -45,9 +46,9 @@ async function applyResearchGroundingAndRevalidate(
   opts?: { researchFromCache?: boolean },
 ): Promise<void> {
   pipelineCtx.researchProvider = researchProvider;
-  pipelineCtx.researchUnverified = UNGROUNDED_PROVIDERS.has(researchProvider);
-  pipelineCtx.webGrounded = !UNGROUNDED_PROVIDERS.has(researchProvider);
-  await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
+  pipelineCtx.researchUnverified = false;
+  pipelineCtx.webGrounded = true;
+  await setLetterResearchUnverified(letterId, false);
 
   let citationRegistry = buildCitationRegistry(research);
   orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
@@ -56,7 +57,6 @@ async function applyResearchGroundingAndRevalidate(
   const researchFromCache = opts?.researchFromCache ?? (researchProvider === "kv-cache");
   const allHighConfidence = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
   const skipRevalidation =
-    pipelineCtx.researchUnverified ||
     citationRegistry.length === 0 ||
     citationRegistry.length < 3 ||
     researchFromCache ||
@@ -64,7 +64,6 @@ async function applyResearchGroundingAndRevalidate(
 
   if (skipRevalidation) {
     const reasons: string[] = [];
-    if (pipelineCtx.researchUnverified) reasons.push("research unverified");
     if (citationRegistry.length === 0) reasons.push("no citations");
     if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
     if (researchFromCache) reasons.push("research served from KV cache (already validated)");

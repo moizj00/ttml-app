@@ -9,7 +9,7 @@ import { logger } from "../logger";
 // MODEL PROVIDERS
 // ═══════════════════════════════════════════════════════
 
-// ── Anthropic (Claude) — direct API, used for Stage 2 (draft) and Stage 3 (assembly) ──
+// ── Anthropic (Claude) — direct API, used for Stage 3 (assembly) and Stage 4 (vetting) ──
 export function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -20,7 +20,7 @@ export function getAnthropicClient() {
   return createAnthropic({ apiKey });
 }
 
-// ── OpenAI — used as backup/failover model for all stages ──
+// ── OpenAI — primary drafter (Stage 2) and failover for assembly/vetting ──
 export function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -80,25 +80,25 @@ export function getResearchModelFallback(): {
   };
 }
 
-/** Stage 2: OpenAI gpt-4o-mini — initial legal draft (cost-optimized) */
+/** Stage 2: OpenAI gpt-4o — primary legal drafter */
 export function getDraftModel() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
+  return openai("gpt-4o");
 }
 
-/** Stage 2 failover: OpenAI gpt-4o-mini */
+/** Stage 2 failover: OpenAI gpt-4o-mini (cost-optimized fallback) */
 export function getDraftModelFallback() {
   const openai = getOpenAIClient();
   return openai("gpt-4o-mini");
 }
 
-/** Stage 3: OpenAI gpt-4o-mini — final polished letter assembly (cost-optimized) */
+/** Stage 3: Anthropic claude-sonnet-4-6 — validates and assembles the final letter */
 export function getAssemblyModel() {
-  const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
+  const anthropic = getAnthropicClient();
+  return anthropic("claude-sonnet-4-6-20250514");
 }
 
-/** Stage 3 failover: OpenAI gpt-4o-mini */
+/** Stage 3 failover: OpenAI gpt-4o-mini (used if Claude is unavailable) */
 export function getAssemblyModelFallback() {
   const openai = getOpenAIClient();
   return openai("gpt-4o-mini");
@@ -149,11 +149,11 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
   "claude-opus-4-6-20250612": { inputPerMillion: 15, outputPerMillion: 75 },
-  "claude-sonnet-4-6-20250514": { inputPerMillion: 3, outputPerMillion: 15 },
+  "claude-sonnet-4-6-20250514": { inputPerMillion: 3, outputPerMillion: 15 }, // Stage 3 assembly + Stage 4 vetting
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
   "claude-sonnet-4-20250514": SONNET_PRICING,
   "claude-sonnet-4": SONNET_PRICING,
-  "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
+  "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 }, // Stage 2 primary drafter
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "llama-3.3-70b-versatile": { inputPerMillion: 0, outputPerMillion: 0 },

@@ -21,7 +21,7 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { sendNewReviewNeededEmail, sendAdminAlertEmail, sendLetterReadyEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
-import { getAnthropicClient, getVettingModelFallback, getFreeOSSModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
+import { getAnthropicClient, getVettingModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { runCitationAudit, replaceUnverifiedCitations, buildCitationRegistry } from "./citations";
 import { runAssemblyStage } from "./assembly";
@@ -158,32 +158,10 @@ export async function runVettingStage(
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
-    const { result: vettingText, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
+    const { result: vettingText, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 4 (vetting retry)",
       letterId,
       async () => {
-        if (vettingProvider === "openai-failover") {
-          const { text, usage: vettingUsage } = await generateText({
-            model: getVettingModelFallback(),
-            system: systemPrompt,
-            prompt: promptWithFeedback,
-            maxOutputTokens: 16000,
-            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-          });
-          accumulateTokens(vettingTokens, vettingUsage);
-          return text;
-        }
-        if (vettingProvider === "groq-oss-fallback") {
-          const { text, usage: vettingUsage } = await generateText({
-            model: getFreeOSSModelFallback(),
-            system: systemPrompt,
-            prompt: promptWithFeedback,
-            maxOutputTokens: 16000,
-            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-          });
-          accumulateTokens(vettingTokens, vettingUsage);
-          return text;
-        }
         const anthropic = getAnthropicClient();
         const { text, usage: vettingUsage } = await generateText({
           model: anthropic("claude-sonnet-4-6-20250514"),
@@ -207,29 +185,9 @@ export async function runVettingStage(
         });
         accumulateTokens(vettingTokens, vettingUsage);
         return text;
-      },
-      async () => {
-        vettingProvider = "groq-oss-fallback";
-        vettingModelKey = "llama-3.3-70b-versatile";
-        const { text, usage: vettingUsage } = await generateText({
-          model: getFreeOSSModelFallback(),
-          system: systemPrompt,
-          prompt: promptWithFeedback,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        });
-        accumulateTokens(vettingTokens, vettingUsage);
-        return text;
       }
     );
-    if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
-      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_OSS_FALLBACK"))) {
-        pipelineCtx.qualityWarnings.push(
-          `VETTING_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during vetting retry (both Claude and OpenAI were unavailable). Quality vetting may be incomplete. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (retryFailover && pipelineCtx) {
+    if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
@@ -245,7 +203,7 @@ export async function runVettingStage(
       `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
     );
 
-    const { result: initialVettingText, provider: initialVettingProvider, failoverTriggered: vettingFailover } = await withModelFailover(
+      const { result: initialVettingText, failoverTriggered: vettingFailover } = await withModelFailover(
       "Stage 4 (vetting)",
       letterId,
       () => {
@@ -268,41 +226,19 @@ export async function runVettingStage(
           maxOutputTokens: 16000,
           abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
         }).then(r => { accumulateTokens(vettingTokens, r.usage); return r.text; });
-      },
-      async () => {
-        vettingProvider = "groq-oss-fallback";
-        vettingModelKey = "llama-3.3-70b-versatile";
-        const r = await generateText({
-          model: getFreeOSSModelFallback(),
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        });
-        accumulateTokens(vettingTokens, r.usage);
-        return r.text;
       }
     );
-
-    if (initialVettingProvider === "groq-oss-fallback") {
-      logger.warn(
-        `[Pipeline] Stage 4: Groq Llama 3.3 used as last-resort for letter #${letterId} (VETTING_OSS_FALLBACK)`
-      );
-      if (pipelineCtx) {
-        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-        pipelineCtx.qualityWarnings.push(
-          `VETTING_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for vetting (both Claude Sonnet and OpenAI were unavailable). Quality vetting may be significantly reduced. Heightened attorney scrutiny required.`
-        );
-      }
-    } else if (vettingFailover) {
+    if (vettingFailover) {
       logger.warn(
         `[Pipeline] Stage 4: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${vettingProvider})`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-        pipelineCtx.qualityWarnings.push(
-          `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o-mini. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
-        );
+        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
+          pipelineCtx.qualityWarnings.push(
+            `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o-mini. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
+          );
+        }
       }
     }
 
@@ -451,7 +387,7 @@ export async function runVettingStage(
         ),
         responsePayloadJson: {
           provider: vettingProvider,
-          failoverUsed: vettingProvider === "openai-failover" || vettingProvider === "groq-oss-fallback",
+          failoverUsed: vettingProvider === "openai-failover",
           vettingReport: currentReport,
           bloatDetected: detectedBloat.length,
           preVetCitationAudit: {
@@ -503,7 +439,7 @@ export async function runVettingStage(
       ),
       responsePayloadJson: {
         provider: vettingProvider,
-        failoverUsed: vettingProvider === "openai-failover" || vettingProvider === "groq-oss-fallback",
+        failoverUsed: vettingProvider === "openai-failover",
         vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
         preVetCitationAudit: {
