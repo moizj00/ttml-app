@@ -36,6 +36,7 @@ import { captureServerException } from "../sentry";
 import { enqueuePipelineJob } from "../queue";
 import { extractLessonFromSubscriberFeedback } from "../learning";
 import { runSimplePipeline } from "../pipeline/simple";
+import type { NotificationCategory } from "../db/notifications";
 import {
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
@@ -170,9 +171,9 @@ export async function submitLetter(
             userId: ctx.userId,
             type: "letter_failed",
             title: "Letter generation failed",
-            body: "We couldn't generate your letter. Your usage has been refunded. Please try again.",
+            body: "We could not generate your letter. Your usage has been refunded. Please try again.",
             link: `/dashboard/letters/${letterId}`,
-            category: "letters",
+            category: "letters" satisfies NotificationCategory,
           }).catch(() => {});
         } else {
           logger.info({ letterId }, "[Submit] Delayed simple pipeline completed successfully");

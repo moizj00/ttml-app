@@ -5,8 +5,10 @@
  * for safe display behind the paywall preview.
  */
 
+type PIIPattern = { pattern: RegExp; replacement: string };
+
 // Patterns for common PII
-const PII_PATTERNS = [
+const PII_PATTERNS: PIIPattern[] = [
   // Email addresses
   { pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi, replacement: "[EMAIL REDACTED]" },
   
@@ -39,7 +41,7 @@ const PII_PATTERNS = [
 ];
 
 // Names in specific contexts (after "Dear", "From:", "To:", "Sincerely,", etc.)
-const NAME_CONTEXT_PATTERNS = [
+const NAME_CONTEXT_PATTERNS: PIIPattern[] = [
   // After "Dear"
   { pattern: /\bDear\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi, replacement: "Dear [NAME REDACTED]" },
   
@@ -53,21 +55,22 @@ const NAME_CONTEXT_PATTERNS = [
   { pattern: /\bTo:\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi, replacement: "To: [NAME REDACTED]" },
 ];
 
+export type RedactPIIOptions = {
+  redactNames?: boolean;
+  redactAddresses?: boolean;
+  redactFinancial?: boolean;
+  preserveStructure?: boolean;
+};
+
 /**
- * Redact PII from text content
- * 
+ * Redact PII from text content.
  * @param content - The raw letter content
  * @param options - Redaction options
- * @returns Redacted content safe for preview
+ * @returns Redacted content safe for paywall preview
  */
 export function redactPII(
   content: string,
-  options: {
-    redactNames?: boolean;
-    redactAddresses?: boolean;
-    redactFinancial?: boolean;
-    preserveStructure?: boolean;
-  } = {}
+  options: RedactPIIOptions = {}
 ): string {
   const {
     redactNames = true,
@@ -136,14 +139,14 @@ export function createPaywallPreview(
 
 /**
  * Check if content likely contains PII
- * Useful for validation/flagging
+ * Useful for validation/flagging.
+ * Uses a fresh regex test (via source clone) to avoid stateful lastIndex issues.
  */
 export function containsPII(content: string): boolean {
   for (const { pattern } of PII_PATTERNS) {
-    if (pattern.test(content)) {
-      pattern.lastIndex = 0; // Reset regex state
-      return true;
-    }
+    // Clone the regex to avoid mutating shared lastIndex on global regexes
+    const fresh = new RegExp(pattern.source, pattern.flags);
+    if (fresh.test(content)) return true;
   }
   return false;
 }
