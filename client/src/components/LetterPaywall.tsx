@@ -12,6 +12,7 @@ import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
   FileText, Loader2, AlertCircle, CreditCard, Tag,
 } from "lucide-react";
+import { redactPII } from "@shared/utils/pii-redaction";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DiscountCodeInput, type DiscountCodeResult } from "@/components/DiscountCodeInput";
@@ -90,6 +91,16 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
   const isPending = payToUnlock.isPending || payFirstLetterMutation.isPending || isRedirecting || subscriptionSubmitMutation.isPending;
 
   const hasDraft = !!draftContent && draftContent.length > 0;
+  
+  // Redact PII from draft content for safe preview display
+  const redactedPreview = useMemo(() => {
+    if (!draftContent) return "";
+    return redactPII(draftContent, {
+      redactNames: true,
+      redactAddresses: true,
+      redactFinancial: true,
+    });
+  }, [draftContent]);
 
   const basePrice = 299;
   const discountedPrice = appliedDiscount
@@ -173,7 +184,7 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
                 className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed"
                 data-testid="text-draft-preview"
               >
-                {draftContent}
+                {redactedPreview}
               </pre>
               <div
                 className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-background dark:via-background/90"

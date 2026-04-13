@@ -203,54 +203,59 @@ function ExpandedTracker({ status }: { status: string }) {
             {/* Left: icon + vertical line */}
             <div className="flex flex-col items-center">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-all duration-300 ${
+                className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
                   isTerminalStage
-                    ? "bg-destructive/10 border-destructive text-destructive"
+                    ? "bg-destructive/10 text-destructive"
                     : isComplete
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-600"
+                    ? "bg-violet-100 text-violet-600"
                     : isCurrent
-                    ? "bg-primary/10 border-primary text-primary"
-                    : "bg-muted border-border text-muted-foreground/30"
+                    ? "bg-violet-600 text-white shadow-md"
+                    : "bg-muted text-muted-foreground/40"
                 }`}
                 data-testid={`stage-expanded-${stage.key}`}
               >
                 {isTerminalStage ? (
-                  <AlertTriangle className="w-4 h-4" />
+                  <AlertTriangle className="w-5 h-5" />
                 ) : isComplete ? (
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircle className="w-5 h-5" />
                 ) : showSpinner ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-5 h-5" />
                 )}
               </div>
               {!isLast && (
                 <div
-                  className={`w-0.5 flex-1 my-1 min-h-[24px] rounded-full transition-all duration-300 ${
-                    isComplete && !isError ? "bg-emerald-400" : "bg-border"
+                  className={`w-0.5 flex-1 my-1 min-h-[28px] rounded-full transition-all duration-300 ${
+                    isComplete && !isError ? "bg-violet-300" : "bg-border"
                   }`}
                 />
               )}
             </div>
 
             {/* Right: label + description */}
-            <div className="pb-5 flex-1 min-w-0">
+            <div className="pb-6 flex-1 min-w-0">
               <p
                 className={`text-sm font-semibold leading-tight ${
                   isTerminalStage
                     ? "text-destructive"
                     : isComplete
-                    ? "text-emerald-700"
+                    ? "text-violet-700"
                     : isCurrent
                     ? "text-foreground"
                     : "text-muted-foreground/50"
                 }`}
                 data-testid={`stage-expanded-label-${stage.key}`}
               >
-                {isTerminalStage ? errorStageLabel : stage.label}
+                {isCurrent && (
+                  <span className="inline-block bg-violet-600 text-white text-xs font-bold px-2 py-0.5 rounded mr-2">
+                    {stage.label}
+                  </span>
+                )}
+                {!isCurrent && (isTerminalStage ? errorStageLabel : stage.label)}
               </p>
               <p
-                className={`text-xs mt-0.5 leading-snug ${
+                className={`text-xs mt-1 leading-snug ${
                   isCurrent || isTerminalStage ? "text-muted-foreground" : "text-muted-foreground/40"
                 }`}
               >
