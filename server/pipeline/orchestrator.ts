@@ -26,6 +26,7 @@ import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
 import { runPipeline as runLangGraphPipeline } from "./langgraph";
+import { runSimplePipeline } from "./simple";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
@@ -167,6 +168,24 @@ export async function runFullPipeline(
       );
     }
     orchLogger.info({ letterId, hasLetter: !!result.vettedLetter }, "[Pipeline] LangGraph pipeline completed");
+    return;
+  }
+
+  // ── Simple Pipeline Routing ──────────────────────────────────────────────────
+  // Set PIPELINE_MODE=simple to use the ultra-simple Claude-only pipeline.
+  // Single stage: intake → Claude → letter. No research, no vetting.
+  const useSimple = process.env.PIPELINE_MODE === "simple";
+  if (useSimple) {
+    orchLogger.info({ letterId }, "[Pipeline] Using simple pipeline (PIPELINE_MODE=simple)");
+    const result = await runSimplePipeline(letterId, intake, userId);
+    if (!result.success) {
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.DRAFTING_PROVIDER_FAILED,
+        result.error ?? "Simple pipeline failed",
+        "pipeline"
+      );
+    }
+    orchLogger.info({ letterId }, "[Pipeline] Simple pipeline completed");
     return;
   }
 
