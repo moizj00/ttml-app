@@ -1,7 +1,7 @@
 import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { updateLetterStatus, createLetterVersion } from "../db";
+import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers } from "../db";
 
 const logger = createLogger("simple-pipeline");
 
@@ -109,15 +109,27 @@ export async function runSimplePipeline(
     );
 
     // Save as ai_draft version (this is what the paywall expects)
-    await createLetterVersion({
+    const version = await createLetterVersion({
       letterRequestId: letterId,
       versionType: "ai_draft",
       content: letterContent,
       createdByType: "system",
       createdByUserId: userId,
+      metadataJson: {
+        model: "claude-3-5-sonnet-20241022",
+        provider: "anthropic",
+        mode: "simple",
+        promptTokens: message.usage?.input_tokens,
+        completionTokens: message.usage?.output_tokens,
+      },
     });
 
-    // Mark as complete
+    // Update the letter request to point to this version
+    await updateLetterVersionPointers(letterId, {
+      currentAiDraftVersionId: version.insertId,
+    });
+
+    // Mark as complete - this triggers the paywall state
     await updateLetterStatus(letterId, "generated_locked");
 
     logger.info({ letterId }, "[Simple] Letter saved and status updated");
