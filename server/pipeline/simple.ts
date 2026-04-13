@@ -1,183 +1,115 @@
 import type { IntakeJson } from "../../shared/types";
-import type { NotificationCategory } from "../db/notifications";
 import { createLogger } from "../logger";
-import { generateText } from "ai";
-import { getAnthropicClient } from "./providers";
-import {
-  updateLetterStatus,
-  createLetterVersion,
-  updateLetterVersionPointers,
-  createNotification,
-  logReviewAction,
-  notifyAdmins,
-  createWorkflowJob,
-  updateWorkflowJob,
-} from "../db";
-import { captureServerException } from "../sentry";
+import { Anthropic } from "@anthropic-ai/sdk";
+import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers } from "../db";
 
 const logger = createLogger("simple-pipeline");
 
 /**
- * Ultra-simple letter generation pipeline.
- *
- * Single stage: intake → Claude generates letter → saved to DB.
+ * Ultra-simple letter generation pipeline
+ * 
+ * Single stage: Take user intake → Claude generates letter → Save to DB
  * No research, no vetting, no orchestration complexity.
- *
- * Activated when PIPELINE_MODE=simple.
- * Uses the Vercel AI SDK generateText() directly (same as all other pipeline stages).
+ * 
+ * Enable via PIPELINE_MODE=simple
  */
 
-const MODEL = "claude-sonnet-4-6-20250514";
-
-export type SimplePipelineResult = {
-  success: boolean;
-  letter?: string;
-  error?: string;
-};
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 function buildPrompt(intake: IntakeJson): string {
   const {
     matter,
     jurisdiction,
-    sender,
     recipient,
+    sender,
     tonePreference,
-    additionalContext,
     desiredOutcome,
-    financials,
-    priorCommunication,
-    deadlineDate,
+    additionalContext,
   } = intake;
 
-  const tone = tonePreference ?? "moderate";
-  const toneLabel = tone === "firm" ? "Firm and assertive" : tone === "aggressive" ? "Aggressive — demand immediate action" : "Professional and moderate";
+  return `You are a professional legal letter writer. Generate a formal legal letter based on the following information:
 
-  return `You are a senior attorney drafting a formal legal letter on behalf of a client.
+**Letter Type:** ${matter?.type || "General Legal Matter"}
+**Subject:** ${matter?.subject || "N/A"}
+**Description:** ${matter?.description || "N/A"}
 
-**Letter Type:** ${intake.letterType ?? "General Legal Matter"}
-**Subject:** ${matter?.subject ?? "N/A"}
-**Matter Category:** ${matter?.category ?? "N/A"}
-**Description of Issue:** ${matter?.description ?? "N/A"}
-${matter?.incidentDate ? `**Date of Incident:** ${matter.incidentDate}` : ""}
+**Jurisdiction:** ${jurisdiction?.state || jurisdiction?.country || "General"}
 
-**Jurisdiction:** ${jurisdiction?.state ? `${jurisdiction.state}, ` : ""}${jurisdiction?.country ?? "US"}
+**From (Sender):**
+- Name: ${sender?.name || "N/A"}
+- Email: ${sender?.email || "N/A"}
+- Phone: ${sender?.phone || "N/A"}
 
-**FROM (Sender / Client):**
-- Name: ${sender?.name ?? "N/A"}
-- Address: ${sender?.address ?? "N/A"}
-${sender?.email ? `- Email: ${sender.email}` : ""}
-${sender?.phone ? `- Phone: ${sender.phone}` : ""}
+**To (Recipient):**
+- Name: ${recipient?.name || "N/A"}
+- Entity: ${recipient?.entity || "N/A"}
+- Email: ${recipient?.email || "N/A"}
+- Address: ${recipient?.address || "N/A"}
 
-**TO (Recipient):**
-- Name: ${recipient?.name ?? "N/A"}
-- Address: ${recipient?.address ?? "N/A"}
-${recipient?.email ? `- Email: ${recipient.email}` : ""}
+**Tone:** ${tonePreference || "Professional"}
+**Desired Outcome:** ${desiredOutcome || "N/A"}
+**Additional Context:** ${additionalContext || "None"}
 
-**Desired Outcome:** ${desiredOutcome ?? "N/A"}
-**Tone:** ${toneLabel}
-${deadlineDate ? `**Response Deadline:** ${deadlineDate}` : ""}
-${financials?.amountOwed ? `**Amount in Dispute:** ${financials.currency ?? "USD"} ${financials.amountOwed}` : ""}
-${priorCommunication ? `**Prior Communication:** ${priorCommunication}` : ""}
-${additionalContext ? `**Additional Context:** ${additionalContext}` : ""}
+Generate a comprehensive, professional legal letter addressing the matter described above. 
+The letter should:
+1. Use proper legal formatting (date, recipient address, salutation, body, closing, signature block)
+2. Be clear, concise, and professional
+3. Address the core issue(s) described
+4. Suggest appropriate next steps or remedies
+5. Be formatted in plain text (not markdown)
 
-Draft a comprehensive, professional legal letter addressing the matter above.
-Requirements:
-1. Use proper legal formatting: today's date, recipient address block, "Re:" subject line, formal salutation, body paragraphs, closing, and signature block for the sender
-2. Be clear, concise, and authoritative — no fluff
-3. Cite the applicable legal basis or rights where relevant to the jurisdiction
-4. State clearly what action is required and by when
-5. Use plain text only — no markdown, no asterisks, no bullet symbols
-6. Address the letter from ${sender?.name ?? "the sender"} to ${recipient?.name ?? "the recipient"}
-
-Output only the finished letter text, ready for attorney review and signature.`;
+Output only the letter content, ready to send.`;
 }
 
 export async function runSimplePipeline(
   letterId: number,
   intake: IntakeJson,
   userId?: number
-): Promise<SimplePipelineResult> {
-  // ── Create workflow_job for admin visibility ───────────────────────────
-  let jobId = 0;
+): Promise<{ success: boolean; letter?: string; error?: string }> {
   try {
-    const job = await createWorkflowJob({
-      letterRequestId: letterId,
-      jobType: "generation_pipeline",
-      provider: "anthropic-simple",
-      requestPayloadJson: {
-        letterId,
-        userId,
-        mode: "simple",
-        model: MODEL,
-        letterType: intake.letterType,
-      },
-    });
-    jobId = (job as { insertId?: number })?.insertId ?? 0;
-    await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
-  } catch (jobErr) {
-    logger.warn({ err: jobErr, letterId }, "[Simple] Failed to create workflow_job (non-fatal)");
-  }
+    logger.info({ letterId, userId }, "[Simple] Starting simple pipeline");
 
-  try {
-    logger.info({ letterId, userId, model: MODEL }, "[Simple] Starting simple pipeline");
-
-    // Transition: submitted → researching → drafting
-    // The status machine requires passing through 'researching' before 'drafting'.
-    // The simple pipeline has no research stage, so we advance through it immediately.
+    // Transition: submitted → researching → drafting (status machine requires this path)
     await updateLetterStatus(letterId, "researching");
-    await logReviewAction({
-      letterRequestId: letterId,
-      actorType: "system",
-      action: "status_changed",
-      noteText: "Simple pipeline started (no research stage).",
-      noteVisibility: "internal",
-      fromStatus: "submitted",
-      toStatus: "researching",
-    }).catch(() => {});
-
     await updateLetterStatus(letterId, "drafting");
-    await logReviewAction({
-      letterRequestId: letterId,
-      actorType: "system",
-      action: "status_changed",
-      noteText: "Drafting started.",
-      noteVisibility: "internal",
-      fromStatus: "researching",
-      toStatus: "drafting",
-    }).catch(() => {});
 
-    // ── Single Vercel AI SDK call ─────────────────────────────────────────
-    const anthropic = getAnthropicClient();
-    const model = anthropic(MODEL);
+    // Build the prompt
+    const prompt = buildPrompt(intake);
+    logger.debug({ letterId }, "[Simple] Prompt built, calling Claude");
 
-    const result = await generateText({
-      model,
-      system:
-        "You are an expert legal letter drafting assistant. You write clear, professional, jurisdiction-aware legal letters on behalf of clients. You output only the finished letter text — no commentary, no preamble, no markdown.",
-      prompt: buildPrompt(intake),
-      maxOutputTokens: 4096,
-      abortSignal: AbortSignal.timeout(90_000),
+    // Call Claude
+    const message = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
     });
 
-    const letterContent = result.text.trim();
+    // Extract the letter content
+    const letterContent =
+      message.content[0]?.type === "text" ? message.content[0].text : "";
 
     if (!letterContent) {
-      logger.error({ letterId }, "[Simple] Draft generation returned empty response");
+      logger.error({ letterId }, "[Simple] Claude returned empty response");
       await updateLetterStatus(letterId, "submitted");
-      await updateWorkflowJob(jobId, {
-        status: "failed",
-        errorMessage: "Model returned empty response",
-        completedAt: new Date(),
-      });
-      return { success: false, error: "Draft generation returned empty response" };
+      return {
+        success: false,
+        error: "Claude returned empty response",
+      };
     }
 
     logger.info(
-      { letterId, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
-      "[Simple] Draft generated successfully"
+      { letterId, tokenUsage: message.usage },
+      "[Simple] Claude generated letter"
     );
 
-    // ── Save ai_draft version ─────────────────────────────────────────────
+    // Save as ai_draft version (this is what the paywall expects)
     const version = await createLetterVersion({
       letterRequestId: letterId,
       versionType: "ai_draft",
@@ -185,96 +117,45 @@ export async function runSimplePipeline(
       createdByType: "system",
       createdByUserId: userId,
       metadataJson: {
+        model: "claude-3-5-sonnet-20241022",
+        provider: "anthropic",
         mode: "simple",
-        model: MODEL,
-        promptTokens: result.usage.inputTokens,
-        completionTokens: result.usage.outputTokens,
+        promptTokens: message.usage?.input_tokens,
+        completionTokens: message.usage?.output_tokens,
       },
     });
 
-    if (!version?.insertId) {
-      logger.error({ letterId }, "[Simple] createLetterVersion returned no insertId");
-      await updateWorkflowJob(jobId, {
-        status: "failed",
-        errorMessage: "createLetterVersion returned no insertId",
-        completedAt: new Date(),
-      });
-      return { success: false, error: "Failed to save letter version" };
-    }
-
+    // Update the letter request to point to this version
     await updateLetterVersionPointers(letterId, {
       currentAiDraftVersionId: version.insertId,
     });
 
-    // Transition: drafting → generated_locked (paywall state)
-    await Promise.all([
-      updateLetterStatus(letterId, "generated_locked"),
-      logReviewAction({
-        letterRequestId: letterId,
-        actorType: "system",
-        action: "ai_pipeline_completed",
-        noteText: `Simple pipeline complete (${MODEL}). Draft ready — awaiting subscriber payment for attorney review.`,
-        noteVisibility: "internal",
-        fromStatus: "drafting",
-        toStatus: "generated_locked",
-      }).catch(() => {}),
-    ]);
+    // Mark as complete - this triggers the paywall state
+    await updateLetterStatus(letterId, "generated_locked");
 
-    // Mark job complete with token/cost data
-    await updateWorkflowJob(jobId, {
-      status: "completed",
-      completedAt: new Date(),
-      promptTokens: result.usage.inputTokens,
-      completionTokens: result.usage.outputTokens,
-      estimatedCostUsd: (
-        (result.usage.inputTokens / 1_000_000) * 3 +
-        (result.usage.outputTokens / 1_000_000) * 15
-      ).toFixed(6),
-      responsePayloadJson: { mode: "simple", model: MODEL, versionId: version.insertId },
-    });
+    logger.info({ letterId }, "[Simple] Letter saved and status updated");
 
-    // Notify user (non-blocking)
-    if (userId) {
-      createNotification({
-        userId,
-        type: "letter_draft_ready",
-        title: "Your letter draft is ready",
-        body: `Our team has prepared your ${intake.matter?.category ?? intake.letterType ?? "legal letter"} and it is ready for attorney review.`,
-        link: `/dashboard/letters/${letterId}`,
-        category: "letters" satisfies NotificationCategory,
-      }).catch((err) =>
-        logger.warn({ err, letterId }, "[Simple] Failed to create user notification (non-fatal)")
-      );
-    }
-
-    // Notify admins (non-blocking)
-    notifyAdmins({
-      category: "letters",
-      type: "pipeline_researching",
-      title: `Letter #${letterId} draft ready (simple pipeline)`,
-      body: `Simple pipeline completed for letter #${letterId}. Awaiting subscriber unlock.`,
-      link: `/admin/letters/${letterId}`,
-    }).catch(() => {});
-
-    logger.info({ letterId }, "[Simple] Pipeline complete — status: generated_locked");
-
-    return { success: true, letter: letterContent };
+    return {
+      success: true,
+      letter: letterContent,
+    };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     logger.error({ err, letterId }, "[Simple] Pipeline failed");
-    captureServerException(err, {
-      tags: { component: "simple-pipeline", error_type: "generation_failed" },
-      extra: { letterId, userId },
-    });
 
-    // Revert to submitted so the user can retry
-    await updateLetterStatus(letterId, "submitted").catch(() => {});
-    await updateWorkflowJob(jobId, {
-      status: "failed",
-      errorMessage: error,
-      completedAt: new Date(),
-    }).catch(() => {});
+    // Revert to submitted state to allow retry
+    try {
+      await updateLetterStatus(letterId, "submitted");
+    } catch (updateErr) {
+      logger.error(
+        { updateErr, letterId },
+        "[Simple] Failed to revert status after error"
+      );
+    }
 
-    return { success: false, error };
+    return {
+      success: false,
+      error,
+    };
   }
 }
