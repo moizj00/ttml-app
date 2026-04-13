@@ -121,19 +121,30 @@ export async function runSimplePipeline(
   try {
     logger.info({ letterId, userId, model: MODEL }, "[Simple] Starting simple pipeline");
 
-    // Transition: submitted → drafting
-    await Promise.all([
-      updateLetterStatus(letterId, "drafting"),
-      logReviewAction({
-        letterRequestId: letterId,
-        actorType: "system",
-        action: "status_changed",
-        noteText: "Simple pipeline started.",
-        noteVisibility: "internal",
-        fromStatus: "submitted",
-        toStatus: "drafting",
-      }).catch(() => {}),
-    ]);
+    // Transition: submitted → researching → drafting
+    // The status machine requires passing through 'researching' before 'drafting'.
+    // The simple pipeline has no research stage, so we advance through it immediately.
+    await updateLetterStatus(letterId, "researching");
+    await logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "status_changed",
+      noteText: "Simple pipeline started (no research stage).",
+      noteVisibility: "internal",
+      fromStatus: "submitted",
+      toStatus: "researching",
+    }).catch(() => {});
+
+    await updateLetterStatus(letterId, "drafting");
+    await logReviewAction({
+      letterRequestId: letterId,
+      actorType: "system",
+      action: "status_changed",
+      noteText: "Drafting started.",
+      noteVisibility: "internal",
+      fromStatus: "researching",
+      toStatus: "drafting",
+    }).catch(() => {});
 
     // ── Single Vercel AI SDK call ─────────────────────────────────────────
     const anthropic = getAnthropicClient();
