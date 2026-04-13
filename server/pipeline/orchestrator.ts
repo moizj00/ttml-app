@@ -34,8 +34,8 @@ const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 // and both branches of retryPipelineFromStage.
 // ═══════════════════════════════════════════════════════
 
-// Perplexity-only research: always web-grounded, fail-hard if unavailable.
-// No fallback providers — researchUnverified is always false.
+// Research providers (Perplexity, Claude) are always web-grounded.
+// The researchUnverified flag is therefore always false.
 
 async function applyResearchGroundingAndRevalidate(
   letterId: number,

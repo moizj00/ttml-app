@@ -118,6 +118,15 @@ export function getVettingModelFallback() {
 
 // ── Groq — free OSS last-resort fallback for all stages ──
 /** Returns Groq Llama 3.3 70B model (free-tier, OpenAI-compatible) for use as OSS last resort */
+/** Stage 1 failover: Anthropic Claude Sonnet — provides web-grounded research if Perplexity is unavailable */
+export function getResearchModelClaudeFallback() {
+  const anthropic = getAnthropicClient();
+  return {
+    model: anthropic("claude-sonnet-4-6-20250514"),
+    provider: "claude-research-fallback",
+  };
+}
+
 export function getFreeOSSModelFallback() {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {

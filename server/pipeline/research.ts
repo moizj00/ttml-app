@@ -13,7 +13,7 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { captureServerException } from "../sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getResearchModel, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getResearchModel, getResearchModelClaudeFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
@@ -179,14 +179,24 @@ export async function runResearchStage(
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
 
-    // FAIL-HARD: Perplexity only — no OpenAI/Groq fallback for research.
-    // The fallback immediately re-throws so the pipeline stops if Perplexity is unavailable.
-    const { result: initialResult } = await withModelFailover(
+    // Perplexity primary, Claude Sonnet fallback for research.
+    const { result: initialResult, provider: initialProvider } = await withModelFailover(
       "Stage 1 (research)",
       letterId,
       () => callPerplexity(userPrompt),
-      () => { throw new Error("[Pipeline] Research stage is Perplexity-only (fail-hard). No fallback provider is configured."); }
+      () => {
+        const claudeResearch = getResearchModelClaudeFallback();
+        researchModelKey = "claude-sonnet-4-6-20250514"; // Update key for cost tracking
+        return generateText({
+          model: claudeResearch.model,
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 4000,
+          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+        });
+      }
     );
+    researchModelKey = initialProvider === "primary" ? "sonar" : (initialProvider === "claude-research-fallback" ? "claude-sonnet-4-6-20250514" : researchModelKey); // Set initial model key based on actual provider
 
     const { text, usage: initialUsage } = initialResult;
     accumulateTokens(researchTokens, initialUsage);
@@ -201,13 +211,24 @@ export async function runResearchStage(
 
     const generateResearch = async (errorFeedback?: string): Promise<string> => {
       const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
-      // FAIL-HARD: retry uses Perplexity only — no fallback providers.
-      const { result: retryResult } = await withModelFailover(
+      // Perplexity primary, Claude Sonnet fallback for research retry.
+      const { result: retryResult, provider: retryProvider } = await withModelFailover(
         "Stage 1 (research retry)",
         letterId,
         () => callPerplexity(promptWithFeedback),
-        () => { throw new Error("[Pipeline] Research stage is Perplexity-only (fail-hard). No fallback provider is configured."); }
+        () => {
+          const claudeResearch = getResearchModelClaudeFallback();
+          researchModelKey = "claude-sonnet-4-6-20250514"; // Update key for cost tracking
+          return generateText({
+            model: claudeResearch.model,
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 4000,
+            abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+          });
+        }
       );
+      researchModelKey = retryProvider === "primary" ? "sonar" : (retryProvider === "claude-research-fallback" ? "claude-sonnet-4-6-20250514" : researchModelKey); // Set model key based on actual provider
       accumulateTokens(researchTokens, retryResult.usage);
       return retryResult.text;
     };

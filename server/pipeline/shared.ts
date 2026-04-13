@@ -186,7 +186,7 @@ export function isFailoverCandidate(err: unknown): boolean {
 
 export interface FailoverResult<T> {
   result: T;
-  provider: "primary" | "openai-failover" | "groq-oss-fallback";
+  provider: "primary" | "perplexity" | "claude-research-fallback" | "openai-failover" | "groq-oss-fallback";
   failoverTriggered: boolean;
 }
 
