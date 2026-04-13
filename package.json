@@ -78,7 +78,7 @@
     "express": "^4.21.2",
     "framer-motion": "^12.38.0",
     "google-auth-library": "^10.6.2",
-    "jose": "6.1.0",
+    "jose": "6.2.2",
     "langchain": "^0.3.0",
     "langsmith": "^0.2.0",
     "lucide-react": "^0.453.0",
