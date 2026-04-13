@@ -138,8 +138,8 @@ export async function runSimplePipeline(
         await createNotification({
           userId,
           type: "letter_draft_ready",
-          title: "Your letter draft is ready!",
-          body: `Your ${intake.matter?.type || "legal letter"} draft has been generated and is ready for review.`,
+          title: "Your letter is ready for review!",
+          body: `Our team has prepared your ${intake.matter?.type || "legal letter"} and it's ready for attorney review.`,
           link: `/dashboard/letters/${letterId}`,
           category: "letters",
         });

@@ -1,7 +1,7 @@
 /**
  * LetterPaywall — shown when a letter is in `generated_locked` status.
  *
- * Shows a truncated preview of the AI draft with the bottom blurred out,
+ * Shows a truncated preview of the prepared draft with the bottom blurred out,
  * plus CTAs to unlock via payment or subscription.
  *
  * For first-time users: $50 attorney review + subscribe to waive option.
@@ -25,7 +25,7 @@ interface LetterPaywallProps {
   letterId: number;
   letterType: string;
   subject: string;
-  /** The truncated AI draft preview from the server */
+  /** The truncated draft preview from the server */
   draftContent?: string;
   /** When true, shows a subtle note that attorney review will address any quality flags */
   qualityDegraded?: boolean;
@@ -172,7 +172,7 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
           <div className="bg-amber-50 border-b border-amber-200 px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800" data-testid="text-draft-preview-label">AI-Generated Draft Preview</span>
+              <span className="text-sm font-semibold text-amber-800" data-testid="text-draft-preview-label">Draft Preview</span>
             </div>
             <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-2 py-0.5 tracking-wider">
               DRAFT — Unreviewed
