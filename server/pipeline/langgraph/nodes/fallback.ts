@@ -12,7 +12,6 @@ import { bestEffortFallback, FALLBACK_EXCLUDED_CODES } from "../../fallback";
 import {
   updateLetterStatus,
   createNotification,
-  setLetterQualityDegraded,
 } from "../../../db";
 import { sendAdminAlertEmail } from "../../../email";
 import { captureServerException } from "../../../sentry";
@@ -63,7 +62,7 @@ export async function fallbackNode(
   // Check if the error code is excluded from fallback (should fail hard instead)
   const shouldFailHard =
     lastError &&
-    FALLBACK_EXCLUDED_CODES.includes(lastError.code as any);
+    FALLBACK_EXCLUDED_CODES.has(lastError.code);
 
   if (shouldFailHard) {
     nodeLogger.error(
@@ -79,13 +78,15 @@ export async function fallbackNode(
           subject: `Pipeline Hard Failure: Letter #${letterId}`,
           body: `Letter #${letterId} failed with excluded error code ${lastError?.code}. No fallback possible.\n\nError: ${lastError?.message}`,
         }),
-        createNotification({
-          userId: state.userId,
-          type: "letter_failed",
-          title: "Letter Generation Failed",
-          message: `We were unable to generate your letter. Our team has been notified and will contact you shortly.`,
-          link: `/dashboard/letters/${letterId}`,
-        }),
+        ...(state.userId ? [
+          createNotification({
+            userId: state.userId,
+            type: "letter_failed",
+            title: "Letter Generation Failed",
+            message: `We were unable to generate your letter. Our team has been notified and will contact you shortly.`,
+            link: `/dashboard/letters/${letterId}`,
+          }),
+        ] : []),
       ]);
     } catch (notifyErr) {
       captureServerException(notifyErr, {
@@ -119,30 +120,39 @@ export async function fallbackNode(
 
     try {
       // Use existing bestEffortFallback to finalize the letter
-      await bestEffortFallback(
+      const fallbackSuccess = await bestEffortFallback({
         letterId,
-        bestContent,
-        [...(qualityWarnings ?? []), `FALLBACK_DELIVERY: ${lastError?.message ?? "Unknown error"}`],
-        pipelineCtx
-      );
+        intake,
+        intermediateDraftContent: bestContent,
+        qualityWarnings,
+        pipelineErrorCode: lastError?.code ?? "UNKNOWN_ERROR",
+        errorMessage: lastError?.message ?? "Unknown error",
+        dbFields: {
+          subject: intake.matter?.subject,
+          jurisdictionState: intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? null,
+        },
+      });
 
-      // Mark letter as quality degraded
-      await setLetterQualityDegraded(letterId, true, [
-        ...(qualityWarnings ?? []),
-        `Delivered via fallback after ${errors.length} error(s)`,
-        `Last error: ${lastError?.stage} - ${lastError?.message}`,
-      ]);
-
-      return {
-        currentStage: "complete",
-        vettedLetter: bestContent,
-        qualityWarnings: [
-          `FALLBACK_DELIVERY: Letter delivered with degraded quality after pipeline errors.`,
-          `Last error stage: ${lastError?.stage}`,
-          `Total errors: ${errors.length}`,
-        ],
-        lastError: null,
-      };
+      if (!fallbackSuccess) {
+        nodeLogger.error(
+          { letterId },
+          "[FallbackNode] bestEffortFallback returned false - no fallback content could be saved"
+        );
+        // Fall through to complete failure below
+      } else {
+        // Successfully delivered best-effort fallback
+        return {
+          currentStage: "complete",
+          vettedLetter: bestContent,
+          qualityWarnings: [
+            `FALLBACK_DELIVERY: Letter delivered with degraded quality after pipeline errors.`,
+            `Last error stage: ${lastError?.stage}`,
+            `Total errors: ${errors.length}`,
+            ...(qualityWarnings ?? []),
+          ],
+          lastError: null,
+        };
+      }
     } catch (fallbackErr) {
       const errorMessage =
         fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
@@ -174,13 +184,15 @@ export async function fallbackNode(
         subject: `Pipeline Complete Failure: Letter #${letterId}`,
         body: `Letter #${letterId} failed completely with no recoverable content.\n\nErrors:\n${errors.map((e) => `- ${e.stage}: ${e.message}`).join("\n")}`,
       }),
-      createNotification({
-        userId: state.userId,
-        type: "letter_failed",
-        title: "Letter Generation Failed",
-        message: `We were unable to generate your letter. Our team has been notified and will contact you shortly.`,
-        link: `/dashboard/letters/${letterId}`,
-      }),
+      ...(state.userId ? [
+        createNotification({
+          userId: state.userId,
+          type: "letter_failed",
+          title: "Letter Generation Failed",
+          message: `We were unable to generate your letter. Our team has been notified and will contact you shortly.`,
+          link: `/dashboard/letters/${letterId}`,
+        }),
+      ] : []),
     ]);
   } catch (notifyErr) {
     captureServerException(notifyErr, {

@@ -96,6 +96,21 @@ export function preflightApiKeyCheck(stage: "research" | "drafting" | "full"): {
  * - Letter finalization
  * - Auto-unlock for previously paid letters
  * 
+ * ARCHITECTURE NOTE: Double Retry Layers
+ * ────────────────────────────────────────
+ * The LangGraph pipeline manages stage-level retries internally (MAX_*_RETRIES
+ * per node). This design differs from the original orchestrator which relied on
+ * pg-boss worker retries across multiple invocations.
+ * 
+ * With LangGraph retries contained within a single runPipeline() call:
+ * - All retries happen synchronously within the request/function execution
+ * - Fallback delivery happens after internal retries are exhausted
+ * - The worker/orchestrator caller doesn't retry again (fallback is final)
+ * 
+ * This means costs and latency are higher per attempt, but failure recovery
+ * is more deterministic. For very long-running pipelines, consider streaming
+ * the pipeline via runPipelineStreaming() instead.
+ * 
  * @param letterId - Database ID of the letter request
  * @param intake - Validated intake JSON from user submission
  * @param userId - Optional user ID for notifications
@@ -146,10 +161,18 @@ export async function runPipeline(
     },
   });
   const pipelineJobId = (pipelineJob as any)?.insertId ?? 0;
-  await updateWorkflowJob(pipelineJobId, {
-    status: "running",
-    startedAt: new Date(),
-  });
+  
+  if (!pipelineJobId) {
+    pipelineLogger.error({ letterId }, "[LangGraph] Failed to create workflow job - insertId was undefined");
+  }
+  
+  // Only update if we have a valid job ID
+  if (pipelineJobId) {
+    await updateWorkflowJob(pipelineJobId, {
+      status: "running",
+      startedAt: new Date(),
+    });
+  }
 
   // ── Build initial state ──
   const initialState = createInitialState(letterId, intake, userId);
@@ -170,12 +193,12 @@ export async function runPipeline(
     );
 
     // ── Handle success ──
-    if (finalState.currentStage === "complete" && finalState.vettedLetter) {
+    if (finalState.currentStage === "complete" && finalState.vettedLetter && finalState.vettingReport) {
       // Finalize the letter
       await finalizeLetterAfterVetting(
         letterId,
         finalState.vettedLetter,
-        finalState.vettingReport!,
+        finalState.vettingReport,
         {
           letterId,
           userId: userId ?? 0,
@@ -190,19 +213,21 @@ export async function runPipeline(
       );
 
       // Update workflow job
-      await updateWorkflowJob(pipelineJobId, {
-        status: "completed",
-        completedAt: new Date(),
-        promptTokens: finalState.tokenUsage.promptTokens,
-        completionTokens: finalState.tokenUsage.completionTokens,
-        estimatedCostUsd: String(finalState.tokenUsage.estimatedCostUsd.toFixed(4)),
-        responsePayloadJson: {
-          validationResults: finalState.validationResults,
-          qualityWarnings: finalState.qualityWarnings,
-          vettingReport: finalState.vettingReport,
-          mode: "langgraph",
-        },
-      });
+      if (pipelineJobId) {
+        await updateWorkflowJob(pipelineJobId, {
+          status: "completed",
+          completedAt: new Date(),
+          promptTokens: finalState.tokenUsage.promptTokens,
+          completionTokens: finalState.tokenUsage.completionTokens,
+          estimatedCostUsd: String(finalState.tokenUsage.estimatedCostUsd.toFixed(4)),
+          responsePayloadJson: {
+            validationResults: finalState.validationResults,
+            qualityWarnings: finalState.qualityWarnings,
+            vettingReport: finalState.vettingReport,
+            mode: "langgraph",
+          },
+        });
+      }
 
       // Auto-unlock if previously paid
       try {
@@ -232,6 +257,39 @@ export async function runPipeline(
       };
     }
 
+    // ── Handle fallback or incomplete pipeline (no vettingReport) ──
+    if (finalState.currentStage === "complete" && finalState.vettedLetter && !finalState.vettingReport) {
+      pipelineLogger.warn(
+        { letterId, hasLetter: !!finalState.vettedLetter, hasReport: !!finalState.vettingReport },
+        "[LangGraph] Pipeline completed but missing vettingReport - treating as fallback delivery"
+      );
+      
+      // Fallback node delivered content but didn't generate a full vetting report
+      if (pipelineJobId) {
+        await updateWorkflowJob(pipelineJobId, {
+          status: "completed",
+          completedAt: new Date(),
+          promptTokens: finalState.tokenUsage.promptTokens,
+          completionTokens: finalState.tokenUsage.completionTokens,
+          estimatedCostUsd: String(finalState.tokenUsage.estimatedCostUsd.toFixed(4)),
+          responsePayloadJson: {
+            validationResults: finalState.validationResults,
+            qualityWarnings: finalState.qualityWarnings,
+            mode: "langgraph",
+            note: "Fallback delivery without vetting report",
+          },
+        });
+      }
+
+      return {
+        success: true,
+        vettedLetter: finalState.vettedLetter,
+        tokenUsage: finalState.tokenUsage,
+        qualityWarnings: finalState.qualityWarnings,
+        finalState,
+      };
+    }
+
     // ── Handle failure ──
     const lastError = finalState.lastError;
     const errorMsg = lastError?.message ?? "Pipeline failed without specific error";
@@ -242,22 +300,24 @@ export async function runPipeline(
     );
 
     await Promise.all([
-      updateWorkflowJob(pipelineJobId, {
-        status: "failed",
-        errorMessage: formatStructuredError(
-          lastError?.code ?? "PIPELINE_FAILED",
-          errorMsg,
-          "pipeline"
-        ),
-        completedAt: new Date(),
-        promptTokens: finalState.tokenUsage.promptTokens,
-        completionTokens: finalState.tokenUsage.completionTokens,
-        responsePayloadJson: {
-          errors: finalState.errors,
-          qualityWarnings: finalState.qualityWarnings,
-          mode: "langgraph",
-        },
-      }),
+      ...(pipelineJobId ? [
+        updateWorkflowJob(pipelineJobId, {
+          status: "failed",
+          errorMessage: formatStructuredError(
+            errorCode,
+            errorMsg,
+            "pipeline"
+          ),
+          completedAt: new Date(),
+          promptTokens: finalState.tokenUsage.promptTokens,
+          completionTokens: finalState.tokenUsage.completionTokens,
+          responsePayloadJson: {
+            errors: finalState.errors,
+            qualityWarnings: finalState.qualityWarnings,
+            mode: "langgraph",
+          },
+        }),
+      ] : []),
       updateLetterStatus(letterId, "submitted"), // Revert to allow retry
     ]);
 
@@ -284,11 +344,13 @@ export async function runPipeline(
     });
 
     await Promise.all([
-      updateWorkflowJob(pipelineJobId, {
-        status: "failed",
-        errorMessage: formatStructuredError(errorCode, errorMessage, "pipeline"),
-        completedAt: new Date(),
-      }),
+      ...(pipelineJobId ? [
+        updateWorkflowJob(pipelineJobId, {
+          status: "failed",
+          errorMessage: formatStructuredError(errorCode, errorMessage, "pipeline"),
+          completedAt: new Date(),
+        }),
+      ] : []),
       updateLetterStatus(letterId, "submitted"),
     ]);
 
