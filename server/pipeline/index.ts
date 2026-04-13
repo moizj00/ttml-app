@@ -12,3 +12,7 @@ export * from "./prompts";
 export * from "./embeddings";
 export * from "./training-capture";
 export * from "./fine-tune";
+
+// LangGraph-based pipeline (new architecture)
+// Enable via PIPELINE_MODE=langgraph environment variable
+export * as langgraph from "./langgraph";
