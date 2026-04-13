@@ -1,7 +1,7 @@
 /**
  * LetterPaywall — shown when a letter is in `generated_locked` status.
  *
- * Shows a truncated preview of the AI draft with the bottom blurred out,
+ * Shows a truncated preview of the prepared draft with the bottom blurred out,
  * plus CTAs to unlock via payment or subscription.
  *
  * For first-time users: $50 attorney review + subscribe to waive option.
@@ -12,6 +12,7 @@ import {
   Lock, CheckCircle, ArrowRight, Shield, Gavel,
   FileText, Loader2, AlertCircle, CreditCard, Tag,
 } from "lucide-react";
+import { redactPII } from "@shared/utils/pii-redaction";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DiscountCodeInput, type DiscountCodeResult } from "@/components/DiscountCodeInput";
@@ -24,7 +25,7 @@ interface LetterPaywallProps {
   letterId: number;
   letterType: string;
   subject: string;
-  /** The truncated AI draft preview from the server */
+  /** The truncated draft preview from the server */
   draftContent?: string;
   /** When true, shows a subtle note that attorney review will address any quality flags */
   qualityDegraded?: boolean;
@@ -90,6 +91,16 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
   const isPending = payToUnlock.isPending || payFirstLetterMutation.isPending || isRedirecting || subscriptionSubmitMutation.isPending;
 
   const hasDraft = !!draftContent && draftContent.length > 0;
+  
+  // Redact PII from draft content for safe preview display
+  const redactedPreview = useMemo(() => {
+    if (!draftContent) return "";
+    return redactPII(draftContent, {
+      redactNames: true,
+      redactAddresses: true,
+      redactFinancial: true,
+    });
+  }, [draftContent]);
 
   const basePrice = 299;
   const discountedPrice = appliedDiscount
@@ -161,7 +172,7 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
           <div className="bg-amber-50 border-b border-amber-200 px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800" data-testid="text-draft-preview-label">AI-Generated Draft Preview</span>
+              <span className="text-sm font-semibold text-amber-800" data-testid="text-draft-preview-label">Draft Preview</span>
             </div>
             <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-2 py-0.5 tracking-wider">
               DRAFT — Unreviewed
@@ -173,7 +184,7 @@ export function LetterPaywall({ letterId, draftContent, qualityDegraded }: Lette
                 className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed"
                 data-testid="text-draft-preview"
               >
-                {draftContent}
+                {redactedPreview}
               </pre>
               <div
                 className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-background dark:via-background/90"

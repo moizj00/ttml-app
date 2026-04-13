@@ -1,5 +1,5 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { generateText } from "./langchain";
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import type { ResearchPacket, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, TokenUsage } from "../../shared/types";
 import { accumulateTokens } from "./providers";
 import { captureServerException } from "../sentry";
@@ -172,10 +172,9 @@ export async function revalidateCitationsWithPerplexity(
     return { registry, modelKey: "none" };
   }
 
-  const perplexityModel = new ChatOpenAI({
-    model: "sonar",
+  const perplexityProvider = createOpenAI({
     apiKey: perplexityApiKey,
-    configuration: { baseURL: "https://api.perplexity.ai" },
+    baseURL: "https://api.perplexity.ai",
   });
 
   try {
@@ -183,7 +182,7 @@ export async function revalidateCitationsWithPerplexity(
       `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
-      model: perplexityModel,
+      model: perplexityProvider("sonar"),
       system: "You are a legal citation verification assistant.",
       prompt,
       maxOutputTokens: 1000,

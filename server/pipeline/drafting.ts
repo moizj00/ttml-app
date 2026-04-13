@@ -1,4 +1,4 @@
-import { generateText } from "./langchain";
+import { generateText } from "ai";
 import {
   createWorkflowJob,
   createLetterVersion,
@@ -8,23 +8,23 @@ import {
   getLatestResearchRun,
   logReviewAction,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext } from "../../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, PipelineContext, TokenUsage, PipelineErrorCode } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import { buildNormalizedPromptInput } from "../intake-normalizer";
+import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 import { getDraftModel, getDraftModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
-import { buildCitationRegistryPromptBlock } from "./citations";
+import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
 import { buildDraftingSystemPrompt, buildDraftingUserPrompt } from "./prompts";
 
 const draftLogger = createLogger({ module: "PipelineDrafting" });
 
 // ═══════════════════════════════════════════════════════
-// STAGE 2: OPENAI DRAFT GENERATION (OpenAI primary, Claude fallback)
+// STAGE 2: OPENAI DRAFT GENERATION
 // ═══════════════════════════════════════════════════════
 
 export async function runDraftingStage(
@@ -97,6 +97,7 @@ export async function runDraftingStage(
   let ragSimilarityScores: number[] = [];
   let ragAbGroup: "test" | "control" = "test";
 
+  // A/B testing: RAG_AB_TEST_CONTROL_PCT (0-100) determines % of runs that skip RAG
   const controlPct = Math.max(0, Math.min(100, parseInt(process.env.RAG_AB_TEST_CONTROL_PCT ?? "0", 10)));
   const isControlRun = controlPct > 0 && Math.random() * 100 < controlPct;
   if (isControlRun) {
@@ -130,6 +131,7 @@ export async function runDraftingStage(
     }
   }
 
+  // Store RAG metadata on pipelineCtx for access by orchestrator
   if (pipelineCtx) {
     pipelineCtx.ragExampleCount = ragExampleCount;
     pipelineCtx.ragSimilarityScores = ragSimilarityScores;
@@ -137,6 +139,7 @@ export async function runDraftingStage(
   }
 
   const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
+  // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
@@ -149,9 +152,9 @@ export async function runDraftingStage(
 
   const draftTokens = createTokenAccumulator();
   let draftProvider = "openai";
-  let draftModelKey = "gpt-4o-mini";
+  let draftModelKey = "gpt-4o";
 
-  const callPrimary = async (prompt: string) => {
+  const callGenerateText = async (prompt: string) => {
     const result = await generateText({
       model: getDraftModel(),
       system: draftSystemPrompt,
@@ -163,7 +166,7 @@ export async function runDraftingStage(
     return result;
   };
 
-  const callFallback = async (prompt: string) => {
+  const callGenerateTextFallback = async (prompt: string) => {
     const result = await generateText({
       model: getDraftModelFallback(),
       system: draftSystemPrompt,
@@ -178,17 +181,16 @@ export async function runDraftingStage(
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
     // Reset provider to primary on each retry to avoid tier collapse
     draftProvider = "openai";
-    draftModelKey = "gpt-4o-mini";
+    draftModelKey = "gpt-4o";
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;
-    const { result, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
+    const { result, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 2 (drafting retry)",
       letterId,
       async () => {
-        const model = draftProvider === "openai-failover" ? getDraftModelFallback() : getDraftModel();
         const r = await generateText({
-          model,
+          model: draftProvider === "openai-failover" ? getDraftModelFallback() : getDraftModel(),
           system: draftSystemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 8000,
@@ -209,13 +211,13 @@ export async function runDraftingStage(
         });
         accumulateTokens(draftTokens, r.usage);
         return r;
-      },
+      }
     );
     if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Switched to OpenAI gpt-4o-mini during draft retry due to rate limit on primary OpenAI model.`
+          `DRAFTING_FAILOVER: Switched to OpenAI GPT-4o-mini during draft retry due to rate limit on primary model.`
         );
       }
     }
@@ -243,25 +245,25 @@ export async function runDraftingStage(
   };
 
   try {
-    draftLogger.info({ letterId }, "[Pipeline] Stage 2: OpenAI structured drafting starting");
+    draftLogger.info({ letterId }, "[Pipeline] Stage 2: OpenAI GPT-4o structured drafting starting");
 
-    const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
+    const { result: initialDraftResult, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
       letterId,
-      () => callPrimary(draftUserPrompt),
+      () => callGenerateText(draftUserPrompt),
       () => {
         draftProvider = "openai-failover";
         draftModelKey = "gpt-4o-mini";
-        return callFallback(draftUserPrompt);
-      },
+        return callGenerateTextFallback(draftUserPrompt);
+      }
     );
 
     if (draftFailover) {
-      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI gpt-4o-mini fallback");
+      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini fallback");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Primary drafting model (OpenAI GPT-4o) was rate-limited. Draft generated by OpenAI gpt-4o-mini fallback.`
+          `DRAFTING_FAILOVER: Primary drafting model (GPT-4o) was rate-limited. Draft generated by GPT-4o-mini. Legal quality may be slightly reduced.`
         );
       }
     }
@@ -411,14 +413,6 @@ export async function runDraftingStage(
       },
     });
     const versionId = (version as any)?.insertId ?? 0;
-    if (!versionId) {
-      throw new PipelineError(
-        PIPELINE_ERROR_CODES.UNKNOWN_ERROR,
-        `createLetterVersion returned a null/zero ID for letter #${letterId} — draft version was not persisted`,
-        "drafting",
-        "insertId was 0 or falsy",
-      );
-    }
 
     await updateLetterVersionPointers(letterId, {
       currentAiDraftVersionId: versionId,

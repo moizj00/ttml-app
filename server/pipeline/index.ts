@@ -12,3 +12,5 @@ export * from "./prompts";
 export * from "./embeddings";
 export * from "./training-capture";
 export * from "./fine-tune";
+export * from "./simple";
+

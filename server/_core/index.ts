@@ -341,12 +341,19 @@ async function startServer() {
   // Warm up pg-boss so the first letter submission doesn't cold-start it
   // under a live HTTP request (which can time out). Non-fatal — if it fails,
   // the queue will cold-start on first use and the error is already logged.
-  getBoss().then(() => {
-    logger.info({ module: "Startup" }, "[Startup] pg-boss queue connection warmed up");
-  }).catch((err) => {
-    logger.error({ module: "Startup", err }, "[Startup] pg-boss warmup failed — queue will cold-start on first use");
-    captureServerException(err, { tags: { component: "startup", error_type: "pgboss_warmup_failed" } });
-  });
+  //
+  // SKIP if PIPELINE_MODE=simple (we don't need pg-boss for inline pipeline execution)
+  const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+  if (useSimplePipeline) {
+    logger.info({ module: "Startup" }, "[Startup] Skipping pg-boss warmup (PIPELINE_MODE=simple)");
+  } else {
+    getBoss().then(() => {
+      logger.info({ module: "Startup" }, "[Startup] pg-boss queue connection warmed up");
+    }).catch((err) => {
+      logger.error({ module: "Startup", err }, "[Startup] pg-boss warmup failed — queue will cold-start on first use");
+      captureServerException(err, { tags: { component: "startup", error_type: "pgboss_warmup_failed" } });
+    });
+  }
 
   server.listen(port, () => {
     logger.info({ module: "Startup", port }, `Server running on http://localhost:${port}/`);

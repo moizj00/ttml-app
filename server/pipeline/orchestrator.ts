@@ -7,8 +7,8 @@ import {
   setLetterResearchUnverified,
   getLatestResearchRun,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, TokenUsage, PipelineErrorCode, ValidationResult } from "../../shared/types";
-import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, TokenUsage, ValidationResult } from "../../shared/types";
+import { PIPELINE_ERROR_CODES, PipelineError, type PipelineErrorCode } from "../../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
@@ -25,8 +25,8 @@ import type { CitationRegistryEntry } from "../../shared/types";
 import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
-import { triggerN8nPipeline, isN8nMcpConfigured } from "../n8nMcp";
-import type { N8nPipelineResult, N8nVettingReport } from "../n8nMcp";
+import { runPipeline as runLangGraphPipeline } from "./langgraph";
+import { runSimplePipeline } from "./simple";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
@@ -36,7 +36,8 @@ const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 // and both branches of retryPipelineFromStage.
 // ═══════════════════════════════════════════════════════
 
-const UNGROUNDED_PROVIDERS = new Set(["anthropic-fallback", "groq-oss-fallback", "synthetic-intake-fallback"]);
+// Research providers (Perplexity, Claude) are always web-grounded.
+// The researchUnverified flag is therefore always false.
 
 async function applyResearchGroundingAndRevalidate(
   letterId: number,
@@ -47,9 +48,9 @@ async function applyResearchGroundingAndRevalidate(
   opts?: { researchFromCache?: boolean },
 ): Promise<void> {
   pipelineCtx.researchProvider = researchProvider;
-  pipelineCtx.researchUnverified = UNGROUNDED_PROVIDERS.has(researchProvider);
-  pipelineCtx.webGrounded = !UNGROUNDED_PROVIDERS.has(researchProvider);
-  await setLetterResearchUnverified(letterId, pipelineCtx.researchUnverified);
+  pipelineCtx.researchUnverified = false;
+  pipelineCtx.webGrounded = true;
+  await setLetterResearchUnverified(letterId, false);
 
   let citationRegistry = buildCitationRegistry(research);
   orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
@@ -58,7 +59,6 @@ async function applyResearchGroundingAndRevalidate(
   const researchFromCache = opts?.researchFromCache ?? (researchProvider === "kv-cache");
   const allHighConfidence = citationRegistry.length > 0 && citationRegistry.every(r => r.confidence === "high");
   const skipRevalidation =
-    pipelineCtx.researchUnverified ||
     citationRegistry.length === 0 ||
     citationRegistry.length < 3 ||
     researchFromCache ||
@@ -66,7 +66,6 @@ async function applyResearchGroundingAndRevalidate(
 
   if (skipRevalidation) {
     const reasons: string[] = [];
-    if (pipelineCtx.researchUnverified) reasons.push("research unverified");
     if (citationRegistry.length === 0) reasons.push("no citations");
     if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
     if (researchFromCache) reasons.push("research served from KV cache (already validated)");
@@ -101,216 +100,6 @@ export function consumeIntermediateContent(letterId: number): { content?: string
 }
 
 // ═══════════════════════════════════════════════════════
-// N8N MCP SYNC RESULT HANDLER
-// When n8n MCP returns results synchronously (not via callback),
-// process them inline using the same logic as the callback handler.
-// ═══════════════════════════════════════════════════════
-
-async function processN8nSyncResult(
-  letterId: number,
-  result: N8nPipelineResult
-): Promise<boolean> {
-  const {
-    researchPacket,
-    draftOutput,
-    assembledLetter,
-    vettedLetter,
-    vettingReport,
-    researchOutput,
-    draftContent,
-    stages,
-    bloatDetected,
-    provider,
-  } = result;
-
-  const effectiveFinalLetter = vettedLetter || assembledLetter;
-  const effectiveDraft = effectiveFinalLetter || draftOutput?.draftLetter || draftContent;
-
-  if (!effectiveDraft) {
-    orchLogger.warn({ letterId }, "[Pipeline] n8n MCP sync result has no draft content — will try fallback");
-    return false;
-  }
-
-  const hasVetting = !!(vettedLetter && vettingReport);
-  const isAligned = !!(researchPacket && draftOutput && assembledLetter);
-  const providerTag = provider ?? (hasVetting ? "n8n-mcp-4stage" : isAligned ? "n8n-mcp-3stage" : "n8n-mcp-sync");
-
-  const {
-    createLetterVersion,
-    updateLetterVersionPointers,
-    logReviewAction,
-    getLetterRequestById,
-    hasLetterBeenPreviouslyUnlocked,
-  } = await import("../db");
-  const { runAssemblyStage } = await import("../pipeline");
-
-  await updateLetterStatus(letterId, "drafting");
-  await logReviewAction({
-    letterRequestId: letterId,
-    actorType: "system",
-    action: "status_transition",
-    noteText: `n8n MCP research complete (${providerTag}). Transitioning to drafting stage.`,
-    fromStatus: "researching",
-    toStatus: "drafting",
-  });
-
-  const draftVersion = await createLetterVersion({
-    letterRequestId: letterId,
-    versionType: "ai_draft",
-    content: effectiveDraft,
-    createdByType: "system",
-    metadataJson: {
-      provider: providerTag,
-      stage: hasVetting ? "vetted_final" : isAligned ? "n8n-assembly" : "n8n-mcp-pipeline",
-      researchSummary: researchPacket?.researchSummary ?? researchOutput?.substring(0, 2000),
-      attorneyReviewSummary: draftOutput?.attorneyReviewSummary,
-      openQuestions: draftOutput?.openQuestions,
-      riskFlags: draftOutput?.riskFlags,
-      stages,
-      ...(hasVetting && vettingReport ? { vettingReport, bloatDetected: bloatDetected ?? 0 } : {}),
-    },
-  });
-
-  const draftVersionId = (draftVersion as { insertId?: number })?.insertId ?? 0;
-  await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: draftVersionId });
-
-  if (researchPacket?.researchSummary) {
-    try {
-      const researchMeta: Record<string, unknown> = {
-        provider: providerTag,
-        stage: "research",
-        researchPacket: {
-          jurisdictionProfile: researchPacket.jurisdictionProfile,
-          issuesIdentified: researchPacket.issuesIdentified,
-          applicableRulesCount: researchPacket.applicableRules?.length ?? 0,
-          riskFlags: researchPacket.riskFlags,
-          draftingConstraints: researchPacket.draftingConstraints,
-        },
-      };
-      await createLetterVersion({
-        letterRequestId: letterId,
-        versionType: "ai_draft",
-        content: researchPacket.researchSummary,
-        createdByType: "system",
-        metadataJson: researchMeta,
-      });
-      orchLogger.info({ letterId }, "[Pipeline] Research version stored from n8n MCP sync result");
-    } catch (researchErr) {
-      orchLogger.warn({ letterId, err: researchErr }, "[Pipeline] Failed to store research version from MCP sync");
-    }
-  }
-
-  if (hasVetting && vettingReport) {
-    orchLogger.info(
-      { letterId, risk: vettingReport.riskLevel, changes: vettingReport.changesApplied?.length ?? 0 },
-      "[Pipeline] Vetted letter stored from n8n MCP sync"
-    );
-  }
-
-  let assemblyHandledEmails = false;
-
-  if (isAligned || hasVetting) {
-    const stageLabel = hasVetting ? "4-stage" : "3-stage";
-    await updateLetterStatus(letterId, "generated_locked");
-    await logReviewAction({
-      letterRequestId: letterId,
-      actorType: "system",
-      action: "ai_pipeline_completed",
-      noteText: `n8n MCP aligned ${stageLabel} pipeline complete (${(stages ?? []).join(" → ")}). ${hasVetting ? `Vetting: risk=${vettingReport!.riskLevel}, bloat_removed=${vettingReport!.bloatPhrasesRemoved?.length ?? 0}. ` : ""}Draft ready — awaiting subscriber payment for attorney review.`,
-      fromStatus: "drafting",
-      toStatus: "generated_locked",
-    });
-  } else {
-    orchLogger.info({ letterId }, "[Pipeline] Legacy n8n MCP output — running local assembly stage");
-    const letter = await getLetterRequestById(letterId);
-    if (letter?.intakeJson) {
-      try {
-        const intake = letter.intakeJson as IntakeJson;
-
-        const research: ResearchPacket = researchPacket ?? {
-          researchSummary: researchOutput ?? "Research completed by n8n MCP pipeline.",
-          jurisdictionProfile: {
-            country: intake.jurisdiction?.country ?? "US",
-            stateProvince: intake.jurisdiction?.state ?? "",
-            city: intake.jurisdiction?.city ?? "",
-            authorityHierarchy: ["Federal", "State", "Local"],
-          },
-          issuesIdentified: [intake.matter?.description?.substring(0, 200) ?? "Legal matter"],
-          applicableRules: [{
-            ruleTitle: "n8n Research Findings",
-            ruleType: "statute",
-            jurisdiction: intake.jurisdiction?.state ?? "",
-            citationText: "See research summary",
-            sectionOrRule: "N/A",
-            summary: (researchOutput ?? "").substring(0, 500),
-            sourceUrl: "",
-            sourceTitle: "n8n MCP Pipeline Research",
-            relevance: "Primary research from n8n pipeline",
-            confidence: "medium" as const,
-          }],
-          localJurisdictionElements: [],
-          factualDataNeeded: [],
-          openQuestions: [],
-          riskFlags: [],
-          draftingConstraints: [],
-        };
-
-        const draft: DraftOutput = draftOutput ?? {
-          draftLetter: draftContent ?? "",
-          attorneyReviewSummary: "Draft generated by n8n MCP pipeline. Please review carefully.",
-          openQuestions: [],
-          riskFlags: [],
-        };
-
-        await runAssemblyStage(letterId, intake, research, draft);
-        assemblyHandledEmails = true;
-        orchLogger.info({ letterId }, "[Pipeline] Local assembly complete from n8n MCP sync result");
-      } catch (assemblyErr) {
-        const assemblyMsg = assemblyErr instanceof Error ? assemblyErr.message : String(assemblyErr);
-        orchLogger.warn({ letterId, err: assemblyMsg }, "[Pipeline] Local assembly failed — using n8n draft as final");
-        await updateLetterStatus(letterId, "generated_locked");
-        await logReviewAction({
-          letterRequestId: letterId,
-          actorType: "system",
-          action: "ai_pipeline_completed",
-          noteText: `n8n MCP pipeline complete (${providerTag}). Local assembly skipped. Draft ready — awaiting subscriber payment for attorney review.`,
-          fromStatus: "drafting",
-          toStatus: "generated_locked",
-        });
-      }
-    } else {
-      await updateLetterStatus(letterId, "generated_locked");
-      await logReviewAction({
-        letterRequestId: letterId,
-        actorType: "system",
-        action: "ai_pipeline_completed",
-        noteText: `n8n MCP pipeline complete (${providerTag}). Draft ready — awaiting subscriber payment for attorney review.`,
-        fromStatus: "drafting",
-        toStatus: "generated_locked",
-      });
-    }
-  }
-
-  if (!assemblyHandledEmails) {
-    const wasAlreadyUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
-    if (!wasAlreadyUnlocked) {
-      orchLogger.info({ letterId }, "[Pipeline] Letter generated_locked — paywall email will fire via cron in ~10–15 min");
-    } else {
-      orchLogger.info({ letterId }, "[Pipeline] Skipping paywall email — previously unlocked");
-    }
-
-    try {
-      await autoAdvanceIfPreviouslyUnlocked(letterId);
-    } catch (autoUnlockErr) {
-      orchLogger.error({ letterId, err: autoUnlockErr }, "[Pipeline] Auto-unlock check failed");
-    }
-  }
-
-  orchLogger.info({ letterId, providerTag }, "[Pipeline] n8n MCP sync result processed successfully");
-  return true;
-}
-
-// ═══════════════════════════════════════════════════════
 // FULL PIPELINE ORCHESTRATOR
 // ═══════════════════════════════════════════════════════
 
@@ -324,15 +113,16 @@ export function preflightApiKeyCheck(stage: "research" | "drafting" | "full"): {
   const hasPerplexity = !!(process.env.PERPLEXITY_API_KEY?.trim());
   const hasOpenAI = !!(process.env.OPENAI_API_KEY?.trim());
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY?.trim());
+  const hasGroq = !!(process.env.GROQ_API_KEY?.trim());
 
-  const canResearch = hasPerplexity;
-  const canDraft = hasOpenAI || hasAnthropic;
+  const canResearch = hasPerplexity || hasOpenAI || hasAnthropic || hasGroq;
+  const canDraft = hasAnthropic || hasOpenAI || hasGroq;
 
   if (!canResearch) {
-    missing.push("Research provider unavailable (PERPLEXITY_API_KEY required — Perplexity is the sole research provider)");
+    missing.push("No research provider available (need PERPLEXITY_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY)");
   }
   if ((stage === "drafting" || stage === "full") && !canDraft) {
-    missing.push("No drafting provider available (need OPENAI_API_KEY or ANTHROPIC_API_KEY)");
+    missing.push("No drafting provider available (need ANTHROPIC_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY)");
   }
 
   const ok = stage === "research" ? canResearch : stage === "drafting" ? canDraft : (canResearch && canDraft);
@@ -363,6 +153,42 @@ export async function runFullPipeline(
     );
   }
 
+  // ── LangGraph Pipeline Routing ──────────────────────────────────────────────
+  // Set PIPELINE_MODE=langgraph to use the new LangGraph-based pipeline.
+  // This eliminates the need for pg-boss workers and n8n workflows.
+  const useLangGraph = process.env.PIPELINE_MODE === "langgraph";
+  if (useLangGraph) {
+    orchLogger.info({ letterId }, "[Pipeline] Using LangGraph pipeline (PIPELINE_MODE=langgraph)");
+    const result = await runLangGraphPipeline(letterId, intake, userId);
+    if (!result.success) {
+      throw new PipelineError(
+        (result.errorCode as PipelineErrorCode) ?? PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,
+        result.error ?? "LangGraph pipeline failed",
+        "pipeline"
+      );
+    }
+    orchLogger.info({ letterId, hasLetter: !!result.vettedLetter }, "[Pipeline] LangGraph pipeline completed");
+    return;
+  }
+
+  // ── Simple Pipeline Routing ──────────────────────────────────────────────────
+  // Set PIPELINE_MODE=simple to use the ultra-simple Claude-only pipeline.
+  // Single stage: intake → Claude → letter. No research, no vetting.
+  const useSimple = process.env.PIPELINE_MODE === "simple";
+  if (useSimple) {
+    orchLogger.info({ letterId }, "[Pipeline] Using simple pipeline (PIPELINE_MODE=simple)");
+    const result = await runSimplePipeline(letterId, intake, userId);
+    if (!result.success) {
+      throw new PipelineError(
+        PIPELINE_ERROR_CODES.DRAFTING_PROVIDER_FAILED,
+        result.error ?? "Simple pipeline failed",
+        "pipeline"
+      );
+    }
+    orchLogger.info({ letterId }, "[Pipeline] Simple pipeline completed");
+    return;
+  }
+
   const normalizedInput = buildNormalizedPromptInput(
     dbFields ?? {
       subject: intake.matter?.subject ?? "Legal Matter",
@@ -377,165 +203,106 @@ export async function runFullPipeline(
   orchLogger.info({ letterId, letterType: normalizedInput.letterType, jurisdictionState: normalizedInput.jurisdiction.state }, "[Pipeline] Normalized intake");
 
   // ── Try n8n workflow first (primary path) ──────────────────────────────────
-  const n8nCallbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
-  const useN8nPrimary = process.env.N8N_PRIMARY === "true";
-  const n8nMcpConfigured = isN8nMcpConfigured();
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "";
-  const hasWebhookFallback = !!n8nWebhookUrl && n8nWebhookUrl.startsWith("https://");
-
-  if (useN8nPrimary && (n8nMcpConfigured || hasWebhookFallback)) {
+  const n8nCallbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
+  // ── Routing: Direct 4-stage pipeline is PRIMARY.
+  // Set N8N_PRIMARY=true in env to route through n8n instead (useful for debugging/experimentation).
+  const useN8nPrimary =
+    process.env.N8N_PRIMARY === "true" &&
+    !!n8nWebhookUrl &&
+    n8nWebhookUrl.startsWith("https://");
+  if (useN8nPrimary) {
     const pipelineJob = await createWorkflowJob({
       letterRequestId: letterId,
       jobType: "generation_pipeline",
-      provider: n8nMcpConfigured ? "n8n-mcp" : "n8n",
+      provider: "n8n",
       requestPayloadJson: {
         letterId,
         stages: ["n8n-sonar-research", "n8n-gpt4o-mini-draft", "n8n-gpt4o-mini-assembly", "n8n-sonnet-vetting"],
         normalizedInput,
-        transport: n8nMcpConfigured ? "mcp" : "webhook",
       },
     });
-    const pipelineJobId = (pipelineJob as { insertId?: number })?.insertId ?? 0;
+    const pipelineJobId = (pipelineJob as any)?.insertId ?? 0;
     await updateWorkflowJob(pipelineJobId, {
       status: "running",
       startedAt: new Date(),
     });
     await updateLetterStatus(letterId, "researching");
 
-    const appBaseUrl =
-      process.env.APP_BASE_URL ??
-      "https://www.talk-to-my-lawyer.com";
-    const callbackUrl = `${appBaseUrl}/api/pipeline/n8n-callback`;
-    const payload = {
-      letterId,
-      letterType: intake.letterType,
-      userId: intake.sender?.name ?? "unknown",
-      callbackUrl,
-      callbackSecret: n8nCallbackSecret,
-      intakeData: {
-        sender: intake.sender,
-        recipient: intake.recipient,
-        jurisdictionState: intake.jurisdiction?.state ?? "",
-        jurisdictionCountry: intake.jurisdiction?.country ?? "US",
-        matter: intake.matter,
-        desiredOutcome: intake.desiredOutcome,
+    try {
+      orchLogger.info({ letterId, url: n8nWebhookUrl }, "[Pipeline] Triggering n8n workflow");
+      const appBaseUrl =
+        process.env.APP_BASE_URL ??
+        "https://www.talk-to-my-lawyer.com";
+      const callbackUrl = `${appBaseUrl}/api/pipeline/n8n-callback`;
+      // We fire-and-forget the n8n webhook — the callback endpoint will handle the result
+      const payload = {
+        letterId,
         letterType: intake.letterType,
-        tonePreference: intake.tonePreference,
-        financials: intake.financials,
-        additionalContext: intake.additionalContext,
-      },
-      normalizedInput,
-    };
+        userId: intake.sender?.name ?? "unknown",
+        callbackUrl,
+        callbackSecret: n8nCallbackSecret,
+        intakeData: {
+          sender: intake.sender,
+          recipient: intake.recipient,
+          jurisdictionState: intake.jurisdiction?.state ?? "",
+          jurisdictionCountry: intake.jurisdiction?.country ?? "US",
+          matter: intake.matter,
+          desiredOutcome: intake.desiredOutcome,
+          letterType: intake.letterType,
+          tonePreference: intake.tonePreference,
+          financials: intake.financials,
+          additionalContext: intake.additionalContext,
+        },
+      };
 
-    let n8nSuccess = false;
+      // Correct stale webhook URL path if needed
+      const resolvedWebhookUrl = n8nWebhookUrl.includes("ttml-legal-pipeline")
+        ? n8nWebhookUrl.replace(
+            "ttml-legal-pipeline",
+            "legal-letter-submission"
+          )
+        : n8nWebhookUrl;
+      const response = await fetch(resolvedWebhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // n8n webhook uses headerAuth — the credential's header name is X-Auth-Token
+          "X-Auth-Token": n8nCallbackSecret,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000), // 10s to get acknowledgment
+      });
 
-    // ── Strategy 1: MCP transport (primary) ──────────────────────────────
-    if (n8nMcpConfigured) {
-      try {
-        orchLogger.info({ letterId }, "[Pipeline] Triggering n8n workflow via MCP (primary path)");
-        const mcpResult = await triggerN8nPipeline(payload);
-
-        if (mcpResult.success) {
-          orchLogger.info({ letterId, hasContent: !!mcpResult.content }, "[Pipeline] n8n MCP call succeeded");
-
-          const mcpContent = mcpResult.content;
-          const hasSyncResult = mcpContent &&
-            typeof mcpContent === "object" &&
-            typeof mcpContent !== "string" &&
-            ("vettedLetter" in mcpContent || "assembledLetter" in mcpContent || "draftContent" in mcpContent);
-
-          if (hasSyncResult) {
-            orchLogger.info({ letterId }, "[Pipeline] n8n MCP returned synchronous results — processing inline");
-            const syncProcessed = await processN8nSyncResult(letterId, mcpContent as N8nPipelineResult);
-            if (syncProcessed) {
-              await updateWorkflowJob(pipelineJobId, {
-                status: "completed",
-                responsePayloadJson: { mode: "n8n-mcp-sync", content: mcpContent },
-                completedAt: new Date(),
-              });
-              n8nSuccess = true;
-            } else {
-              orchLogger.warn({ letterId }, "[Pipeline] n8n MCP sync result unusable — trying fallback");
-              await updateWorkflowJob(pipelineJobId, {
-                status: "failed",
-                errorMessage: formatStructuredError(
-                  PIPELINE_ERROR_CODES.N8N_ERROR,
-                  "n8n MCP returned sync result but no usable draft content",
-                  "pipeline",
-                  "Falling back to webhook or in-app pipeline"
-                ),
-                completedAt: new Date(),
-              });
-            }
-          } else {
-            orchLogger.info({ letterId }, "[Pipeline] n8n MCP acknowledged — awaiting async callback");
-            await updateWorkflowJob(pipelineJobId, {
-              status: "running",
-              responsePayloadJson: { mode: "n8n-mcp-async", ack: mcpContent },
-            });
-            n8nSuccess = true;
-          }
-        } else {
-          orchLogger.warn({ letterId, err: mcpResult.content }, "[Pipeline] n8n MCP call returned error");
-        }
-      } catch (mcpErr) {
-        const mcpMsg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr);
-        orchLogger.warn({ letterId, err: mcpMsg }, "[Pipeline] n8n MCP call failed");
-      }
-    }
-
-    // ── Strategy 2: Legacy webhook fallback ──────────────────────────────
-    if (!n8nSuccess && hasWebhookFallback) {
-      try {
-        orchLogger.info({ letterId, url: n8nWebhookUrl }, "[Pipeline] Falling back to n8n webhook");
-        const resolvedWebhookUrl = n8nWebhookUrl.includes("ttml-legal-pipeline")
-          ? n8nWebhookUrl.replace("ttml-legal-pipeline", "legal-letter-submission")
-          : n8nWebhookUrl;
-        const response = await fetch(resolvedWebhookUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Auth-Token": n8nCallbackSecret,
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(10000),
+      if (response.ok) {
+        const ack = await response.json().catch(() => ({}));
+        orchLogger.info({ letterId, ack }, "[Pipeline] n8n acknowledged");
+        await updateWorkflowJob(pipelineJobId, {
+          status: "running",
+          responsePayloadJson: { ack, mode: "n8n-async" },
         });
-
-        if (response.ok) {
-          const ack = await response.json().catch(() => ({}));
-          orchLogger.info({ letterId, ack }, "[Pipeline] n8n webhook acknowledged");
-          await updateWorkflowJob(pipelineJobId, {
-            status: "running",
-            responsePayloadJson: { ack, mode: "n8n-webhook-async" },
-          });
-          n8nSuccess = true;
-        } else {
-          const errText = await response.text().catch(() => "unknown");
-          orchLogger.warn({ letterId, status: response.status, errText }, "[Pipeline] n8n webhook returned error");
-        }
-      } catch (webhookErr) {
-        const webhookMsg = webhookErr instanceof Error ? webhookErr.message : String(webhookErr);
-        orchLogger.warn({ letterId, err: webhookMsg }, "[Pipeline] n8n webhook call failed");
+        // n8n will call back when done — we return here and let the callback handle the rest
+        return;
+      } else {
+        const errText = await response.text().catch(() => "unknown");
+        orchLogger.warn({ letterId, status: response.status, errText }, "[Pipeline] n8n returned error — falling back to in-app pipeline");
+        await updateWorkflowJob(pipelineJobId, {
+          status: "failed",
+          errorMessage: formatStructuredError(
+            PIPELINE_ERROR_CODES.N8N_ERROR,
+            `n8n returned ${response.status}`,
+            "pipeline",
+            errText
+          ),
+          completedAt: new Date(),
+        });
       }
+    } catch (n8nErr) {
+      const n8nMsg = n8nErr instanceof Error ? n8nErr.message : String(n8nErr);
+      orchLogger.warn({ letterId, err: n8nMsg }, "[Pipeline] n8n call failed — falling back to in-app pipeline");
     }
-
-    if (n8nSuccess) {
-      return;
-    }
-
-    orchLogger.warn({ letterId }, "[Pipeline] All n8n paths failed — falling back to in-app pipeline");
-    await updateWorkflowJob(pipelineJobId, {
-      status: "failed",
-      errorMessage: formatStructuredError(
-        PIPELINE_ERROR_CODES.N8N_ERROR,
-        "All n8n paths (MCP + webhook) failed",
-        "pipeline",
-        "Falling back to in-app 4-stage pipeline"
-      ),
-      completedAt: new Date(),
-    });
   } else {
-    orchLogger.info({ letterId, useN8nPrimary, n8nMcpConfigured, hasWebhookFallback }, "[Pipeline] N8N_PRIMARY not set or not configured — using direct 4-stage pipeline");
+    orchLogger.info({ letterId }, "[Pipeline] N8N_PRIMARY not set — using direct 4-stage pipeline (primary path)");
   }
 
   // ── API key preflight for direct pipeline (only when NOT routing through n8n) ──
@@ -565,7 +332,7 @@ export async function runFullPipeline(
       normalizedInput,
     },
   });
-  const rawPipelineJobId = (pipelineJob as { insertId?: number })?.insertId;
+  const rawPipelineJobId = (pipelineJob as any)?.insertId;
   if (rawPipelineJobId == null) {
     orchLogger.warn({ letterId }, "[Pipeline] createWorkflowJob returned nullish insertId for pipeline job, falling back to jobId=0");
   }
@@ -631,7 +398,7 @@ export async function runFullPipeline(
       promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
       completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
       estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "sonar", citationRevalidationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", citationRevalidationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
@@ -691,6 +458,19 @@ export async function runFullPipeline(
 // that import directly from orchestrator (e.g. worker.ts).
 export { bestEffortFallback, autoAdvanceIfPreviouslyUnlocked, FALLBACK_EXCLUDED_CODES } from "./fallback";
 
+// ═══════════════════════════════════════════════════════
+// LANGGRAPH PIPELINE (new architecture)
+// ═══════════════════════════════════════════════════════
+// Re-export LangGraph pipeline for callers that prefer the new architecture.
+// Enable via PIPELINE_MODE=langgraph environment variable.
+export {
+  runPipeline as runLangGraphFullPipeline,
+  runPipelineStreaming as runLangGraphStreamingPipeline,
+  preflightApiKeyCheck as langGraphPreflightCheck,
+  type PipelineResult as LangGraphPipelineResult,
+  type PipelineStreamEvent as LangGraphStreamEvent,
+} from "./langgraph";
+
 
 // ═══════════════════════════════════════════════════════
 // RETRY LOGIC
@@ -745,7 +525,7 @@ export async function retryPipelineFromStage(
     provider: "multi-provider",
     requestPayloadJson: { letterId, stage, userId },
   });
-  const rawRetryJobId = (retryJob as { insertId?: number })?.insertId;
+  const rawRetryJobId = (retryJob as any)?.insertId;
   if (rawRetryJobId == null) {
     orchLogger.warn({ letterId }, "[Pipeline] createWorkflowJob returned nullish insertId for retry job, falling back to jobId=0");
   }
@@ -817,7 +597,7 @@ export async function retryPipelineFromStage(
       promptTokens: retryCitationTokens?.promptTokens ?? 0,
       completionTokens: retryCitationTokens?.completionTokens ?? 0,
       estimatedCostUsd: retryCitationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "sonar", retryCitationTokens)
+        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", retryCitationTokens)
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,

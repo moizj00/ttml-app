@@ -35,6 +35,8 @@ import {
 import { captureServerException } from "../sentry";
 import { enqueuePipelineJob } from "../queue";
 import { extractLessonFromSubscriberFeedback } from "../learning";
+import { runSimplePipeline } from "../pipeline/simple";
+import type { NotificationCategory } from "../db/notifications";
 import {
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
@@ -147,24 +149,61 @@ export async function submitLetter(
     });
   }
 
-  try {
-    await enqueuePipelineJob({
-      type: "runPipeline",
-      letterId,
-      intake: input.intakeJson,
-      userId: ctx.userId,
-      appUrl,
-      label: "submit",
-      usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+  // ── Simple Pipeline Mode ─────────────────────────────────────────────────
+  // When PIPELINE_MODE=simple, run the pipeline inline as a fire-and-forget
+  // Promise. This avoids setTimeout (which doesn't survive process restarts)
+  // while still returning immediately so the user sees the progress timeline.
+  const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+  if (useSimplePipeline) {
+    logger.info({ letterId }, "[Submit] Launching simple pipeline (PIPELINE_MODE=simple)");
+
+    // Fire-and-forget: do NOT await — return immediately to the subscriber
+    Promise.resolve().then(async () => {
+      try {
+        const result = await runSimplePipeline(letterId, input.intakeJson, ctx.userId);
+        if (!result.success) {
+          logger.error({ letterId, error: result.error }, "[Submit] Simple pipeline failed");
+          await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+          await createNotification({
+            userId: ctx.userId,
+            type: "letter_failed",
+            title: "Letter generation failed",
+            body: "We could not generate your letter. Your usage has been refunded. Please try again.",
+            link: `/dashboard/letters/${letterId}`,
+            category: "letters" satisfies NotificationCategory,
+          }).catch(() => {});
+        } else {
+          logger.info({ letterId }, "[Submit] Simple pipeline completed successfully");
+        }
+      } catch (pipelineErr) {
+        logger.error({ err: pipelineErr, letterId }, "[Submit] Simple pipeline threw an error");
+        captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "pipeline_failed" } });
+        await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      }
     });
-  } catch (enqueueErr) {
-    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-    captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-    await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
-    });
+
+    logger.info({ letterId }, "[Submit] Pipeline launched, returning to user");
+  } else {
+    // ── Standard Queue-Based Pipeline ────────────────────────────────────────
+    try {
+      await enqueuePipelineJob({
+        type: "runPipeline",
+        letterId,
+        intake: input.intakeJson,
+        userId: ctx.userId,
+        appUrl,
+        label: "submit",
+        usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+      });
+    } catch (enqueueErr) {
+      logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+      captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+      await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
+      });
+    }
   }
 
   // Fire-and-forget: admin notification is non-blocking after successful enqueue
@@ -280,22 +319,40 @@ export async function processSubscriberFeedback(
     await updateLetterStatus(letterId, "submitted");
     const intake = updatedIntakeJson ?? ctx.letter.intakeJson;
     if (intake) {
-      try {
-        await enqueuePipelineJob({
-          type: "runPipeline",
-          letterId,
-          intake,
-          userId: ctx.letter.userId ?? ctx.userId,
-          appUrl,
-          label: "updateForChanges",
+      const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+      if (useSimplePipeline) {
+        // Fire-and-forget simple pipeline for needs_changes retry
+        const retriggerUserId = ctx.letter.userId ?? ctx.userId;
+        Promise.resolve().then(async () => {
+          try {
+            const result = await runSimplePipeline(letterId, intake, retriggerUserId);
+            if (!result.success) {
+              logger.error({ letterId, error: result.error }, "[processSubscriberFeedback] Simple pipeline retry failed");
+            }
+          } catch (pipelineErr) {
+            logger.error({ err: pipelineErr, letterId }, "[processSubscriberFeedback] Simple pipeline retry threw an error");
+            captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "retry_pipeline_failed" } });
+          }
         });
-      } catch (enqueueErr) {
-        logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-        captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to start letter reprocessing. Please try again.",
-        });
+        logger.info({ letterId }, "[processSubscriberFeedback] Simple pipeline re-run launched");
+      } else {
+        try {
+          await enqueuePipelineJob({
+            type: "runPipeline",
+            letterId,
+            intake,
+            userId: ctx.letter.userId ?? ctx.userId,
+            appUrl,
+            label: "updateForChanges",
+          });
+        } catch (enqueueErr) {
+          logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to start letter reprocessing. Please try again.",
+          });
+        }
       }
     }
   } else {
