@@ -7,8 +7,8 @@ import {
   setLetterResearchUnverified,
   getLatestResearchRun,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, TokenUsage, PipelineErrorCode, ValidationResult } from "../../shared/types";
-import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
+import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, TokenUsage, ValidationResult } from "../../shared/types";
+import { PIPELINE_ERROR_CODES, PipelineError, type PipelineErrorCode } from "../../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
@@ -25,6 +25,7 @@ import type { CitationRegistryEntry } from "../../shared/types";
 import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
+import { runPipeline as runLangGraphPipeline } from "./langgraph";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
@@ -149,6 +150,24 @@ export async function runFullPipeline(
       "pipeline",
       intakeCheck.errors.join("; ")
     );
+  }
+
+  // ── LangGraph Pipeline Routing ──────────────────────────────────────────────
+  // Set PIPELINE_MODE=langgraph to use the new LangGraph-based pipeline.
+  // This eliminates the need for pg-boss workers and n8n workflows.
+  const useLangGraph = process.env.PIPELINE_MODE === "langgraph";
+  if (useLangGraph) {
+    orchLogger.info({ letterId }, "[Pipeline] Using LangGraph pipeline (PIPELINE_MODE=langgraph)");
+    const result = await runLangGraphPipeline(letterId, intake, userId);
+    if (!result.success) {
+      throw new PipelineError(
+        (result.errorCode as PipelineErrorCode) ?? PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,
+        result.error ?? "LangGraph pipeline failed",
+        "pipeline"
+      );
+    }
+    orchLogger.info({ letterId, hasLetter: !!result.vettedLetter }, "[Pipeline] LangGraph pipeline completed");
+    return;
   }
 
   const normalizedInput = buildNormalizedPromptInput(
@@ -419,6 +438,19 @@ export async function runFullPipeline(
 // Implementation extracted to ./fallback.ts — re-exported here for callers
 // that import directly from orchestrator (e.g. worker.ts).
 export { bestEffortFallback, autoAdvanceIfPreviouslyUnlocked, FALLBACK_EXCLUDED_CODES } from "./fallback";
+
+// ═══════════════════════════════════════════════════════
+// LANGGRAPH PIPELINE (new architecture)
+// ═══════════════════════════════════════════════════════
+// Re-export LangGraph pipeline for callers that prefer the new architecture.
+// Enable via PIPELINE_MODE=langgraph environment variable.
+export {
+  runPipeline as runLangGraphFullPipeline,
+  runPipelineStreaming as runLangGraphStreamingPipeline,
+  preflightApiKeyCheck as langGraphPreflightCheck,
+  type PipelineResult as LangGraphPipelineResult,
+  type PipelineStreamEvent as LangGraphStreamEvent,
+} from "./langgraph";
 
 
 // ═══════════════════════════════════════════════════════
