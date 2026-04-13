@@ -1,7 +1,7 @@
 import type { IntakeJson } from "../../shared/types";
 import type { NotificationCategory } from "../db/notifications";
 import { createLogger } from "../logger";
-import { generateText } from "./langchain";
+import { generateText } from "ai";
 import { getAnthropicClient } from "./providers";
 import {
   updateLetterStatus,
@@ -24,11 +24,10 @@ const logger = createLogger("simple-pipeline");
  * No research, no vetting, no orchestration complexity.
  *
  * Activated when PIPELINE_MODE=simple.
- * Uses the same LangChain generateText() wrapper as the full pipeline,
- * so all calls are automatically traced in LangSmith when configured.
+ * Uses the Vercel AI SDK generateText() directly (same as all other pipeline stages).
  */
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "claude-sonnet-4-6-20250514";
 
 export type SimplePipelineResult = {
   success: boolean;
@@ -136,7 +135,7 @@ export async function runSimplePipeline(
       }).catch(() => {}),
     ]);
 
-    // ── Single LangChain call (auto-traced in LangSmith) ─────────────────
+    // ── Single Vercel AI SDK call ─────────────────────────────────────────
     const anthropic = getAnthropicClient();
     const model = anthropic(MODEL);
 
@@ -147,9 +146,6 @@ export async function runSimplePipeline(
       prompt: buildPrompt(intake),
       maxOutputTokens: 4096,
       abortSignal: AbortSignal.timeout(90_000),
-      runName: `ttml-simple-${letterId}`,
-      metadata: { letterId, userId, mode: "simple", letterType: intake.letterType },
-      tags: ["ttml", "simple-pipeline"],
     });
 
     const letterContent = result.text.trim();
