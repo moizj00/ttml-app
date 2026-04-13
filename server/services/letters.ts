@@ -35,6 +35,7 @@ import {
 import { captureServerException } from "../sentry";
 import { enqueuePipelineJob } from "../queue";
 import { extractLessonFromSubscriberFeedback } from "../learning";
+import { runSimplePipeline } from "../pipeline/simple";
 import {
   checkLetterSubmissionAllowed,
   incrementLettersUsed,
@@ -147,24 +148,54 @@ export async function submitLetter(
     });
   }
 
-  try {
-    await enqueuePipelineJob({
-      type: "runPipeline",
-      letterId,
-      intake: input.intakeJson,
-      userId: ctx.userId,
-      appUrl,
-      label: "submit",
-      usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
-    });
-  } catch (enqueueErr) {
-    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-    captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-    await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
-    });
+  // ── Simple Pipeline Mode ─────────────────────────────────────────────────
+  // When PIPELINE_MODE=simple, run the pipeline inline (no queue, no worker).
+  // This is ideal for fast, single-stage letter generation without pg-boss.
+  const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+  if (useSimplePipeline) {
+    logger.info({ letterId }, "[Submit] Running simple pipeline inline (PIPELINE_MODE=simple)");
+    try {
+      const result = await runSimplePipeline(letterId, input.intakeJson, ctx.userId);
+      if (!result.success) {
+        logger.error({ letterId, error: result.error }, "[Submit] Simple pipeline failed:");
+        await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: result.error ?? "Letter generation failed. Your usage has been refunded. Please try again.",
+        });
+      }
+      logger.info({ letterId }, "[Submit] Simple pipeline completed successfully");
+    } catch (pipelineErr) {
+      if (pipelineErr instanceof TRPCError) throw pipelineErr;
+      logger.error({ err: pipelineErr, letterId }, "[Submit] Simple pipeline threw an error:");
+      captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "inline_pipeline_failed" } });
+      await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Letter generation failed. Your usage has been refunded. Please try again.",
+      });
+    }
+  } else {
+    // ── Standard Queue-Based Pipeline ────────────────────────────────────────
+    try {
+      await enqueuePipelineJob({
+        type: "runPipeline",
+        letterId,
+        intake: input.intakeJson,
+        userId: ctx.userId,
+        appUrl,
+        label: "submit",
+        usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+      });
+    } catch (enqueueErr) {
+      logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+      captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+      await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
+      });
+    }
   }
 
   // Fire-and-forget: admin notification is non-blocking after successful enqueue

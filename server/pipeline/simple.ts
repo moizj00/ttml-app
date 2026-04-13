@@ -1,7 +1,7 @@
 import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers } from "../db";
+import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers, createNotification } from "../db";
 
 const logger = createLogger("simple-pipeline");
 
@@ -131,6 +131,23 @@ export async function runSimplePipeline(
 
     // Mark as complete - this triggers the paywall state
     await updateLetterStatus(letterId, "generated_locked");
+
+    // Notify user that their letter draft is ready
+    if (userId) {
+      try {
+        await createNotification({
+          userId,
+          type: "letter_draft_ready",
+          title: "Your letter draft is ready!",
+          body: `Your ${intake.matter?.type || "legal letter"} draft has been generated and is ready for review.`,
+          link: `/dashboard/letters/${letterId}`,
+          category: "letters",
+        });
+        logger.info({ letterId, userId }, "[Simple] User notification created");
+      } catch (notifyErr) {
+        logger.warn({ err: notifyErr, letterId }, "[Simple] Failed to create notification (non-fatal)");
+      }
+    }
 
     logger.info({ letterId }, "[Simple] Letter saved and status updated");
 
