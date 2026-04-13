@@ -150,23 +150,20 @@ export async function submitLetter(
   }
 
   // ── Simple Pipeline Mode ─────────────────────────────────────────────────
-  // When PIPELINE_MODE=simple, run the pipeline with a configurable delay.
-  // Default: 5 minutes delay to show the progress timeline to users.
-  // Set PIPELINE_DELAY_MS=0 to run immediately (for testing).
+  // When PIPELINE_MODE=simple, run the pipeline inline as a fire-and-forget
+  // Promise. This avoids setTimeout (which doesn't survive process restarts)
+  // while still returning immediately so the user sees the progress timeline.
   const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
   if (useSimplePipeline) {
-    const delayMs = parseInt(process.env.PIPELINE_DELAY_MS ?? "300000", 10); // Default 5 minutes
-    logger.info({ letterId, delayMs }, "[Submit] Scheduling simple pipeline (PIPELINE_MODE=simple)");
-    
-    // Run pipeline after delay (fire-and-forget, user sees progress timeline)
-    setTimeout(async () => {
+    logger.info({ letterId }, "[Submit] Launching simple pipeline (PIPELINE_MODE=simple)");
+
+    // Fire-and-forget: do NOT await — return immediately to the subscriber
+    Promise.resolve().then(async () => {
       try {
-        logger.info({ letterId }, "[Submit] Starting delayed simple pipeline execution");
         const result = await runSimplePipeline(letterId, input.intakeJson, ctx.userId);
         if (!result.success) {
-          logger.error({ letterId, error: result.error }, "[Submit] Delayed simple pipeline failed:");
+          logger.error({ letterId, error: result.error }, "[Submit] Simple pipeline failed");
           await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
-          // Notify user of failure
           await createNotification({
             userId: ctx.userId,
             type: "letter_failed",
@@ -176,17 +173,16 @@ export async function submitLetter(
             category: "letters" satisfies NotificationCategory,
           }).catch(() => {});
         } else {
-          logger.info({ letterId }, "[Submit] Delayed simple pipeline completed successfully");
+          logger.info({ letterId }, "[Submit] Simple pipeline completed successfully");
         }
       } catch (pipelineErr) {
-        logger.error({ err: pipelineErr, letterId }, "[Submit] Delayed simple pipeline threw an error:");
-        captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "delayed_pipeline_failed" } });
+        logger.error({ err: pipelineErr, letterId }, "[Submit] Simple pipeline threw an error");
+        captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "pipeline_failed" } });
         await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
       }
-    }, delayMs);
-    
-    // Return immediately - user sees "submitted" status and progress timeline
-    logger.info({ letterId, delayMs }, "[Submit] Pipeline scheduled, returning to user");
+    });
+
+    logger.info({ letterId }, "[Submit] Pipeline launched, returning to user");
   } else {
     // ── Standard Queue-Based Pipeline ────────────────────────────────────────
     try {
@@ -323,22 +319,40 @@ export async function processSubscriberFeedback(
     await updateLetterStatus(letterId, "submitted");
     const intake = updatedIntakeJson ?? ctx.letter.intakeJson;
     if (intake) {
-      try {
-        await enqueuePipelineJob({
-          type: "runPipeline",
-          letterId,
-          intake,
-          userId: ctx.letter.userId ?? ctx.userId,
-          appUrl,
-          label: "updateForChanges",
+      const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
+      if (useSimplePipeline) {
+        // Fire-and-forget simple pipeline for needs_changes retry
+        const retriggerUserId = ctx.letter.userId ?? ctx.userId;
+        Promise.resolve().then(async () => {
+          try {
+            const result = await runSimplePipeline(letterId, intake, retriggerUserId);
+            if (!result.success) {
+              logger.error({ letterId, error: result.error }, "[processSubscriberFeedback] Simple pipeline retry failed");
+            }
+          } catch (pipelineErr) {
+            logger.error({ err: pipelineErr, letterId }, "[processSubscriberFeedback] Simple pipeline retry threw an error");
+            captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "retry_pipeline_failed" } });
+          }
         });
-      } catch (enqueueErr) {
-        logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-        captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to start letter reprocessing. Please try again.",
-        });
+        logger.info({ letterId }, "[processSubscriberFeedback] Simple pipeline re-run launched");
+      } else {
+        try {
+          await enqueuePipelineJob({
+            type: "runPipeline",
+            letterId,
+            intake,
+            userId: ctx.letter.userId ?? ctx.userId,
+            appUrl,
+            label: "updateForChanges",
+          });
+        } catch (enqueueErr) {
+          logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
+          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to start letter reprocessing. Please try again.",
+          });
+        }
       }
     }
   } else {
