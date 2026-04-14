@@ -36,8 +36,10 @@ const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 // and both branches of retryPipelineFromStage.
 // ═══════════════════════════════════════════════════════
 
-// Research providers (Perplexity, Claude) are always web-grounded.
-// The researchUnverified flag is therefore always false.
+// Perplexity research is web-grounded (researchUnverified=false). When research
+// falls back to a non-grounded provider (e.g. Claude without web search), we
+// mark the letter's research as unverified and skip citation revalidation —
+// there's nothing to verify because the "citations" were generated offline.
 
 async function applyResearchGroundingAndRevalidate(
   letterId: number,
@@ -47,13 +49,17 @@ async function applyResearchGroundingAndRevalidate(
   pipelineCtx: PipelineContext,
   opts?: { researchFromCache?: boolean },
 ): Promise<void> {
+  const isUnverified =
+    researchProvider === "anthropic-fallback" ||
+    researchProvider === "claude-fallback" ||
+    researchProvider === "none";
   pipelineCtx.researchProvider = researchProvider;
-  pipelineCtx.researchUnverified = false;
-  pipelineCtx.webGrounded = true;
-  await setLetterResearchUnverified(letterId, false);
+  pipelineCtx.researchUnverified = isUnverified;
+  pipelineCtx.webGrounded = !isUnverified;
+  await setLetterResearchUnverified(letterId, isUnverified);
 
   let citationRegistry = buildCitationRegistry(research);
-  orchLogger.info({ letterId, count: citationRegistry.length }, "[Pipeline] Built citation registry");
+  orchLogger.info({ letterId, count: citationRegistry.length, isUnverified }, "[Pipeline] Built citation registry");
 
   const citationTokens = createTokenAccumulator();
   const researchFromCache = opts?.researchFromCache ?? (researchProvider === "kv-cache");
@@ -61,6 +67,7 @@ async function applyResearchGroundingAndRevalidate(
   const skipRevalidation =
     citationRegistry.length === 0 ||
     citationRegistry.length < 3 ||
+    isUnverified ||
     researchFromCache ||
     allHighConfidence;
 
@@ -68,6 +75,7 @@ async function applyResearchGroundingAndRevalidate(
     const reasons: string[] = [];
     if (citationRegistry.length === 0) reasons.push("no citations");
     if (citationRegistry.length > 0 && citationRegistry.length < 3) reasons.push(`only ${citationRegistry.length} citations (< 3 threshold)`);
+    if (isUnverified) reasons.push(`research provider ${researchProvider} is not web-grounded`);
     if (researchFromCache) reasons.push("research served from KV cache (already validated)");
     if (allHighConfidence) reasons.push("all citations already high confidence");
     orchLogger.info({ letterId, reasons }, "[Pipeline] Skipping citation revalidation");
