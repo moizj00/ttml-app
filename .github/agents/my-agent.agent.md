@@ -15,10 +15,9 @@ mcp_servers:
     args:
       - "-y"
       - "@supabase/mcp-server-supabase@latest"
-      - "--read-only"
     env:
       SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: [${SUPABASE_SERVICE_ROLE_KEY}](https://lguqhibpxympxvwqpedf.supabase.co)
     description: >
       Connects to your Supabase project. Enables querying tables,
       managing rows, running SQL, and interacting with Supabase Auth.
