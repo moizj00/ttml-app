@@ -3,7 +3,7 @@ import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
 import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers } from "../db";
 
-const logger = createLogger("simple-pipeline");
+const logger = createLogger({ module: "simple-pipeline" });
 
 /**
  * Ultra-simple letter generation pipeline
@@ -31,7 +31,7 @@ function buildPrompt(intake: IntakeJson): string {
 
   return `You are a professional legal letter writer. Generate a formal legal letter based on the following information:
 
-**Letter Type:** ${matter?.type || "General Legal Matter"}
+**Letter Type:** ${matter?.category || "General Legal Matter"}
 **Subject:** ${matter?.subject || "N/A"}
 **Description:** ${matter?.description || "N/A"}
 
@@ -44,7 +44,6 @@ function buildPrompt(intake: IntakeJson): string {
 
 **To (Recipient):**
 - Name: ${recipient?.name || "N/A"}
-- Entity: ${recipient?.entity || "N/A"}
 - Email: ${recipient?.email || "N/A"}
 - Address: ${recipient?.address || "N/A"}
 
