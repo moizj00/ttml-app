@@ -311,6 +311,13 @@
       "breakpoints": true
     },
     {
+      "idx": 44,
+      "version": "7",
+      "when": 1775700000000,
+      "tag": "0044_startup_migrations_extraction",
+      "breakpoints": true
+    },
+    {
       "idx": 45,
       "version": "7",
       "when": 1775789251107,

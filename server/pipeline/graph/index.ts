@@ -13,9 +13,18 @@ const log = createLogger({ module: "LangGraph:Graph" });
 // CONDITIONAL ROUTING
 // ═══════════════════════════════════════════════════════
 
-/** After vetting: loop back to draft (max 2 retries) or finalize */
+/** After vetting: loop back to draft (max 2 retries), fail on errors, or finalize */
 function routeAfterVetting(state: PipelineStateType): string {
-  const { qualityDegraded, retryCount } = state;
+  const { qualityDegraded, retryCount, errorRetryCount, assembledLetter } = state;
+
+  // If too many node errors or no draft content was ever produced → fail fast
+  if (errorRetryCount >= 3 || !assembledLetter) {
+    log.error(
+      { letterId: state.letterId, errorRetryCount, hasContent: !!assembledLetter },
+      "[Graph] Too many errors or empty draft — routing to fail",
+    );
+    return "fail";
+  }
 
   if (qualityDegraded && retryCount < 2) {
     log.info(
@@ -28,26 +37,7 @@ function routeAfterVetting(state: PipelineStateType): string {
   return "finalize";
 }
 
-/** After any error-prone stage: retry or fail */
-function routeAfterError(state: PipelineStateType): string {
-  const { errorRetryCount, lastErrorStage } = state;
-
-  if (errorRetryCount < 3 && lastErrorStage) {
-    log.warn(
-      { letterId: state.letterId, errorRetryCount, lastErrorStage },
-      "[Graph] Error — retrying stage",
-    );
-    return lastErrorStage;
-  }
-
-  log.error(
-    { letterId: state.letterId, errorRetryCount },
-    "[Graph] Max error retries exhausted → fail",
-  );
-  return "fail";
-}
-
-// ─── Vetting router node (wraps vettingNode + increments retryCount) ───
+// ─── Vetting router node (wraps vettingNode + increments retryCount on redraft) ───
 
 async function vettingRouterNode(state: PipelineStateType): Promise<Partial<PipelineStateType>> {
   const result = await vettingNode(state);
@@ -101,10 +91,11 @@ function buildPipelineGraph() {
     .addEdge("draft", "assembly")
     .addEdge("assembly", "vetting")
 
-    // ─── Conditional: after vetting → redraft or finalize ──
+    // ─── Conditional: after vetting → redraft, finalize, or fail ──
     .addConditionalEdges("vetting", routeAfterVetting, {
       draft: "draft",
       finalize: "finalize",
+      fail: "fail",
     })
 
     // ─── Terminal edges ────────────────────────────────────

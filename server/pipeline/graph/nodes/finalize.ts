@@ -1,6 +1,6 @@
 import { AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
-import { getDb, updateLetterStatus } from "../../../db";
+import { getDb, updateLetterStatus, updateLetterVersionPointers } from "../../../db";
 import { letterRequests, letterVersions } from "../../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { PipelineStateType } from "../state";
@@ -57,18 +57,24 @@ export async function finalizeNode(
 
   const versionId = version?.id ?? null;
 
-  // Update letter_requests with quality flags and new version pointer
+  // Update quality flags first (independent of status transition)
   await db
     .update(letterRequests)
     .set({
-      status: "generated_locked",
       researchUnverified,
       qualityDegraded,
-      currentAiDraftVersionId: versionId,
-      lastStatusChangedAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(letterRequests.id, letterId));
+
+  // Update the version pointer via the canonical helper
+  if (versionId !== null) {
+    await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
+  }
+
+  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
+  // (drafting → generated_locked is valid per shared/types/letter.ts)
+  await updateLetterStatus(letterId, "generated_locked");
 
   log.info(
     { letterId, versionId, qualityDegraded, researchUnverified },
