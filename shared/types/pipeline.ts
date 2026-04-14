@@ -239,6 +239,8 @@ export const PIPELINE_ERROR_CODES = {
   API_KEY_MISSING: "API_KEY_MISSING",
   N8N_ERROR: "N8N_ERROR",
   SUPERSEDED: "SUPERSEDED",
+  RESEARCH_PROVIDER_FAILED: "RESEARCH_PROVIDER_FAILED",
+  DRAFTING_PROVIDER_FAILED: "DRAFTING_PROVIDER_FAILED",
   UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
 
@@ -263,6 +265,8 @@ export const PIPELINE_ERROR_CATEGORY: Record<PipelineErrorCode, PipelineErrorCat
   API_KEY_MISSING: "permanent",
   N8N_ERROR: "transient",
   SUPERSEDED: "permanent",
+  RESEARCH_PROVIDER_FAILED: "transient",
+  DRAFTING_PROVIDER_FAILED: "transient",
   UNKNOWN_ERROR: "transient",
 };
 
@@ -283,6 +287,8 @@ export const PIPELINE_ERROR_LABELS: Record<PipelineErrorCode, string> = {
   API_KEY_MISSING: "API Key Missing",
   N8N_ERROR: "n8n Integration Error",
   SUPERSEDED: "Superseded",
+  RESEARCH_PROVIDER_FAILED: "Research Provider Failed",
+  DRAFTING_PROVIDER_FAILED: "Drafting Provider Failed",
   UNKNOWN_ERROR: "Unknown Error",
 };
 

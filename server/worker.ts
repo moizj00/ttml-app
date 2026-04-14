@@ -18,6 +18,7 @@ import {
   type RetryFromStageJobData,
 } from "./queue";
 import { runFullPipeline, retryPipelineFromStage, bestEffortFallback, consumeIntermediateContent, preflightApiKeyCheck } from "./pipeline";
+import { runLangGraphPipeline } from "./pipeline/graph";
 import { PipelineError } from "../shared/types";
 import {
   acquirePipelineLock,
@@ -62,6 +63,35 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
       "pipeline",
       "No retries attempted — API keys must be configured first"
     );
+  }
+
+  // ── LangGraph pipeline route (opt-in via LANGGRAPH_PIPELINE=true) ──────────
+  // When enabled, the LangGraph StateGraph handles the full 4-stage pipeline
+  // with streaming tokens to pipeline_stream_chunks for real-time frontend display.
+  // The existing runFullPipeline() remains the default for stability.
+  if (process.env.LANGGRAPH_PIPELINE === "true") {
+    logger.info(`[Worker] LANGGRAPH_PIPELINE=true — routing letter #${letterId} through LangGraph StateGraph`);
+    try {
+      await runLangGraphPipeline({
+        letterId,
+        userId,
+        intake: intake as Record<string, any>,
+      });
+      logger.info(`[Worker] LangGraph pipeline completed for letter #${letterId}`);
+      return;
+    } catch (lgErr) {
+      const lgMsg = lgErr instanceof Error ? lgErr.message : String(lgErr);
+      logger.warn({ err: lgMsg }, `[Worker] LangGraph pipeline failed for letter #${letterId} — falling back to standard pipeline`);
+      // Fall through to the standard pipeline below
+    } finally {
+      await releasePipelineLock(letterId).catch(e => logger.error({ e }, "[Worker] Failed to release pipeline lock after LangGraph:"));
+    }
+    // If we reach here, LangGraph failed — release was already called, re-acquire for standard pipeline
+    const reAcquired = await acquirePipelineLock(letterId);
+    if (!reAcquired) {
+      logger.warn(`[Worker] Could not re-acquire lock for letter #${letterId} after LangGraph fallback`);
+      return;
+    }
   }
 
   let lastErr: unknown;
