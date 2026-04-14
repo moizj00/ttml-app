@@ -16,8 +16,8 @@ mcp_servers:
       - "-y"
       - "@supabase/mcp-server-supabase@latest"
     env:
-      SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: [${SUPABASE_SERVICE_ROLE_KEY}](https://lguqhibpxympxvwqpedf.supabase.co)
+      SUPABASE_URL: "${SUPABASE_URL}"
+      SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
     description: >
       Connects to your Supabase project. Enables querying tables,
       managing rows, running SQL, and interacting with Supabase Auth.
@@ -28,8 +28,8 @@ mcp_servers:
       - "-y"
       - "@n8n/mcp-server@latest"
     env:
-      N8N_BASE_URL: ${N8N_BASE_URL}
-      N8N_API_KEY: ${N8N_API_KEY}
+      N8N_BASE_URL: "${N8N_BASE_URL}"
+      N8N_API_KEY: "${N8N_API_KEY}"
     description: >
       Connects to your n8n instance. Enables listing, triggering,
       and managing workflows programmatically.
@@ -40,9 +40,9 @@ mcp_servers:
       - "-y"
       - "@sentry/mcp-server@latest"
     env:
-      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
-      SENTRY_ORG: ${SENTRY_ORG}
-      SENTRY_PROJECT: ${SENTRY_PROJECT}
+      SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN}"
+      SENTRY_ORG: "${SENTRY_ORG}"
+      SENTRY_PROJECT: "${SENTRY_PROJECT}"
     description: >
       Connects to your Sentry organization. Enables querying issues,
       events, releases, and performance data.
