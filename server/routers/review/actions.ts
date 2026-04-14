@@ -18,9 +18,12 @@ import {
   getUserById,
   logReviewAction,
   updateLetterStatus,
-  updateLetterPdfUrl,
+  updateLetterStoragePath,
   updateLetterVersionPointers,
+  createClientPortalToken,
+  createDeliveryLogEntry,
 } from "../../db";
+import { storageGet } from "../../storage";
 import {
   sendLetterRejectedEmail,
   sendLetterApprovedEmail,
@@ -270,6 +273,9 @@ export const reviewActionsRouter = router({
         });
       }
       // ── Generate PDF immediately upon attorney approval ──
+      // Security: store only the R2 key in DB — never a permanent public URL.
+      // Presigned URLs are generated on-demand when serving to the client.
+      let pdfKey: string | undefined;
       let pdfUrl: string | undefined;
       try {
         const pdfResult = await generateAndUploadApprovedPdf({
@@ -283,9 +289,12 @@ export const reviewActionsRouter = router({
           jurisdictionCountry: letter.jurisdictionCountry,
           intakeJson: letter.intakeJson as Record<string, unknown> | null,
         });
-        pdfUrl = pdfResult.pdfUrl;
-        await updateLetterPdfUrl(input.letterId, pdfUrl);
-        logger.info(`[Approve] PDF generated for letter #${input.letterId}: ${pdfUrl}`);
+        pdfKey = pdfResult.pdfKey;
+        await updateLetterStoragePath(input.letterId, pdfKey);
+        // Resolve a short-lived URL for immediate use in this response only
+        const resolved = await storageGet(pdfKey);
+        pdfUrl = resolved.url;
+        logger.info(`[Approve] PDF generated for letter #${input.letterId}: key=${pdfKey}`);
       } catch (pdfErr) {
         captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
         logger.error({ err: pdfErr }, `[Approve] PDF generation failed for letter #${input.letterId} (non-blocking):`);
@@ -319,6 +328,16 @@ export const reviewActionsRouter = router({
             toStatus: "sent",
           });
           logger.info(`[Approve] Letter #${input.letterId} sent to ${input.recipientEmail}`);
+          // Write delivery log entry
+          createDeliveryLogEntry({
+            letterRequestId: input.letterId,
+            recipientEmail: input.recipientEmail,
+            deliveryMethod: "email",
+          }).catch((e) => logger.error({ err: e }, "[DeliveryLog] Failed to write log:"));
+          // Issue a portal token so the recipient can view/respond online
+          createClientPortalToken(input.letterId, {
+            recipientEmail: input.recipientEmail,
+          }).catch((e) => logger.error({ err: e }, "[PortalToken] Failed to create:"));
         } catch (sendErr) {
           recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
           captureServerException(sendErr, { tags: { component: "review", error_type: "approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });

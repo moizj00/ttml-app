@@ -178,16 +178,29 @@ export default function ReviewQueue() {
         )}
       </div>
 
-      {/* Review Modal */}
-      {selectedLetterId !== null && (
-        <ReviewModal
-          letterId={selectedLetterId}
-          open={true}
-          onOpenChange={(open) => {
-            if (!open) setSelectedLetterId(null);
-          }}
-        />
-      )}
+      {/* Review Modal — with J/K queue navigation */}
+      {selectedLetterId !== null && (() => {
+        const currentIdx = filtered.findIndex((l) => l.id === selectedLetterId);
+        return (
+          <ReviewModal
+            letterId={selectedLetterId}
+            open={true}
+            onOpenChange={(open) => {
+              if (!open) setSelectedLetterId(null);
+            }}
+            onNext={
+              currentIdx < filtered.length - 1
+                ? () => setSelectedLetterId(filtered[currentIdx + 1].id)
+                : undefined
+            }
+            onPrev={
+              currentIdx > 0
+                ? () => setSelectedLetterId(filtered[currentIdx - 1].id)
+                : undefined
+            }
+          />
+        );
+      })()}
     </AppLayout>
   );
 }

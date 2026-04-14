@@ -15,6 +15,7 @@ import {
   getAttachmentsByLetterId,
   getReviewActions,
   archiveLetterRequest,
+  getDeliveryLogByLetterId,
 } from "../../db";
 import { storagePut } from "../../storage";
 import { processSubscriberFeedback, retryFromRejected, sendLetterToRecipientFlow } from "../../services/letters";
@@ -155,5 +156,19 @@ export const subscriberProcedures = {
         sizeBytes: buffer.length,
       });
       return { url, key };
+    }),
+
+  /**
+   * Fetch delivery log entries for a specific letter.
+   * Only accessible by the owning subscriber. Surfaces in LetterDetail
+   * as a delivery confirmation section.
+   */
+  deliveryLog: subscriberProcedure
+    .input(z.object({ letterId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter || letter.userId !== ctx.user.id)
+        throw new TRPCError({ code: "NOT_FOUND" });
+      return getDeliveryLogByLetterId(input.letterId);
     }),
 };

@@ -244,3 +244,71 @@ export const intakeFormTemplates = pgTable("intake_form_templates", {
 
 export type IntakeFormTemplate = typeof intakeFormTemplates.$inferSelect;
 export type InsertIntakeFormTemplate = typeof intakeFormTemplates.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: letter_delivery_log
+// Tracks every outbound delivery of a final approved letter
+// to the recipient — email, portal link, etc.
+// ═══════════════════════════════════════════════════════
+export const letterDeliveryLog = pgTable("letter_delivery_log", {
+  id: serial("id").primaryKey(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
+  recipientEmail: varchar("recipient_email", { length: 320 }),
+  recipientName: varchar("recipient_name", { length: 500 }),
+  deliveryMethod: varchar("delivery_method", { length: 50 }).default("email").notNull(), // email | portal | certified_mail
+  deliveryStatus: varchar("delivery_status", { length: 50 }).default("pending").notNull(), // pending | sent | bounced | read
+  resendMessageId: varchar("resend_message_id", { length: 255 }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_letter_delivery_log_request_id").on(t.letterRequestId),
+]);
+
+export type LetterDeliveryLog = typeof letterDeliveryLog.$inferSelect;
+export type InsertLetterDeliveryLog = typeof letterDeliveryLog.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: client_portal_tokens
+// Single-use, time-limited tokens sent to the letter
+// recipient so they can view the letter online and respond.
+// This is TTML's key differentiator: two-sided legal comms.
+// ═══════════════════════════════════════════════════════
+export const clientPortalTokens = pgTable("client_portal_tokens", {
+  id: serial("id").primaryKey(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }),
+  token: varchar("token", { length: 64 }).notNull().unique(), // nanoid — single-use
+  recipientEmail: varchar("recipient_email", { length: 320 }),
+  recipientName: varchar("recipient_name", { length: 500 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }),   // null = not yet opened
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_client_portal_tokens_letter_request_id").on(t.letterRequestId),
+  index("idx_client_portal_tokens_token").on(t.token),
+]);
+
+export type ClientPortalToken = typeof clientPortalTokens.$inferSelect;
+export type InsertClientPortalToken = typeof clientPortalTokens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: letter_analytics
+// Per-letter pipeline performance and cost data,
+// surfaced in the subscriber dashboard as "letter health".
+// ═══════════════════════════════════════════════════════
+export const letterAnalytics = pgTable("letter_analytics", {
+  id: serial("id").primaryKey(),
+  letterRequestId: integer("letter_request_id").notNull().references(() => letterRequests.id, { onDelete: "cascade" }).unique(),
+  pipelineDurationMs: integer("pipeline_duration_ms"),
+  stageDurationsJson: jsonb("stage_durations_json"), // { research: 1200, drafting: 800, ... }
+  totalTokens: integer("total_tokens"),
+  totalCostCents: integer("total_cost_cents"),
+  vettingIterations: integer("vetting_iterations").default(1).notNull(),
+  qualityScore: text("quality_score"), // stored as text to avoid numeric precision issues; parse as float
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_letter_analytics_request_id").on(t.letterRequestId),
+]);
+
+export type LetterAnalytics = typeof letterAnalytics.$inferSelect;
+export type InsertLetterAnalytics = typeof letterAnalytics.$inferInsert;

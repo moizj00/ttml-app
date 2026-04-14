@@ -4,7 +4,7 @@ import { LetterPaywall } from "@/components/LetterPaywall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Clock, Copy, Trash2, XCircle, RotateCcw, Eye } from "lucide-react";
+import { FileText, Download, MessageSquare, ArrowLeft, CheckCircle, AlertCircle, Clock, Copy, Trash2, XCircle, RotateCcw, Eye, Send } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
@@ -67,6 +67,12 @@ export default function LetterDetail() {
 
   const utils = trpc.useUtils();
   const invalidate = () => utils.letters.detail.invalidate({ id: letterId });
+
+  // Delivery log — only fetch when letter has been sent
+  const { data: deliveryLogData } = trpc.letters.deliveryLog.useQuery(
+    { letterId },
+    { enabled: !!letterId }
+  );
 
   useLetterRealtime({
     letterId: letterId || null,
@@ -338,6 +344,36 @@ export default function LetterDetail() {
 
         {letter.status === "rejected" && (
           <RejectionRetryBlock letterId={letterId} onRetry={invalidate} />
+        )}
+
+        {/* Delivery confirmation — shown when at least one delivery log entry exists */}
+        {deliveryLogData && deliveryLogData.length > 0 && (
+          <Card className="border-green-200 bg-green-50/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Send className="w-4 h-4 text-green-600" />
+                Delivery Confirmation
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {deliveryLogData.map((entry) => (
+                <div key={entry.id} className="flex items-start gap-3 text-sm">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-green-800 font-medium">
+                      Letter delivered via {entry.deliveryMethod}
+                      {entry.recipientEmail && ` to ${entry.recipientEmail}`}
+                    </p>
+                    {entry.deliveredAt && (
+                      <p className="text-green-600 text-xs mt-0.5">
+                        {new Date(entry.deliveredAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
 
         {attachments && attachments.length > 0 && (

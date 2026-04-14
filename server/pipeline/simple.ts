@@ -1,7 +1,8 @@
 import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers } from "../db";
+import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers, createWorkflowJob, updateWorkflowJob, getAllUsers } from "../db";
+import { sendAdminAlertEmail } from "../email";
 
 const logger = createLogger({ module: "simple-pipeline" });
 
@@ -67,8 +68,22 @@ export async function runSimplePipeline(
   intake: IntakeJson,
   userId?: number
 ): Promise<{ success: boolean; letter?: string; error?: string }> {
+  // Hoisted so catch block can also call updateWorkflowJob on failure
+  let jobId = 0;
+
   try {
     logger.info({ letterId, userId }, "[Simple] Starting simple pipeline");
+
+    // Create a workflow_jobs record so admin pipeline monitor and getWorkflowJobsByLetterId
+    // can see simple-mode letters — without this, failures are invisible to admins.
+    const job = await createWorkflowJob({
+      letterRequestId: letterId,
+      jobType: "generation_pipeline",
+      provider: "anthropic",
+      requestPayloadJson: { mode: "simple", letterType: intake.letterType },
+    });
+    jobId = job?.insertId ?? 0;
+    await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
     // Transition: submitted → researching → drafting (status machine requires this path)
     await updateLetterStatus(letterId, "researching");
@@ -132,6 +147,14 @@ export async function runSimplePipeline(
     // Mark as complete - this triggers the paywall state
     await updateLetterStatus(letterId, "generated_locked");
 
+    // Mark workflow job as completed with token usage for cost tracking
+    await updateWorkflowJob(jobId, {
+      status: "completed",
+      completedAt: new Date(),
+      promptTokens: message.usage?.input_tokens,
+      completionTokens: message.usage?.output_tokens,
+    });
+
     logger.info({ letterId }, "[Simple] Letter saved and status updated");
 
     return {
@@ -141,6 +164,30 @@ export async function runSimplePipeline(
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     logger.error({ err, letterId }, "[Simple] Pipeline failed");
+
+    // Mark workflow job as failed so it appears in admin pipeline monitor
+    await updateWorkflowJob(jobId, {
+      status: "failed",
+      errorMessage: error,
+      completedAt: new Date(),
+    }).catch(e => logger.error({ e }, "[Simple] Failed to update workflow job on error"));
+
+    // Alert admins — mirrors the pattern in fallback.ts / vetting.ts
+    getAllUsers("admin").then(admins => {
+      const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+      return Promise.allSettled(admins.map(admin => {
+        if (!admin.email) return Promise.resolve();
+        return sendAdminAlertEmail({
+          to: admin.email,
+          name: admin.name ?? "Admin",
+          subject: `Simple pipeline failed for letter #${letterId}`,
+          preheader: `PIPELINE_MODE=simple letter failed — subscriber usage refunded`,
+          bodyHtml: `<p>Letter <strong>#${letterId}</strong> failed during simple pipeline execution.</p><p>Error: <strong>${error}</strong></p><p>The subscriber's usage has been refunded and the letter status reverted to <em>submitted</em> for retry.</p>`,
+          ctaText: "View Letter",
+          ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
+        }).catch(e => logger.error({ e }, "[Simple] Failed to send admin alert email"));
+      }));
+    }).catch(e => logger.error({ e }, "[Simple] Failed to fetch admins for alert"));
 
     // Revert to submitted state to allow retry
     try {

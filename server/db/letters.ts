@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { captureServerException } from "../sentry";
+import { storageGet } from "../storage";
 import {
   adminVerificationCodes,
   attachments,
@@ -18,6 +19,8 @@ import {
   subscriptions,
   users,
   workflowJobs,
+  clientPortalTokens,
+  letterDeliveryLog,
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
 import { getDb } from "./core";
@@ -89,14 +92,14 @@ export async function getLetterRequestById(id: number) {
 export async function getLetterRequestsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select({
       id: letterRequests.id,
       letterType: letterRequests.letterType,
       subject: letterRequests.subject,
       status: letterRequests.status,
       jurisdictionState: letterRequests.jurisdictionState,
-      pdfUrl: letterRequests.pdfUrl,
+      pdfStoragePath: letterRequests.pdfStoragePath,
       createdAt: letterRequests.createdAt,
     })
     .from(letterRequests)
@@ -104,6 +107,20 @@ export async function getLetterRequestsByUserId(userId: number) {
       and(eq(letterRequests.userId, userId), isNull(letterRequests.archivedAt))
     )
     .orderBy(desc(letterRequests.createdAt));
+
+  // Resolve presigned URLs on-demand — never persist public URLs in DB
+  return Promise.all(
+    rows.map(async (row) => {
+      let pdfUrl: string | null = null;
+      if (row.pdfStoragePath) {
+        try {
+          const resolved = await storageGet(row.pdfStoragePath);
+          pdfUrl = resolved.url;
+        } catch { /* non-blocking: PDF URL unavailable */ }
+      }
+      return { ...row, pdfUrl };
+    })
+  );
 }
 
 /** Subscriber-safe: never returns AI draft, attorney edits, or internal research data */
@@ -126,7 +143,7 @@ export async function getLetterRequestSafeForSubscriber(
       status: letterRequests.status,
       priority: letterRequests.priority,
       currentFinalVersionId: letterRequests.currentFinalVersionId,
-      pdfUrl: letterRequests.pdfUrl,
+      pdfStoragePath: letterRequests.pdfStoragePath,
       qualityDegraded: letterRequests.qualityDegraded,
       submittedByAdmin: letterRequests.submittedByAdmin,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,
@@ -136,7 +153,17 @@ export async function getLetterRequestSafeForSubscriber(
     .from(letterRequests)
     .where(and(eq(letterRequests.id, id), eq(letterRequests.userId, userId)))
     .limit(1);
-  return result[0];
+  const row = result[0];
+  if (!row) return undefined;
+  // Resolve a short-lived presigned URL on-demand — never serve a permanent URL from DB
+  let pdfUrl: string | null = null;
+  if (row.pdfStoragePath) {
+    try {
+      const resolved = await storageGet(row.pdfStoragePath);
+      pdfUrl = resolved.url;
+    } catch { /* non-blocking */ }
+  }
+  return { ...row, pdfUrl };
 }
 
 export async function getAllLetterRequests(filters?: {
@@ -349,6 +376,22 @@ export async function updateLetterPdfUrl(id: number, pdfUrl: string) {
     .where(eq(letterRequests.id, id));
 }
 
+/**
+ * Store only the R2 storage key (never a permanent public URL).
+ * Use storageGet(key) at serve time to produce a short-lived presigned URL.
+ * When R2_PUBLIC_URL is NOT set this is the only path; when it IS set we
+ * call this instead of updateLetterPdfUrl so we avoid hard-coding a
+ * permanent URL that bypasses auth.
+ */
+export async function updateLetterStoragePath(id: number, pdfKey: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(letterRequests)
+    .set({ pdfStoragePath: pdfKey, updatedAt: new Date() } as any)
+    .where(eq(letterRequests.id, id));
+}
+
 export async function archiveLetterRequest(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -490,3 +533,97 @@ export async function markPriorPipelineRunsSuperseded(
     );
 }
 
+
+// ═══════════════════════════════════════════════════════
+// CLIENT PORTAL TOKEN HELPERS
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Create a single-use portal token for the letter recipient.
+ * Token is 64 chars (nanoid), valid for 7 days.
+ * This is the key two-sided-comms differentiator for TTML.
+ */
+export async function createClientPortalToken(
+  letterRequestId: number,
+  opts: { recipientEmail?: string; recipientName?: string }
+): Promise<string> {
+  const { nanoid } = await import("nanoid");
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const token = nanoid(64);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  await db.insert(clientPortalTokens).values({
+    letterRequestId,
+    token,
+    recipientEmail: opts.recipientEmail ?? null,
+    recipientName: opts.recipientName ?? null,
+    expiresAt,
+  });
+  return token;
+}
+
+/**
+ * Look up a portal token. Returns null if not found or expired.
+ * Also marks the token as viewed (sets viewedAt) on first access.
+ */
+export async function redeemClientPortalToken(token: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(clientPortalTokens)
+    .where(eq(clientPortalTokens.token, token))
+    .limit(1);
+  const record = rows[0];
+  if (!record) return null;
+  if (new Date() > record.expiresAt) return null; // expired
+  // Mark first view
+  if (!record.viewedAt) {
+    await db
+      .update(clientPortalTokens)
+      .set({ viewedAt: new Date() })
+      .where(eq(clientPortalTokens.id, record.id));
+  }
+  return record;
+}
+
+// ═══════════════════════════════════════════════════════
+// LETTER DELIVERY LOG HELPERS
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Write a delivery log entry when a letter is sent to the recipient.
+ * Call this immediately after a successful sendLetterToRecipient call.
+ */
+export async function createDeliveryLogEntry(data: {
+  letterRequestId: number;
+  recipientEmail?: string;
+  recipientName?: string;
+  deliveryMethod?: "email" | "portal" | "certified_mail";
+  resendMessageId?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(letterDeliveryLog).values({
+    letterRequestId: data.letterRequestId,
+    recipientEmail: data.recipientEmail ?? null,
+    recipientName: data.recipientName ?? null,
+    deliveryMethod: data.deliveryMethod ?? "email",
+    deliveryStatus: "sent",
+    resendMessageId: data.resendMessageId ?? null,
+    deliveredAt: new Date(),
+  });
+}
+
+/**
+ * Fetch all delivery log entries for a letter (for the subscriber detail view).
+ */
+export async function getDeliveryLogByLetterId(letterRequestId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(letterDeliveryLog)
+    .where(eq(letterDeliveryLog.letterRequestId, letterRequestId))
+    .orderBy(desc(letterDeliveryLog.createdAt));
+}

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useEffect } from "react";
 import StatusBadge from "../StatusBadge";
 import RichTextEditor, { plainTextToHtml } from "../RichTextEditor";
 import { LETTER_TYPE_CONFIG } from "../../../../../shared/types";
@@ -25,12 +26,18 @@ interface ReviewModalProps {
   letterId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Navigate to the next letter in the queue (keyboard: J) */
+  onNext?: () => void;
+  /** Navigate to the previous letter in the queue (keyboard: K) */
+  onPrev?: () => void;
 }
 
 export default function ReviewModal({
   letterId,
   open,
   onOpenChange,
+  onNext,
+  onPrev,
 }: ReviewModalProps) {
   const {
     letter,
@@ -79,6 +86,59 @@ export default function ReviewModal({
     setSidePanelOpen(false);
     onOpenChange(false);
   };
+
+  // ── Keyboard shortcuts ──
+  // A = approve  |  R = request changes  |  J = next letter  |  K = previous letter
+  // Only active when the modal is open, no input/textarea/contenteditable is focused,
+  // and no action dialog is currently open.
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+      if (isTyping) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case "a":
+          if (isUnderReview && !activeAction) {
+            e.preventDefault();
+            handleApprove();
+          }
+          break;
+        case "r":
+          if (isUnderReview && !activeAction) {
+            e.preventDefault();
+            setActiveAction("changes");
+          }
+          break;
+        case "j":
+          if (!activeAction) {
+            e.preventDefault();
+            onNext?.();
+          }
+          break;
+        case "k":
+          if (!activeAction) {
+            e.preventDefault();
+            onPrev?.();
+          }
+          break;
+        case "escape":
+          if (activeAction) {
+            setActiveAction(null);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, isUnderReview, activeAction, handleApprove, setActiveAction, onNext, onPrev]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

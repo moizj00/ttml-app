@@ -50,6 +50,7 @@ import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { registerSitemapRoute } from "../sitemapRoute";
 import { registerNewsletterRoute } from "../newsletterRoute";
 import { registerConfigRoute } from "../configRoute";
+import { registerClientPortalRoute } from "../clientPortalRoute";
 import { registerSentryDebugRoute } from "../sentryDebugRoute";
 import { startCronScheduler } from "../cronScheduler";
 import { stripeWebhookHandler } from "../stripeWebhook";
@@ -307,6 +308,7 @@ async function startServer() {
   registerSitemapRoute(app);
   registerNewsletterRoute(app);
   registerConfigRoute(app);
+  registerClientPortalRoute(app);
 
   app.use(
     "/api/trpc",

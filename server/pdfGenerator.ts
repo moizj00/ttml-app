@@ -160,14 +160,19 @@ function buildTemplateData(opts: PdfGenerationOptions): LetterTemplateData {
 
 /**
  * Generate a professional PDF from the approved letter content using Template 1
- * (blue attorney stamp, no watermark), upload it to R2/S3, and return the public URL.
+ * (blue attorney stamp, no watermark), upload it to R2/S3, and return only
+ * the storage key.
+ *
+ * SECURITY: Never returns a URL — callers must call storageGet(key) on-demand
+ * to produce a short-lived presigned URL. This prevents permanent public URLs
+ * from being persisted in the database when R2_PUBLIC_URL is set.
  *
  * Wiring: Template 1 (Approved) → buildApprovedLetterHtml → Cloudflare Worker (primary)
- *         → local Puppeteer (fallback) → storagePut → pdfUrl returned to caller
+ *         → local Puppeteer (fallback) → storagePut → pdfKey returned to caller
  */
 export async function generateAndUploadApprovedPdf(
   opts: PdfGenerationOptions
-): Promise<{ pdfUrl: string; pdfKey: string }> {
+): Promise<{ pdfKey: string }> {
   if (!opts.content || opts.content.trim().length === 0) {
     throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate PDF`);
   }
@@ -183,10 +188,10 @@ export async function generateAndUploadApprovedPdf(
     .replace(/\s+/g, "-");
   const fileKey = `approved-letters/${opts.letterId}-${safeSubject}-${timestamp}.pdf`;
 
-  const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+  const { key } = await storagePut(fileKey, pdfBuffer, "application/pdf");
 
-  logger.info(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${fileKey} (${pdfBuffer.length} bytes) → ${url}`);
-  return { pdfUrl: url, pdfKey: fileKey };
+  logger.info(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${key} (${pdfBuffer.length} bytes)`);
+  return { pdfKey: key };
 }
 
 /**

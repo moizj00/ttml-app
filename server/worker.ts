@@ -89,7 +89,12 @@ export async function processRunPipeline(data: RunPipelineJobData): Promise<void
     // If we reach here, LangGraph failed — release was already called, re-acquire for standard pipeline
     const reAcquired = await acquirePipelineLock(letterId);
     if (!reAcquired) {
-      logger.warn(`[Worker] Could not re-acquire lock for letter #${letterId} after LangGraph fallback`);
+      // BUG FIX: previously returned silently leaving the letter stranded in
+      // researching/drafting with no pipeline_failed status and no admin alert.
+      logger.warn(`[Worker] Could not re-acquire lock for letter #${letterId} after LangGraph fallback — marking pipeline_failed`);
+      await updateLetterStatus(letterId, "pipeline_failed", { force: true }).catch(e =>
+        logger.error({ e }, `[Worker] Failed to set pipeline_failed for letter #${letterId} after lock loss`)
+      );
       return;
     }
   }

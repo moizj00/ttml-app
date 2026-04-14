@@ -25,6 +25,8 @@ export const blogPosts = pgTable("blog_posts", {
   readingTimeMinutes: integer("reading_time_minutes").default(5).notNull(),
   status: varchar("status", { length: 20 }).default("draft").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  reviewedBy: varchar("reviewed_by", { length: 200 }),   // admin who signed off before publish
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({

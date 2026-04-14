@@ -72,6 +72,7 @@ const Terms = lazyRetry(() => import("./pages/Terms"));
 const Privacy = lazyRetry(() => import("./pages/Privacy"));
 const Onboarding = lazyRetry(() => import("./pages/Onboarding"));
 const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
+const ClientPortal = lazyRetry(() => import("./pages/ClientPortal"));
 
 const SubscriberDashboard = lazyRetry(() => import("./pages/subscriber/Dashboard"));
 const SubmitLetter = lazyRetry(() => import("./pages/subscriber/SubmitLetter"));
@@ -142,6 +143,12 @@ function Router() {
       <Route path="/analyze">
         <SuspenseFade fallback={<DocumentAnalyzerSkeleton />}>
           <DocumentAnalyzer />
+        </SuspenseFade>
+      </Route>
+      {/* Public portal: recipient views their letter — no auth required */}
+      <Route path="/portal/:token">
+        <SuspenseFade fallback={<PublicPageSkeleton />}>
+          <ClientPortal />
         </SuspenseFade>
       </Route>
       <Route path="/blog">
