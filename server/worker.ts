@@ -308,7 +308,7 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
       case "retryPipelineFromStage":
         await processRetryFromStage(job.data);
         break;
-      default:
+      default: 
         throw new Error(`Unknown job type: ${(job.data as any).type}`);
     }
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -394,10 +394,8 @@ async function startWorker() {
   const boss = await getBoss();
 
   // Register the job handler — pg-boss calls this with an array of jobs
-  await boss.work<PipelineJobData>(QUEUE_NAME, { localConcurrency: 1 }, async (jobs) => {
-    for (const job of jobs) {
+  await boss.work<PipelineJobData>(QUEUE_NAME, { localConcurrency: 1 }, async (job) => {
       await processJob(job);
-    }
   });
 
   boss.on("error", (err) => {
