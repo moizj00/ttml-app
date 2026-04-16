@@ -180,6 +180,7 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> 
     currentPeriodStart: sub.current_period_start ? new Date(sub.current_period_start * 1000) : null,
     currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    resetLettersUsed: true, // Reset usage counter at the start of each billing period
   });
 
   stripeLogger.info({ userId }, "[StripeWebhook] Invoice paid, subscription renewed");

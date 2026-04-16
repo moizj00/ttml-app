@@ -15,7 +15,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getDraftModel, getDraftModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
@@ -36,7 +36,7 @@ export async function runDraftingStage(
   const job = await createWorkflowJob({
     letterRequestId: letterId,
     jobType: "draft_generation",
-    provider: "openai",
+    provider: "anthropic",
     requestPayloadJson: {
       letterId,
       userId: pipelineCtx?.userId,
@@ -48,12 +48,8 @@ export async function runDraftingStage(
   });
   const jobId = (job as any)?.insertId ?? 0;
 
-  // Parallelize independent stage-start writes — these have no data dependencies
-  await Promise.all([
-    updateWorkflowJob(jobId, { status: "running", startedAt: new Date() }),
-    updateLetterStatus(letterId, "drafting", { force: true }),
-  ]);
-  // Fire-and-forget: audit log + admin notification (non-blocking)
+  await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
+  await updateLetterStatus(letterId, "drafting", { force: true });
   logReviewAction({
     letterRequestId: letterId,
     actorType: "system",
@@ -63,18 +59,19 @@ export async function runDraftingStage(
     fromStatus: "researching",
     toStatus: "drafting",
   }).catch(e => draftLogger.error({ err: e, letterId }, "[Pipeline] Failed to log researching→drafting action"));
-  import("../db").then(({ notifyAdmins }) =>
-    notifyAdmins({
+  try {
+    const { notifyAdmins } = await import("../db");
+    await notifyAdmins({
       category: "letters",
       type: "pipeline_drafting",
       title: `Letter #${letterId} entering drafting stage`,
       body: `AI pipeline is now drafting letter #${letterId}.`,
       link: `/admin/letters/${letterId}`,
-    })
-  ).catch(err => {
+    });
+  } catch (err) {
     draftLogger.error({ err }, "[notifyAdmins] pipeline_drafting");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_drafting" } });
-  });
+  }
 
   const normalizedIntake = buildNormalizedPromptInput(
     {
@@ -151,8 +148,8 @@ export async function runDraftingStage(
   );
 
   const draftTokens = createTokenAccumulator();
-  let draftProvider = "openai";
-  let draftModelKey = "gpt-4o";
+  let draftProvider = "anthropic";
+  let draftModelKey = "claude-sonnet-4-20250514";
 
   const callGenerateText = async (prompt: string) => {
     const result = await generateText({
@@ -179,18 +176,15 @@ export async function runDraftingStage(
   };
 
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
-    // Reset provider to primary on each retry to avoid tier collapse
-    draftProvider = "openai";
-    draftModelKey = "gpt-4o";
     const promptWithFeedback = errorFeedback
       ? draftUserPrompt + errorFeedback
       : draftUserPrompt;
-    const { result, failoverTriggered: retryFailover } = await withModelFailover(
+    const { result, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 2 (drafting retry)",
       letterId,
       async () => {
         const r = await generateText({
-          model: draftProvider === "openai-failover" ? getDraftModelFallback() : getDraftModel(),
+          model: draftProvider === "openai-failover" ? getDraftModelFallback() : draftProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getDraftModel(),
           system: draftSystemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 8000,
@@ -211,9 +205,29 @@ export async function runDraftingStage(
         });
         accumulateTokens(draftTokens, r.usage);
         return r;
+      },
+      async () => {
+        draftProvider = "groq-oss-fallback";
+        draftModelKey = "llama-3.3-70b-versatile";
+        const r = await generateText({
+          model: getFreeOSSModelFallback(),
+          system: draftSystemPrompt,
+          prompt: promptWithFeedback,
+          maxOutputTokens: 8000,
+          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
+        });
+        accumulateTokens(draftTokens, r.usage);
+        return r;
       }
     );
-    if (retryFailover && pipelineCtx) {
+    if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
+      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFT_OSS_FALLBACK"))) {
+        pipelineCtx.qualityWarnings.push(
+          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for draft retry (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
+        );
+      }
+    } else if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
@@ -245,9 +259,9 @@ export async function runDraftingStage(
   };
 
   try {
-    draftLogger.info({ letterId }, "[Pipeline] Stage 2: OpenAI GPT-4o structured drafting starting");
+    draftLogger.info({ letterId }, "[Pipeline] Stage 2: Claude structured drafting starting");
 
-    const { result: initialDraftResult, failoverTriggered: draftFailover } = await withModelFailover(
+    const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
       letterId,
       () => callGenerateText(draftUserPrompt),
@@ -255,15 +269,36 @@ export async function runDraftingStage(
         draftProvider = "openai-failover";
         draftModelKey = "gpt-4o-mini";
         return callGenerateTextFallback(draftUserPrompt);
+      },
+      async () => {
+        draftProvider = "groq-oss-fallback";
+        draftModelKey = "llama-3.3-70b-versatile";
+        const r = await generateText({
+          model: getFreeOSSModelFallback(),
+          system: draftSystemPrompt,
+          prompt: draftUserPrompt,
+          maxOutputTokens: 8000,
+          abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
+        });
+        accumulateTokens(draftTokens, r.usage);
+        return r;
       }
     );
 
-    if (draftFailover) {
-      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini fallback");
+    if (initialDraftProvider === "groq-oss-fallback") {
+      draftLogger.warn({ letterId }, "[Pipeline] Stage 2: Groq Llama 3.3 used as last-resort (DRAFT_OSS_FALLBACK)");
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Primary drafting model (GPT-4o) was rate-limited. Draft generated by GPT-4o-mini. Legal quality may be slightly reduced.`
+          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for drafting (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
+        );
+      }
+    } else if (draftFailover) {
+      draftLogger.warn({ letterId, provider: draftProvider }, "[Pipeline] Stage 2: Switched to OpenAI GPT-4o-mini failover");
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `DRAFTING_FAILOVER: Primary drafting model (Claude) was rate-limited. Draft generated by OpenAI GPT-4o-mini. Legal tone and structure may differ from Claude standard.`
         );
       }
     }
@@ -397,7 +432,7 @@ export async function runDraftingStage(
       metadataJson: {
         provider: draftProvider,
         stage: "draft_generation",
-        failoverUsed: draftProvider === "openai-failover",
+        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
         attorneyReviewSummary: draft.attorneyReviewSummary,
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
@@ -426,7 +461,7 @@ export async function runDraftingStage(
       responsePayloadJson: {
         versionId,
         provider: draftProvider,
-        failoverUsed: draftProvider === "openai-failover",
+        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
         groundingReport: pipelineCtx?.groundingReport,
         consistencyReport: pipelineCtx?.consistencyReport,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),

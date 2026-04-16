@@ -36,7 +36,7 @@ export const billingLettersRouter = router({
         ok: false as const,
         nextState: "payment_required" as const,
         message:
-          "The free first letter offer has ended. Please pay $50 for attorney review or subscribe to a plan.",
+          "The free first letter offer has ended. Please pay $100 for attorney review or subscribe to a plan.",
       };
     }),
 
@@ -73,7 +73,8 @@ export const billingLettersRouter = router({
               "pipeline_failed",
             ])
           )
-        );
+        )
+        .limit(1); // Stop scanning after first match — existence check only
       if (unlockedLetters.length > 0) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -122,46 +123,53 @@ export const billingLettersRouter = router({
         });
       }
 
-      // Parallelize: status update + review action are independent
-      await Promise.all([
-        updateLetterStatus(input.letterId, "pending_review"),
-        logReviewAction({
-          letterRequestId: input.letterId,
-          reviewerId: ctx.user.id,
-          actorType: "subscriber",
-          action: "subscription_submit",
-          noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
-          noteVisibility: "internal",
-          fromStatus: "generated_locked",
-          toStatus: "pending_review",
-        }),
-      ]);
+      await updateLetterStatus(input.letterId, "pending_review");
+      await logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.user.id,
+        actorType: "subscriber",
+        action: "subscription_submit",
+        noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
+        noteVisibility: "internal",
+        fromStatus: "generated_locked",
+        toStatus: "pending_review",
+      });
 
-      // Parallelize: subscriber email + attorney fan-out + admin notification are independent
-      const appUrl = getAppUrl(ctx.req);
-      await Promise.allSettled([
-        sendLetterUnlockedEmail({
+      try {
+        await sendLetterUnlockedEmail({
           to: ctx.user.email ?? "",
           name: ctx.user.name ?? "Subscriber",
           subject: letter.subject,
           letterId: input.letterId,
-          appUrl,
-        }).catch(e => captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } })),
-        notifyAllAttorneys({
+          appUrl: getAppUrl(ctx.req),
+        });
+      } catch (e) {
+        captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
+      }
+
+      try {
+        await notifyAllAttorneys({
           letterId: input.letterId,
           letterSubject: letter.subject,
           letterType: letter.letterType,
           jurisdiction: letter.jurisdictionState ?? "Unknown",
-          appUrl,
-        }).catch(notifyErr => captureServerException(notifyErr, { tags: { component: "billing", error_type: "notify_attorneys_subscription_submit_failed" } })),
-        notifyAdmins({
+          appUrl: getAppUrl(ctx.req),
+        });
+      } catch (notifyErr) {
+        captureServerException(notifyErr, { tags: { component: "billing", error_type: "notify_attorneys_subscription_submit_failed" } });
+      }
+
+      try {
+        await notifyAdmins({
           category: "letters",
           type: "subscription_submit",
           title: `Subscription submit — letter #${input.letterId} enters review queue`,
           body: `${ctx.user.name ?? "A subscriber"} submitted "${letter.subject}" via active subscription. Now pending review.`,
           link: `/admin/letters/${input.letterId}`,
-        }).catch(err => captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } })),
-      ]);
+        });
+      } catch (err) {
+        captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
+      }
 
       return { ok: true as const };
     }),

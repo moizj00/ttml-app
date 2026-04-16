@@ -3,24 +3,14 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { ADMIN_2FA_COOKIE, verifyAdmin2FAToken } from "./admin2fa";
-
-function parseCookieHeader(cookieHeader: string | undefined): Map<string, string> {
-  if (!cookieHeader) return new Map();
-  const map = new Map<string, string>();
-  cookieHeader.split(";").forEach(pair => {
-    const [key, ...rest] = pair.split("=");
-    if (key) {
-      map.set(key.trim(), decodeURIComponent(rest.join("=").trim()));
-    }
-  });
-  return map;
-}
+import { parseCookieHeader } from "./cookies";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
 export const router = t.router;
+export const mergeRouters = t.mergeRouters;
 export const publicProcedure = t.procedure;
 
 const requireUser = t.middleware(async opts => {

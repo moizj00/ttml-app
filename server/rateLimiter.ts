@@ -117,10 +117,11 @@ function getDocumentAnalysisLimiter(): Ratelimit | null {
 export function getClientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
-    // Take the rightmost IP — it is appended by our trusted reverse proxy (Railway)
-    // and cannot be spoofed by the client (who can only prepend values).
+    // Railway appends its own trusted proxy IP as the rightmost value.
+    // The client IP is the leftmost value (set by the first proxy in the chain).
+    // We take the leftmost to identify the real originating client.
     const ips = Array.isArray(forwarded) ? forwarded : forwarded.split(",");
-    return ips[ips.length - 1].trim();
+    return ips[0].trim();
   }
   return req.socket?.remoteAddress ?? "unknown";
 }
@@ -289,14 +290,14 @@ export async function checkTrpcRateLimit(
     if (err?.code === "TOO_MANY_REQUESTS") throw err;
     if (err?.code === "INTERNAL_SERVER_ERROR") throw err;
     if (failClosed) {
-      logger.error({ err }, "[RateLimit] Redis error on critical endpoint, denying:");
+      logger.error({ err: err?.message }, "[RateLimit] Redis error on critical endpoint, denying:");
       const { TRPCError } = await import("@trpc/server");
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Service temporarily unavailable. Please try again shortly.",
       });
     }
-    logger.warn({ err }, "[RateLimit] tRPC check error, allowing:");
+    logger.warn({ err: err?.message }, "[RateLimit] tRPC check error, allowing:");
   }
 }
 

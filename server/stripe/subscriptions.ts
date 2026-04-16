@@ -37,6 +37,8 @@ export async function activateSubscription(params: {
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
+  /** Pass true on billing period renewals (invoice.paid) to reset lettersUsed to 0 */
+  resetLettersUsed?: boolean;
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -72,6 +74,8 @@ export async function activateSubscription(params: {
         plan: params.planId as any,
         status: params.status,
         lettersAllowed,
+        // Reset usage counter at the start of each billing period
+        ...(params.resetLettersUsed ? { lettersUsed: 0 } : {}),
         currentPeriodStart: params.currentPeriodStart ?? null,
         currentPeriodEnd: params.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: params.cancelAtPeriodEnd ?? false,

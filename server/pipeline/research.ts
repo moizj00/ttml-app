@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { generateText, type ToolSet } from "ai";
 import {
   createResearchRun,
   createWorkflowJob,
@@ -13,12 +13,73 @@ import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intak
 import { captureServerException } from "../sentry";
 import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getResearchModel, getResearchModelClaudeFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, runOpenAIStoredPromptResearch, isOpenAIFailoverAvailable } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
 import { logger } from "../logger";
 
+function synthesizeResearchFromIntake(intake: IntakeJson): ResearchPacket {
+  const state = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "Unknown";
+  const country = intake.jurisdiction?.country ?? "US";
+  const city = intake.jurisdiction?.city;
+  const letterType = intake.letterType ?? "general";
+  const subject = intake.matter?.subject ?? "Legal Matter";
+  const description = intake.matter?.description ?? "";
+  const desiredOutcome = intake.desiredOutcome ?? "";
+
+  return {
+    researchSummary:
+      `[SYNTHETIC RESEARCH — All research providers were unavailable. This research packet was synthesized from the client's intake data and must be independently verified by the reviewing attorney.]\n\n` +
+      `Subject: ${subject}\n` +
+      `Letter Type: ${letterType}\n` +
+      `Jurisdiction: ${state}, ${country}\n` +
+      (description ? `\nClient Description: ${description}\n` : "") +
+      (desiredOutcome ? `\nDesired Outcome: ${desiredOutcome}\n` : "") +
+      `\nATTORNEY NOTE: No external legal research was performed. The reviewing attorney must independently verify all applicable statutes, regulations, case law, and procedural requirements for ${state} before approving this letter.`,
+    jurisdictionProfile: {
+      country,
+      stateProvince: state,
+      city: city ?? undefined,
+      authorityHierarchy: [
+        `${state} State Legislature`,
+        `${state} Courts`,
+        country === "US" ? "Federal Courts" : `${country} National Courts`,
+      ],
+    },
+    issuesIdentified: [
+      `Client seeks ${letterType} letter regarding: ${subject}`,
+      ...(desiredOutcome ? [`Desired outcome: ${desiredOutcome}`] : []),
+      `[UNVERIFIED] All legal issues require independent attorney verification — no external research was available.`,
+    ],
+    applicableRules: [],
+    localJurisdictionElements: [
+      {
+        element: `${state} jurisdiction requirements`,
+        whyItMatters: `Letter must comply with ${state} procedural and substantive requirements. Attorney must verify applicable rules.`,
+        sourceUrl: "",
+        confidence: "low" as const,
+      },
+    ],
+    recentCasePrecedents: [],
+    statuteOfLimitations: {
+      notes: `[UNVERIFIED] Attorney must independently determine applicable statute of limitations for ${state}.`,
+    },
+    factualDataNeeded: [
+      `[UNVERIFIED] Attorney must assess what additional factual information is required for ${state}.`,
+    ],
+    openQuestions: [
+      `[UNVERIFIED] No external research was available. Attorney must identify all open legal questions for this ${letterType} matter.`,
+    ],
+    riskFlags: [
+      `SYNTHETIC_RESEARCH: All research was synthesized from intake data — no external legal research was performed. Independent verification required.`,
+    ],
+    draftingConstraints: [
+      `Must clearly indicate unverified research status in letter where appropriate.`,
+      `Attorney must verify all procedural requirements for ${state} before approving.`,
+    ],
+  };
+}
 
 // ═══════════════════════════════════════════════════════
 // STAGE 1: PERPLEXITY LEGAL RESEARCH
@@ -51,13 +112,9 @@ export async function runResearchStage(
   });
   const runId = (researchRun as any)?.insertId ?? 0;
 
-  // Parallelize independent stage-start writes — these have no data dependencies
-  await Promise.all([
-    updateWorkflowJob(jobId, { status: "running", startedAt: new Date() }),
-    updateResearchRun(runId, { status: "running" }),
-    updateLetterStatus(letterId, "researching", { force: true }),
-  ]);
-  // Fire-and-forget: audit log + admin notification (non-blocking)
+  await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
+  await updateResearchRun(runId, { status: "running" });
+  await updateLetterStatus(letterId, "researching", { force: true });
   logReviewAction({
     letterRequestId: letterId,
     actorType: "system",
@@ -67,18 +124,19 @@ export async function runResearchStage(
     fromStatus: "submitted",
     toStatus: "researching",
   }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to log submitted→researching action for #${letterId}:`));
-  import("../db").then(({ notifyAdmins }) =>
-    notifyAdmins({
+  try {
+    const { notifyAdmins } = await import("../db");
+    await notifyAdmins({
       category: "letters",
       type: "pipeline_researching",
       title: `Letter #${letterId} entering research stage`,
       body: `AI pipeline has started researching for letter #${letterId}.`,
       link: `/admin/letters/${letterId}`,
-    })
-  ).catch(err => {
+    });
+  } catch (err) {
     logger.error({ err: err }, "[notifyAdmins] pipeline_researching:");
     captureServerException(err, { tags: { component: "pipeline", error_type: "notify_admins_researching" } });
-  });
+  }
 
   // Build normalized intake for the research prompt
   const normalizedIntake = buildNormalizedPromptInput(
@@ -160,35 +218,48 @@ export async function runResearchStage(
 
   // Declare provider-tracking variables at function scope so the catch block
   // can read the active model key for accurate cost reporting after failover.
-  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar" : "gpt-4o";
+  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-sonnet-4-20250514";
 
   try {
     logger.info(
       `[Pipeline] Stage 1: ${researchConfig.provider} 8-task deep research for letter #${letterId}`
     );
 
-    // Perplexity-only: single model, no failover switching
-    const activeProvider = researchConfig.provider;
+    // Track the active model — may switch to failover mid-stage
+    let activeModel = researchConfig.model;
+    let activeProvider = researchConfig.provider;
+    let activeFallbackTools: ToolSet | undefined;
 
-    const callPerplexity = (prompt: string) =>
-      generateText({
-        model: researchConfig.model,
+    const callGenerateText = async (prompt: string) => {
+      return generateText({
+        model: activeModel,
         system: systemPrompt,
         prompt,
         maxOutputTokens: 4000,
         abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
       });
+    };
 
-    // Perplexity primary, Claude Sonnet fallback for research.
-    const { result: initialResult, provider: initialProvider } = await withModelFailover(
+    const { result: initialResult, failoverTriggered: initialFailover, provider: initialProvider } = await withModelFailover(
       "Stage 1 (research)",
       letterId,
-      () => callPerplexity(userPrompt),
+      () => callGenerateText(userPrompt),
+      async () => {
+        activeProvider = "openai-stored-prompt";
+        activeFallbackTools = undefined;
+        researchModelKey = "gpt-4o-search-preview";
+        logger.info(`[Pipeline] Stage 1: Using OpenAI stored prompt for letter #${letterId}`);
+        const storedResult = await runOpenAIStoredPromptResearch(userPrompt);
+        activeModel = null as any;
+        return { text: storedResult.text, usage: storedResult.usage } as any;
+      },
       () => {
-        const claudeResearch = getResearchModelClaudeFallback();
-        researchModelKey = "claude-sonnet-4-6-20250514"; // Update key for cost tracking
+        activeModel = getFreeOSSModelFallback();
+        activeProvider = "groq-oss-fallback";
+        activeFallbackTools = undefined;
+        researchModelKey = "llama-3.3-70b-versatile";
         return generateText({
-          model: claudeResearch.model,
+          model: activeModel,
           system: systemPrompt,
           prompt: userPrompt,
           maxOutputTokens: 4000,
@@ -196,7 +267,39 @@ export async function runResearchStage(
         });
       }
     );
-    researchModelKey = initialProvider === "primary" ? "sonar" : (initialProvider === "claude-research-fallback" ? "claude-sonnet-4-6-20250514" : researchModelKey); // Set initial model key based on actual provider
+
+    if (initialProvider === "groq-oss-fallback") {
+      logger.warn(
+        `[Pipeline] Stage 1: Groq Llama 3.3 used as last-resort for letter #${letterId} (RESEARCH_OSS_FALLBACK) — research is NOT web-grounded.`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for research (both Perplexity and OpenAI were unavailable). Research is NOT web-grounded and citations cannot be verified. Heightened attorney scrutiny required.`
+        );
+        pipelineCtx.researchUnverified = true;
+      }
+    } else if (initialProvider === "openai-failover" && activeProvider === "openai-stored-prompt") {
+      logger.warn(
+        `[Pipeline] Stage 1: OpenAI stored prompt (web search) used for letter #${letterId} — Perplexity was unavailable.`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_FAILOVER: Primary research model (Perplexity) was unavailable. Research performed by OpenAI stored prompt with web search grounding. Citation style and format may differ from Perplexity standard.`
+        );
+      }
+    } else if (initialFailover) {
+      logger.warn(
+        `[Pipeline] Stage 1: Switched to OpenAI failover for letter #${letterId} (provider=${activeProvider})`
+      );
+      if (pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        pipelineCtx.qualityWarnings.push(
+          `RESEARCH_FAILOVER: Primary research model (Perplexity) was rate-limited. Research performed by OpenAI failover with web search grounding. Citation style and format may differ slightly from Perplexity standard.`
+        );
+      }
+    }
 
     const { text, usage: initialUsage } = initialResult;
     accumulateTokens(researchTokens, initialUsage);
@@ -209,18 +312,47 @@ export async function runResearchStage(
       return JSON.parse(jsonStr);
     };
 
+    const callWithActiveFallback = (prompt: string) => {
+      if (activeFallbackTools) {
+        return generateText({
+          model: activeModel,
+          tools: activeFallbackTools,
+          system: systemPrompt,
+          prompt,
+          maxOutputTokens: 4000,
+          abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+        });
+      }
+      return generateText({
+        model: activeModel,
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 4000,
+        abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+      });
+    };
+
     const generateResearch = async (errorFeedback?: string): Promise<string> => {
       const promptWithFeedback = errorFeedback ? userPrompt + errorFeedback : userPrompt;
-      // Perplexity primary, Claude Sonnet fallback for research retry.
-      const { result: retryResult, provider: retryProvider } = await withModelFailover(
+      const { result: retryResult, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
         "Stage 1 (research retry)",
         letterId,
-        () => callPerplexity(promptWithFeedback),
+        () => callWithActiveFallback(promptWithFeedback),
+        async () => {
+          activeProvider = "openai-stored-prompt";
+          activeFallbackTools = undefined;
+          researchModelKey = "gpt-4o-search-preview";
+          const storedResult = await runOpenAIStoredPromptResearch(promptWithFeedback);
+          activeModel = null as any;
+          return { text: storedResult.text, usage: storedResult.usage } as any;
+        },
         () => {
-          const claudeResearch = getResearchModelClaudeFallback();
-          researchModelKey = "claude-sonnet-4-6-20250514"; // Update key for cost tracking
+          activeModel = getFreeOSSModelFallback();
+          activeProvider = "groq-oss-fallback";
+          activeFallbackTools = undefined;
+          researchModelKey = "llama-3.3-70b-versatile";
           return generateText({
-            model: claudeResearch.model,
+            model: activeModel,
             system: systemPrompt,
             prompt: promptWithFeedback,
             maxOutputTokens: 4000,
@@ -228,7 +360,22 @@ export async function runResearchStage(
           });
         }
       );
-      researchModelKey = retryProvider === "primary" ? "sonar" : (retryProvider === "claude-research-fallback" ? "claude-sonnet-4-6-20250514" : researchModelKey); // Set model key based on actual provider
+      if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_OSS_FALLBACK"))) {
+          pipelineCtx.qualityWarnings.push(
+            `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during research retry. Research is NOT web-grounded. Heightened attorney scrutiny required.`
+          );
+        }
+        pipelineCtx.researchUnverified = true;
+      } else if (retryFailover && pipelineCtx) {
+        if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_FAILOVER"))) {
+          pipelineCtx.qualityWarnings.push(
+            `RESEARCH_FAILOVER: Switched to OpenAI gpt-4o-search-preview during research retry due to rate limit.`
+          );
+        }
+      }
       accumulateTokens(researchTokens, retryResult.usage);
       return retryResult.text;
     };
@@ -365,20 +512,31 @@ export async function runResearchStage(
       );
     }
 
-    // Perplexity-only: research is always web-grounded when it succeeds
+    const isClaudeFallback = activeProvider === "anthropic-fallback";
+    const isOpenAIFailover = activeProvider === "openai-failover" || activeProvider === "openai-stored-prompt";
+    const isGroqOSSFallback = activeProvider === "groq-oss-fallback";
+    // OpenAI failover (stored prompt or SDK) uses web search — still web-grounded.
+    // Claude anthropic-fallback and Groq OSS fallback have no web access — ungrounded.
+    const isWebGrounded = !isClaudeFallback && !isGroqOSSFallback;
     const successResult: ValidationResult = {
       stage: "research",
       check: "research_packet_validation",
       passed: true,
       errors: [],
-      warnings: validation.warnings,
+      warnings: [
+        ...validation.warnings,
+        ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used — no web access)"] : []),
+        ...(activeProvider === "openai-stored-prompt" ? ["Research used OpenAI stored prompt with web search grounding. Perplexity was unavailable."] : []),
+        ...(activeProvider === "openai-failover" ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
+        ...(isGroqOSSFallback ? ["Research is NOT web-grounded (Groq Llama 3.3 OSS last-resort used — no web access). Citations cannot be verified. Heightened attorney scrutiny required."] : []),
+      ],
       timestamp: new Date().toISOString(),
     };
 
     await updateResearchRun(runId, {
       status: "completed",
       resultJson: researchPacket,
-      validationResultJson: { ...successResult, webGrounded: true, provider: activeProvider },
+      validationResultJson: { ...successResult, webGrounded: isWebGrounded, provider: activeProvider },
       cacheHit: false,
       cacheKey: kvCacheKey,
     });
@@ -390,23 +548,37 @@ export async function runResearchStage(
       estimatedCostUsd: calculateCost(researchModelKey, researchTokens),
       responsePayloadJson: {
         researchRunId: runId,
-        webGrounded: true,
+        webGrounded: isWebGrounded,
         provider: activeProvider,
-        failoverUsed: false,
+        failoverUsed: isOpenAIFailover,
         validationResult: successResult,
       },
     });
 
-    // Store result in KV cache (Perplexity results are always web-grounded)
-    await setCachedResearch(kvCacheKey, researchPacket);
+    // Store new result in KV cache (only for web-grounded Perplexity results)
+    if (isWebGrounded) {
+      await setCachedResearch(kvCacheKey, researchPacket);
+    }
+
+    if (isClaudeFallback) {
+      logger.warn(
+        `[Pipeline] Stage 1: Claude fallback used for letter #${letterId} — research is NOT web-grounded. Citations may not be verified.`
+      );
+    } else if (isOpenAIFailover) {
+      logger.warn(
+        `[Pipeline] Stage 1: OpenAI gpt-4o-search-preview failover used for letter #${letterId} — research IS web-grounded via webSearchPreview tool. Perplexity was rate-limited.`
+      );
+    } else if (isGroqOSSFallback) {
+      logger.warn(
+        `[Pipeline] Stage 1: Groq Llama 3.3 70B OSS last-resort used for letter #${letterId} — research is NOT web-grounded. Both Perplexity and OpenAI were exhausted.`
+      );
+    }
 
     logger.info(`[Pipeline] Stage 1 complete for letter #${letterId} (provider: ${activeProvider})`);
     return { packet: researchPacket, provider: activeProvider };
   } catch (err) {
-    // FAIL-HARD: Perplexity is the only research provider.
-    // If it fails, the pipeline stops immediately — no synthetic fallback.
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ msg: msg }, `[Pipeline] Stage 1 FAIL-HARD for letter #${letterId}: Perplexity research failed. Pipeline aborted.`);
+    logger.error({ msg: msg }, `[Pipeline] Stage 1 failed for letter #${letterId}:`);
     captureServerException(err, {
       tags: { pipeline_stage: "research", letter_id: String(letterId) },
       extra: { researchRunId: runId, jobId, errorMessage: msg },
@@ -414,25 +586,42 @@ export async function runResearchStage(
 
     const stageErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
 
-    const failedResult: ValidationResult = {
+    const syntheticPacket = synthesizeResearchFromIntake(intake);
+    logger.warn(
+      `[Pipeline] Stage 1: All research providers failed for letter #${letterId} — synthesizing research from intake data. Pipeline will continue with degraded research.`
+    );
+
+    if (pipelineCtx) {
+      if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
+      pipelineCtx.qualityWarnings.push(
+        `RESEARCH_ALL_PROVIDERS_FAILED: All research providers (Perplexity, OpenAI, Groq) were unavailable. Research was synthesized from client intake data only — no external legal research was performed. Original error: ${msg}. Heightened attorney scrutiny required.`
+      );
+      pipelineCtx.researchUnverified = true;
+    }
+
+    const syntheticResult: ValidationResult = {
       stage: "research",
-      check: "research_fail_hard",
-      passed: false,
-      errors: [`Research stage aborted: ${msg}`],
-      warnings: [],
+      check: "synthetic_fallback",
+      passed: true,
+      errors: [],
+      warnings: [
+        `All research providers failed (${stageErrCode}). Synthetic research packet created from intake data.`,
+        `Original error: ${msg}`,
+        "No external legal research was performed. Attorney must independently verify all legal claims.",
+      ],
       timestamp: new Date().toISOString(),
     };
-    addValidationResult(pipelineCtx, failedResult);
+    addValidationResult(pipelineCtx, syntheticResult);
 
     await updateResearchRun(runId, {
-      status: "failed",
-      resultJson: null,
-      validationResultJson: { ...failedResult, webGrounded: false, provider: "perplexity", originalError: msg },
-      errorMessage: `Research Stage Aborted: ${msg}`,
+      status: "completed",
+      resultJson: syntheticPacket,
+      validationResultJson: { ...syntheticResult, webGrounded: false, provider: "synthetic-intake-fallback", originalError: msg },
+      cacheHit: false,
+      cacheKey: kvCacheKey,
     });
     await updateWorkflowJob(jobId, {
-      status: "failed",
-      errorMessage: `Research Stage Aborted: ${msg}`,
+      status: "completed",
       completedAt: new Date(),
       promptTokens: researchTokens.promptTokens,
       completionTokens: researchTokens.completionTokens,
@@ -440,20 +629,14 @@ export async function runResearchStage(
       responsePayloadJson: {
         researchRunId: runId,
         webGrounded: false,
-        provider: "perplexity",
-        failHard: true,
+        provider: "synthetic-intake-fallback",
+        syntheticFallback: true,
         originalError: msg,
-        validationResult: failedResult,
+        validationResult: syntheticResult,
       },
     });
 
-    // Re-throw so the orchestrator marks the letter as pipeline_failed
-    if (err instanceof PipelineError) throw err;
-    throw new PipelineError(
-      stageErrCode as PipelineErrorCode,
-      `Research stage aborted: Perplexity unavailable. ${msg}`,
-      "research"
-    );
+    return { packet: syntheticPacket, provider: "synthetic-intake-fallback" };
   }
 }
 

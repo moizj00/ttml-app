@@ -9,7 +9,7 @@ import { logger } from "../logger";
 // MODEL PROVIDERS
 // ═══════════════════════════════════════════════════════
 
-// ── Anthropic (Claude) — direct API, used for Stage 3 (assembly) and Stage 4 (vetting) ──
+// ── Anthropic (Claude) — direct API, used for Stage 2 (draft) and Stage 3 (assembly) ──
 export function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -20,7 +20,7 @@ export function getAnthropicClient() {
   return createAnthropic({ apiKey });
 }
 
-// ── OpenAI — primary drafter (Stage 2) and failover for assembly/vetting ──
+// ── OpenAI — used as backup/failover model for all stages ──
 export function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -37,17 +37,17 @@ export function isOpenAIFailoverAvailable(): boolean {
   return !!(apiKey && apiKey.trim().length > 0);
 }
 
-/** Stage 1: Perplexity sonar (base) — concise web-grounded legal research (direct API) */
+/** Stage 1: Perplexity sonar-pro — web-grounded legal research (direct API) */
 export function getResearchModel() {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
     logger.warn(
-      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to OpenAI gpt-4o for research"
+      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to Claude for research"
     );
-    const openai = getOpenAIClient();
+    const anthropic = getAnthropicClient();
     return {
-      model: openai("gpt-4o"),
-      provider: "openai-fallback",
+      model: anthropic("claude-sonnet-4-20250514"),
+      provider: "anthropic-fallback",
     };
   }
   // Perplexity is OpenAI-compatible — use @ai-sdk/openai with custom baseURL
@@ -56,7 +56,7 @@ export function getResearchModel() {
     baseURL: "https://api.perplexity.ai",
     name: "perplexity",
   });
-  return { model: perplexity.chat("sonar"), provider: "perplexity" };
+  return { model: perplexity.chat("sonar-pro"), provider: "perplexity" };
 }
 
 /**
@@ -80,34 +80,28 @@ export function getResearchModelFallback(): {
   };
 }
 
-/** Stage 2: OpenAI gpt-4o — primary legal drafter */
+/** Stage 2: Anthropic claude-sonnet-4 — initial legal draft (direct Anthropic API) */
 export function getDraftModel() {
-  const openai = getOpenAIClient();
-  return openai("gpt-4o");
+  const anthropic = getAnthropicClient();
+  return anthropic("claude-sonnet-4-20250514");
 }
 
-/** Stage 2 failover: OpenAI gpt-4o-mini (cost-optimized fallback) */
+/** Stage 2 failover: OpenAI gpt-4o-mini */
 export function getDraftModelFallback() {
   const openai = getOpenAIClient();
   return openai("gpt-4o-mini");
 }
 
-/** Stage 3: Anthropic claude-sonnet-4-6 — validates and assembles the final letter */
+/** Stage 3: Anthropic claude-sonnet-4 — final polished letter assembly (direct Anthropic API) */
 export function getAssemblyModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-6-20250514");
+  return anthropic("claude-sonnet-4-20250514");
 }
 
-/** Stage 3 failover: OpenAI gpt-4o-mini (used if Claude is unavailable) */
+/** Stage 3 failover: OpenAI gpt-4o-mini */
 export function getAssemblyModelFallback() {
   const openai = getOpenAIClient();
   return openai("gpt-4o-mini");
-}
-
-/** Stage 4: Anthropic claude-sonnet-4-6 — the ONE premium vetting call (cost-optimized from Opus) */
-export function getVettingModel() {
-  const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-6-20250514");
 }
 
 /** Stage 4 vetting failover: OpenAI gpt-4o-mini */
@@ -118,15 +112,6 @@ export function getVettingModelFallback() {
 
 // ── Groq — free OSS last-resort fallback for all stages ──
 /** Returns Groq Llama 3.3 70B model (free-tier, OpenAI-compatible) for use as OSS last resort */
-/** Stage 1 failover: Anthropic Claude Sonnet — provides web-grounded research if Perplexity is unavailable */
-export function getResearchModelClaudeFallback() {
-  const anthropic = getAnthropicClient();
-  return {
-    model: anthropic("claude-sonnet-4-6-20250514"),
-    provider: "claude-research-fallback",
-  };
-}
-
 export function getFreeOSSModelFallback() {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -157,12 +142,11 @@ export const SONNET_PRICING = { inputPerMillion: 3, outputPerMillion: 15 };
 export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
-  "claude-opus-4-6-20250612": { inputPerMillion: 15, outputPerMillion: 75 },
-  "claude-sonnet-4-6-20250514": { inputPerMillion: 3, outputPerMillion: 15 }, // Stage 3 assembly + Stage 4 vetting
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
+  // Support both full and short model IDs to avoid drift when model IDs change
   "claude-sonnet-4-20250514": SONNET_PRICING,
-  "claude-sonnet-4": SONNET_PRICING,
-  "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 }, // Stage 2 primary drafter
+  "claude-sonnet-4-20250514": SONNET_PRICING,
+  "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "llama-3.3-70b-versatile": { inputPerMillion: 0, outputPerMillion: 0 },

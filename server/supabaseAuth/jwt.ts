@@ -18,22 +18,11 @@ import {
 import { isSupabaseEmailConfirmed } from "./helpers";
 import { captureServerException } from "../sentry";
 import { logger } from "../logger";
+import { parseCookieHeader } from "../_core/cookies";
 
 // ─── Cookie / Token Extraction ─────────────────────────────────────────────
-export function parseCookies(cookieHeader: string | undefined): Map<string, string> {
-  if (!cookieHeader) return new Map();
-  const map = new Map<string, string>();
-  cookieHeader.split(";").forEach(pair => {
-    const [key, ...rest] = pair.split("=");
-    if (key) {
-      const rawVal = rest.join("=").trim();
-      let decoded = rawVal;
-      try { decoded = decodeURIComponent(rawVal); } catch { /* malformed percent-encoding — use raw value */ }
-      map.set(key.trim(), decoded);
-    }
-  });
-  return map;
-}
+// Re-exported alias for backward compatibility with existing callers
+export const parseCookies = parseCookieHeader;
 
 function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
