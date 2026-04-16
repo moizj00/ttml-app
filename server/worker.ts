@@ -398,8 +398,8 @@ async function startWorker() {
       await processJob(job);
   });
 
-  boss.on("error", (err: Error) => {
-    logger.error({ err: err.message }, "[Worker] pg-boss error:");
+  boss.on("error", (err: unknown) => {
+    logger.error({ err: err instanceof Error ? err.message : err }, "[Worker] pg-boss error:");
   });
 
   const shutdown = async (signal: string) => {

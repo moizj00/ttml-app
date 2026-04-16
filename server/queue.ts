@@ -13,6 +13,7 @@
  */
 
 import dns from "node:dns";
+import type { Job } from "pg-boss";
 // pg-boss publishes as CJS with `export = PgBoss`. Under Node ESM loading,
 // the named-import form crashes at runtime with
 // "Named export 'PgBoss' not found". The default-import form is what the
@@ -20,8 +21,58 @@ import dns from "node:dns";
 // the shipped type declarations are incomplete for the admin-dashboard
 // surface (getQueueStats / findJobs / localConcurrency etc.).
 import PgBossPkg from "pg-boss";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PgBoss: any = (PgBossPkg as any)?.default ?? PgBossPkg;
+interface PgBossQueueStats {
+  queuedCount?: number;
+  deferredCount?: number;
+  activeCount?: number;
+  totalCount?: number;
+}
+
+interface PgBossFoundJob<T = unknown> {
+  id: string;
+  name: string;
+  state: string;
+  output?: { message?: string } | null;
+  completedOn?: Date | null;
+  startedOn?: Date | null;
+  data: T;
+}
+
+interface PgBossConstructorOptions {
+  connectionString: string;
+  ssl?: { rejectUnauthorized: boolean };
+  schedule?: boolean;
+}
+
+interface PgBossCreateQueueOptions {
+  policy: "standard";
+  retryLimit: number;
+  expireInSeconds: number;
+  deleteAfterSeconds: number;
+  retentionSeconds: number;
+}
+
+interface PgBossClient {
+  on(event: "error" | "warning", handler: (payload: unknown) => void): void;
+  start(): Promise<void>;
+  stop(options?: { graceful?: boolean; timeout?: number }): Promise<void>;
+  send(
+    queueName: string,
+    data: object,
+    options?: { id?: string; singletonKey?: string; retryLimit?: number; expireInSeconds?: number }
+  ): Promise<string | null | undefined>;
+  createQueue(queueName: string, options: PgBossCreateQueueOptions): Promise<void>;
+  getQueueStats(queueName: string): Promise<PgBossQueueStats | undefined>;
+  findJobs<T = unknown>(queueName: string): Promise<Array<PgBossFoundJob<T>>>;
+  work<T>(
+    queueName: string,
+    options: { localConcurrency?: number },
+    handler: (job: Job<T>) => Promise<void>
+  ): Promise<unknown>;
+}
+
+const PgBoss: { new (options: PgBossConstructorOptions): PgBossClient } =
+  ((PgBossPkg as any)?.default ?? PgBossPkg) as { new (options: PgBossConstructorOptions): PgBossClient };
 import { logger } from "./logger";
 
 // Force Node.js to prefer IPv4 addresses globally — Railway resolves
@@ -58,8 +109,8 @@ export type PipelineJobData = RunPipelineJobData | RetryFromStageJobData;
 
 // ─── pg-boss Singleton ─────────────────────────────────────────────────────
 
-let _boss: any | null = null;
-let _bossStarting: Promise<any> | null = null;
+let _boss: PgBossClient | null = null;
+let _bossStarting: Promise<PgBossClient> | null = null;
 
 function getConnectionString(): string {
   const envSource = process.env.SUPABASE_DIRECT_URL
@@ -123,7 +174,7 @@ async function resolveConnectionToIPv4(connectionString: string): Promise<string
   return connectionString;
 }
 
-export async function getBoss(): Promise<any> {
+export async function getBoss(): Promise<PgBossClient> {
   if (_boss) return _boss;
   if (_bossStarting) return _bossStarting;
 
@@ -133,7 +184,7 @@ export async function getBoss(): Promise<any> {
     const connectionString = await resolveConnectionToIPv4(rawConnectionString);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pgBossOptions: any = {
+    const pgBossOptions: PgBossConstructorOptions = {
       connectionString,
       ssl: { rejectUnauthorized: false },
       schedule: false,
@@ -191,7 +242,7 @@ export async function getBoss(): Promise<any> {
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
-  let boss: any;
+  let boss: PgBossClient;
   try {
     boss = await getBoss();
   } catch (firstErr) {
@@ -292,8 +343,8 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getFailedCount() {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs(QUEUE_NAME);
-        return jobs.filter((j: any) => j.state === "failed").length;
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        return jobs.filter((j) => j.state === "failed").length;
       } catch { return 0; }
     },
     async getDelayedCount() {
@@ -302,11 +353,11 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getFailed(start: number, end: number) {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs(QUEUE_NAME);
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
         return jobs
-          .filter((j: any) => j.state === "failed")
+          .filter((j) => j.state === "failed")
           .slice(start, end + 1)
-          .map((j: any) => ({
+          .map((j) => ({
             id: j.id,
             name: j.name,
             failedReason: (j.output as { message?: string } | null)?.message ?? "Unknown error",
@@ -318,11 +369,11 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getCompleted(start: number, end: number) {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs(QUEUE_NAME);
+        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
         return jobs
-          .filter((j: any) => j.state === "completed")
+          .filter((j) => j.state === "completed")
           .slice(start, end + 1)
-          .map((j: any) => ({
+          .map((j) => ({
             id: j.id,
             finishedOn: j.completedOn ? j.completedOn.getTime() : null,
             processedOn: j.startedOn ? j.startedOn.getTime() : null,
