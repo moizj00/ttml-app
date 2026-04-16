@@ -143,9 +143,14 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
-  // Support both full and short model IDs to avoid drift when model IDs change
+  // Support both full and short model IDs for both Sonnet 4 and Sonnet 4.6,
+  // to avoid pricing drift when model IDs change across pipeline stages.
+  // All four variants are active in server/pipeline/{drafting,assembly,research,vetting}.ts
+  // and server/learning/{categories,dedup,quality}.ts as of 2026-04-16.
   "claude-sonnet-4-20250514": SONNET_PRICING,
-  "claude-sonnet-4-20250514": SONNET_PRICING,
+  "claude-sonnet-4": SONNET_PRICING,
+  "claude-sonnet-4-6-20250514": SONNET_PRICING,
+  "claude-sonnet-4-6": SONNET_PRICING,
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4o-search-preview": { inputPerMillion: 2.5, outputPerMillion: 10 },

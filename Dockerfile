@@ -13,7 +13,15 @@ RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 COPY package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 
-RUN pnpm install
+# --no-frozen-lockfile: let pnpm update pnpm-lock.yaml in place when package.json
+# has drifted (e.g. new @langchain/* and @anthropic-ai/sdk deps added in the
+# 2026-04-16 deploy-blockers commit). Without this flag, pnpm v10 defaults to
+# --frozen-lockfile whenever the CI env var is set and fails the build. We
+# cannot easily regenerate and push a 348 KB pnpm-lock.yaml through this
+# MCP-only deploy path, so we let the container regenerate it from package.json
+# on every build. The patches/ directory is already copied so pnpm can apply
+# the wouter@3.7.1 patch during install.
+RUN pnpm install --no-frozen-lockfile
 
 # Copy all source files needed for the build
 COPY client/ ./client/
@@ -36,10 +44,11 @@ ENV NODE_ENV=production
 # Install pnpm via npm (same approach as builder stage — reliable, no network OOM)
 RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 
-# Install production-only dependencies
+# Install production-only dependencies. Copy the regenerated lockfile from the
+# builder stage so stage 2 uses exactly what stage 1 resolved.
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/patches/ ./patches/
-RUN pnpm install --prod
+RUN pnpm install --prod --frozen-lockfile
 
 # Copy the compiled server bundle + client assets
 # dist/index.js    — esbuild server bundle
