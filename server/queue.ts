@@ -13,7 +13,15 @@
  */
 
 import dns from "node:dns";
-import { PgBoss } from "pg-boss";
+// pg-boss publishes as CJS with `export = PgBoss`. Under Node ESM loading,
+// the named-import form crashes at runtime with
+// "Named export 'PgBoss' not found". The default-import form is what the
+// Node error message itself recommends. We widen the type to `any` because
+// the shipped type declarations are incomplete for the admin-dashboard
+// surface (getQueueStats / findJobs / localConcurrency etc.).
+import PgBossPkg from "pg-boss";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PgBoss: any = (PgBossPkg as any)?.default ?? PgBossPkg;
 import { logger } from "./logger";
 
 // Force Node.js to prefer IPv4 addresses globally — Railway resolves
