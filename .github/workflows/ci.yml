@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     env:
-      PORT: "5000"
+      PORT: "3000"
       E2E_SUBSCRIBER_EMAIL: ${{ secrets.E2E_SUBSCRIBER_EMAIL }}
       E2E_SUBSCRIBER_PASSWORD: ${{ secrets.E2E_SUBSCRIBER_PASSWORD }}
       E2E_ATTORNEY_EMAIL: ${{ secrets.E2E_ATTORNEY_EMAIL }}

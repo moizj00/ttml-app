@@ -29,7 +29,10 @@ export async function getDb() {
     try {
       const client = postgres(dbUrl, {
         ssl: needsSsl(dbUrl) ? "require" : false,
-        max: parseInt(process.env.DB_POOL_MAX ?? "25", 10),
+        // Primary pool: writes + consistency-sensitive reads only.
+        // Read-heavy paths (analytics, blog, admin, lessons) use getReadDb() → replica.
+        // Keep this small to leave headroom for pg-boss + replica pool.
+        max: parseInt(process.env.DB_POOL_MAX ?? "10", 10),
         idle_timeout: 20,
         connect_timeout: 10,
       });
