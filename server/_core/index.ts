@@ -246,6 +246,53 @@ async function startServer() {
   });
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ─── X-Robots-Tag (indexability hints for crawlers & AI bots) ─────────────
+  // Defense-in-depth companion to client/public/robots.txt. Some crawlers ignore
+  // robots.txt, some only follow HTTP headers, and some follow internal links into
+  // API paths where robots.txt never gets checked. Setting the header on every
+  // response tells every well-behaved bot exactly which URLs are public and which
+  // are private — in HTTP, not just as a separate text file.
+  //
+  //   public pages (/, /blog, /services, /pricing, /faq, /analyze, /terms, /privacy)
+  //     → index, follow, max-image-preview:large
+  //   auth / api / dashboard / admin / per-user routes
+  //     → noindex, nofollow, noarchive
+  //
+  // Paths not in either list fall through to index,follow (safe default for the
+  // SPA's static marketing routes).
+  const PRIVATE_PATH_PREFIXES = [
+    "/api/",
+    "/auth/",
+    "/admin",
+    "/dashboard",
+    "/submit",
+    "/letters",
+    "/attorney",
+    "/review",
+    "/employee",
+    "/subscriber",
+    "/profile",
+    "/onboarding",
+    "/settings",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/verify-email",
+    "/reset-password",
+    "/accept-invitation",
+  ];
+  app.use((req, res, next) => {
+    const path = req.path || req.url || "";
+    const isPrivate = PRIVATE_PATH_PREFIXES.some((p) => path === p || path.startsWith(p));
+    if (isPrivate) {
+      res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    } else {
+      res.setHeader("X-Robots-Tag", "index, follow, max-image-preview:large");
+    }
+    next();
+  });
+  // ──────────────────────────────────────────────────────────────────────────
+
   // ─── Health check endpoints (plain HTTP GET, no tRPC overhead) ────────────
   // GET /health — public, used by Railway health checks and load balancers.
   // Returns overall status derived from all dependencies (DB, Redis, Stripe,
