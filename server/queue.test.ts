@@ -22,7 +22,7 @@ vi.mock("pg-boss", () => {
     Object.assign(this, mockBoss);
     return this;
   });
-  return { PgBoss };
+  return { default: PgBoss };
 });
 
 vi.mock("./_core/env", () => ({

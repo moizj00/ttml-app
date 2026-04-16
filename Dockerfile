@@ -48,7 +48,7 @@ RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 # builder stage so stage 2 uses exactly what stage 1 resolved.
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/patches/ ./patches/
-RUN pnpm install --prod --no-frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile
 
 # Copy the compiled server bundle + client assets
 # dist/index.js    — esbuild server bundle

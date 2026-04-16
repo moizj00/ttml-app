@@ -58,8 +58,8 @@ export type PipelineJobData = RunPipelineJobData | RetryFromStageJobData;
 
 // ─── pg-boss Singleton ─────────────────────────────────────────────────────
 
-let _boss: PgBoss | null = null;
-let _bossStarting: Promise<PgBoss> | null = null;
+let _boss: any | null = null;
+let _bossStarting: Promise<any> | null = null;
 
 function getConnectionString(): string {
   const envSource = process.env.SUPABASE_DIRECT_URL
@@ -123,7 +123,7 @@ async function resolveConnectionToIPv4(connectionString: string): Promise<string
   return connectionString;
 }
 
-export async function getBoss(): Promise<PgBoss> {
+export async function getBoss(): Promise<any> {
   if (_boss) return _boss;
   if (_bossStarting) return _bossStarting;
 
@@ -140,11 +140,11 @@ export async function getBoss(): Promise<PgBoss> {
     };
     const boss = new PgBoss(pgBossOptions);
 
-    boss.on("error", (err) => {
+    boss.on("error", (err: unknown) => {
       logger.error({ err }, "[Queue] pg-boss error:");
     });
 
-    boss.on("warning", (warning) => {
+    boss.on("warning", (warning: unknown) => {
       logger.warn({ warning }, "[Queue] pg-boss warning:");
     });
 
@@ -191,7 +191,7 @@ export async function getBoss(): Promise<PgBoss> {
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
-  let boss: PgBoss;
+  let boss: any;
   try {
     boss = await getBoss();
   } catch (firstErr) {
@@ -292,8 +292,8 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getFailedCount() {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
-        return jobs.filter(j => j.state === "failed").length;
+        const jobs = await boss.findJobs(QUEUE_NAME);
+        return jobs.filter((j: any) => j.state === "failed").length;
       } catch { return 0; }
     },
     async getDelayedCount() {
@@ -302,11 +302,11 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getFailed(start: number, end: number) {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        const jobs = await boss.findJobs(QUEUE_NAME);
         return jobs
-          .filter(j => j.state === "failed")
+          .filter((j: any) => j.state === "failed")
           .slice(start, end + 1)
-          .map(j => ({
+          .map((j: any) => ({
             id: j.id,
             name: j.name,
             failedReason: (j.output as { message?: string } | null)?.message ?? "Unknown error",
@@ -318,11 +318,11 @@ export function getPipelineQueue(): PipelineQueueShim {
     async getCompleted(start: number, end: number) {
       try {
         const boss = await getBoss();
-        const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+        const jobs = await boss.findJobs(QUEUE_NAME);
         return jobs
-          .filter(j => j.state === "completed")
+          .filter((j: any) => j.state === "completed")
           .slice(start, end + 1)
-          .map(j => ({
+          .map((j: any) => ({
             id: j.id,
             finishedOn: j.completedOn ? j.completedOn.getTime() : null,
             processedOn: j.startedOn ? j.startedOn.getTime() : null,
