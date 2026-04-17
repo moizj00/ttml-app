@@ -394,12 +394,12 @@ async function startWorker() {
   const boss = await getBoss();
 
   // Register the job handler — pg-boss calls this with an array of jobs
-  await boss.work<PipelineJobData>(QUEUE_NAME, { localConcurrency: 1 }, async (job) => {
+  await boss.work(QUEUE_NAME, { localConcurrency: 1 }, async (job: Job<PipelineJobData>) => {
       await processJob(job);
   });
 
-  boss.on("error", (err) => {
-    logger.error({ err: err.message }, "[Worker] pg-boss error:");
+  boss.on("error", (err: unknown) => {
+    logger.error({ err: err instanceof Error ? err.message : err }, "[Worker] pg-boss error:");
   });
 
   const shutdown = async (signal: string) => {

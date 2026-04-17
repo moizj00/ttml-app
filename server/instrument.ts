@@ -1,3 +1,38 @@
+// ─── Worker liveness probe ─────────────────────────────────────────────────
+// Railway's root `railway.toml` sets `healthcheckPath = /api/health`, and
+// every service inherits it. The app service has Express to answer that
+// path, but the worker process has no HTTP listener — so without this
+// shim Railway marks every worker deploy FAILED after the healthcheck
+// window expires, even when the pg-boss consumer is healthy and about to
+// start. We detect "am I the worker?" via process.argv (the entry script)
+// and bind a trivial HTTP server BEFORE any heavy imports so Sentry/DB/etc.
+// can't block the listener. The app process (dist/index.js entry) is not
+// affected — it continues to bind Express as before.
+import http from "node:http";
+const _entryScript = (process.argv[1] || "").split(/[\\/]/).pop() || "";
+if (_entryScript === "worker.js" || _entryScript === "worker.ts") {
+  const port = Number(process.env.PORT) || 8080;
+  const server = http.createServer((req, res) => {
+    if (req.method === "GET" && (req.url === "/api/health" || req.url === "/health")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", role: "worker", ts: Date.now() }));
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("not found");
+  });
+  server.on("error", (err) => {
+    // Port conflicts or EADDRINUSE shouldn't crash the worker — pg-boss is
+    // the real job. Log to stdout (logger isn't loaded yet at this point).
+    // eslint-disable-next-line no-console
+    console.error(`[Worker] Health server error: ${err instanceof Error ? err.message : String(err)}`);
+  });
+  server.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`[Worker] Health server listening on :${port} (GET /api/health)`);
+  });
+}
+
 import * as Sentry from "@sentry/node";
 import { logger } from "./logger";
 

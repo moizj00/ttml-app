@@ -2,7 +2,7 @@
  * vitest.setup.ts
  *
  * Runs before every test file (via vitest.config.ts `setupFiles`).
- * Stubs environment variables that are required at module-load time so that
+ * Stubs environment variables that are required at runtime so that
  * tests can import server modules without crashing.
  *
  * NOTE: These are test-only stubs — they do NOT grant any real permissions.
@@ -10,9 +10,11 @@
  */
 
 // ── Admin 2FA ─────────────────────────────────────────────────────────────────
-// admin2fa.ts throws at module-load time if neither ADMIN_2FA_SECRET nor
-// SUPABASE_SERVICE_ROLE_KEY is set. We stub ADMIN_2FA_SECRET only — we
-// deliberately do NOT stub SUPABASE_SERVICE_ROLE_KEY so that the live
+// admin2fa.ts resolves its HMAC secret lazily (inside signAdmin2FAToken /
+// verifyAdmin2FAToken) rather than at module-load time. We still stub the
+// env var here so that any test that exercises those functions gets a
+// predictable, non-empty secret.
+// We deliberately do NOT stub SUPABASE_SERVICE_ROLE_KEY so that the live
 // integration test (supabase-auth.test.ts) continues to skip itself when
 // real credentials are absent.
 if (!process.env.ADMIN_2FA_SECRET && !process.env.SUPABASE_SERVICE_ROLE_KEY) {

@@ -3,8 +3,10 @@
  *
  * Queries all letter_requests that:
  *   - Have status = 'generated_locked' (draft ready, not yet paid)
- *   - Were last transitioned to generated_locked 10–15 minutes ago
- *     (based on lastStatusChangedAt, which is stamped by updateLetterStatus)
+ *   - Were submitted (createdAt) 10–15 minutes ago — the cron window is
+ *     anchored to the subscriber's submit time, not to the pipeline
+ *     completion time, so the "your draft is ready" nudge always fires
+ *     ~10–15 min after submit regardless of pipeline speed.
  *   - Have initial_paywall_email_sent_at IS NULL (email not yet sent)
  *
  * For each matching letter, sends sendPaywallNotificationEmail to the subscriber
@@ -14,10 +16,12 @@
  * cron service hitting POST /api/cron/paywall-emails with the correct secret.
  *
  * STATUS FLOW CONTEXT:
- *   generated_locked → [subscriber pays] → pending_review → under_review → approved
+ *   submitted → researching → drafting → generated_locked → [subscriber pays]
+ *     → pending_review → under_review → approved
  *
- * This cron fires the initial "your draft is ready — unlock it" email that
- * drives the subscriber back to the platform to complete payment.
+ * The status filter (generated_locked / generated_unlocked) acts as a safety
+ * gate: if the pipeline hasn't finished by the time the cron window opens,
+ * we skip the email rather than send a broken "unlock your draft" link.
  * The existing 48-hour sendDraftReminderEmail (draftReminders.ts) continues
  * to fire as a follow-up for subscribers who still haven't acted.
  */
@@ -35,7 +39,7 @@ const paywallLogger = createLogger({ module: "PaywallEmails" });
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /**
- * Minimum minutes after draft generation before the paywall email fires.
+ * Minimum minutes after the subscriber submits before the paywall email fires.
  * The window between MIN and MAX is the cron-job polling window.
  * With a 5-minute cron, use 10 min min / 15 min max so every letter is caught
  * in exactly one cron run.
@@ -68,10 +72,11 @@ export interface PaywallEmailResult {
  * Returns a summary of what happened.
  *
  * Eligibility:
- *   - status = 'generated_locked'
+ *   - status = 'generated_locked' (or legacy 'generated_unlocked')
  *   - initial_paywall_email_sent_at IS NULL
- *   - lastStatusChangedAt is between PAYWALL_EMAIL_MIN_DELAY_MINUTES and
- *     PAYWALL_EMAIL_MAX_DELAY_MINUTES ago
+ *   - createdAt is between PAYWALL_EMAIL_MIN_DELAY_MINUTES and
+ *     PAYWALL_EMAIL_MAX_DELAY_MINUTES ago (anchored to submit time)
+ *   - submittedByAdmin = false
  *
  * Idempotency: initial_paywall_email_sent_at is stamped immediately after a
  * successful send, so re-runs of the cron will not re-send.
@@ -92,14 +97,17 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
   }
 
   const now = Date.now();
-  // Letters that transitioned to generated_locked at least MIN minutes ago
+  // Letters submitted at least MIN minutes ago (upper bound of createdAt range)
   const minThresholdDate = new Date(now - PAYWALL_EMAIL_MAX_DELAY_MINUTES * 60 * 1000);
-  // Letters that transitioned to generated_locked no more than MAX minutes ago
+  // Letters submitted no more than MAX minutes ago (lower bound of createdAt range)
   const maxThresholdDate = new Date(now - PAYWALL_EMAIL_MIN_DELAY_MINUTES * 60 * 1000);
 
-  // Query: generated_locked (and legacy generated_unlocked) letters in the
-  // 10–15 min window with no paywall email sent yet.
-  // generated_unlocked is a legacy status (Phase ≤68) treated identically.
+  // Query: generated_locked (and legacy generated_unlocked) letters whose
+  // submit time falls in the 10–15 min window and which have not received
+  // a paywall email yet. The status filter is a safety gate — if the
+  // pipeline is slow and a letter is still in `researching`/`drafting` when
+  // the window opens, we skip it so the email is only sent once a real
+  // draft exists. `generated_unlocked` is a legacy status (Phase ≤68).
   const eligibleLetters = await db
     .select()
     .from(letterRequests)
@@ -108,8 +116,8 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         inArray(letterRequests.status, ["generated_locked", "generated_unlocked"]),
         isNull(letterRequests.initialPaywallEmailSentAt),
         eq(letterRequests.submittedByAdmin, false),
-        gte(letterRequests.lastStatusChangedAt, minThresholdDate),
-        lt(letterRequests.lastStatusChangedAt, maxThresholdDate)
+        gte(letterRequests.createdAt, minThresholdDate),
+        lt(letterRequests.createdAt, maxThresholdDate)
       )
     );
 

@@ -1,4 +1,85 @@
+# Talk to My Lawyer — robots.txt
+#
+# POLICY
+# ──────
+# Every public, content-heavy page is open to crawlers. Authenticated paths
+# (login, dashboard, admin, submission, subscriber/attorney portals) and the
+# JSON/tRPC API are closed. This applies equally to:
+#
+#   • Search engines         (Google, Bing, DuckDuckGo, Yandex, Baidu, Apple)
+#   • AI training / answering bots
+#                            (GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot,
+#                             Claude-Web, anthropic-ai, Google-Extended,
+#                             Applebot-Extended, PerplexityBot, Perplexity-User,
+#                             CCBot, YouBot, Amazonbot, Diffbot)
+#   • Social preview bots    (Twitterbot, facebookexternalhit, LinkedInBot,
+#                             Slackbot, Discordbot, TelegramBot, WhatsApp)
+#   • Archive & monitoring   (ia_archiver, Wayback, UptimeRobot, Pingdom,
+#                             Site24x7)
+#
+# The `User-agent: *` line at the end of the list catches every bot that
+# doesn't have its own named stanza. RFC 9309 lets one rule-block apply to
+# multiple User-agent lines, so this is both explicit and DRY.
+#
+# If you add a new authenticated path to the client router, add it to the
+# Disallow list below.
+
+# ── Search engines ────────────────────────────────────────────────────────
+User-agent: Googlebot
+User-agent: Googlebot-Image
+User-agent: Googlebot-News
+User-agent: Googlebot-Video
+User-agent: Bingbot
+User-agent: msnbot
+User-agent: DuckDuckBot
+User-agent: Yandex
+User-agent: YandexBot
+User-agent: Baiduspider
+User-agent: Applebot
+
+# ── AI training / answering bots ──────────────────────────────────────────
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: OAI-SearchBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: CCBot
+User-agent: YouBot
+User-agent: Amazonbot
+User-agent: Diffbot
+User-agent: cohere-ai
+User-agent: Bytespider
+
+# ── Social link-preview bots ──────────────────────────────────────────────
+User-agent: Twitterbot
+User-agent: facebookexternalhit
+User-agent: facebookcatalog
+User-agent: LinkedInBot
+User-agent: Slackbot
+User-agent: Slackbot-LinkExpanding
+User-agent: Discordbot
+User-agent: TelegramBot
+User-agent: WhatsApp
+User-agent: Pinterestbot
+User-agent: redditbot
+
+# ── Archive & uptime monitoring ───────────────────────────────────────────
+User-agent: ia_archiver
+User-agent: Wayback
+User-agent: archive.org_bot
+User-agent: UptimeRobot
+User-agent: Pingdom.com_bot
+User-agent: Site24x7
+User-agent: StatusCake
+
+# ── Default (everything else) ─────────────────────────────────────────────
 User-agent: *
+
 Allow: /
 Allow: /blog
 Allow: /blog/
@@ -9,6 +90,17 @@ Allow: /services/*
 Allow: /pricing
 Allow: /analyze
 Allow: /faq
+Allow: /terms
+Allow: /privacy
+Allow: /favicon-16.png
+Allow: /favicon-32.png
+Allow: /logo-main.png
+Allow: /logo-full.png
+Allow: /logo-icon.png
+Allow: /logo-icon-192.png
+Allow: /logo.png
+Allow: /sitemap.xml
+Allow: /robots.txt
 
 Disallow: /admin
 Disallow: /admin/
@@ -22,11 +114,15 @@ Disallow: /employee
 Disallow: /subscriber
 Disallow: /profile
 Disallow: /onboarding
+Disallow: /settings
+Disallow: /settings/
 Disallow: /login
 Disallow: /signup
 Disallow: /forgot-password
 Disallow: /verify-email
 Disallow: /reset-password
 Disallow: /accept-invitation
+Disallow: /api/
+Disallow: /auth/
 
 Sitemap: https://www.talk-to-my-lawyer.com/sitemap.xml
