@@ -21,18 +21,34 @@ import { logger } from "../logger";
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
 
-const ALLOWED_ORIGIN_HOSTS = new Set([
+/**
+ * Explicit allowlist of hosts permitted to originate auth emails / redirects.
+ *
+ * Historically this file contained wildcard regexes (`*.railway.app`,
+ * `*.replit.dev`, `*-*-*.janeway.replit.dev`) which meant ANY deployment on
+ * those providers — including ones owned by unrelated parties — could set an
+ * `Origin` / `X-Forwarded-Host` header we would trust. That's a redirect /
+ * phishing primitive: attacker-controlled subdomain → legit Supabase auth
+ * emails land on their domain.
+ *
+ * Starting with this change:
+ *  - Only the canonical production hosts are allowed by default.
+ *  - Additional hosts (e.g. the specific Railway service hosts, a preview
+ *    Replit URL) must be added explicitly via the `ALLOWED_ORIGIN_HOSTS`
+ *    environment variable as a comma-separated list.
+ *  - No wildcards, ever.
+ */
+const ALLOWED_ORIGIN_HOSTS: ReadonlySet<string> = new Set<string>([
   "www.talk-to-my-lawyer.com",
   "talk-to-my-lawyer.com",
+  ...(process.env.ALLOWED_ORIGIN_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
 ]);
 
 function isAllowedHost(host: string): boolean {
-  return (
-    ALLOWED_ORIGIN_HOSTS.has(host) ||
-    /^[a-z0-9-]+\.railway\.app$/.test(host) ||
-    /^[a-z0-9-]+-[a-z0-9]+-[a-z0-9]+\.janeway\.replit\.dev$/.test(host) ||
-    /^[a-z0-9-]+\.replit\.dev$/.test(host)
-  );
+  return ALLOWED_ORIGIN_HOSTS.has(host.toLowerCase());
 }
 
 /**
