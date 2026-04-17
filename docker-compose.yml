@@ -12,6 +12,7 @@ x-common: &common
   build:
     context: .
     dockerfile: Dockerfile
+  image: ttml:latest
   env_file: .env
   environment:
     - NODE_ENV=production
