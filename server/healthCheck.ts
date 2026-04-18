@@ -203,6 +203,12 @@ async function runBackgroundProbe(): Promise<void> {
   probeRunning = true;
   try {
     cachedResult = await executeFullChecks();
+    if (cachedResult.status !== "healthy") {
+      const failing = Object.entries(cachedResult.services)
+        .filter(([, v]) => v.status === "error")
+        .map(([k, v]) => `${k}: ${v.error} (${v.responseTimeMs}ms)`);
+      logger.warn({ status: cachedResult.status, failing }, "[HealthCheck] Non-healthy status detected");
+    }
   } catch (err) {
     logger.error({ err: err }, "[HealthCheck] Background probe failed:");
   } finally {

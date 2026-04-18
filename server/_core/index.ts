@@ -128,6 +128,7 @@ async function startServer() {
   }
 
   const app = express();
+  app.disable("x-powered-by");
   // CRITICAL: Trust Railway's proxy to correctly identify HTTPS protocol (X-Forwarded-Proto).
   // This is required for secure cookie handling and protocol detection.
   app.set("trust proxy", 1);
