@@ -4,8 +4,7 @@ import postgres from "postgres";
 
 test.describe("E2E Pipeline Integration Test", () => {
   test.beforeEach(() => {
-    // Skip if e2e subscriber doesn't exist
-    test.skip(!isSubscriberConfigured, "E2E subscriber credentials not configured");
+    // Skip bypassed for manual testing
   });
 
   test("runs the AI pipeline after successful intake form submission", async ({ subscriberPage: page }) => {
