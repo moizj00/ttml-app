@@ -83,7 +83,7 @@ vi.mock("./pipeline/vetting", () => ({
 
 vi.mock("./pipeline/citations", () => ({
   buildCitationRegistry: (...args: unknown[]) => mockBuildCitationRegistry(...args),
-  revalidateCitationsWithPerplexity: (...args: unknown[]) => mockRevalidateCitationsWithPerplexity(...args),
+  revalidateCitationsWithOpenAI: (...args: unknown[]) => mockRevalidateCitationsWithPerplexity(...args),
 }));
 
 const VALID_INTAKE = {
