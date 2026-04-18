@@ -20,7 +20,7 @@ import { formatStructuredError, classifyErrorCode } from "./shared";
 import { createTokenAccumulator, calculateCost } from "./providers";
 import { validateIntakeCompleteness, addValidationResult } from "./validators";
 import { autoAdvanceIfPreviouslyUnlocked } from "./fallback";
-import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
+import { buildCitationRegistry, revalidateCitationsWithOpenAI } from "./citations";
 import type { CitationRegistryEntry } from "../../shared/types";
 import { runResearchStage } from "./research";
 import { runDraftingStage } from "./drafting";

@@ -15,7 +15,7 @@ import { buildCacheKey, getCachedResearch, setCachedResearch } from "../kvCache"
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 import { getResearchModel, getResearchModelFallback, getFreeOSSModelFallback, RESEARCH_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, runOpenAIStoredPromptResearch, isOpenAIFailoverAvailable } from "./providers";
 import { validateResearchPacket, retryOnValidationFailure, addValidationResult } from "./validators";
-import { buildCitationRegistry, revalidateCitationsWithPerplexity } from "./citations";
+import { buildCitationRegistry, revalidateCitationsWithOpenAI } from "./citations";
 import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
 import { logger } from "../logger";
 
