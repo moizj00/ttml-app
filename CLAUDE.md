@@ -61,7 +61,7 @@ All three share the same `.env`. Only `app` serves HTTP. Do **not** call pipelin
 - REST is reserved for: `POST /api/auth/signup` · `POST /api/auth/login` · `POST /api/stripe/webhook` · `POST /api/pipeline/n8n-callback` · `GET /api/letters/:id/draft-pdf` · `GET /api/system/health`.
 - `client/src/lib/trpc.ts` imports `AppRouter` type from the server for end-to-end type safety. **Superjson** is the serializer.
 - Root router: `server/routers/index.ts` → `appRouter`, composed of sub-routers (`letters`, `review`, `admin`, `billing`, `affiliate`, `documents`, `blog`, `auth`, `system`).
-- Access gated by tRPC middleware procedures in `server/_core/trpc.ts`: `publicProcedure`, `protectedProcedure`, `subscriberProcedure`, `attorneyProcedure`, `adminProcedure` (last requires 2FA cookie).
+- Access gated by tRPC middleware procedures: `publicProcedure` / `protectedProcedure` / `emailVerifiedProcedure` / `adminProcedure` in `server/_core/trpc.ts`; `subscriberProcedure` / `attorneyProcedure` in `server/routers/_shared.ts` (last requires 2FA cookie).
 
 ### Letter lifecycle (the core domain)
 
@@ -83,10 +83,12 @@ pipeline_failed → submitted (admin retry)
 
 ### AI pipeline (4 stages, in `server/pipeline/orchestrator.ts`)
 
-1. **Research** — Perplexity `sonar-pro` (Claude Opus fallback if key missing)
-2. **Drafting** — Claude Opus (uses RAG examples from prior attorney-approved letters)
-3. **Assembly** — Claude Opus (polish into formal legal letter)
-4. **Vetting** — Claude Sonnet (anti-hallucination, citation check)
+1. **Research** — Perplexity `sonar-pro` (Claude Sonnet fallback if key missing)
+2. **Drafting** — Anthropic `claude-sonnet-4` (uses RAG examples from prior attorney-approved letters)
+3. **Assembly** — Anthropic `claude-sonnet-4` (polish into formal legal letter)
+4. **Vetting** — Anthropic `claude-sonnet-4` (anti-hallucination, citation check)
+
+Model IDs live in `server/pipeline/providers.ts`. Historical docs referring to Claude Opus for drafting/assembly are stale — all three non-research stages currently run on Sonnet.
 
 Attorney edits feed the **recursive learning system**: edits extracted into `pipeline_lessons` and injected into future prompts (managed at `/admin/learning`). n8n is a dormant alternative path, only active when `N8N_PRIMARY=true`.
 
@@ -110,9 +112,9 @@ Detailed enforcement rules live in `skills/architectural-patterns/`. **Never vio
 1. **Mandatory Attorney Review** — Every AI-generated letter must be reviewed by an attorney. The `ai_draft` letter version is immutable — always create a new `attorney_edit` version. Log all attorney actions via `logReviewAction` in `server/db/review-actions.ts`.
 2. **Strict Status Machine** — All transitions validated against `ALLOWED_TRANSITIONS` in `shared/types/letter.ts`. No skipping states. Use `isValidTransition()`. Only admin with `force=true` can bypass. Never hardcode status strings — import from `shared/types/letter.ts`.
 3. **RBAC Enforcement** — Use tRPC procedure guards from `server/_core/trpc.ts`. Never rely on client-side checks. Admin also requires 2FA (`admin_2fa` cookie via `server/_core/admin2fa.ts`).
-4. **Super Admin Whitelist** — `SUPER_ADMIN_EMAILS` hard-coded in `server/supabaseAuth.ts`. Cannot be modified via UI or API. Do not generate any endpoint or UI to assign the `admin` role dynamically.
+4. **Super Admin Whitelist** — `SUPER_ADMIN_EMAILS` hard-coded in `server/supabaseAuth/client.ts` (re-exported via the `server/supabaseAuth.ts` barrel). Cannot be modified via UI or API. Do not generate any endpoint or UI to assign the `admin` role dynamically.
 5. **Attorney Promotion Flow** — Only super admins can promote to attorney; active subscribers cannot be promoted.
-6. **Payment Gate** — Letter content is truncated server-side (~100 chars) in `server/routers/versions.ts` when status is `generated_locked`. Transition to `pending_review` only after confirmed Stripe payment. Frontend blur via `client/src/components/LetterPaywall.tsx`.
+6. **Payment Gate** — When status is `generated_locked`, `server/routers/versions.ts` returns only the first 20% of lines (minimum 5) and sets `truncated: true`. Transition to `pending_review` only after confirmed Stripe payment. Frontend blur via `client/src/components/LetterPaywall.tsx`.
 7. **Session Refresh** — Role changes take effect via `invalidateUserCache()` + frontend `refetchOnWindowFocus`.
 
 ---
