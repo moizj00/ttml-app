@@ -582,17 +582,19 @@ export default function QualityDashboard() {
             <CardContent>
               <div className="space-y-3" data-testid="quality-by-type">
                 {byLetterType.map((row, i) => (
-                  <div key={i} className="flex items-center gap-3" data-testid={`row-quality-type-${i}`}>
-                    <span className="text-sm font-medium w-40 shrink-0 capitalize">
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" data-testid={`row-quality-type-${i}`}>
+                    <span className="text-sm font-medium w-full sm:w-40 sm:shrink-0 capitalize">
                       {String(row.letterType ?? "Unknown").replace(/[-_]/g, " ")}
                     </span>
-                    <ScoreBar value={Number(row.avgScore ?? 0)} />
-                    <span className="text-xs text-muted-foreground w-20 text-right shrink-0">
-                      {Math.round(Number(row.firstPassRate ?? 0))}% 1st-pass
-                    </span>
-                    <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
-                      ({String(row.total ?? 0)})
-                    </span>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <ScoreBar value={Number(row.avgScore ?? 0)} />
+                      <span className="text-xs text-muted-foreground w-20 text-right shrink-0">
+                        {Math.round(Number(row.firstPassRate ?? 0))}% 1st-pass
+                      </span>
+                      <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
+                        ({String(row.total ?? 0)})
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

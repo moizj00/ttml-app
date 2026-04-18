@@ -327,11 +327,12 @@ export function LessonsTab({
       {/* Filters */}
       <Card>
         <CardContent className="py-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:flex-wrap">
+            <Filter className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
             <Select value={filterStage} onValueChange={setFilterStage}>
               <SelectTrigger
-                className="w-[140px] h-8 text-xs"
+                className="w-full sm:w-[140px] h-8 text-xs"
                 data-testid="filter-stage"
               >
                 <SelectValue placeholder="All stages" />
@@ -347,7 +348,7 @@ export function LessonsTab({
             </Select>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger
-                className="w-[160px] h-8 text-xs"
+                className="w-full sm:w-[160px] h-8 text-xs"
                 data-testid="filter-category"
               >
                 <SelectValue placeholder="All categories" />
@@ -363,7 +364,7 @@ export function LessonsTab({
             </Select>
             <Select value={filterLetterType} onValueChange={setFilterLetterType}>
               <SelectTrigger
-                className="w-[160px] h-8 text-xs"
+                className="w-full sm:w-[160px] h-8 text-xs"
                 data-testid="filter-letter-type"
               >
                 <SelectValue placeholder="All letter types" />
@@ -379,7 +380,7 @@ export function LessonsTab({
             </Select>
             <Select value={filterActive} onValueChange={setFilterActive}>
               <SelectTrigger
-                className="w-[120px] h-8 text-xs"
+                className="w-full sm:w-[120px] h-8 text-xs"
                 data-testid="filter-active"
               >
                 <SelectValue placeholder="All status" />
@@ -394,9 +395,10 @@ export function LessonsTab({
               value={filterJurisdiction}
               onChange={(e) => setFilterJurisdiction(e.target.value)}
               placeholder="Jurisdiction..."
-              className="w-[140px] h-8 text-xs"
+              className="w-full sm:w-[140px] h-8 text-xs"
               data-testid="filter-jurisdiction"
             />
+            </div>
             {(filterStage !== "__all__" ||
               filterCategory !== "__all__" ||
               filterActive !== "__all__" ||

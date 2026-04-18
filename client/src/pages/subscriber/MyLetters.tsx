@@ -239,7 +239,7 @@ export default function MyLetters() {
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <button
                           onClick={() => navigate(`/letters/${letter.id}`)}
-                          className="text-sm font-semibold text-foreground leading-tight truncate max-w-[260px] sm:max-w-[400px] text-left hover:underline"
+                          className="text-sm font-semibold text-foreground leading-tight truncate max-w-full text-left hover:underline"
                         >
                           {letter.subject}
                         </button>

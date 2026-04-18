@@ -32,8 +32,8 @@ export default function Footer() {
   return (
     <footer className="bg-[#0c2340] text-slate-300" data-testid="site-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-8 mb-10">
-          <div className="md:col-span-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 sm:gap-8 mb-10">
+          <div className="sm:col-span-2 lg:col-span-1">
             <BrandLogo href="/" variant="dark" size="sm" loading="lazy" />
             <p className="mt-4 text-sm text-slate-400 leading-relaxed">
               Attorney-reviewed legal letters drafted around California legal language.
