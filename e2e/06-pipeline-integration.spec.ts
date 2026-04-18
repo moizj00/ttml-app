@@ -78,10 +78,10 @@ test.describe("E2E Pipeline Integration Test", () => {
         await page.waitForTimeout(3000);
 
         const records = await sql`
-          SELECT id, status, "intakeJson"
+          SELECT id, status, intake_json
           FROM letter_requests 
-          WHERE "intakeJson"->>'subject' = ${uniqueTestSubject}
-          ORDER BY "createdAt" DESC LIMIT 1;
+          WHERE intake_json->>'subject' = ${uniqueTestSubject}
+          ORDER BY created_at DESC LIMIT 1;
         `;
 
         if (records.length > 0) {
@@ -97,7 +97,7 @@ test.describe("E2E Pipeline Integration Test", () => {
 
       // Assertions
       expect(foundRecord).toBeDefined();
-      expect(foundRecord.intakeJson).toBeTruthy();
+      expect(foundRecord.intake_json).toBeTruthy();
       expect(isProcessing).toBe(true);
 
     } finally {
