@@ -27,16 +27,21 @@ test.describe("Attorney Review Centre Verification", () => {
     if (hasLetterRow) {
       await letterRow.click();
       await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(1000);
+      // Wait for the review modal draft to load
+      await page.waitForTimeout(5000);
       
-      // After clicking, we should see a review detail or claim dialog
+      // After clicking, a review modal opens with the draft
       await page.screenshot({ path: "test-results/review-detail.png", fullPage: true });
       console.log("After click URL:", page.url());
 
-      // Look for a claim button on the detail page
-      const claimBtn = page.getByRole("button", { name: /claim|start review|accept/i }).first();
+      // Look for a claim button in the modal
+      const claimBtn = page.getByRole("button", { name: /claim|start review|accept|approve/i }).first();
       const hasClaimBtn = await claimBtn.isVisible({ timeout: 5000 }).catch(() => false);
-      console.log("Has claim button on detail:", hasClaimBtn);
+      console.log("Has claim button in modal:", hasClaimBtn);
+
+      // Also check for any action buttons at bottom of modal
+      const allButtons = await page.getByRole("button").allTextContents();
+      console.log("All visible buttons:", allButtons.filter(b => b.trim()).join(", "));
 
       if (hasClaimBtn) {
         await claimBtn.click();
