@@ -2,14 +2,19 @@
 
 End-to-end tests that verify the **complete letter lifecycle** from submission through AI pipeline, paywall, payment, attorney review, and claim. These tests exercise the full platform integration across multiple user roles.
 
+See also: [`skills/platform-e2e-verification/SKILL.md`](../../skills/platform-e2e-verification/SKILL.md) for the full procedural guide with pitfalls and solutions.
+
 ## Test Suites
 
 | File | Flow | Role(s) |
 |------|------|---------|
 | `01-pipeline-submission.spec.ts` | 6-step intake form → AI pipeline → DB save | Subscriber |
-| `02-paywall-verification.spec.ts` | Draft locked behind paywall with payment options | Subscriber |
-| `03-attorney-review-queue.spec.ts` | Letter in review queue → claim → under_review | Attorney |
-| `04-full-lifecycle.spec.ts` | All-in-one: submit → pipeline → paywall → claim | Both |
+| `02-ai-content-verification.spec.ts` | Verify AI draft content in letter_versions table | Subscriber |
+| `03-paywall-verification.spec.ts` | Draft locked behind paywall with payment options | Subscriber |
+| `04-payment-simulation.spec.ts` | Simulate Stripe payment → pending_review | Subscriber |
+| `05-attorney-review-queue.spec.ts` | Letter visible in attorney review queue | Attorney |
+| `06-attorney-claim.spec.ts` | Open review modal, claim letter, verify DB | Attorney |
+| `07-full-lifecycle.spec.ts` | All-in-one: submit → AI → paywall → payment → claim | Both |
 
 ## Prerequisites
 
@@ -34,14 +39,19 @@ End-to-end tests that verify the **complete letter lifecycle** from submission t
 ## Running
 
 ```bash
-# Run all platform tests
+# Run all platform tests (in order)
 npx playwright test e2e/platform/ --reporter=list
 
-# Run a specific suite
+# Run individual steps
 npx playwright test e2e/platform/01-pipeline-submission.spec.ts --reporter=list
+npx playwright test e2e/platform/02-ai-content-verification.spec.ts --reporter=list
+npx playwright test e2e/platform/03-paywall-verification.spec.ts --reporter=list
+npx playwright test e2e/platform/04-payment-simulation.spec.ts --reporter=list
+npx playwright test e2e/platform/05-attorney-review-queue.spec.ts --reporter=list
+npx playwright test e2e/platform/06-attorney-claim.spec.ts --reporter=list
 
-# Run full lifecycle (longest, does everything)
-npx playwright test e2e/platform/04-full-lifecycle.spec.ts --reporter=list
+# Run full lifecycle (longest, does everything in one test)
+npx playwright test e2e/platform/07-full-lifecycle.spec.ts --reporter=list
 ```
 
 ## Key Patterns

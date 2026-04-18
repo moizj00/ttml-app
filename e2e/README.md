@@ -11,6 +11,22 @@ Playwright-based end-to-end tests covering 5 critical user flows.
 | `03-subscriber-dashboard.spec.ts` | Subscriber dashboard — letter list, status display, detail navigation |
 | `04-attorney-review.spec.ts` | Attorney review — queue view, claim a letter, editor, approve flow |
 | `05-admin-dashboard.spec.ts` | Admin dashboard — user list, system stats, section navigation |
+| `06-pipeline-integration.spec.ts` | Pipeline — form submit + AI pipeline + DB verification |
+
+### Platform E2E Tests (`e2e/platform/`)
+
+Full lifecycle integration tests covering the entire letter journey across roles.
+See [`e2e/platform/README.md`](platform/README.md) for details.
+
+| File | Flow |
+|------|------|
+| `platform/01-pipeline-submission.spec.ts` | 6-step form → AI pipeline → DB save |
+| `platform/02-ai-content-verification.spec.ts` | Verify AI draft in letter_versions |
+| `platform/03-paywall-verification.spec.ts` | Draft locked behind paywall |
+| `platform/04-payment-simulation.spec.ts` | Simulate payment → pending_review |
+| `platform/05-attorney-review-queue.spec.ts` | Attorney review queue visibility |
+| `platform/06-attorney-claim.spec.ts` | Review modal + claim + DB verify |
+| `platform/07-full-lifecycle.spec.ts` | All-in-one end-to-end lifecycle |
 
 ## Architecture
 
