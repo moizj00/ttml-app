@@ -202,6 +202,8 @@ export function letterSubmitRateLimitMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  // Skip rate limiting in development mode
+  if (process.env.NODE_ENV === "development") { next(); return; }
   const ip = getClientIp(req);
   // Use IP as identifier for tRPC calls (user ID resolved in procedure)
   checkLimit(getLetterSubmitLimiter(), ip, res).then((allowed) => {
@@ -251,6 +253,8 @@ export async function checkTrpcRateLimit(
   identifier: string,
   failClosed = false
 ): Promise<void> {
+  // Skip rate limiting in development mode
+  if (process.env.NODE_ENV === "development") return;
   let limiter: Ratelimit | null;
   switch (limiterType) {
     case "letter":
