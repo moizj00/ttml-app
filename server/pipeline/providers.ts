@@ -37,47 +37,52 @@ export function isOpenAIFailoverAvailable(): boolean {
   return !!(apiKey && apiKey.trim().length > 0);
 }
 
-/** Stage 1: Perplexity sonar-pro — web-grounded legal research (direct API) */
+/** Stage 1: OpenAI gpt-4o-search-preview — web-grounded legal research via Responses API */
 export function getResearchModel() {
-  const apiKey = process.env.PERPLEXITY_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey || openaiKey.trim().length === 0) {
     logger.warn(
-      "[Pipeline] PERPLEXITY_API_KEY is not set — falling back to Claude for research"
+      "[Pipeline] OPENAI_API_KEY is not set — falling back to Claude for research"
     );
     const anthropic = getAnthropicClient();
     return {
       model: anthropic("claude-sonnet-4-20250514"),
       provider: "anthropic-fallback",
+      tools: undefined as ToolSet | undefined,
     };
   }
-  // Perplexity is OpenAI-compatible — use @ai-sdk/openai with custom baseURL
-  const perplexity = createOpenAI({
-    apiKey,
-    baseURL: "https://api.perplexity.ai",
-    name: "perplexity",
-  });
-  return { model: perplexity.chat("sonar-pro"), provider: "perplexity" };
-}
-
-/**
- * Stage 1 failover: OpenAI gpt-4o-search-preview via the Responses API.
- * The Responses API + webSearchPreview tool provides real-time web grounding,
- * matching Perplexity's core capability.
- *
- * Returns both the LanguageModel and a properly-typed ToolSet so callers can
- * spread directly into generateText({ model, tools }) without casts.
- */
-export function getResearchModelFallback(): {
-  model: ReturnType<ReturnType<typeof createOpenAI>["responses"]>;
-  tools: ToolSet;
-  provider: string;
-} {
-  const openai = getOpenAIClient();
+  const openai = createOpenAI({ apiKey: openaiKey });
   return {
     model: openai.responses("gpt-4o-search-preview"),
     tools: { webSearch: openai.tools.webSearchPreview({}) } as ToolSet,
-    provider: "openai-failover",
+    provider: "openai",
   };
+}
+
+/**
+ * Stage 1 failover: Perplexity sonar-pro (if configured) or Groq OSS.
+ * Falls back to Perplexity if the API key is available, otherwise skips
+ * to the OSS last-resort tier.
+ */
+export function getResearchModelFallback(): {
+  model: any;
+  tools: ToolSet | undefined;
+  provider: string;
+} | null {
+  const perplexityKey = process.env.PERPLEXITY_API_KEY;
+  if (perplexityKey && perplexityKey.trim().length > 0) {
+    const perplexity = createOpenAI({
+      apiKey: perplexityKey,
+      baseURL: "https://api.perplexity.ai",
+      name: "perplexity",
+    });
+    return {
+      model: perplexity.chat("sonar-pro"),
+      tools: undefined,
+      provider: "perplexity-failover",
+    };
+  }
+  return null;
 }
 
 /** Stage 2: Anthropic claude-sonnet-4 — initial legal draft (direct Anthropic API) */
@@ -134,7 +139,7 @@ export function isGroqFallbackAvailable(): boolean {
 }
 
 // Timeout constants (ms)
-export const RESEARCH_TIMEOUT_MS = 90_000; // 90s — Perplexity web search can be slow
+export const RESEARCH_TIMEOUT_MS = 90_000; // 90s — OpenAI web search can be slow
 export const DRAFT_TIMEOUT_MS = 90_000; // 90s — Claude Sonnet drafting a full legal letter
 export const ASSEMBLY_TIMEOUT_MS = 90_000; // 90s — Claude Sonnet final assembly
 

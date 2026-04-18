@@ -218,7 +218,7 @@ export async function runResearchStage(
 
   // Declare provider-tracking variables at function scope so the catch block
   // can read the active model key for accurate cost reporting after failover.
-  let researchModelKey = researchConfig.provider === "perplexity" ? "sonar-pro" : "claude-sonnet-4-20250514";
+  let researchModelKey = researchConfig.provider === "openai" ? "gpt-4o-search-preview" : "claude-sonnet-4-20250514";
 
   try {
     logger.info(
@@ -228,11 +228,12 @@ export async function runResearchStage(
     // Track the active model — may switch to failover mid-stage
     let activeModel = researchConfig.model;
     let activeProvider = researchConfig.provider;
-    let activeFallbackTools: ToolSet | undefined;
+    let activeFallbackTools: ToolSet | undefined = (researchConfig as any).tools;
 
     const callGenerateText = async (prompt: string) => {
       return generateText({
         model: activeModel,
+        ...(activeFallbackTools ? { tools: activeFallbackTools } : {}),
         system: systemPrompt,
         prompt,
         maxOutputTokens: 4000,
@@ -245,6 +246,23 @@ export async function runResearchStage(
       letterId,
       () => callGenerateText(userPrompt),
       async () => {
+        // Failover 1: try Perplexity if configured, otherwise use OpenAI stored prompt
+        const perplexityFallback = getResearchModelFallback();
+        if (perplexityFallback) {
+          activeModel = perplexityFallback.model;
+          activeProvider = "perplexity-failover";
+          activeFallbackTools = undefined;
+          researchModelKey = "sonar-pro";
+          logger.info(`[Pipeline] Stage 1: Falling back to Perplexity sonar-pro for letter #${letterId}`);
+          return generateText({
+            model: activeModel,
+            system: systemPrompt,
+            prompt: userPrompt,
+            maxOutputTokens: 4000,
+            abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+          });
+        }
+        // No Perplexity key — try OpenAI stored prompt
         activeProvider = "openai-stored-prompt";
         activeFallbackTools = undefined;
         researchModelKey = "gpt-4o-search-preview";
@@ -275,28 +293,28 @@ export async function runResearchStage(
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for research (both Perplexity and OpenAI were unavailable). Research is NOT web-grounded and citations cannot be verified. Heightened attorney scrutiny required.`
+          `RESEARCH_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for research (both OpenAI and Perplexity were unavailable). Research is NOT web-grounded and citations cannot be verified. Heightened attorney scrutiny required.`
         );
         pipelineCtx.researchUnverified = true;
       }
-    } else if (initialProvider === "openai-failover" && activeProvider === "openai-stored-prompt") {
+    } else if (initialProvider === "perplexity-failover") {
       logger.warn(
-        `[Pipeline] Stage 1: OpenAI stored prompt (web search) used for letter #${letterId} — Perplexity was unavailable.`
+        `[Pipeline] Stage 1: Perplexity sonar-pro failover used for letter #${letterId} — OpenAI primary was unavailable.`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `RESEARCH_FAILOVER: Primary research model (Perplexity) was unavailable. Research performed by OpenAI stored prompt with web search grounding. Citation style and format may differ from Perplexity standard.`
+          `RESEARCH_FAILOVER: Primary research model (OpenAI) was unavailable. Research performed by Perplexity sonar-pro failover with web search grounding.`
         );
       }
     } else if (initialFailover) {
       logger.warn(
-        `[Pipeline] Stage 1: Switched to OpenAI failover for letter #${letterId} (provider=${activeProvider})`
+        `[Pipeline] Stage 1: Switched to failover for letter #${letterId} (provider=${activeProvider})`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         pipelineCtx.qualityWarnings.push(
-          `RESEARCH_FAILOVER: Primary research model (Perplexity) was rate-limited. Research performed by OpenAI failover with web search grounding. Citation style and format may differ slightly from Perplexity standard.`
+          `RESEARCH_FAILOVER: Primary research model (OpenAI) was rate-limited or unavailable. Research performed by ${activeProvider} failover.`
         );
       }
     }
@@ -339,6 +357,20 @@ export async function runResearchStage(
         letterId,
         () => callWithActiveFallback(promptWithFeedback),
         async () => {
+          const perplexityFallback = getResearchModelFallback();
+          if (perplexityFallback) {
+            activeModel = perplexityFallback.model;
+            activeProvider = "perplexity-failover";
+            activeFallbackTools = undefined;
+            researchModelKey = "sonar-pro";
+            return generateText({
+              model: activeModel,
+              system: systemPrompt,
+              prompt: promptWithFeedback,
+              maxOutputTokens: 4000,
+              abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+            });
+          }
           activeProvider = "openai-stored-prompt";
           activeFallbackTools = undefined;
           researchModelKey = "gpt-4o-search-preview";
@@ -372,7 +404,7 @@ export async function runResearchStage(
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
         if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("RESEARCH_FAILOVER"))) {
           pipelineCtx.qualityWarnings.push(
-            `RESEARCH_FAILOVER: Switched to OpenAI gpt-4o-search-preview during research retry due to rate limit.`
+            `RESEARCH_FAILOVER: Switched to failover (${retryProvider}) during research retry.`
           );
         }
       }
@@ -513,9 +545,10 @@ export async function runResearchStage(
     }
 
     const isClaudeFallback = activeProvider === "anthropic-fallback";
-    const isOpenAIFailover = activeProvider === "openai-failover" || activeProvider === "openai-stored-prompt";
+    const isPerplexityFailover = activeProvider === "perplexity-failover";
+    const isOpenAIPrimary = activeProvider === "openai" || activeProvider === "openai-stored-prompt";
     const isGroqOSSFallback = activeProvider === "groq-oss-fallback";
-    // OpenAI failover (stored prompt or SDK) uses web search — still web-grounded.
+    // OpenAI primary, OpenAI stored prompt, and Perplexity failover all use web search — web-grounded.
     // Claude anthropic-fallback and Groq OSS fallback have no web access — ungrounded.
     const isWebGrounded = !isClaudeFallback && !isGroqOSSFallback;
     const successResult: ValidationResult = {
@@ -526,8 +559,7 @@ export async function runResearchStage(
       warnings: [
         ...validation.warnings,
         ...(isClaudeFallback ? ["Research is NOT web-grounded (Claude fallback used — no web access)"] : []),
-        ...(activeProvider === "openai-stored-prompt" ? ["Research used OpenAI stored prompt with web search grounding. Perplexity was unavailable."] : []),
-        ...(activeProvider === "openai-failover" ? ["Research used OpenAI gpt-4o-search-preview failover (web-grounded via webSearchPreview tool). Perplexity was rate-limited."] : []),
+        ...(isPerplexityFailover ? ["Research used Perplexity sonar-pro failover (web-grounded). OpenAI primary was unavailable."] : []),
         ...(isGroqOSSFallback ? ["Research is NOT web-grounded (Groq Llama 3.3 OSS last-resort used — no web access). Citations cannot be verified. Heightened attorney scrutiny required."] : []),
       ],
       timestamp: new Date().toISOString(),
@@ -550,12 +582,12 @@ export async function runResearchStage(
         researchRunId: runId,
         webGrounded: isWebGrounded,
         provider: activeProvider,
-        failoverUsed: isOpenAIFailover,
+        failoverUsed: isPerplexityFailover || isGroqOSSFallback,
         validationResult: successResult,
       },
     });
 
-    // Store new result in KV cache (only for web-grounded Perplexity results)
+    // Store new result in KV cache (only for web-grounded results)
     if (isWebGrounded) {
       await setCachedResearch(kvCacheKey, researchPacket);
     }
@@ -564,13 +596,13 @@ export async function runResearchStage(
       logger.warn(
         `[Pipeline] Stage 1: Claude fallback used for letter #${letterId} — research is NOT web-grounded. Citations may not be verified.`
       );
-    } else if (isOpenAIFailover) {
-      logger.warn(
-        `[Pipeline] Stage 1: OpenAI gpt-4o-search-preview failover used for letter #${letterId} — research IS web-grounded via webSearchPreview tool. Perplexity was rate-limited.`
+    } else if (isPerplexityFailover) {
+      logger.info(
+        `[Pipeline] Stage 1: Perplexity sonar-pro failover used for letter #${letterId} — research IS web-grounded.`
       );
     } else if (isGroqOSSFallback) {
       logger.warn(
-        `[Pipeline] Stage 1: Groq Llama 3.3 70B OSS last-resort used for letter #${letterId} — research is NOT web-grounded. Both Perplexity and OpenAI were exhausted.`
+        `[Pipeline] Stage 1: Groq Llama 3.3 70B OSS last-resort used for letter #${letterId} — research is NOT web-grounded. Both OpenAI and Perplexity were exhausted.`
       );
     }
 
@@ -594,7 +626,7 @@ export async function runResearchStage(
     if (pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       pipelineCtx.qualityWarnings.push(
-        `RESEARCH_ALL_PROVIDERS_FAILED: All research providers (Perplexity, OpenAI, Groq) were unavailable. Research was synthesized from client intake data only — no external legal research was performed. Original error: ${msg}. Heightened attorney scrutiny required.`
+        `RESEARCH_ALL_PROVIDERS_FAILED: All research providers (OpenAI, Perplexity, Groq) were unavailable. Research was synthesized from client intake data only — no external legal research was performed. Original error: ${msg}. Heightened attorney scrutiny required.`
       );
       pipelineCtx.researchUnverified = true;
     }
