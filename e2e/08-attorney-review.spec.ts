@@ -19,15 +19,32 @@ test.describe("Attorney Review Centre Verification", () => {
       pageContent?.includes("pending") || pageContent?.includes("Pending") || pageContent?.includes("review") || pageContent?.includes("Review"));
 
     // Look for a claim button or review action
-    const claimButton = page.getByRole("button", { name: /claim|review|start/i }).first();
-    const hasClaimButton = await claimButton.isVisible({ timeout: 5000 }).catch(() => false);
-    console.log("Has claim/review button:", hasClaimButton);
+    // The claim action is triggered by clicking the letter row (arrow →)
+    const letterRow = page.getByText("E2E Pipeline Run").first();
+    const hasLetterRow = await letterRow.isVisible({ timeout: 5000 }).catch(() => false);
+    console.log("Has letter in queue:", hasLetterRow);
 
-    if (hasClaimButton) {
-      await claimButton.click();
+    if (hasLetterRow) {
+      await letterRow.click();
       await page.waitForLoadState("networkidle");
-      await page.screenshot({ path: "test-results/review-claimed.png", fullPage: true });
-      console.log("After claim URL:", page.url());
+      await page.waitForTimeout(1000);
+      
+      // After clicking, we should see a review detail or claim dialog
+      await page.screenshot({ path: "test-results/review-detail.png", fullPage: true });
+      console.log("After click URL:", page.url());
+
+      // Look for a claim button on the detail page
+      const claimBtn = page.getByRole("button", { name: /claim|start review|accept/i }).first();
+      const hasClaimBtn = await claimBtn.isVisible({ timeout: 5000 }).catch(() => false);
+      console.log("Has claim button on detail:", hasClaimBtn);
+
+      if (hasClaimBtn) {
+        await claimBtn.click();
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(1000);
+        await page.screenshot({ path: "test-results/review-claimed.png", fullPage: true });
+        console.log("After claim URL:", page.url());
+      }
     }
   });
 });
