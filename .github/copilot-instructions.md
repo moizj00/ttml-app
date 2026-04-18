@@ -41,7 +41,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
 - **Database**: PostgreSQL via Replit's built-in database (migrated from Supabase), accessed with Drizzle ORM + `postgres-js`. All 24 schema tables are applied via the migrations in [drizzle/migrations/](drizzle/migrations/) and `drizzle/*.sql`.
 - **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE with SameSite=None), custom Resend verification emails. Admin 2FA enforced.
-- **AI Pipeline**: A 4-stage pipeline: (1) Perplexity Research (fail-hard, no fallback), (2) OpenAI GPT-4o Drafting (Claude Sonnet fallback), (3) Claude Sonnet Assembly (OpenAI GPT-4o-mini fallback), (4) Claude Sonnet Vetting (OpenAI GPT-4o-mini fallback). Two-tier failover (primary + fallback). Groq OSS tier removed. Automatic retry with exponential backoff for overall pipeline resilience.
+- **AI Pipeline**: 4-stage pipeline: (1) OpenAI `gpt-4o-search-preview` Research with web search (Perplexity `sonar-pro` optional failover), (2) OpenAI GPT-4o Drafting (Claude Sonnet fallback), (3) Claude Sonnet Assembly (OpenAI GPT-4o-mini fallback), (4) Claude Sonnet Vetting (OpenAI GPT-4o-mini fallback). Two-tier failover per stage. Groq OSS last-resort for research.
 - **n8n MCP Integration**: When `N8N_PRIMARY=true`, the pipeline routes through the user's n8n cloud instance (`designtec.app.n8n.cloud`) via MCP (Model Context Protocol) as the primary path. Falls back to legacy webhook, then to the in-app 4-stage pipeline if n8n is unavailable. MCP client module: [server/n8nMcp.ts](server/n8nMcp.ts). Direct connection using `N8N_MCP_URL` + `N8N_MCP_BEARER_TOKEN` env vars. Tool selection: explicit via `N8N_MCP_TOOL_NAME` env var, or single-tool auto-select, or keyword match (`legal-letter`, `letter-submission`, `legal-pipeline`, `ttml`). The n8n callback endpoint (`/api/pipeline/n8n-callback`) remains functional for async workflow results.
 - **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback, including AI-powered categorization, deduplication, and effectiveness tracking.
 - **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning. Vector similarity search uses **pgvector** (built into Supabase PostgreSQL) as the active vector store. Vertex AI Vector Search is an optional upgrade path for very large vector volumes (millions of vectors); pgvector handles current scale well and avoids the ~\$70–110/month cost of Vertex AI Vector Search.
@@ -49,7 +49,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Rate Limiting**: Fine-grained, per-user limits using Upstash Redis (fail-open for general usage).
 - **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
 - **Database Architecture**: Uses a primary + read replica topology with transparent fallback.
-- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, Perplexity, Cloudflare R2.
+- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, OpenAI, Cloudflare R2.
 - **Error Tracking**: Sentry.
 - **Deployment**: Railway (previously); now also runs on Replit.
 
@@ -58,7 +58,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database**: Supabase PostgreSQL (via `SUPABASE_DATABASE_URL` direct connection string). SSL is applied conditionally — enabled for Supabase/cloud URLs, skipped for local connections.
 - **Auth**: Supabase Auth (JWT tokens) — requires `SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **Required secrets** (set in Replit Secrets): `SUPABASE_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
-- **Pipeline AI secrets** (required for pipeline): `PERPLEXITY_API_KEY` (research, fail-hard), `OPENAI_API_KEY` (primary drafter), `ANTHROPIC_API_KEY` (assembly/vetting + draft fallback).
+- **Pipeline AI secrets** (required for pipeline): `OPENAI_API_KEY` (primary research + drafting), `ANTHROPIC_API_KEY` (assembly/vetting + draft fallback). Optional: `PERPLEXITY_API_KEY` (research failover).
 - **n8n MCP secrets** (for n8n pipeline): `N8N_MCP_URL`, `N8N_MCP_BEARER_TOKEN`. Env vars: `N8N_PRIMARY=true` (shared), optional `N8N_MCP_TOOL_NAME` (explicit tool binding).
 - **Optional secrets**: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `JWT_SECRET`.
 - **Port**: 5000 (configured via `PORT` env var in shared environment).
@@ -81,8 +81,9 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **postgres-js**: PostgreSQL client.
 - **Resend**: Transactional email sending.
 - **Stripe**: Payment processing.
-- **Perplexity API**: Legal research for AI pipeline.
-- **Anthropic API (Claude Opus/Sonnet)**: AI model for drafting, assembly, and vetting.
+- **OpenAI API**: Primary research (gpt-4o-search-preview with web search), drafting, embeddings, document analysis.
+- **Anthropic API (Claude Opus/Sonnet)**: Assembly, vetting, draft fallback.
+- **Perplexity API** (optional): Research failover (`sonar-pro`).
 - **Upstash Redis**: Rate limiting only (fail-open).
 - **pg-boss**: PostgreSQL-native job queue for pipeline worker process.
 - **Sentry**: Error tracking and monitoring.
