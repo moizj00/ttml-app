@@ -121,25 +121,20 @@ async function checkAnthropic(): Promise<ServiceCheckResult> {
   });
 }
 
-async function checkPerplexity(): Promise<ServiceCheckResult> {
-  if (!ENV.perplexityApiKey) {
+async function checkOpenAI(): Promise<ServiceCheckResult> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
     return { status: "unconfigured", responseTimeMs: 0 };
   }
-  return checkService("perplexity", async () => {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
+  return checkService("openai", async () => {
+    const res = await fetch("https://api.openai.com/v1/models", {
+      method: "GET",
       headers: {
-        Authorization: `Bearer ${ENV.perplexityApiKey}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: "sonar",
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
-      }),
       signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
     });
-    if (!res.ok && res.status !== 429) throw new Error(`Perplexity API returned ${res.status}`);
+    if (!res.ok && res.status !== 429) throw new Error(`OpenAI API returned ${res.status}`);
   });
 }
 
@@ -169,14 +164,14 @@ function getUptime(): number {
 }
 
 async function executeFullChecks(): Promise<HealthCheckResult> {
-  const [database, redis, stripe, resend, anthropic, perplexity, r2] =
+  const [database, redis, stripe, resend, anthropic, openai, r2] =
     await Promise.all([
       checkDatabase(),
       checkRedis(),
       checkStripe(),
       checkResend(),
       checkAnthropic(),
-      checkPerplexity(),
+      checkOpenAI(),
       checkR2(),
     ]);
 
@@ -186,7 +181,7 @@ async function executeFullChecks(): Promise<HealthCheckResult> {
     stripe,
     resend,
     anthropic,
-    perplexity,
+    openai,
     r2,
   };
 
