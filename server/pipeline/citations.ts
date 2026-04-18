@@ -156,7 +156,7 @@ export type CitationRevalidationResult = {
   modelKey: string;
 };
 
-export async function revalidateCitationsWithPerplexity(
+export async function revalidateCitationsWithOpenAI(
   registry: CitationRegistryEntry[],
   jurisdiction: string,
   letterId: number,
@@ -164,25 +164,24 @@ export async function revalidateCitationsWithPerplexity(
 ): Promise<CitationRevalidationResult> {
   const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
 
-  const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
-  if (!perplexityApiKey || perplexityApiKey.trim().length === 0) {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (!openaiApiKey || openaiApiKey.trim().length === 0) {
     logger.warn(
-      `[Pipeline] PERPLEXITY_API_KEY not set — skipping citation revalidation for letter #${letterId}`
+      `[Pipeline] OPENAI_API_KEY not set — skipping citation revalidation for letter #${letterId}`
     );
     return { registry, modelKey: "none" };
   }
 
-  const perplexityProvider = createOpenAI({
-    apiKey: perplexityApiKey,
-    baseURL: "https://api.perplexity.ai",
+  const openaiProvider = createOpenAI({
+    apiKey: openaiApiKey,
   });
 
   try {
     logger.info(
-      `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar for letter #${letterId}`
+      `[Pipeline] Revalidating ${registry.length} citations with OpenAI gpt-4o-mini for letter #${letterId}`
     );
     const { text, usage: citationUsage } = await generateText({
-      model: perplexityProvider("sonar"),
+      model: openaiProvider("gpt-4o-mini"),
       system: "You are a legal citation verification assistant.",
       prompt,
       maxOutputTokens: 1000,
@@ -192,9 +191,9 @@ export async function revalidateCitationsWithPerplexity(
 
     const updatedRegistry = parseCitationRevalidationResponse(text, registry);
     logger.info(
-      `[Pipeline] Citation revalidation complete (Perplexity) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+      `[Pipeline] Citation revalidation complete (OpenAI) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
     );
-    return { registry: updatedRegistry, modelKey: "sonar" };
+    return { registry: updatedRegistry, modelKey: "gpt-4o-mini" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn(
