@@ -69,27 +69,26 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # top-level package.json reads in the bundle.
 COPY --from=builder /app/package.json ./
 
-# Legacy startup script: runs migrations + worker + server in one container.
-# Kept for single-container platforms that want the old behavior.
-COPY start.sh ./
-RUN chmod +x start.sh
+# Legacy startup script + multi-service entrypoint
+COPY start.sh docker-entrypoint.sh ./
+RUN chmod +x start.sh docker-entrypoint.sh
 
 EXPOSE ${PORT:-3000}
 
 # ─── Multi-service usage ────────────────────────────────────────────────────
-# This image supports three roles via different commands:
+# This image supports three roles via the PROCESS_TYPE env var:
 #
-#   App (web server):   node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js
-#   Worker (pg-boss):   node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js
-#   Migrate (one-shot): node --dns-result-order=ipv4first dist/migrate.js
+#   PROCESS_TYPE=web     → Express server (default)
+#   PROCESS_TYPE=worker  → pg-boss pipeline worker
+#   PROCESS_TYPE=migrate → one-shot Drizzle migration
+#   PROCESS_TYPE=all     → legacy single-container (start.sh)
 #
-# Override CMD in docker-compose.yml, Railway service config, or K8s pod spec.
-# The default CMD below starts the web server only (decoupled model).
-# Use ./start.sh for the legacy single-container model (migrate + worker + web).
+# Set PROCESS_TYPE per Railway service. All services share the same image.
 # ────────────────────────────────────────────────────────────────────────────
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider \
   "http://localhost:${PORT:-3000}/api/health" || exit 1
 
-CMD ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD []

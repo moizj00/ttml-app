@@ -2,31 +2,28 @@
 #
 # MULTI-SERVICE DEPLOYMENT MODEL
 # ──────────────────────────────
-# This repo produces one Docker image that supports three roles:
+# This repo produces one Docker image with a PROCESS_TYPE entrypoint:
 #
-#   Service      │ Railway startCommand                                                               │ Notes
-#   ─────────────┼────────────────────────────────────────────────────────────────────────────────────┼──────────────────────
-#   app (web)    │ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js      │ Receives HTTP traffic
-#   worker       │ node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js     │ No domain needed
-#   migrate      │ node --dns-result-order=ipv4first dist/migrate.js                                  │ One-shot per deploy
+#   Service      │ PROCESS_TYPE env var │ Notes
+#   ─────────────┼──────────────────────┼──────────────────────
+#   ttml-app     │ web (default)        │ Receives HTTP traffic
+#   worker       │ worker               │ No domain needed
+#   migrate      │ migrate              │ One-shot per deploy
 #
-# Create three Railway services from the same repo. Each uses the same
-# Dockerfile build but a different startCommand. Only the app service
-# needs a domain and health check.
+# Create three Railway services from the same repo. Set PROCESS_TYPE
+# as an env var on each service. Only the web service needs a domain
+# and health check.
 #
 # LEGACY SINGLE-CONTAINER MODE
 # ─────────────────────────────
-# To run everything in one container (migrate + worker + web), set:
-#   startCommand = "./start.sh"
-# This is simpler but couples all processes and prevents independent scaling.
+# Set PROCESS_TYPE=all to run migrate + worker + web in one container.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# App service: web server only (recommended decoupled model)
-startCommand = "node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js"
+# No startCommand needed — docker-entrypoint.sh dispatches via PROCESS_TYPE env var
 healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
