@@ -81,7 +81,7 @@ async function applyResearchGroundingAndRevalidate(
     orchLogger.info({ letterId, reasons }, "[Pipeline] Skipping citation revalidation");
   } else {
     const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-    const revalResult = await revalidateCitationsWithPerplexity(
+    const revalResult = await revalidateCitationsWithOpenAI(
       citationRegistry, jurisdiction, letterId, citationTokens
     );
     citationRegistry = revalResult.registry;
