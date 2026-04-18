@@ -18,10 +18,30 @@ spec:
         app: ttml
         component: backend
     spec:
+      # Run migrations before the backend starts
+      initContainers:
+        - name: migrate
+          image: ttml-backend:latest
+          imagePullPolicy: Never
+          command: ["node", "--dns-result-order=ipv4first", "dist/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: ttml-config
+            - secretRef:
+                name: ttml-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
       containers:
         - name: backend
           image: ttml-backend:latest
           imagePullPolicy: Never
+          # Sentry instrumentation loaded before the server
+          command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
           ports:
             - containerPort: 3000
               name: http
