@@ -20,7 +20,7 @@ import type { Job } from "pg-boss";
 // Node error message itself recommends. We widen the type to `any` because
 // the shipped type declarations are incomplete for the admin-dashboard
 // surface (getQueueStats / findJobs / localConcurrency etc.).
-import PgBossPkg from "pg-boss";
+import PgBoss from "pg-boss";
 // @ts-ignore
 interface PgBossQueueStats {
   queuedCount?: number;
