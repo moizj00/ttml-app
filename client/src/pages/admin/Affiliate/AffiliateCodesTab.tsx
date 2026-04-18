@@ -60,7 +60,8 @@ export function AffiliateCodesTab({
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : codes && codes.length > 0 ? (
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>
@@ -201,7 +202,8 @@ export function AffiliateCodesTab({
                 );
               })}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             <Gift className="w-10 h-10 mx-auto mb-2 opacity-40" />

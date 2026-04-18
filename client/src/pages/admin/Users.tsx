@@ -436,8 +436,9 @@ export default function AdminUsers() {
                 ROLE_CONFIG.subscriber;
               return (
                 <Card key={user.id} data-testid={`card-user-${user.id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      <div className="flex items-center gap-3 sm:gap-4">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-primary font-semibold text-sm">
                           {(user.name ?? user.email ?? "U")[0].toUpperCase()}
@@ -470,7 +471,8 @@ export default function AdminUsers() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
                         {/* Subscription badge */}
                         {user.subscriptionStatus === "active" ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-green-700 bg-green-100">
@@ -521,7 +523,7 @@ export default function AdminUsers() {
                             }}
                           >
                             <SelectTrigger
-                              className="w-36 h-7 text-xs"
+                              className="w-full sm:w-36 h-7 text-xs"
                               disabled={user.role === "attorney"}
                             >
                               <SelectValue

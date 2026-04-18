@@ -197,9 +197,9 @@ export default function ReviewDetail() {
         )}
 
         {/* ── Split panel ───────────────────────────────────────────────────── */}
-        <div className="flex gap-4 min-h-0" style={{ height: "calc(100vh - 200px)" }}>
+        <div className="flex flex-col lg:flex-row gap-4 min-h-0 lg:h-[calc(100vh-200px)]">
           {/* Left: Rich text editor */}
-          <div className="flex-1 flex flex-col min-w-0 border border-border rounded-2xl overflow-hidden bg-card">
+          <div className="flex-1 flex flex-col min-w-0 border border-border rounded-2xl overflow-hidden bg-card min-h-[50vh] lg:min-h-0">
             {/* Editor header */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/20 flex-shrink-0">
               <FileText className="w-4 h-4 text-muted-foreground" />
@@ -337,9 +337,9 @@ export default function ReviewDetail() {
           </div>
 
           {/* Right: Intake / Research / Citations / History panel */}
-          <div className="w-80 flex-shrink-0 flex flex-col min-h-0">
+          <div className="w-full lg:w-80 flex-shrink-0 flex flex-col min-h-[40vh] lg:min-h-0">
             <Tabs defaultValue="intake" className="flex flex-col h-full">
-              <TabsList className="w-full flex-shrink-0" data-testid="tabs-review-panel">
+              <TabsList className="w-full flex-shrink-0 overflow-x-auto" data-testid="tabs-review-panel">
                 <TabsTrigger
                   value="intake"
                   className="flex-1 text-xs"

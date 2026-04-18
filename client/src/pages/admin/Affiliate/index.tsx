@@ -141,20 +141,22 @@ export default function AdminAffiliate() {
 
         {/* Tabs */}
         <Tabs defaultValue="performance" className="space-y-4">
-          <TabsList className="grid grid-cols-4 w-full max-w-xl">
-            <TabsTrigger value="performance">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full max-w-xl">
+            <TabsTrigger value="performance" className="text-xs sm:text-sm">
               <BarChart3 className="w-3.5 h-3.5 mr-1" />
-              Performance
+              <span className="hidden sm:inline">Performance</span>
+              <span className="sm:hidden">Perf</span>
             </TabsTrigger>
-            <TabsTrigger value="codes">
+            <TabsTrigger value="codes" className="text-xs sm:text-sm">
               <Gift className="w-3.5 h-3.5 mr-1" />
               Codes
             </TabsTrigger>
-            <TabsTrigger value="commissions">
+            <TabsTrigger value="commissions" className="text-xs sm:text-sm">
               <DollarSign className="w-3.5 h-3.5 mr-1" />
-              Commissions
+              <span className="hidden sm:inline">Commissions</span>
+              <span className="sm:hidden">Comm</span>
             </TabsTrigger>
-            <TabsTrigger value="payouts">
+            <TabsTrigger value="payouts" className="text-xs sm:text-sm">
               <Wallet className="w-3.5 h-3.5 mr-1" />
               Payouts
             </TabsTrigger>
