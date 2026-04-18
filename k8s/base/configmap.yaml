@@ -8,3 +8,7 @@ data:
   PORT: "3000"
   CORS_ALLOWED_ORIGINS: "http://ttml.local"
   APP_URL: "http://ttml.local"
+  # Set to "simple" for single-stage Claude pipeline (no pg-boss worker needed)
+  # Set to "langgraph" for LangGraph pipeline
+  # Leave empty for the default 4-stage pipeline (requires worker deployment)
+  # PIPELINE_MODE: ""

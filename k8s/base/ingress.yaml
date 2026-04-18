@@ -4,7 +4,9 @@ metadata:
   name: ttml-ingress
   namespace: ttml
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Do NOT use rewrite-target here — /api/* must be passed through
+    # to the backend as-is (Express routes expect /api/health, /api/trpc, etc.)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: nginx
   rules:
