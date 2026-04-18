@@ -276,10 +276,8 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
 
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
   const boss = await getBoss();
-  const jobId = `retry-${data.letterId}-${data.stage}-${Date.now()}`;
   // singletonKey deduplicates at the queue level — same as enqueuePipelineJob
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
-    id: jobId,
     singletonKey: `letter-${data.letterId}`,
     retryLimit: 0,
     expireInSeconds: 30 * 60,
@@ -288,9 +286,8 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
     logger.warn(`[Queue] Duplicate retry-from-stage job suppressed for letter #${data.letterId} (stage: ${data.stage}) — already active/queued`);
     return `retry-${data.letterId}-${data.stage}-deduplicated`;
   }
-  const resolvedId = id ?? jobId;
-  logger.info(`[Queue] Enqueued retry-from-stage job ${resolvedId} for letter #${data.letterId} (stage: ${data.stage})`);
-  return resolvedId;
+  logger.info(`[Queue] Enqueued retry-from-stage job ${id} for letter #${data.letterId} (stage: ${data.stage})`);
+  return id;
 }
 
 
