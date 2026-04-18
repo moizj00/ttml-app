@@ -1,0 +1,28 @@
+# Large directories not needed for Docker build
+attached_assets/
+artifacts/
+references/
+e2e/
+skills/
+skills-audit/
+docs/
+coverage/
+test_reports/
+
+# Dev/test files
+*.test.ts
+*.spec.ts
+*.test.js
+*.spec.js
+test-*.mjs
+test-*.txt
+vitest.config.ts
+vitest.setup.ts
+playwright.config.ts
+
+# Misc
+*.md
+*.log
+.manus
+memory
+todo.md
