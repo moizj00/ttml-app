@@ -254,13 +254,11 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
     _boss = null;
     boss = await getBoss();
   }
-  const jobId = `pipeline-${data.letterId}-${Date.now()}`;
   // singletonKey provides application-level deduplication hint.
   // With 'standard' policy, pg-boss does NOT block on failed jobs with the same key.
   // Actual deduplication is enforced by the pipeline lock (acquirePipelineLock).
   logger.info(`[Queue] Sending pipeline job for letter #${data.letterId} (${data.label})...`);
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
-    id: jobId,
     singletonKey: `letter-${data.letterId}`,
 
     // No retries at queue level — worker handles its own retry logic with backoff
@@ -272,9 +270,8 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
     logger.warn(`[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`);
     return `pipeline-${data.letterId}-deduplicated`;
   }
-  const resolvedId = id ?? jobId;
-  logger.info(`[Queue] Enqueued pipeline job ${resolvedId} for letter #${data.letterId} (${data.label})`);
-  return resolvedId;
+  logger.info(`[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`);
+  return id;
 }
 
 export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
