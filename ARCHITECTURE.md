@@ -9,7 +9,7 @@
 
 **Platform:** Talk to My Lawyer — full-stack legal letter platform where users submit legal situations, AI generates professional letters, and a licensed attorney reviews before delivery.
 
-**Production URL:** https://www.talk-to-my-lawyer.com
+**Production URL:** <https://www.talk-to-my-lawyer.com>
 
 ---
 
