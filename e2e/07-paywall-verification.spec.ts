@@ -17,7 +17,7 @@ test.describe("Paywall and Payment Flow Verification", () => {
     }
 
     // Navigate directly to the letter detail page
-    await page.goto("/dashboard/letters/96");
+    await page.goto("/letters/96");
     await page.waitForLoadState("networkidle");
 
     // Dismiss onboarding modal again if it reappears
