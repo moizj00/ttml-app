@@ -11,7 +11,7 @@
  * transparently proxy API calls so the client can use relative /api/trpc
  * paths without CORS or domain-switching complexity.
  *
- * The `run_worker_first: ["/api/*"]` rule in wrangler.jsonc ensures that
+ * The `run_worker_first: ["/api/*"]` rule in the Cloudflare config ensures that
  * non-API routes are served directly from the assets bucket without
  * invoking this Worker at all — cheap, fast, and edge-cached globally.
  */
@@ -47,7 +47,7 @@ export default {
     }
 
     // Everything else → static assets (React SPA).
-    // In practice this branch is rarely hit because wrangler.jsonc's
+    // In practice this branch is rarely hit because the Cloudflare config's
     // run_worker_first list only routes /api/* through this Worker.
     return env.ASSETS.fetch(request);
   },

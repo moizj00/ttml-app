@@ -69,9 +69,9 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # top-level package.json reads in the bundle.
 COPY --from=builder /app/package.json ./
 
-# Legacy startup script + multi-service entrypoint
-COPY start.sh docker-entrypoint.sh ./
-RUN chmod +x start.sh docker-entrypoint.sh
+# Multi-service entrypoint
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE ${PORT:-3000}
 
@@ -81,7 +81,7 @@ EXPOSE ${PORT:-3000}
 #   PROCESS_TYPE=web     → Express server (default)
 #   PROCESS_TYPE=worker  → pg-boss pipeline worker
 #   PROCESS_TYPE=migrate → one-shot Drizzle migration
-#   PROCESS_TYPE=all     → legacy single-container (start.sh)
+#   PROCESS_TYPE=all     → legacy single-container (web)
 #
 # Set PROCESS_TYPE per Railway service. All services share the same image.
 # ────────────────────────────────────────────────────────────────────────────

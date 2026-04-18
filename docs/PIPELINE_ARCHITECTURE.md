@@ -23,10 +23,10 @@ The pipeline orchestrator (`server/pipeline/orchestrator.ts`) and individual sta
 Letter Submit
     │
     ▼
-Stage 1: Perplexity sonar-pro [PRIMARY]
-         (web-grounded legal research)
-         ↳ Fallback: Claude claude-opus-4-5 [if PERPLEXITY_API_KEY missing]
-                     (research NOT web-grounded)
+Stage 1: OpenAI gpt-4o-search-preview [PRIMARY]
+         (web-grounded legal research with webSearchPreview tool)
+         ↳ Failover chain: Perplexity sonar-pro → OpenAI stored prompt
+                           → Groq Llama 3.3 70B → synthetic fallback
     │
     ▼
 Stage 2: Anthropic claude-opus-4-5
@@ -108,8 +108,8 @@ This section documents every service pair in the system: what is primary, what t
 
 | Service | Primary | Fallback | Trigger | Capability Lost on Fallback |
 |---------|---------|----------|---------|----------------------------|
-| **Letter generation** | Local 4-stage pipeline (Perplexity → Opus × 2 → Sonnet) | n8n external workflow | `N8N_PRIMARY=true` env var set (currently NOT set — dormant) | n8n path is less tested; not recommended for production |
-| **Stage 1 Research** | Perplexity `sonar-pro` | Anthropic `claude-opus-4-5` | `PERPLEXITY_API_KEY` missing or empty | Research is **not web-grounded**; no live citations; `researchUnverified` flag set on letter |
+| **Letter generation** | Local 4-stage pipeline (OpenAI Research → Opus × 2 → Sonnet) | n8n external workflow | `N8N_PRIMARY=true` env var set (currently NOT set — dormant) | n8n path is less tested; not recommended for production |
+| **Stage 1 Research** | OpenAI `gpt-4o-search-preview` (web search) | Perplexity `sonar-pro` → OpenAI stored prompt → Groq → synthetic | OpenAI research call fails | Degrades through failover chain; final synthetic fallback sets `researchUnverified` flag |
 | **Rate limiting** | Upstash Redis (`@upstash/ratelimit`) | Fail-open / allow-all (general endpoints); fail-closed / deny (auth endpoints) | Redis credentials missing (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`) or Redis unreachable | General endpoints lose abuse protection; auth endpoints remain protected via fail-closed behaviour |
 | **Monitoring** | Sentry (frontend + backend DSN) | `console.error` / `console.warn` | Sentry DSN not configured or Sentry SDK init fails | Errors still surface in server logs but are not aggregated, alerted, or tracked in Sentry dashboard |
 | **Background jobs** | pg-boss (PostgreSQL-native queue) | None — enqueue failure throws `INTERNAL_SERVER_ERROR` and refunds user usage | Database unavailable when enqueueing | Letter submission fails; usage is automatically refunded; no silent degradation |
@@ -117,7 +117,7 @@ This section documents every service pair in the system: what is primary, what t
 ### Notes
 
 - **Letter generation routing:** `N8N_PRIMARY` must equal the string `"true"` AND `N8N_WEBHOOK_URL` must be set and start with `https://`. All three conditions must be true simultaneously to activate n8n. The current production environment does not set `N8N_PRIMARY`, so the local pipeline is always used.
-- **Stage 1 research fallback:** When Claude is used for research instead of Perplexity, the letter's `researchUnverified` column is set to `true` and `webGrounded` is `false`. This is surfaced to attorneys in the review UI.
+- **Stage 1 research failover:** If all providers fail, the letter's `researchUnverified` column is set to `true` and `webGrounded` is `false`. This is surfaced to attorneys in the review UI.
 - **Rate limiter fail-open vs fail-closed:** Auth endpoints (login, signup, forgot-password) use fail-closed (deny) when Redis is down, to prevent unbounded brute-force. All other endpoints use fail-open (allow) to avoid blocking normal usage during Redis outages. See `server/rateLimiter.ts` lines 133–170.
 - **pg-boss / background jobs:** There is no inline fallback for queue failures. If the database is unavailable and a job cannot be enqueued, the submission is rejected with a user-facing error and any consumed usage credit is refunded. pg-boss uses the existing Supabase PostgreSQL connection — no separate Redis dependency.
 
@@ -147,12 +147,12 @@ Because `N8N_PRIMARY` is not set, the pipeline **always** uses the direct 4-stag
 
 | Stage | Role | Primary Provider | Primary Model | Fallback Provider | Fallback Model | Timeout |
 |-------|------|-----------------|---------------|-------------------|----------------|---------|
-| Research | Stage 1 | Perplexity (OpenAI-compatible) | `sonar-pro` | Anthropic | `claude-opus-4-5` | 90s |
+| Research | Stage 1 | OpenAI | `gpt-4o-search-preview` | Perplexity / Groq / synthetic | failover chain | 90s |
 | Draft | Stage 2 | Anthropic | `claude-opus-4-5` | — | — | 120s |
 | Assembly | Stage 3 | Anthropic | `claude-opus-4-5` | — | — | 120s |
 | Vetting | Stage 4 | Anthropic | `claude-sonnet` | — | — | 120s |
 
-**Stage 1 fallback trigger:** `PERPLEXITY_API_KEY` is missing or empty → falls back to `claude-opus-4-5`. Research will **not** be web-grounded when fallback is active.
+**Stage 1 failover chain:** OpenAI gpt-4o-search-preview (primary, web-grounded) → Perplexity sonar-pro (if `PERPLEXITY_API_KEY` set) → OpenAI stored prompt → Groq Llama 3.3 70B → synthetic fallback. Research is web-grounded on the primary path; synthetic fallback sets `researchUnverified`.
 
 ---
 
@@ -236,7 +236,8 @@ Legacy pgEnum-only values (not part of the active state machine):
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `ANTHROPIC_API_KEY` | **Yes** | Stages 2, 3 + 4 (always required) |
-| `PERPLEXITY_API_KEY` | Recommended | Stage 1 research (primary); falls back to Claude if missing |
+| `OPENAI_API_KEY` | **Yes** | Stage 1 research (primary, gpt-4o-search-preview with web search) |
+| `PERPLEXITY_API_KEY` | Optional | Stage 1 research failover (sonar-pro); skipped if missing |
 | `UPSTASH_REDIS_REST_URL` | Recommended | Rate limiter (`@upstash/ratelimit`) — fail-open if absent |
 | `UPSTASH_REDIS_REST_TOKEN` | Recommended | Auth token paired with `UPSTASH_REDIS_REST_URL` for rate limiter |
 | `SUPABASE_DIRECT_URL` | Recommended | Direct PostgreSQL connection for pg-boss queue (falls back to `DATABASE_URL`) |

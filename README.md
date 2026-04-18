@@ -8,16 +8,8 @@ AI-powered legal letter drafting with mandatory attorney review.
 |----------|---------|
 | [`STRUCTURE.md`](STRUCTURE.md) | Primary architecture reference — schema, routes, status machine, pipeline |
 | [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–86+) |
-| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: Perplexity → Opus × 2 → Sonnet vetting) |
+| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: OpenAI Research → Opus × 2 → Sonnet vetting) |
 | [`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md) | Spec compliance tracking |
-| [`docs/CODE_REVIEW_VERIFIED.md`](docs/CODE_REVIEW_VERIFIED.md) | Code review issue tracker |
-| [`docs/AUDIT_REPORT_PHASE74.md`](docs/AUDIT_REPORT_PHASE74.md) | Phase 74 full platform audit |
-| [`docs/SUPABASE_MCP_CAPABILITIES.md`](docs/SUPABASE_MCP_CAPABILITIES.md) | Supabase MCP connector reference |
-| [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | Historical gap analysis — all 9 gaps completed |
-| [`docs/TTML_REMAINING_FEATURES_PROMPT.md`](docs/TTML_REMAINING_FEATURES_PROMPT.md) | Historical feature gap prompt (Phase 48) |
-| [`docs/REVALIDATION_REPORT_PHASE62.md`](docs/REVALIDATION_REPORT_PHASE62.md) | Phase 62 validation snapshot (historical) |
-| [`docs/VALIDATION_REPORT_PHASE73.md`](docs/VALIDATION_REPORT_PHASE73.md) | Phase 73 validation snapshot (historical) |
-| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Phase 0 audit (historical) |
 | [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar, keyword map |
 | [`todo.md`](todo.md) | Full feature and bug tracking (all phases) |
 
@@ -29,7 +21,7 @@ AI-powered legal letter drafting with mandatory attorney review.
 - **Auth:** Supabase Auth (JWT)
 - **Payments:** Stripe (subscriptions + per-letter checkout)
 - **Email:** Resend (transactional, 17 templates)
-- **AI Pipeline:** Perplexity `sonar-pro` (primary research; Claude fallback if key missing) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting); local 4-stage pipeline is primary, n8n is dormant alternative
+- **AI Pipeline:** OpenAI `gpt-4o-search-preview` (primary research with web search; Perplexity sonar-pro optional failover) → Anthropic Claude Opus (draft + assembly) → Anthropic Claude Sonnet (vetting); local 4-stage pipeline is primary, n8n is dormant alternative
 
 ## Development
 
@@ -106,16 +98,16 @@ Create **three Railway services** from the same GitHub repo (`moibftj/ttml-app`)
 
 > **Tip:** The `railway.toml` in this repo is pre-configured for the `ttml-app` service. For worker and migrate, override the start command in the Railway dashboard — `railway.toml` only applies to the primary service.
 
-### Legacy single-container mode
+### All-in-one mode (legacy)
 
-For simple platforms that don't support multi-service orchestration, `start.sh` runs all three roles in one container:
+For simple platforms that don't support multi-service orchestration, use `PROCESS_TYPE=all` with the `docker-entrypoint.sh` dispatcher. This runs migrations, starts the worker in the background, and then starts the web server in the foreground.
 
 ```bash
 # In Dockerfile or platform config:
-./start.sh
+PROCESS_TYPE=all ./docker-entrypoint.sh
 ```
 
-This runs migrations, starts the worker in the background, then starts the web server. It works but couples all processes — a crash in the worker kills the web server too.
+It works but couples all processes — a crash in the worker kills the web server too.
 
 ### Package scripts reference
 

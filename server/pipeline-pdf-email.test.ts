@@ -66,7 +66,7 @@ const mockRunDraftingStage = vi.fn();
 const mockRunAssemblyVettingLoop = vi.fn();
 const mockFinalizeLetterAfterVetting = vi.fn();
 const mockBuildCitationRegistry = vi.fn();
-const mockRevalidateCitationsWithPerplexity = vi.fn();
+const mockRevalidateCitationsWithOpenAI = vi.fn();
 
 vi.mock("./pipeline/research", () => ({
   runResearchStage: (...args: unknown[]) => mockRunResearchStage(...args),
@@ -83,7 +83,7 @@ vi.mock("./pipeline/vetting", () => ({
 
 vi.mock("./pipeline/citations", () => ({
   buildCitationRegistry: (...args: unknown[]) => mockBuildCitationRegistry(...args),
-  revalidateCitationsWithOpenAI: (...args: unknown[]) => mockRevalidateCitationsWithPerplexity(...args),
+  revalidateCitationsWithOpenAI: (...args: unknown[]) => mockRevalidateCitationsWithOpenAI(...args),
 }));
 
 const VALID_INTAKE = {
@@ -195,7 +195,7 @@ describe("Pipeline Orchestration", () => {
         { text: "CCP § 1005", confidence: "low", url: null },
         { text: "CCP § 1013", confidence: "medium", url: null },
       ]);
-      mockRevalidateCitationsWithPerplexity.mockResolvedValue({
+      mockRevalidateCitationsWithOpenAI.mockResolvedValue({
         registry: [
           { text: "Cal. Civ. Code § 1788.17", confidence: "high", url: "https://leginfo.ca.gov/xxx" },
           { text: "CCP § 1005", confidence: "high", url: "https://leginfo.ca.gov/yyy" },
@@ -219,7 +219,7 @@ describe("Pipeline Orchestration", () => {
 
       expect(mockRunResearchStage).toHaveBeenCalledTimes(1);
       expect(mockBuildCitationRegistry).toHaveBeenCalledWith(MOCK_RESEARCH_PACKET);
-      expect(mockRevalidateCitationsWithPerplexity).toHaveBeenCalledTimes(1);
+      expect(mockRevalidateCitationsWithOpenAI).toHaveBeenCalledTimes(1);
       expect(mockRunDraftingStage).toHaveBeenCalledTimes(1);
       expect(mockRunAssemblyVettingLoop).toHaveBeenCalledTimes(1);
       expect(mockFinalizeLetterAfterVetting).toHaveBeenCalledTimes(1);
@@ -248,7 +248,7 @@ describe("Pipeline Orchestration", () => {
         letterType: "demand",
       }, 1);
 
-      expect(mockRevalidateCitationsWithPerplexity).not.toHaveBeenCalled();
+      expect(mockRevalidateCitationsWithOpenAI).not.toHaveBeenCalled();
       expect(mockSetLetterResearchUnverified).toHaveBeenCalledWith(42, true);
     });
 
@@ -271,7 +271,7 @@ describe("Pipeline Orchestration", () => {
         letterType: "demand",
       }, 1);
 
-      expect(mockRevalidateCitationsWithPerplexity).not.toHaveBeenCalled();
+      expect(mockRevalidateCitationsWithOpenAI).not.toHaveBeenCalled();
     });
 
     it("should skip citation revalidation when fewer than 3 citations", async () => {
@@ -292,7 +292,7 @@ describe("Pipeline Orchestration", () => {
         letterType: "demand",
       }, 1);
 
-      expect(mockRevalidateCitationsWithPerplexity).not.toHaveBeenCalled();
+      expect(mockRevalidateCitationsWithOpenAI).not.toHaveBeenCalled();
     });
 
     it("should skip citation revalidation when all citations are high confidence", async () => {
@@ -315,7 +315,7 @@ describe("Pipeline Orchestration", () => {
         letterType: "demand",
       }, 1);
 
-      expect(mockRevalidateCitationsWithPerplexity).not.toHaveBeenCalled();
+      expect(mockRevalidateCitationsWithOpenAI).not.toHaveBeenCalled();
     });
 
     it("should run citation revalidation when 3+ citations with mixed confidence", async () => {
@@ -325,7 +325,7 @@ describe("Pipeline Orchestration", () => {
         { text: "Citation 2", confidence: "medium" },
         { text: "Citation 3", confidence: "low" },
       ]);
-      mockRevalidateCitationsWithPerplexity.mockResolvedValue({
+      mockRevalidateCitationsWithOpenAI.mockResolvedValue({
         registry: [
           { text: "Citation 1", confidence: "high" },
           { text: "Citation 2", confidence: "high" },
@@ -345,7 +345,7 @@ describe("Pipeline Orchestration", () => {
         letterType: "demand",
       }, 1);
 
-      expect(mockRevalidateCitationsWithPerplexity).toHaveBeenCalledTimes(1);
+      expect(mockRevalidateCitationsWithOpenAI).toHaveBeenCalledTimes(1);
     });
 
     it("should reject incomplete intake data", async () => {
@@ -389,7 +389,7 @@ describe("Pipeline Orchestration", () => {
         { text: "C2", confidence: "low" },
         { text: "C3", confidence: "medium" },
       ]);
-      mockRevalidateCitationsWithPerplexity.mockResolvedValue({
+      mockRevalidateCitationsWithOpenAI.mockResolvedValue({
         registry: [
           { text: "C1", confidence: "high" },
           { text: "C2", confidence: "high" },

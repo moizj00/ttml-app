@@ -1,8 +1,9 @@
 /**
  * migrate.ts — Run Drizzle ORM migrations against the production database.
  *
- * This script is executed by start.sh before the server starts to ensure
- * the database schema is always up-to-date on every deployment.
+ * This script is executed by `docker-entrypoint.sh` before the server starts
+ * to ensure that the database schema is always up-to-date on every deployment.
+ * It replaces the legacy `start.sh` migration call.
  *
  * KNOWN ISSUE: Drizzle's migrate() always runs `CREATE SCHEMA IF NOT EXISTS "public"`
  * which can fail on Supabase pooler connections. This script works around it by:

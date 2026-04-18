@@ -28,7 +28,12 @@ case "$PROCESS_TYPE" in
     ;;
   all)
     echo "[entrypoint] Starting all (legacy single-container mode)..."
-    exec ./start.sh
+    echo "[entrypoint] Running database migrations..."
+    node --dns-result-order=ipv4first dist/migrate.js
+    echo "[entrypoint] Starting pipeline worker (background)..."
+    node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js &
+    echo "[entrypoint] Starting Express server..."
+    exec node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js
     ;;
   *)
     echo "[entrypoint] Unknown PROCESS_TYPE: $PROCESS_TYPE"

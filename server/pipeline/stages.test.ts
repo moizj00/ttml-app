@@ -144,7 +144,7 @@ vi.mock("./vetting", () => ({
 const {
   buildCitationRegistry,
   buildCitationRegistryPromptBlock,
-  revalidateCitationsWithPerplexity,
+  revalidateCitationsWithOpenAI,
   extractCitationsFromText,
   normalizeCitation,
   runCitationAudit,

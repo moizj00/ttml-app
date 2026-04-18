@@ -21,7 +21,7 @@
 | Backend | Node.js, Express 4.21, tRPC 11.6, TypeScript |
 | Database | PostgreSQL on Supabase, Drizzle ORM 0.44 |
 | Auth | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security |
-| AI — Research | Perplexity `sonar-pro` (fallback: Claude Opus if key missing) |
+| AI — Research | OpenAI `gpt-4o-search-preview` (web search); Perplexity `sonar-pro` optional failover |
 | AI — Drafting/Assembly | Anthropic Claude Opus |
 | AI — Vetting | Anthropic Claude Sonnet |
 | AI — Doc Analysis | OpenAI GPT-4o |
@@ -155,7 +155,7 @@ pipeline_failed → submitted (admin retry)
 | `letter_versions` | Immutable history of drafts and edits (ai_draft, attorney_edit, final_approved) |
 | `review_actions` | Audit trail for status changes and review notes |
 | `workflow_jobs` | Pipeline stage execution logs (tokens, errors) |
-| `research_runs` | Perplexity research results per letter |
+| `research_runs` | AI research results per letter |
 | `subscriptions` | Stripe billing state (plan, letters_allowed, letters_used) |
 | `pipeline_lessons` | Recursive learning: attorney feedback → future AI prompt improvements |
 | `document_analyses` | Results from the free AI document analyzer |
@@ -191,13 +191,13 @@ Defined in `server/pipeline/orchestrator.ts`.
 
 | Stage | Model | Purpose | Output |
 |-------|-------|---------|--------|
-| 1 — Research | Perplexity `sonar-pro` | Web-grounded legal research | `ResearchPacket` |
+| 1 — Research | OpenAI `gpt-4o-search-preview` | Web-grounded legal research (with `webSearchPreview` tool) | `ResearchPacket` |
 | 2 — Drafting | Claude Opus | Initial letter draft from research + intake | `DraftOutput` |
 | 3 — Assembly | Claude Opus | Polish into formal legal letter format | Assembled letter text |
 | 4 — Vetting | Claude Sonnet | Anti-hallucination, citation check, bloat removal | Vetted letter text |
 
 - **RAG/Recursive Learning:** Attorney-approved letters are embedded (OpenAI `text-embedding-3-small`) and used as reference examples in Stage 2 drafting.
-- **Fallback:** If `PERPLEXITY_API_KEY` is missing, Stage 1 falls back to Claude Opus (non-web-grounded).
+- **Research failover chain:** OpenAI gpt-4o-search-preview → Perplexity sonar-pro (if key set) → OpenAI stored prompt → Groq Llama 3.3 70B → synthetic fallback.
 - **n8n:** Dormant alternative path, only active when `N8N_PRIMARY=true` is set.
 
 For deep pipeline details, see `docs/PIPELINE_ARCHITECTURE.md`.
@@ -231,14 +231,4 @@ Each piece of information lives in **exactly one place**. This table maps every 
 | SEO content strategy, blog calendar, keyword map | `CONTENT-STRATEGY.md` | Marketing/content |
 | Complete task and bug tracking (all phases) | `todo.md` | Historical task log |
 | Workflow summary (letter lifecycle, end-to-end) | `docs/workflow_summary.md` | Business logic walkthrough |
-| QA role matrix and test credentials | `docs/QA_ROLE_MATRIX.md` | Testing reference |
-| Paywall email architecture | `docs/paywall_email_architecture.md` | Email notification design |
-| Implementation guide (timed email + paywall) | `docs/implementation_guide.md` | Feature implementation spec |
-| Supabase MCP capabilities | `docs/SUPABASE_MCP_CAPABILITIES.md` | Infrastructure reference |
-| Intelligence roadmap (competitive analysis, future features) | `docs/INTELLIGENCE_ROADMAP.md` | Product strategy |
-| Pricing constants | `shared/pricing.ts` | Code (single source of truth) |
-| Status transitions | `shared/types/letter.ts` | Code (single source of truth) |
-
-### Archived (point-in-time reports, no longer actively maintained)
-
-All historical audit reports, validation snapshots, and one-time analyses live in `docs/archive/`. These are preserved for reference but are **not** sources of truth.
+| Feature inventory (all phases) | `docs/FEATURE_MAP.md` | What's been built |

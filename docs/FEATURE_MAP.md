@@ -12,7 +12,7 @@
 
 ## 1. Platform Overview
 
-Talk-to-My-Lawyer is an AI-powered legal letter platform with mandatory attorney review. It features a four-stage AI pipeline (Perplexity → Claude Drafting → Claude Assembly → Claude Sonnet Vetting). The platform enforces a strict paywall: subscribers see a blurred draft preview and must pay $200 for attorney review before any letter is finalized.
+Talk-to-My-Lawyer is an AI-powered legal letter platform with mandatory attorney review. It features a four-stage AI pipeline (OpenAI Research → Claude Drafting → Claude Assembly → Claude Sonnet Vetting). The platform enforces a strict paywall: subscribers see a blurred draft preview and must pay $200 for attorney review before any letter is finalized.
 
 ---
 
@@ -67,7 +67,7 @@ A new **Subscriber Letter Preview Modal** was added to the `client_approval_pend
 ## 5. Letter Pipeline & Resilience
 
 ### 5.1 Pipeline Stages
-1. **Research** (Perplexity `sonar-pro`)
+1. **Research** (OpenAI `gpt-4o-search-preview` with web search)
 2. **Drafting** (Claude `claude-opus-4-5`)
 3. **Assembly** (Claude `claude-opus-4-5`)
 4. **Vetting** (Claude `claude-sonnet`)
