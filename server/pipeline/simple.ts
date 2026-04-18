@@ -131,7 +131,7 @@ export async function runSimplePipeline(
       createdByType: "system",
       createdByUserId: userId,
       metadataJson: {
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-sonnet-4-20250514",
         provider: "anthropic",
         mode: "simple",
         promptTokens: message.usage?.input_tokens,

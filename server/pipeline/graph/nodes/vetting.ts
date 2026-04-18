@@ -35,7 +35,7 @@ export async function vettingNode(
 
   const llm = new ChatAnthropic({
     apiKey,
-    model: "claude-3-5-sonnet-20241022",
+    model: "claude-sonnet-4-20250514",
     maxTokens: 2000,
   });
 
