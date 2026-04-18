@@ -21,6 +21,7 @@ import type { Job } from "pg-boss";
 // the shipped type declarations are incomplete for the admin-dashboard
 // surface (getQueueStats / findJobs / localConcurrency etc.).
 import PgBossPkg from "pg-boss";
+// @ts-ignore
 interface PgBossQueueStats {
   queuedCount?: number;
   deferredCount?: number;
