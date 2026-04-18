@@ -277,10 +277,13 @@ export default function AppLayout({
   useEffect(() => {
     if (!notifications || !user) return;
     const roleNotif = notifications.find(
-      n => n.type === "role_updated" && !seenRoleUpdateRef.current.has(n.id)
+      n => n.type === "role_updated" && !n.readAt && !seenRoleUpdateRef.current.has(n.id)
     );
     if (!roleNotif) return;
     seenRoleUpdateRef.current.add(roleNotif.id);
+    // Mark the notification as read immediately so it won't re-trigger
+    // after navigating (AppLayout remounts on each page, resetting the ref).
+    markRead.mutate({ id: roleNotif.id });
     // Invalidate auth.me — the server cache was already cleared by
     // invalidateUserCache() in the updateRole mutation, so this fetch
     // will always get the fresh role from the DB.
@@ -293,7 +296,7 @@ export default function AppLayout({
         navigate(dest);
       }
     });
-  }, [notifications, user, utils, navigate]);
+  }, [notifications, user, utils, navigate, markRead]);
 
   if (!isAuthenticated || !user) {
     return (
