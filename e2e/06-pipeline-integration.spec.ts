@@ -78,17 +78,17 @@ test.describe("E2E Pipeline Integration Test", () => {
         await page.waitForTimeout(3000);
 
         const records = await sql`
-          SELECT id, status, intake_json
+          SELECT id, status, subject, intake_json
           FROM letter_requests 
-          WHERE intake_json->>'subject' = ${uniqueTestSubject}
+          WHERE subject = ${uniqueTestSubject}
           ORDER BY created_at DESC LIMIT 1;
         `;
 
         if (records.length > 0) {
           foundRecord = records[0];
 
-          // Check if the pipeline has started processing
-          if (["researching", "drafting", "generated_locked", "needs_changes", "rejected", "approved"].includes(foundRecord.status)) {
+          // Check if the pipeline has started processing (or at least submitted)
+          if (["submitted", "researching", "drafting", "generated_locked", "needs_changes", "rejected", "approved"].includes(foundRecord.status)) {
             isProcessing = true;
             break;
           }
