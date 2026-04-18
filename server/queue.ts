@@ -73,7 +73,10 @@ interface PgBossClient {
 }
 
 const PgBoss: { new (options: PgBossConstructorOptions): PgBossClient } =
-  ((PgBossPkg as any)?.default ?? PgBossPkg) as { new (options: PgBossConstructorOptions): PgBossClient };
+  // pg-boss v10+ exports a named class: { PgBoss, ... }. Older CJS builds used default.
+  ((PgBossPkg as any)?.PgBoss ?? (PgBossPkg as any)?.default ?? PgBossPkg) as {
+    new (options: PgBossConstructorOptions): PgBossClient;
+  };
 import { logger } from "./logger";
 
 // Force Node.js to prefer IPv4 addresses globally — Railway resolves
