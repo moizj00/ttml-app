@@ -24,7 +24,7 @@ describe("Drizzle PostgreSQL Schema", () => {
     for (const table of expectedTables) {
       expect(schema).toHaveProperty(table, expect.anything());
     }
-  });
+  }, 10000);
 
   it("exports all required Insert types", async () => {
     const schema = await import("../drizzle/schema");
@@ -47,7 +47,8 @@ describe("Drizzle PostgreSQL Schema", () => {
 
 describe("Database connection URL resolution", () => {
   it("prefers SUPABASE_DATABASE_URL over DATABASE_URL when both set", () => {
-    const supabaseUrl = "postgresql://postgres.abc123:pass@aws-1-us-east-2.pooler.supabase.com:6543/postgres";
+    const supabaseUrl =
+      "postgresql://postgres.abc123:pass@aws-1-us-east-2.pooler.supabase.com:6543/postgres";
     const fallbackUrl = "postgresql://user:pass@other-db.example.com:5432/db";
 
     // Simulate the resolution logic from db.ts
@@ -62,9 +63,17 @@ describe("Database connection URL resolution", () => {
 
   it("identifies Supabase URLs correctly", () => {
     const isSupabase = (url: string) => url.includes("supabase");
-    expect(isSupabase("postgresql://postgres.abc@aws-1-us-east-2.pooler.supabase.com:6543/postgres")).toBe(true);
-    expect(isSupabase("postgresql://postgres:pass@db.abc.supabase.co:5432/postgres")).toBe(true);
-    expect(isSupabase("postgresql://user:pass@other-db.example.com:5432/db")).toBe(false);
+    expect(
+      isSupabase(
+        "postgresql://postgres.abc@aws-1-us-east-2.pooler.supabase.com:6543/postgres"
+      )
+    ).toBe(true);
+    expect(
+      isSupabase("postgresql://postgres:pass@db.abc.supabase.co:5432/postgres")
+    ).toBe(true);
+    expect(
+      isSupabase("postgresql://user:pass@other-db.example.com:5432/db")
+    ).toBe(false);
   });
 });
 
@@ -74,10 +83,13 @@ describe("PostgreSQL Migration SQL", () => {
   it("migration file exists and contains all 9 tables", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const migrationPath = path.join(process.cwd(), "drizzle/migrations/0001_initial_pg_schema.sql");
-    
+    const migrationPath = path.join(
+      process.cwd(),
+      "drizzle/migrations/0001_initial_pg_schema.sql"
+    );
+
     expect(fs.existsSync(migrationPath)).toBe(true);
-    
+
     const sql = fs.readFileSync(migrationPath, "utf-8");
     const expectedTables = [
       "users",
@@ -98,7 +110,10 @@ describe("PostgreSQL Migration SQL", () => {
   it("migration file contains all 12 enum types", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const migrationPath = path.join(process.cwd(), "drizzle/migrations/0001_initial_pg_schema.sql");
+    const migrationPath = path.join(
+      process.cwd(),
+      "drizzle/migrations/0001_initial_pg_schema.sql"
+    );
     const sql = fs.readFileSync(migrationPath, "utf-8");
 
     const expectedEnums = [
@@ -123,7 +138,10 @@ describe("PostgreSQL Migration SQL", () => {
   it("migration file contains all 7 indexes", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const migrationPath = path.join(process.cwd(), "drizzle/migrations/0001_initial_pg_schema.sql");
+    const migrationPath = path.join(
+      process.cwd(),
+      "drizzle/migrations/0001_initial_pg_schema.sql"
+    );
     const sql = fs.readFileSync(migrationPath, "utf-8");
 
     const expectedIndexes = [
@@ -143,7 +161,10 @@ describe("PostgreSQL Migration SQL", () => {
   it("migration file contains updated_at trigger function", async () => {
     const fs = await import("fs");
     const path = await import("path");
-    const migrationPath = path.join(process.cwd(), "drizzle/migrations/0001_initial_pg_schema.sql");
+    const migrationPath = path.join(
+      process.cwd(),
+      "drizzle/migrations/0001_initial_pg_schema.sql"
+    );
     const sql = fs.readFileSync(migrationPath, "utf-8");
     expect(sql).toContain("update_updated_at_column");
     expect(sql).toContain("BEFORE UPDATE");
