@@ -158,7 +158,9 @@ vi.mock("./storage", () => ({
   storagePut: vi
     .fn()
     .mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
-  storageGet: vi.fn().mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
+  storageGet: vi
+    .fn()
+    .mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
   getSignedUrl: vi
     .fn()
     .mockResolvedValue("https://r2.example.com/signed-url.pdf"),
