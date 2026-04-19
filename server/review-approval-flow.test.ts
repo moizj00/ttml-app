@@ -137,6 +137,15 @@ vi.mock("./email", () => ({
   sendClientRevisionRequestEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Add pipeline module mocks to prevent async execution issues
+vi.mock("./pipeline/trainingCapture", () => ({
+  captureTrainingSample: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./pipeline/embeddings", () => ({
+  generateAndStoreEmbedding: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("./pdfGenerator", () => ({
   generateAndUploadApprovedPdf: vi.fn().mockResolvedValue({
     pdfUrl: "https://r2.example.com/approved-letters/42-test.pdf",
