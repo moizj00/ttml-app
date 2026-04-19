@@ -149,6 +149,9 @@ vi.mock("./storage", () => ({
     .fn()
     .mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
   storageGet: vi.fn(),
+  getSignedUrl: vi
+    .fn()
+    .mockResolvedValue("https://r2.example.com/signed-url.pdf"),
 }));
 
 vi.mock("./supabaseAuth", () => ({
