@@ -144,6 +144,7 @@ vi.mock("./pipeline/trainingCapture", () => ({
 
 vi.mock("./pipeline/embeddings", () => ({
   generateAndStoreEmbedding: vi.fn().mockResolvedValue(undefined),
+  embedAndStoreLetterVersion: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./pdfGenerator", () => ({
@@ -157,7 +158,7 @@ vi.mock("./storage", () => ({
   storagePut: vi
     .fn()
     .mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
-  storageGet: vi.fn(),
+  storageGet: vi.fn().mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
   getSignedUrl: vi
     .fn()
     .mockResolvedValue("https://r2.example.com/signed-url.pdf"),
