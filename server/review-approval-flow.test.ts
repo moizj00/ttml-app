@@ -28,28 +28,38 @@ const mockGetWorkflowJobsByLetterId = vi.fn();
 const mockGetResearchRunsByLetterId = vi.fn();
 const mockGetAttachmentsByLetterId = vi.fn();
 const mockGetAllLetterRequests = vi.fn();
-const mockUpdateLetterPdfUrl = vi.fn();
+const mockUpdateLetterStoragePath = vi.fn();
 const mockDecrementLettersUsed = vi.fn();
 const mockEnqueueRetryFromStageJob = vi.fn();
 
 vi.mock("./db", () => ({
-  getLetterRequestById: (...args: unknown[]) => mockGetLetterRequestById(...args),
-  claimLetterForReview: (...args: unknown[]) => mockClaimLetterForReview(...args),
+  getLetterRequestById: (...args: unknown[]) =>
+    mockGetLetterRequestById(...args),
+  claimLetterForReview: (...args: unknown[]) =>
+    mockClaimLetterForReview(...args),
   logReviewAction: (...args: unknown[]) => mockLogReviewAction(...args),
   updateLetterStatus: (...args: unknown[]) => mockUpdateLetterStatus(...args),
   createLetterVersion: (...args: unknown[]) => mockCreateLetterVersion(...args),
-  updateLetterVersionPointers: (...args: unknown[]) => mockUpdateLetterVersionPointers(...args),
+  updateLetterVersionPointers: (...args: unknown[]) =>
+    mockUpdateLetterVersionPointers(...args),
   getUserById: (...args: unknown[]) => mockGetUserById(...args),
   createNotification: (...args: unknown[]) => mockCreateNotification(...args),
   notifyAdmins: (...args: unknown[]) => mockNotifyAdmins(...args),
-  getAllLetterRequests: (...args: unknown[]) => mockGetAllLetterRequests(...args),
-  getLetterVersionsByRequestId: (...args: unknown[]) => mockGetLetterVersionsByRequestId(...args),
+  getAllLetterRequests: (...args: unknown[]) =>
+    mockGetAllLetterRequests(...args),
+  getLetterVersionsByRequestId: (...args: unknown[]) =>
+    mockGetLetterVersionsByRequestId(...args),
   getReviewActions: (...args: unknown[]) => mockGetReviewActions(...args),
-  getWorkflowJobsByLetterId: (...args: unknown[]) => mockGetWorkflowJobsByLetterId(...args),
-  getResearchRunsByLetterId: (...args: unknown[]) => mockGetResearchRunsByLetterId(...args),
-  getAttachmentsByLetterId: (...args: unknown[]) => mockGetAttachmentsByLetterId(...args),
-  updateLetterPdfUrl: (...args: unknown[]) => mockUpdateLetterPdfUrl(...args),
-  decrementLettersUsed: (...args: unknown[]) => mockDecrementLettersUsed(...args),
+  getWorkflowJobsByLetterId: (...args: unknown[]) =>
+    mockGetWorkflowJobsByLetterId(...args),
+  getResearchRunsByLetterId: (...args: unknown[]) =>
+    mockGetResearchRunsByLetterId(...args),
+  getAttachmentsByLetterId: (...args: unknown[]) =>
+    mockGetAttachmentsByLetterId(...args),
+  updateLetterStoragePath: (...args: unknown[]) =>
+    mockUpdateLetterStoragePath(...args),
+  decrementLettersUsed: (...args: unknown[]) =>
+    mockDecrementLettersUsed(...args),
   createLetterRequest: vi.fn(),
   createAttachment: vi.fn(),
   getAllUsers: vi.fn().mockResolvedValue([]),
@@ -128,11 +138,16 @@ vi.mock("./email", () => ({
 }));
 
 vi.mock("./pdfGenerator", () => ({
-  generateAndUploadApprovedPdf: vi.fn().mockResolvedValue({ pdfUrl: "https://r2.example.com/approved-letters/42-test.pdf", pdfKey: "approved-letters/42-test.pdf" }),
+  generateAndUploadApprovedPdf: vi.fn().mockResolvedValue({
+    pdfUrl: "https://r2.example.com/approved-letters/42-test.pdf",
+    pdfKey: "approved-letters/42-test.pdf",
+  }),
 }));
 
 vi.mock("./storage", () => ({
-  storagePut: vi.fn().mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
+  storagePut: vi
+    .fn()
+    .mockResolvedValue({ url: "https://r2.example.com/test.pdf" }),
 }));
 
 vi.mock("./supabaseAuth", () => ({
@@ -153,7 +168,8 @@ vi.mock("./stripe", () => ({
 
 vi.mock("./queue", () => ({
   enqueuePipelineJob: vi.fn(),
-  enqueueRetryFromStageJob: (...args: unknown[]) => mockEnqueueRetryFromStageJob(...args),
+  enqueueRetryFromStageJob: (...args: unknown[]) =>
+    mockEnqueueRetryFromStageJob(...args),
   getPipelineQueue: vi.fn().mockReturnValue({
     getJobs: vi.fn().mockResolvedValue([]),
     getJobCounts: vi.fn().mockResolvedValue({}),
@@ -184,7 +200,10 @@ vi.mock("./rateLimiter", () => ({
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }));
 
-function createMockCtx(role: "attorney" | "admin" | "subscriber", userId = 1): TrpcContext {
+function createMockCtx(
+  role: "attorney" | "admin" | "subscriber",
+  userId = 1
+): TrpcContext {
   return {
     user: {
       id: userId,
@@ -203,7 +222,10 @@ function createMockCtx(role: "attorney" | "admin" | "subscriber", userId = 1): T
       employeeId: null,
       attorneyId: role === "attorney" ? `ATT-0001` : null,
     },
-    req: { protocol: "https", headers: { host: "www.talk-to-my-lawyer.com" } } as TrpcContext["req"],
+    req: {
+      protocol: "https",
+      headers: { host: "www.talk-to-my-lawyer.com" },
+    } as TrpcContext["req"],
     res: {
       clearCookie: vi.fn(),
     } as unknown as TrpcContext["res"],
@@ -227,7 +249,11 @@ function createMockLetter(overrides: Record<string, unknown> = {}) {
       sender: { name: "John Doe", address: "123 Main St, LA, CA" },
       recipient: { name: "Jane Smith", address: "456 Oak Ave, LA, CA" },
       jurisdiction: { country: "US", state: "CA" },
-      matter: { category: "debt", subject: "Demand for Payment", description: "Unpaid invoice" },
+      matter: {
+        category: "debt",
+        subject: "Demand for Payment",
+        description: "Unpaid invoice",
+      },
       desiredOutcome: "Full payment",
     },
     ...overrides,
@@ -246,7 +272,7 @@ describe("Review & Approval Flow", () => {
     mockLogReviewAction.mockResolvedValue(undefined);
     mockCreateNotification.mockResolvedValue(undefined);
     mockNotifyAdmins.mockResolvedValue(undefined);
-    mockUpdateLetterPdfUrl.mockResolvedValue(undefined);
+    mockUpdateLetterStoragePath.mockResolvedValue(undefined);
   });
 
   describe("Claim letter for review", () => {
@@ -257,7 +283,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "pending_review", assignedReviewerId: null });
+      const letter = createMockLetter({
+        status: "pending_review",
+        assignedReviewerId: null,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockClaimLetterForReview.mockResolvedValue(undefined);
 
@@ -379,13 +408,20 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       const result = await caller.review.unclaim({ letterId: 42 });
       expect(result).toEqual({ success: true });
-      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "pending_review", { assignedReviewerId: null });
+      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(
+        42,
+        "pending_review",
+        { assignedReviewerId: null }
+      );
       expect(mockLogReviewAction).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "released_back_to_queue",
@@ -402,7 +438,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(caller.review.unclaim({ letterId: 42 })).rejects.toThrow(
@@ -417,7 +456,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("admin", 1);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
@@ -432,7 +474,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "pending_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "pending_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(caller.review.unclaim({ letterId: 42 })).rejects.toThrow(
@@ -449,7 +494,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockCreateLetterVersion.mockResolvedValue({ insertId: 100 });
       mockUpdateLetterVersionPointers.mockResolvedValue(undefined);
@@ -457,7 +505,8 @@ describe("Review & Approval Flow", () => {
 
       const result = await caller.review.approve({
         letterId: 42,
-        finalContent: "This is the final approved content of the legal letter. It must be at least 50 characters long for validation.",
+        finalContent:
+          "This is the final approved content of the legal letter. It must be at least 50 characters long for validation.",
       });
 
       expect(result.success).toBe(true);
@@ -489,9 +538,12 @@ describe("Review & Approval Flow", () => {
       await expect(
         caller.review.approve({
           letterId: 42,
-          finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+          finalContent:
+            "This is the final approved content of the legal letter with enough characters to pass validation.",
         })
-      ).rejects.toThrow("You must acknowledge that research citations are unverified");
+      ).rejects.toThrow(
+        "You must acknowledge that research citations are unverified"
+      );
     });
 
     it("should allow approval of unverified research when acknowledged", async () => {
@@ -513,7 +565,8 @@ describe("Review & Approval Flow", () => {
 
       const result = await caller.review.approve({
         letterId: 42,
-        finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+        finalContent:
+          "This is the final approved content of the legal letter with enough characters to pass validation.",
         acknowledgedUnverifiedResearch: true,
       });
 
@@ -527,13 +580,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(
         caller.review.approve({
           letterId: 42,
-          finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+          finalContent:
+            "This is the final approved content of the legal letter with enough characters to pass validation.",
         })
       ).rejects.toThrow("You are not assigned to this letter");
     });
@@ -545,13 +602,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "pending_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "pending_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(
         caller.review.approve({
           letterId: 42,
-          finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+          finalContent:
+            "This is the final approved content of the legal letter with enough characters to pass validation.",
         })
       ).rejects.toThrow("Letter must be under_review to approve");
     });
@@ -563,7 +624,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("admin", 1);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockCreateLetterVersion.mockResolvedValue({ insertId: 102 });
       mockUpdateLetterVersionPointers.mockResolvedValue(undefined);
@@ -571,7 +635,8 @@ describe("Review & Approval Flow", () => {
 
       const result = await caller.review.approve({
         letterId: 42,
-        finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+        finalContent:
+          "This is the final approved content of the legal letter with enough characters to pass validation.",
       });
 
       expect(result.success).toBe(true);
@@ -584,7 +649,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockCreateLetterVersion.mockResolvedValue({ insertId: 103 });
       mockUpdateLetterVersionPointers.mockResolvedValue(undefined);
@@ -592,21 +660,33 @@ describe("Review & Approval Flow", () => {
 
       await caller.review.approve({
         letterId: 42,
-        finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+        finalContent:
+          "This is the final approved content of the legal letter with enough characters to pass validation.",
         internalNote: "Good letter, minor edits made",
-        userVisibleNote: "Your letter has been reviewed and approved with minor adjustments.",
+        userVisibleNote:
+          "Your letter has been reviewed and approved with minor adjustments.",
       });
 
       const logCalls = mockLogReviewAction.mock.calls;
       expect(logCalls.length).toBeGreaterThanOrEqual(2);
 
-      const approvedLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "approved");
+      const approvedLog = logCalls.find(
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "approved"
+      );
       expect(approvedLog).toBeTruthy();
-      expect((approvedLog![0] as Record<string, unknown>).noteVisibility).toBe("internal");
+      expect((approvedLog![0] as Record<string, unknown>).noteVisibility).toBe(
+        "internal"
+      );
 
-      const userNoteLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "attorney_note");
+      const userNoteLog = logCalls.find(
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "attorney_note"
+      );
       expect(userNoteLog).toBeTruthy();
-      expect((userNoteLog![0] as Record<string, unknown>).noteVisibility).toBe("user_visible");
+      expect((userNoteLog![0] as Record<string, unknown>).noteVisibility).toBe(
+        "user_visible"
+      );
     });
 
     it("should reject finalContent shorter than 50 characters", async () => {
@@ -631,7 +711,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockCreateLetterVersion.mockResolvedValue({ insertId: 104 });
       mockUpdateLetterVersionPointers.mockResolvedValue(undefined);
@@ -639,7 +722,8 @@ describe("Review & Approval Flow", () => {
 
       const result = await caller.review.approve({
         letterId: 42,
-        finalContent: "This is the final approved content of the legal letter with enough characters to pass validation.",
+        finalContent:
+          "This is the final approved content of the legal letter with enough characters to pass validation.",
       });
 
       expect(result.success).toBe(true);
@@ -655,23 +739,34 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       const result = await caller.review.reject({
         letterId: 42,
-        reason: "This letter contains factual errors and cannot proceed as drafted.",
+        reason:
+          "This letter contains factual errors and cannot proceed as drafted.",
       });
 
       expect(result).toEqual({ success: true });
       expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "rejected");
 
       const logCalls = mockLogReviewAction.mock.calls;
-      const rejectedLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "rejected");
+      const rejectedLog = logCalls.find(
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "rejected"
+      );
       expect(rejectedLog).toBeTruthy();
-      expect((rejectedLog![0] as Record<string, unknown>).fromStatus).toBe("under_review");
-      expect((rejectedLog![0] as Record<string, unknown>).toStatus).toBe("rejected");
+      expect((rejectedLog![0] as Record<string, unknown>).fromStatus).toBe(
+        "under_review"
+      );
+      expect((rejectedLog![0] as Record<string, unknown>).toStatus).toBe(
+        "rejected"
+      );
     });
 
     it("should require rejection reason of at least 10 characters", async () => {
@@ -696,7 +791,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(
@@ -714,24 +812,32 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       await caller.review.reject({
         letterId: 42,
         reason: "Internal: multiple citation errors and jurisdiction mismatch",
-        userVisibleReason: "We were unable to proceed with this letter due to jurisdiction limitations.",
+        userVisibleReason:
+          "We were unable to proceed with this letter due to jurisdiction limitations.",
       });
 
       const logCalls = mockLogReviewAction.mock.calls;
       const internalLog = logCalls.find(
-        (c: unknown[]) => (c[0] as Record<string, unknown>).action === "rejected" && (c[0] as Record<string, unknown>).noteVisibility === "internal"
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "rejected" &&
+          (c[0] as Record<string, unknown>).noteVisibility === "internal"
       );
       expect(internalLog).toBeTruthy();
 
       const visibleLog = logCalls.find(
-        (c: unknown[]) => (c[0] as Record<string, unknown>).action === "rejection_notice" && (c[0] as Record<string, unknown>).noteVisibility === "user_visible"
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "rejection_notice" &&
+          (c[0] as Record<string, unknown>).noteVisibility === "user_visible"
       );
       expect(visibleLog).toBeTruthy();
     });
@@ -745,17 +851,23 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       const result = await caller.review.requestChanges({
         letterId: 42,
-        userVisibleNote: "The tone needs to be more formal. Please also add the specific contract clause numbers.",
+        userVisibleNote:
+          "The tone needs to be more formal. Please also add the specific contract clause numbers.",
       });
 
       expect(result).toEqual({ success: true });
-      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "needs_changes", { assignedReviewerId: null });
+      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "needs_changes", {
+        assignedReviewerId: null,
+      });
     });
 
     it("should store pipeline retrigger preference when requested", async () => {
@@ -765,20 +877,28 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       await caller.review.requestChanges({
         letterId: 42,
-        userVisibleNote: "Please regenerate the draft with a more aggressive tone and updated citations.",
+        userVisibleNote:
+          "Please regenerate the draft with a more aggressive tone and updated citations.",
         retriggerPipeline: true,
       });
 
       const logCalls = mockLogReviewAction.mock.calls;
-      const internalLog = logCalls.find((c: unknown[]) => (c[0] as Record<string, unknown>).action === "requested_changes");
+      const internalLog = logCalls.find(
+        (c: unknown[]) =>
+          (c[0] as Record<string, unknown>).action === "requested_changes"
+      );
       expect(internalLog).toBeTruthy();
-      const noteText = (internalLog![0] as Record<string, unknown>).noteText as string;
+      const noteText = (internalLog![0] as Record<string, unknown>)
+        .noteText as string;
       const parsed = JSON.parse(noteText);
       expect(parsed.retriggerPipeline).toBe(true);
     });
@@ -790,13 +910,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockUpdateLetterStatus.mockResolvedValue(undefined);
 
       await caller.review.requestChanges({
         letterId: 42,
-        userVisibleNote: "Minor formatting issues that can be fixed without regeneration of the letter.",
+        userVisibleNote:
+          "Minor formatting issues that can be fixed without regeneration of the letter.",
       });
 
       expect(mockEnqueueRetryFromStageJob).not.toHaveBeenCalled();
@@ -826,13 +950,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockCreateLetterVersion.mockResolvedValue({ insertId: 200 });
 
       const result = await caller.review.saveEdit({
         letterId: 42,
-        content: "This is the edited content of the legal letter. It replaces the AI-generated draft with attorney revisions.",
+        content:
+          "This is the edited content of the legal letter. It replaces the AI-generated draft with attorney revisions.",
         note: "Fixed citation format",
       });
 
@@ -858,13 +986,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(
         caller.review.saveEdit({
           letterId: 42,
-          content: "This is the edited content of the legal letter with enough characters to pass validation.",
+          content:
+            "This is the edited content of the legal letter with enough characters to pass validation.",
         })
       ).rejects.toThrow("You are not assigned to this letter");
     });
@@ -876,13 +1008,17 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "approved", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "approved",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(
         caller.review.saveEdit({
           letterId: 42,
-          content: "This is the edited content of the legal letter with enough characters to pass validation.",
+          content:
+            "This is the edited content of the legal letter with enough characters to pass validation.",
         })
       ).rejects.toThrow("Letter must be under_review to edit");
     });
@@ -896,7 +1032,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 5);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockGetLetterVersionsByRequestId.mockResolvedValue([]);
       mockGetReviewActions.mockResolvedValue([]);
@@ -917,7 +1056,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "pending_review", assignedReviewerId: null });
+      const letter = createMockLetter({
+        status: "pending_review",
+        assignedReviewerId: null,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockGetLetterVersionsByRequestId.mockResolvedValue([]);
       mockGetReviewActions.mockResolvedValue([]);
@@ -936,7 +1078,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("attorney", 99);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
 
       await expect(caller.review.letterDetail({ id: 42 })).rejects.toThrow(
@@ -951,7 +1096,10 @@ describe("Review & Approval Flow", () => {
       const ctx = createMockCtx("admin", 1);
       const caller = appRouter.createCaller(ctx);
 
-      const letter = createMockLetter({ status: "under_review", assignedReviewerId: 5 });
+      const letter = createMockLetter({
+        status: "under_review",
+        assignedReviewerId: 5,
+      });
       mockGetLetterRequestById.mockResolvedValue(letter);
       mockGetLetterVersionsByRequestId.mockResolvedValue([]);
       mockGetReviewActions.mockResolvedValue([]);
@@ -974,7 +1122,11 @@ describe("Review & Approval Flow", () => {
 
       mockGetAllLetterRequests.mockResolvedValue([
         createMockLetter({ status: "pending_review" }),
-        createMockLetter({ id: 43, status: "under_review", assignedReviewerId: 5 }),
+        createMockLetter({
+          id: 43,
+          status: "under_review",
+          assignedReviewerId: 5,
+        }),
       ]);
 
       const result = await caller.review.queue();
@@ -989,12 +1141,18 @@ describe("Review & Approval Flow", () => {
       const caller = appRouter.createCaller(ctx);
 
       mockGetAllLetterRequests.mockResolvedValue([
-        createMockLetter({ id: 43, status: "under_review", assignedReviewerId: 5 }),
+        createMockLetter({
+          id: 43,
+          status: "under_review",
+          assignedReviewerId: 5,
+        }),
       ]);
 
       await caller.review.queue({ myAssigned: true });
 
-      expect(mockGetAllLetterRequests).toHaveBeenCalledWith({ assignedReviewerId: 5 });
+      expect(mockGetAllLetterRequests).toHaveBeenCalledWith({
+        assignedReviewerId: 5,
+      });
     });
   });
 });
