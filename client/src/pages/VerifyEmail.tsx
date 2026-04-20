@@ -22,7 +22,7 @@ export default function VerifyEmail() {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
   const [redirectPath, setRedirectPath] = useState("/dashboard");
-  const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [redirectCountdown, setRedirectCountdown] = useState(2);
 
   useEffect(() => {
     if (state !== "success-redirect") return;
