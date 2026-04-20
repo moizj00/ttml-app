@@ -2,7 +2,10 @@ import { getActiveLessons, incrementLessonInjectionStats } from "../db";
 import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
-import { isOpenAIFailoverAvailable, isGroqFallbackAvailable } from "./providers";
+import {
+  isOpenAIFailoverAvailable,
+  isGroqFallbackAvailable,
+} from "./providers";
 import { logger } from "../logger";
 
 // ═══════════════════════════════════════════════════════
@@ -81,7 +84,10 @@ export function sanitizeObjectForPrompt<T extends Record<string, unknown>>(
 
   for (const [key, value] of Object.entries(sanitized)) {
     if (typeof value === "string") {
-      const result = sanitizeForPrompt(value, prefix ? `${prefix}.${key}` : key);
+      const result = sanitizeForPrompt(
+        value,
+        prefix ? `${prefix}.${key}` : key
+      );
       (sanitized as any)[key] = result.sanitized;
       if (result.hadInjection) hadInjection = true;
     }
@@ -94,7 +100,7 @@ export function formatStructuredError(
   code: PipelineErrorCode,
   message: string,
   stage: string,
-  details?: string,
+  details?: string
 ): string {
   return JSON.stringify(createPipelineError(code, message, stage, details));
 }
@@ -106,34 +112,90 @@ export function formatStructuredError(
  * RATE_LIMITED (all providers tried and exhausted). When false (default), such
  * errors are still RATE_LIMITED but callers know to attempt failover first.
  */
-export function classifyErrorCode(err: unknown, failoverExhausted = false): PipelineErrorCode {
+export function classifyErrorCode(
+  err: unknown,
+  failoverExhausted = false
+): PipelineErrorCode {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
   // "All providers exhausted" is emitted by withModelFailover when both primary and GPT-4o-mini fail.
   // This is the authoritative signal that no more failover is possible.
-  if (lower.includes("all providers exhausted")) return PIPELINE_ERROR_CODES.RATE_LIMITED;
-  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("abortcontroller") || lower.includes("econnreset")) return PIPELINE_ERROR_CODES.API_TIMEOUT;
+  if (lower.includes("all providers exhausted"))
+    return PIPELINE_ERROR_CODES.RATE_LIMITED;
+  if (
+    lower.includes("timeout") ||
+    lower.includes("timed out") ||
+    lower.includes("abortcontroller") ||
+    lower.includes("econnreset")
+  )
+    return PIPELINE_ERROR_CODES.API_TIMEOUT;
   // Rate-limit, credits-depleted, and token/context-limit all map to RATE_LIMITED.
   // Use `failoverExhausted` context to distinguish "try failover" vs "all providers done".
   if (
-    lower.includes("rate limit") || lower.includes("429") || lower.includes("too many requests") ||
-    lower.includes("credits") || lower.includes("quota") || lower.includes("billing") ||
-    lower.includes("insufficient_quota") || lower.includes("overloaded") || lower.includes("capacity") ||
-    lower.includes("context_length_exceeded") || lower.includes("maximum context length") ||
-    lower.includes("context window") || lower.includes("token limit") || lower.includes("max_tokens")
-  ) return PIPELINE_ERROR_CODES.RATE_LIMITED;
-  if (lower.includes("content policy") || lower.includes("safety") || lower.includes("content filter") || lower.includes("refused")) return PIPELINE_ERROR_CODES.CONTENT_POLICY_VIOLATION;
-  if (lower.includes("api key") || lower.includes("apikey") || lower.includes("unauthorized") || lower.includes("authentication") || lower.includes("api_key")) return PIPELINE_ERROR_CODES.API_KEY_MISSING;
-  if (lower.includes("intake validation") || lower.includes("intake pre-flight")) return PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE;
-  if (lower.includes("grounding") || lower.includes("ungrounded citation")) return PIPELINE_ERROR_CODES.GROUNDING_CHECK_FAILED;
-  if (lower.includes("word count") || lower.includes("too short") || lower.includes("too long")) return PIPELINE_ERROR_CODES.WORD_COUNT_EXCEEDED;
-  if (lower.includes("citation") && (lower.includes("validation") || lower.includes("audit"))) return PIPELINE_ERROR_CODES.CITATION_VALIDATION_FAILED;
-  if (lower.includes("jurisdiction mismatch")) return PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH;
-  if (lower.includes("json") || lower.includes("parse")) return PIPELINE_ERROR_CODES.JSON_PARSE_FAILED;
-  if (lower.includes("vetting") || lower.includes("vetted")) return PIPELINE_ERROR_CODES.VETTING_REJECTED;
-  if (lower.includes("assembly") || lower.includes("final letter")) return PIPELINE_ERROR_CODES.ASSEMBLY_STRUCTURE_INVALID;
-  if (lower.includes("draft validation") || lower.includes("draft output")) return PIPELINE_ERROR_CODES.DRAFT_VALIDATION_FAILED;
-  if (lower.includes("research validation") || lower.includes("research packet")) return PIPELINE_ERROR_CODES.RESEARCH_VALIDATION_FAILED;
+    lower.includes("rate limit") ||
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("credits") ||
+    lower.includes("quota") ||
+    lower.includes("billing") ||
+    lower.includes("insufficient_quota") ||
+    lower.includes("overloaded") ||
+    lower.includes("capacity") ||
+    lower.includes("context_length_exceeded") ||
+    lower.includes("maximum context length") ||
+    lower.includes("context window") ||
+    lower.includes("token limit") ||
+    lower.includes("max_tokens")
+  )
+    return PIPELINE_ERROR_CODES.RATE_LIMITED;
+  if (
+    lower.includes("content policy") ||
+    lower.includes("safety") ||
+    lower.includes("content filter") ||
+    lower.includes("refused")
+  )
+    return PIPELINE_ERROR_CODES.CONTENT_POLICY_VIOLATION;
+  if (
+    lower.includes("api key") ||
+    lower.includes("apikey") ||
+    lower.includes("unauthorized") ||
+    lower.includes("authentication") ||
+    lower.includes("api_key")
+  )
+    return PIPELINE_ERROR_CODES.API_KEY_MISSING;
+  if (
+    lower.includes("intake validation") ||
+    lower.includes("intake pre-flight")
+  )
+    return PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE;
+  if (lower.includes("grounding") || lower.includes("ungrounded citation"))
+    return PIPELINE_ERROR_CODES.GROUNDING_CHECK_FAILED;
+  if (
+    lower.includes("word count") ||
+    lower.includes("too short") ||
+    lower.includes("too long")
+  )
+    return PIPELINE_ERROR_CODES.WORD_COUNT_EXCEEDED;
+  if (
+    lower.includes("citation") &&
+    (lower.includes("validation") || lower.includes("audit"))
+  )
+    return PIPELINE_ERROR_CODES.CITATION_VALIDATION_FAILED;
+  if (lower.includes("jurisdiction mismatch"))
+    return PIPELINE_ERROR_CODES.JURISDICTION_MISMATCH;
+  if (lower.includes("json") || lower.includes("parse"))
+    return PIPELINE_ERROR_CODES.JSON_PARSE_FAILED;
+  if (lower.includes("vetting") || lower.includes("vetted"))
+    return PIPELINE_ERROR_CODES.VETTING_REJECTED;
+  if (lower.includes("assembly") || lower.includes("final letter"))
+    return PIPELINE_ERROR_CODES.ASSEMBLY_STRUCTURE_INVALID;
+  if (lower.includes("draft validation") || lower.includes("draft output"))
+    return PIPELINE_ERROR_CODES.DRAFT_VALIDATION_FAILED;
+  if (
+    lower.includes("research validation") ||
+    lower.includes("research packet")
+  )
+    return PIPELINE_ERROR_CODES.RESEARCH_VALIDATION_FAILED;
   return PIPELINE_ERROR_CODES.UNKNOWN_ERROR;
 }
 
@@ -150,32 +212,67 @@ export function isFailoverCandidate(err: unknown): boolean {
   const lower = msg.toLowerCase();
 
   // HTTP 429 and explicit rate-limit signals
-  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many requests")) return true;
+  if (
+    lower.includes("429") ||
+    lower.includes("rate limit") ||
+    lower.includes("too many requests")
+  )
+    return true;
 
   // Credits / quota / billing exhaustion (Anthropic, OpenAI)
-  if (lower.includes("credits") || lower.includes("quota") || lower.includes("billing") ||
-      lower.includes("insufficient_quota") || lower.includes("payment_required")) return true;
+  if (
+    lower.includes("credits") ||
+    lower.includes("quota") ||
+    lower.includes("billing") ||
+    lower.includes("insufficient_quota") ||
+    lower.includes("payment_required")
+  )
+    return true;
 
   // Invalid / missing API key — treat as failover candidate so the next provider gets a chance
-  if (lower.includes("incorrect api key") || lower.includes("invalid api key") ||
-      lower.includes("invalid_api_key") || lower.includes("authentication") ||
-      lower.includes("unauthorized") || lower.includes("invalid x-api-key")) return true;
+  if (
+    lower.includes("incorrect api key") ||
+    lower.includes("invalid api key") ||
+    lower.includes("invalid_api_key") ||
+    lower.includes("authentication") ||
+    lower.includes("unauthorized") ||
+    lower.includes("invalid x-api-key")
+  )
+    return true;
 
   // Capacity / overload signals
-  if (lower.includes("overloaded") || lower.includes("capacity") || lower.includes("service unavailable") ||
-      lower.includes("529")) return true;
+  if (
+    lower.includes("overloaded") ||
+    lower.includes("capacity") ||
+    lower.includes("service unavailable") ||
+    lower.includes("529")
+  )
+    return true;
 
   // Token / context-length limits — the model cannot process the request at all.
   // For Claude: "prompt is too long", "context_length_exceeded"
   // For OpenAI: "context_length_exceeded", "maximum context length", "max_tokens"
-  if (lower.includes("prompt is too long") || lower.includes("context_length_exceeded") ||
-      lower.includes("maximum context length") || lower.includes("context window") ||
-      lower.includes("token limit") || lower.includes("max_tokens")) return true;
+  if (
+    lower.includes("prompt is too long") ||
+    lower.includes("context_length_exceeded") ||
+    lower.includes("maximum context length") ||
+    lower.includes("context window") ||
+    lower.includes("token limit") ||
+    lower.includes("max_tokens")
+  )
+    return true;
 
   // Check for numeric HTTP status codes on error objects (Anthropic SDK pattern)
   const errObj = err as Record<string, unknown>;
   const status = typeof errObj?.status === "number" ? errObj.status : undefined;
-  if (status === 401 || status === 429 || status === 529 || status === 402 || status === 503) return true;
+  if (
+    status === 401 ||
+    status === 429 ||
+    status === 529 ||
+    status === 402 ||
+    status === 503
+  )
+    return true;
 
   return false;
 }
@@ -186,7 +283,14 @@ export function isFailoverCandidate(err: unknown): boolean {
 
 export interface FailoverResult<T> {
   result: T;
-  provider: "primary" | "perplexity" | "claude-research-fallback" | "openai-failover" | "groq-oss-fallback";
+  provider:
+    | "primary"
+    | "perplexity"
+    | "perplexity-failover"
+    | "openai-stored-prompt"
+    | "openai-failover"
+    | "claude-research-fallback"
+    | "groq-oss-fallback";
   failoverTriggered: boolean;
 }
 
@@ -220,7 +324,7 @@ export async function withModelFailover<T>(
   letterId: number,
   primaryFn: () => Promise<T>,
   fallbackFn: () => Promise<T>,
-  ossLastResortFn?: () => Promise<T>,
+  ossLastResortFn?: () => Promise<T>
 ): Promise<FailoverResult<T>> {
   try {
     const result = await primaryFn();
@@ -230,7 +334,8 @@ export async function withModelFailover<T>(
       throw primaryErr;
     }
 
-    const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+    const primaryMsg =
+      primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
 
     if (!isOpenAIFailoverAvailable()) {
       logger.error(
@@ -249,7 +354,10 @@ export async function withModelFailover<T>(
         );
         return { result, provider: "openai-failover", failoverTriggered: true };
       } catch (fallbackErr) {
-        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        const fallbackMsg =
+          fallbackErr instanceof Error
+            ? fallbackErr.message
+            : String(fallbackErr);
         logger.error(
           `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
         );
@@ -262,11 +370,15 @@ export async function withModelFailover<T>(
               pipeline_stage: stage,
               all_providers_exhausted: "true",
             },
-            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg },
+            extra: {
+              letterId,
+              primaryError: primaryMsg,
+              fallbackError: fallbackMsg,
+            },
           });
           throw new Error(
             `All providers exhausted for ${stage} (letter #${letterId}). ` +
-            `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
+              `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
           );
         }
 
@@ -282,11 +394,15 @@ export async function withModelFailover<T>(
               all_providers_exhausted: "true",
               oss_skipped: "no_api_key",
             },
-            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg },
+            extra: {
+              letterId,
+              primaryError: primaryMsg,
+              fallbackError: fallbackMsg,
+            },
           });
           throw new Error(
             `All providers exhausted for ${stage} (letter #${letterId}). ` +
-            `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
+              `Primary error: ${primaryMsg}. Failover error: ${fallbackMsg}`
           );
         }
 
@@ -298,9 +414,14 @@ export async function withModelFailover<T>(
           logger.info(
             `[Pipeline] ${stage} for letter #${letterId}: Groq Llama 3.3 OSS last resort succeeded (provider=groq-oss-fallback)`
           );
-          return { result, provider: "groq-oss-fallback", failoverTriggered: true };
+          return {
+            result,
+            provider: "groq-oss-fallback",
+            failoverTriggered: true,
+          };
         } catch (ossErr) {
-          const ossMsg = ossErr instanceof Error ? ossErr.message : String(ossErr);
+          const ossMsg =
+            ossErr instanceof Error ? ossErr.message : String(ossErr);
           logger.error(
             `[Pipeline] ${stage} for letter #${letterId}: Groq OSS last resort also failed (all 3 providers exhausted): ${ossMsg}`
           );
@@ -312,11 +433,16 @@ export async function withModelFailover<T>(
               all_providers_exhausted: "true",
               tiers_attempted: "3",
             },
-            extra: { letterId, primaryError: primaryMsg, fallbackError: fallbackMsg, ossError: ossMsg },
+            extra: {
+              letterId,
+              primaryError: primaryMsg,
+              fallbackError: fallbackMsg,
+              ossError: ossMsg,
+            },
           });
           throw new Error(
             `All providers exhausted for ${stage} (letter #${letterId}). ` +
-            `Primary error: ${primaryMsg}. OpenAI error: ${fallbackMsg}. Groq OSS error: ${ossMsg}`
+              `Primary error: ${primaryMsg}. OpenAI error: ${fallbackMsg}. Groq OSS error: ${ossMsg}`
           );
         }
       }
@@ -359,7 +485,7 @@ export async function withModelFailover<T>(
       });
       throw new Error(
         `All providers exhausted for ${stage} (letter #${letterId}). ` +
-        `Primary error: ${primaryMsg}. Groq OSS error: ${ossMsg}`
+          `Primary error: ${primaryMsg}. Groq OSS error: ${ossMsg}`
       );
     }
   }
@@ -370,7 +496,7 @@ async function findSimilarLessons(
   letterType: string,
   jurisdiction: string | null,
   stage: string,
-  limit: number = 5,
+  limit: number = 5
 ): Promise<any[]> {
   try {
     const { generateEmbedding } = await import("./embeddings");
@@ -394,7 +520,10 @@ async function findSimilarLessons(
     `);
     return results as any[];
   } catch (err) {
-    logger.warn({ err: err }, "[Pipeline] Semantic lesson search failed, skipping:");
+    logger.warn(
+      { err: err },
+      "[Pipeline] Semantic lesson search failed, skipping:"
+    );
     return [];
   }
 }
@@ -404,7 +533,7 @@ export async function buildLessonsPromptBlock(
   jurisdiction: string | null,
   stage: string,
   queryContext?: string,
-  pipelineCtx?: PipelineContext,
+  pipelineCtx?: PipelineContext
 ): Promise<string> {
   try {
     const primaryLessons = await getActiveLessons({
@@ -418,20 +547,33 @@ export async function buildLessonsPromptBlock(
     // when a query context (e.g. the intake summary) is provided or OPENAI_API_KEY is set
     let semanticLessons: any[] = [];
     if (queryContext && process.env.OPENAI_API_KEY) {
-      semanticLessons = await findSimilarLessons(queryContext, letterType, jurisdiction, stage, 5);
+      semanticLessons = await findSimilarLessons(
+        queryContext,
+        letterType,
+        jurisdiction,
+        stage,
+        5
+      );
     }
 
     // Merge: primary lessons first, then semantic additions not already covered
     const primaryIds = new Set((primaryLessons ?? []).map((l: any) => l.id));
-    const additionalSemantic = semanticLessons.filter((l: any) => !primaryIds.has(l.id));
+    const additionalSemantic = semanticLessons.filter(
+      (l: any) => !primaryIds.has(l.id)
+    );
     const lessons = [...(primaryLessons ?? []), ...additionalSemantic];
 
     if (lessons.length === 0) return "";
 
-    const lessonIds = (lessons as Array<{ id?: number | null }>).map((l) => l.id).filter((id): id is number => id != null);
+    const lessonIds = (lessons as Array<{ id?: number | null }>)
+      .map(l => l.id)
+      .filter((id): id is number => id != null);
     if (lessonIds.length > 0) {
-      incrementLessonInjectionStats(lessonIds).catch((err) =>
-        logger.warn({ err: err }, "[Pipeline] Failed to increment injection stats:")
+      incrementLessonInjectionStats(lessonIds).catch(err =>
+        logger.warn(
+          { err: err },
+          "[Pipeline] Failed to increment injection stats:"
+        )
       );
     }
 
@@ -441,7 +583,11 @@ export async function buildLessonsPromptBlock(
     }
 
     const grouped: Record<string, string[]> = {};
-    for (const l of lessons as Array<{ category?: string | null; lesson_text?: string; lessonText?: string }>) {
+    for (const l of lessons as Array<{
+      category?: string | null;
+      lesson_text?: string;
+      lessonText?: string;
+    }>) {
       const cat = l.category ?? "general";
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(l.lesson_text ?? l.lessonText ?? "");
@@ -455,8 +601,13 @@ export async function buildLessonsPromptBlock(
 
     return `\n\n## LESSONS FROM PAST ATTORNEY REVIEWS\nThe following lessons have been extracted from attorney feedback on similar letters. Apply them:\n\n${sections.join("\n\n")}\n`;
   } catch (err) {
-    logger.error({ err: err }, "[Pipeline] Failed to load lessons for prompt injection:");
-    captureServerException(err, { tags: { component: "pipeline", error_type: "lessons_load_failed" } });
+    logger.error(
+      { err: err },
+      "[Pipeline] Failed to load lessons for prompt injection:"
+    );
+    captureServerException(err, {
+      tags: { component: "pipeline", error_type: "lessons_load_failed" },
+    });
     return "";
   }
 }
