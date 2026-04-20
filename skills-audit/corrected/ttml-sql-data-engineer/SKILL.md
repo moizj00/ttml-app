@@ -22,7 +22,7 @@ Defined in `drizzle/schema.ts` (do not invent parallel tables):
 - **`review_actions`** — attorney audit trail (status transitions, edits, approvals)
 - **`workflow_jobs`** — pg-boss pipeline job records; columns include `jobType`, `provider`, `status`, token counts, `estimatedCostUsd`
 - **`research_runs`** — Perplexity research artifacts + KV cache provenance
-- **`subscriptions`** — Stripe subscription rows (monthly $200, yearly $2000; per-letter flow does not use this table)
+- **`subscriptions`** — Stripe subscription rows (monthly $299 for 4 letters, yearly $2,400 for 8 letters; columns `letters_allowed` / `letters_used` — never `remaining_letters`; per-letter flow at $299 one-time does not use this table). Canonical pricing in `shared/pricing.ts`.
 - **`commission_ledger`** — employee 5% commission (500 bps, stored in cents)
 - **`discount_codes`** — employee-owned promotional codes; `discountPercent` is arbitrary per code
 - **`document_analyses`** — free GPT-4o analyzer output

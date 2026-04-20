@@ -1,59 +1,67 @@
 ---
 name: ttml-n8n-workflow-integration
-description: n8n workflow integration for the TTML AI letter pipeline. Use when configuring the optional n8n path, debugging n8n MCP/webhook calls, or designing an n8n workflow that mirrors the in-app 4-stage pipeline.
+description: n8n workflow integration for the TTML letter pipeline. Use when configuring the optional N8N_PRIMARY path, debugging the /api/pipeline/n8n-callback route, designing an n8n workflow that mirrors the in-app 4-stage pipeline, or troubleshooting why letters route through (or past) n8n. Aligned to the 2026-04-20 repository state where the n8n MCP path has been removed and only a webhook-based integration remains.
 ---
 
-# n8n Workflow Integration
+# n8n Workflow Integration — TTML (verified 2026‑04‑20)
+
+## What Changed From The Previous Audit
+
+This SKILL replaces earlier guidance that described a dual-transport "MCP preferred, webhook fallback" architecture. As of the April 16, 2026 cleanup:
+
+- **`server/n8nMcp.ts` is an empty deprecated stub.** The n8n MCP code path is gone. Do not reference `N8N_MCP_URL`, `N8N_MCP_BEARER_TOKEN`, or any MCP tool registry for n8n.
+- **Webhook-only integration.** The only way to route through n8n is the plain HTTPS webhook, gated by `N8N_PRIMARY=true` + `N8N_WEBHOOK_URL`.
+- **Claude Sonnet 4**, not Claude Opus, drives Draft / Assembly / Vetting. The n8n workflow should pin `claude-sonnet-4-20250514` to match.
+- **Callback is async.** The orchestrator fires the webhook, gets a 10-second ack, and returns. n8n finishes the work on its own time and POSTs results to `/api/pipeline/n8n-callback`.
+- **Fallback to in-app is automatic.** If the webhook returns non-2xx, times out, or throws, the orchestrator falls through to the in-app 4-stage pipeline (Perplexity → Claude Sonnet 4 × 3).
+
+---
 
 ## Architecture Overview
 
-The **canonical, primary** letter pipeline runs **in-app** via `server/pipeline/orchestrator.ts` — a 4-stage chain (Perplexity `sonar-pro` research → Claude Opus draft → Claude Opus assembly → Claude Sonnet vetting), driven by pg-boss workers.
-
-n8n is an **optional, dormant** alternative. It is only consulted when `N8N_PRIMARY=true` AND a usable transport is configured (either `N8N_MCP_URL` + `N8N_MCP_BEARER_TOKEN` or a plain `N8N_WEBHOOK_URL`). If the n8n call fails or times out, the orchestrator falls back to the in-app pipeline — **not** to OpenAI. OpenAI GPT-4o is reserved for the free `documents.analyze` analyzer and is not part of the letter pipeline.
-
 ```
-Default (N8N_PRIMARY unset / false):
-  submit → in-app 4-stage pipeline → letter_versions(ai_draft) → pending_review
-
-With N8N_PRIMARY=true:
-  submit → try n8n (MCP preferred, webhook fallback)
-        ↳ on failure/timeout → in-app 4-stage pipeline
+Subscriber submits letter → pg-boss job → server/worker.ts → runFullPipeline
+                                                                 │
+                                                                 ▼
+                                                  server/pipeline/orchestrator.ts
+                                                                 │
+                      ┌──────────────────────────────────────────┼──────────────────────────┐
+                      │                                          │                          │
+              PIPELINE_MODE=langgraph                  PIPELINE_MODE=simple        (default, 2-tier chain)
+                      │                                          │                          │
+                      ▼                                          ▼                          ▼
+            runLangGraphPipeline                       runSimplePipeline         ┌──────────────────┐
+              (StateGraph)                          (Claude-only)                │  useN8nPrimary?  │
+                                                                                  └──────┬───────────┘
+                                                                                         │
+                                                             N8N_PRIMARY=true + https:// │ false
+                                                             ────────────────────────────┼──────────────
+                                                                                         ▼
+                                                       ┌──────────────────────┐   In-app 4-stage chain
+                                                       │ POST n8n webhook     │   (Perplexity + Claude
+                                                       │ X-Auth-Token header  │    Sonnet 4 × 3)
+                                                       │ 10s AbortSignal ack  │
+                                                       └─────┬────────────────┘
+                                                             │ async
+                                                             ▼
+                                            POST /api/pipeline/n8n-callback
+                                            (header: x-ttml-callback-secret)
+                                                             │
+                                                             ▼
+                                        server/n8nCallback.ts → create letter_versions,
+                                                               updateLetterStatus(generated_locked)
 ```
 
-When n8n is active, its workflow should mirror the 4-stage chain so the `ai_draft` it writes is comparable in quality to what the in-app path produces.
+The key gate is in `server/pipeline/orchestrator.ts` (verified):
 
-### Why n8n Is Sometimes Useful
+```ts
+const useN8nPrimary =
+  process.env.N8N_PRIMARY === "true" &&
+  !!n8nWebhookUrl &&
+  n8nWebhookUrl.startsWith("https://");
+```
 
-- Visual workflow authoring for legal ops / attorneys who want to tweak jurisdiction-specific prompts without a code deploy
-- Built-in integrations to third-party legal-research databases
-- Direct Supabase service-role writes for latency-sensitive ops
-- Easier to experiment with prompt variations in staging
-
----
-
-## Critical Rules (MUST Follow)
-
-1. **[DORMANT BY DEFAULT]** n8n must not run unless `N8N_PRIMARY=true`. The default `.env` ships with this unset; production flips it intentionally.
-
-2. **[MCP PREFERRED, WEBHOOK FALLBACK]** Prefer the n8n MCP server (`N8N_MCP_URL` + bearer token). Fall back to the plain webhook path only if MCP is unreachable. Both paths are owned by `server/n8nMcp.ts`.
-
-3. **[SAME OUTPUT SHAPE]** Whatever n8n produces, it must land in the same places the in-app pipeline uses: a `letter_versions` row (`version_type = 'ai_draft'`), an updated `letter_requests.status`, a `workflow_jobs` row per stage, and a `research_runs` row for grounded research. Never invent a parallel table.
-
-4. **[SERVER-ROLE WRITES ONLY]** n8n writes to Supabase using the **service_role** key (bypasses RLS). Never put this key in any client-visible place. Rotate immediately if it leaks.
-
-5. **[TIMEOUT DISCIPLINE]** The orchestrator wraps n8n calls in an `AbortSignal` timeout. If it trips, fail cleanly and let the in-app pipeline take over.
-
-6. **[GRACEFUL FALLBACK]** n8n failures fall back to the in-app pipeline **silently** to the user. The failure is recorded in `workflow_jobs` / Sentry — not surfaced in the UI.
-
-7. **[WEBHOOK SECURITY]** The webhook URL must be HTTPS and carry a secret (`X-Webhook-Secret` header), verified at the n8n entry node.
-
-8. **[PAYLOAD VALIDATION]** Validate the n8n response against a Zod schema before trusting it. Required fields: `letterRequestId`, `status`, and at least one content artifact (draft markdown or a version row id).
-
-9. **[JURISDICTION EXTRACTION]** n8n extracts jurisdiction from the intake address when not explicitly provided. Default to `'CA'` only as a last resort and mark the letter accordingly.
-
-10. **[RESEARCH PROVENANCE]** If n8n does its own research (instead of deferring to Perplexity), persist the statutes / disclosures / KV cache provenance in `research_runs.jsonRaw` for attorney reference.
-
-11. **[MONITORING]** Track n8n availability, response time, and failure rate via `workflow_jobs`. Alert DevOps if success rate <95% or average response time >30 s.
+If `useN8nPrimary` is false, the orchestrator logs `"N8N_PRIMARY not set — using direct 4-stage pipeline (primary path)"` and proceeds to the in-app chain.
 
 ---
 
@@ -63,439 +71,353 @@ When n8n is active, its workflow should mirror the 4-stage chain so the `ai_draf
 # Route through n8n when true; otherwise run the in-app pipeline (default)
 N8N_PRIMARY=false
 
-# Preferred transport: n8n MCP server
-N8N_MCP_URL=https://n8n.example.com/mcp
-N8N_MCP_BEARER_TOKEN=sk_live_...
+# HTTPS webhook URL registered in n8n (Webhook Trigger node)
+N8N_WEBHOOK_URL=https://n8n.example.com/webhook/legal-letter-submission
 
-# Fallback transport: plain webhook
-N8N_WEBHOOK_URL=https://n8n.example.com/webhook/generate-letter
-N8N_WEBHOOK_SECRET=whsec_...
+# Shared secret, used for BOTH directions:
+#   - App → n8n:  sent in X-Auth-Token header (orchestrator.ts line 279)
+#   - n8n → App:  expected in x-ttml-callback-secret header (n8nCallback.ts line 87)
+N8N_CALLBACK_SECRET=whsec_...
 
-# Supabase connection for n8n's direct DB writes (service_role — NEVER expose this)
-N8N_SUPABASE_URL=https://<project>.supabase.co
-N8N_SUPABASE_SERVICE_KEY=service_role_key_here
-
-# Optional: use IPv4 direct URL if n8n lives in an IPv4-only network
-N8N_SUPABASE_DIRECT_URL=postgresql://postgres:...@db.<project>.supabase.co:5432/postgres
+# Canonical app domain used when building the callbackUrl in payloads
+APP_BASE_URL=https://www.talk-to-my-lawyer.com
 ```
 
-### Availability Check
-
-```typescript
-// server/n8nMcp.ts — illustrative
-export function isN8nActive(): boolean {
-  if (process.env.N8N_PRIMARY !== 'true') return false
-
-  const mcpUrl = process.env.N8N_MCP_URL
-  const mcpTok = process.env.N8N_MCP_BEARER_TOKEN
-  if (mcpUrl && mcpTok) return mcpUrl.startsWith('https://')
-
-  const webhookUrl = process.env.N8N_WEBHOOK_URL
-  return !!webhookUrl && webhookUrl.startsWith('https://')
-}
-```
+> **MCP env vars are retired.** `N8N_MCP_URL`, `N8N_MCP_BEARER_TOKEN`, and any "bearer" auth variant no longer exist in `server/_core/env.ts`. Do not add them back.
 
 ---
 
-## Integration in the Orchestrator
+## Critical Rules (MUST Follow)
 
-n8n routing lives in `server/pipeline/orchestrator.ts`, next to (not instead of) the in-app chain. The orchestrator is reached from the pg-boss `pipeline.run` worker — not from a request handler.
+1. **[DORMANT BY DEFAULT]** n8n must not run unless `N8N_PRIMARY === "true"` *and* `N8N_WEBHOOK_URL` starts with `https://`. The HTTP-vs-HTTPS check is enforced in `orchestrator.ts`.
 
-```typescript
-// server/pipeline/orchestrator.ts (illustrative)
-export async function runPipeline(ctx: PipelineCtx) {
-  const letterId = ctx.letterRequestId
+2. **[WEBHOOK-ONLY]** There is no MCP path anymore. `server/n8nMcp.ts` is an intentional empty stub (`export {};`). Do not re-introduce `@modelcontextprotocol/sdk` or any MCP client to call n8n.
 
-  if (isN8nActive()) {
-    try {
-      const result = await triggerN8nPipeline(ctx)
-      if (result.ok) return result
-      ctx.logger.warn({ letterId, err: result.error }, 'n8n path failed, falling back to in-app pipeline')
-    } catch (err) {
-      ctx.logger.warn({ letterId, err }, 'n8n path threw, falling back to in-app pipeline')
-    }
-  }
+3. **[AUTH HEADERS — TWO DIRECTIONS, ONE SECRET]**
+   - Outbound (app → n8n): the app sends `X-Auth-Token: <N8N_CALLBACK_SECRET>` on the webhook POST.
+   - Inbound (n8n → app): n8n must send `x-ttml-callback-secret: <N8N_CALLBACK_SECRET>` on the callback POST.
+   Both match the same `N8N_CALLBACK_SECRET` env var. The callback comparison uses `crypto.timingSafeEqual` on equal-length buffers; length mismatch is also a 401.
 
-  // In-app 4-stage pipeline
-  await runResearchStage(ctx)   // Perplexity sonar-pro → research_runs row
-  await runDraftStage(ctx)      // Claude Opus → intermediate content registry
-  await runAssemblyStage(ctx)   // Claude Opus → letter_versions row (ai_draft)
-  await runVettingStage(ctx)    // Claude Sonnet → updates ai_draft, may loop
-}
-```
+4. **[10s ACK TIMEOUT]** The outbound webhook fetch is wrapped in `AbortSignal.timeout(10000)`. This is the *ack* timeout — n8n is not expected to do the real work in 10s. It acknowledges, we return, n8n does the work and POSTs the callback.
 
-`triggerN8nPipeline` returns a typed result and does not throw for expected failures (timeout, 5xx, invalid response) — only unexpected bugs propagate.
+5. **[GRACEFUL FALLBACK]** Non-2xx response, timeout, or any thrown error from the webhook path MUST fall through to the in-app 4-stage pipeline. Failure is recorded on the `workflow_jobs` row (status `"failed"`, `errorMessage` formatted via `formatStructuredError(PIPELINE_ERROR_CODES.N8N_ERROR, …)`) and the orchestrator continues. No user-visible error.
 
-### Payload Shape
+6. **[STALE URL AUTO-CORRECTION]** If the configured `N8N_WEBHOOK_URL` contains `ttml-legal-pipeline`, orchestrator rewrites the path to `legal-letter-submission` at call time. Don't rely on this — fix the env var — but know the protection exists.
 
-```typescript
-// server/n8nMcp.ts
-export interface N8nPipelineRequest {
-  letterRequestId: string
-  userId: string
-  letterType: LetterType
-  intake: {
-    sender: { name: string; address: string; email?: string; phone?: string }
-    recipient: { name: string; address: string; email?: string }
-    details: Record<string, unknown> // type-specific fields
-    jurisdiction?: string            // 2-letter state code
-  }
-  metadata: {
-    userEmail: string
-    createdAt: string // ISO
-    pipelineVersion: string // e.g. "2026.04" so n8n can branch on it
-  }
-}
+7. **[CALLBACK SECRET REQUIRED]** The callback route refuses all requests (503) if `N8N_CALLBACK_SECRET` is unset. Missing header or bad length is 401.
 
-export interface N8nPipelineResult {
-  ok: boolean
-  letterRequestId: string
-  status?: LetterStatus  // expected 'generated_locked' on success
-  aiDraftVersionId?: string
-  researchRunId?: string
-  error?: string
-  errorType?: 'http_error' | 'invalid_response' | 'timeout' | 'network_error'
-}
-```
+8. **[STATUS DISCIPLINE]** The status machine must go `submitted → researching → drafting → generated_locked`. The orchestrator sets `researching` just before firing the webhook. The callback advances `researching → drafting → generated_locked` in two logged steps. On failure the callback reverts `researching → submitted` (not `pipeline_failed`) so the letter is retriable.
 
-### Transform + Dispatch
+9. **[SAME STORAGE SHAPE]** Whatever n8n produces must land in the same tables the in-app pipeline uses: a `letter_versions` row (`versionType: "ai_draft"`), updated `letter_requests.status` + `currentAiDraftVersionId`, and a `workflow_jobs` row per stage. Never invent a parallel table.
 
-```typescript
-export async function triggerN8nPipeline(ctx: PipelineCtx): Promise<N8nPipelineResult> {
-  const payload = buildN8nPayload(ctx)
+10. **[NO `pipeline_failed` FROM N8N]** The callback must not set `letter_requests.status = "pipeline_failed"` — only local failure paths do. Otherwise you lose the retry affordance.
 
-  // Try MCP first
-  if (process.env.N8N_MCP_URL) {
-    const mcpRes = await callN8nViaMcp(payload)
-    if (mcpRes.ok) return mcpRes
-    ctx.logger.warn({ err: mcpRes.error }, 'n8n MCP call failed; trying webhook')
-  }
+11. **[JURISDICTION]** The payload already contains structured `jurisdictionState` / `jurisdictionCountry`. n8n should not re-derive jurisdiction — use what was sent. If you must, fall back to `"CA"` only as last resort and mark `research_runs.jsonRaw` accordingly.
 
-  // Fall back to webhook
-  if (process.env.N8N_WEBHOOK_URL) {
-    return callN8nViaWebhook(payload)
-  }
+12. **[MODEL PINS]** The in-app chain uses `claude-sonnet-4-20250514` (see `server/pipeline/providers.ts`). If the n8n workflow calls Anthropic directly, use the same model ID. Do **not** use Claude Opus anywhere in the letter pipeline.
 
-  return { ok: false, letterRequestId: ctx.letterRequestId, error: 'no n8n transport configured', errorType: 'network_error' }
-}
+13. **[SERVICE-ROLE WRITES]** If n8n writes directly to Supabase, it must use the **service_role** key (bypasses RLS). Never put this key in any client-visible place. Rotate immediately if it leaks.
 
-async function callN8nViaWebhook(payload: N8nPipelineRequest): Promise<N8nPipelineResult> {
-  const webhookUrl = process.env.N8N_WEBHOOK_URL!
-  const secret = process.env.N8N_WEBHOOK_SECRET
+14. **[PAYWALL EMAIL]** The callback does **not** send the paywall notification email directly. The `paywallEmailCron` job (`POST /api/cron/paywall-emails`) picks up letters 10–15 minutes after they land in `generated_locked`. Don't short-circuit this.
 
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(secret ? { 'X-Webhook-Secret': secret } : {}),
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(55_000),
-    })
-
-    if (!response.ok) {
-      const body = await response.text()
-      return {
-        ok: false,
-        letterRequestId: payload.letterRequestId,
-        error: `n8n returned ${response.status}: ${body.slice(0, 500)}`,
-        errorType: 'http_error',
-      }
-    }
-
-    const parsed = N8nPipelineResultSchema.safeParse(await response.json())
-    if (!parsed.success) {
-      return {
-        ok: false,
-        letterRequestId: payload.letterRequestId,
-        error: 'n8n response failed validation',
-        errorType: 'invalid_response',
-      }
-    }
-    return { ...parsed.data, ok: true }
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      return {
-        ok: false,
-        letterRequestId: payload.letterRequestId,
-        error: 'n8n workflow timeout',
-        errorType: 'timeout',
-      }
-    }
-    return {
-      ok: false,
-      letterRequestId: payload.letterRequestId,
-      error: err?.message ?? String(err),
-      errorType: 'network_error',
-    }
-  }
-}
-```
-
-### Jurisdiction Extraction Helpers
-
-```typescript
-export function extractStateCode(address: string | undefined): string | null {
-  if (!address) return null
-  const m = address.match(/\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/)
-  return m?.[1] ?? null
-}
-
-export function extractTypeSpecificFields(letterType: LetterType, intake: Record<string, unknown>) {
-  const typeFieldMap: Record<LetterType, string[]> = {
-    'demand-letter':       ['amountOwed', 'deadlineDate', 'incidentDescription'],
-    'cease-and-desist':    ['violationDescription', 'demandedAction', 'deadlineDate'],
-    'contract-breach':     ['contractDate', 'breachDescription', 'remedySought'],
-    'eviction-notice':     ['propertyAddress', 'reasonForEviction', 'noticePeriod'],
-    'employment-dispute':  ['disputeDescription', 'employmentDates', 'resolutionSought'],
-    'consumer-complaint':  ['complaintDescription', 'purchaseDate', 'resolutionSought'],
-  }
-  const fields = typeFieldMap[letterType] ?? []
-  const out: Record<string, unknown> = {}
-  for (const f of fields) if (intake[f] !== undefined) out[f] = intake[f]
-  return out
-}
-```
+15. **[AUTO-ADVANCE]** `autoAdvanceIfPreviouslyUnlocked` runs at the end of the callback for letters the subscriber has already paid to unlock previously (subsequent revisions). If this throws, it's logged and swallowed — the callback response has already been sent.
 
 ---
 
-## n8n Workflow Design
+## Outbound Payload (App → n8n)
 
-The n8n workflow should mirror the 4-stage chain so the letter it writes is comparable in quality. A proven layout:
+Built in `server/pipeline/orchestrator.ts` (verified shape):
 
-```
-1. Webhook Trigger (POST, header-auth via X-Webhook-Secret)
-   ↓
-2. Extract Jurisdiction (JS code node)
-   ↓
-3. Research Stage
-   - Option A: call Perplexity sonar-pro (recommended)
-   - Option B: hit a dedicated legal-research API + persist provenance
-   ↓
-4. Draft Stage (Anthropic node, Claude Opus)
-   ↓
-5. Assembly Stage (Anthropic node, Claude Opus)
-   ↓
-6. Vetting Stage (Anthropic node, Claude Sonnet) with retry loop on critical issues
-   ↓
-7. Supabase writes:
-   - research_runs row with provenance
-   - letter_versions row (version_type = 'ai_draft')
-   - letter_requests.current_version_id, status = 'generated_locked'
-   - workflow_jobs row per stage
-   ↓
-8. Respond to Webhook (200 + minimal JSON)
+```ts
+{
+  letterId: number,                // letter_requests.id
+  letterType: string,              // "demand_letter" | ...
+  userId: string,                  // currently set to intake.sender?.name (legacy; treat as opaque)
+  callbackUrl: string,             // `${APP_BASE_URL}/api/pipeline/n8n-callback`
+  callbackSecret: string,          // N8N_CALLBACK_SECRET (also sent in X-Auth-Token header)
+  intakeData: {
+    sender: { name, address, email?, phone? },
+    recipient: { name, address, email? },
+    jurisdictionState: string,     // "" allowed
+    jurisdictionCountry: string,   // "US" default
+    matter: { subject, description, ... },
+    desiredOutcome: string,
+    letterType: string,
+    tonePreference: string,
+    financials: object | null,
+    additionalContext: string,
+  }
+}
 ```
 
-### Step 1 — Webhook Trigger
+Request is sent with:
+
+```ts
+fetch(resolvedWebhookUrl, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-Auth-Token": N8N_CALLBACK_SECRET,
+  },
+  body: JSON.stringify(payload),
+  signal: AbortSignal.timeout(10_000),
+});
+```
+
+n8n's Webhook Trigger node must be configured with **Header Auth** → header name `X-Auth-Token`. Header auth is the only supported scheme; Basic Auth / Bearer are not handled by the orchestrator.
+
+---
+
+## Inbound Callback (n8n → App)
+
+Route: `POST /api/pipeline/n8n-callback` (registered via `registerN8nCallbackRoute` in `server/n8nCallback.ts`).
+
+Required header:
+
+```
+x-ttml-callback-secret: <N8N_CALLBACK_SECRET>
+```
+
+### Callback payload shape (verified from `n8nCallback.ts`)
+
+```ts
+interface N8nCallbackPayload {
+  letterId: number;
+  success: boolean;
+
+  // Aligned 4-stage output (preferred)
+  researchPacket?: ResearchPacket;   // Stage 1 structured
+  draftOutput?: DraftOutput;          // Stage 2 structured
+  assembledLetter?: string;           // Stage 3 polished text
+  vettedLetter?: string;              // Stage 4 vetted text
+  vettingReport?: {
+    citationsVerified: number;
+    citationsRemoved: number;
+    citationsFlagged: string[];
+    bloatPhrasesRemoved: string[];
+    jurisdictionIssues: string[];
+    factualIssuesFound: string[];
+    changesApplied: string[];
+    overallAssessment: string;
+    riskLevel: "low" | "medium" | "high";
+  };
+
+  // Legacy / flat output (falls back to local assembly)
+  researchOutput?: string;
+  draftContent?: string;
+
+  provider?: string;                 // default: derived (n8n-4stage | n8n-3stage | n8n-legacy)
+  stages?: string[];                 // informational
+  bloatDetected?: number;
+  error?: string;                    // when success = false
+}
+```
+
+### Three flow branches inside the callback
+
+Decision keys:
+
+- `hasVetting = !!(vettedLetter && vettingReport)`
+- `isAligned  = !!(researchPacket && draftOutput && assembledLetter)`
+- `effectiveFinalLetter = vettedLetter || assembledLetter`
+- `effectiveDraft = effectiveFinalLetter || draftOutput?.draftLetter || draftContent`
+
+Flow 1 — **Aligned 4-stage** (`hasVetting`):
+- Tag `providerTag = "n8n-4stage"`.
+- Store `ai_draft` version with `stage: "vetted_final"`, include `vettingReport` + `bloatDetected` in metadata.
+- `updateLetterStatus(letterId, "generated_locked")`.
+- Log `ai_pipeline_completed` with `fromStatus: "drafting", toStatus: "generated_locked"`.
+
+Flow 2 — **Aligned 3-stage** (`isAligned`, no vetting):
+- Tag `providerTag = "n8n-3stage"`.
+- Store `ai_draft` with `stage: "n8n-assembly"`.
+- Same status + log transitions as flow 1.
+
+Flow 3 — **Legacy flat** (`draftContent` only):
+- Tag `providerTag = "n8n-legacy"`.
+- Store `ai_draft` with `stage: "n8n-pipeline"`.
+- Run the local `runAssemblyStage(letterId, intake, research, draft)` to polish the legacy draft into the canonical assembled + vetted letter.
+- If local assembly throws, fall back to storing n8n's raw draft as final and mark `generated_locked` with `noteText: "Local assembly skipped."`.
+
+Failure branch (`success === false` or `effectiveDraft` missing):
+- Revert to `"submitted"`, log `action: "pipeline_failed"`, set `fromStatus: "researching", toStatus: "submitted"`. No email.
+
+### Research version side-write
+
+If `researchPacket.researchSummary` is present, the callback *additionally* writes a second `ai_draft` letter version containing the research summary + structured packet metadata (`stage: "research"`). This gives attorney reviewers the provenance without polluting the drafting version. Failure is logged and swallowed.
+
+---
+
+## n8n Workflow Design (Aligned 4-Stage, recommended)
+
+```
+1. Webhook Trigger (POST, Header Auth via X-Auth-Token)
+   ↓
+2. Extract Jurisdiction (JS code node — pass through intakeData.jurisdictionState)
+   ↓
+3. Research Stage  — Perplexity sonar-pro
+   ↓
+4. Draft Stage     — Anthropic claude-sonnet-4-20250514
+   ↓
+5. Assembly Stage  — Anthropic claude-sonnet-4-20250514
+   ↓
+6. Vetting Stage   — Anthropic claude-sonnet-4-20250514 (retry loop on critical issues)
+   ↓
+7. Respond to Callback (HTTP Request → /api/pipeline/n8n-callback)
+   Headers:
+     x-ttml-callback-secret: {{ $json.callbackSecret }}
+   Body:
+     {
+       "letterId": {{ $json.letterId }},
+       "success": true,
+       "researchPacket": { ... structured ... },
+       "draftOutput":    { ... structured ... },
+       "assembledLetter": "…",
+       "vettedLetter":    "…",
+       "vettingReport":   { ... structured ... },
+       "provider":        "n8n-4stage",
+       "stages":          ["research","draft","assembly","vetting"],
+       "bloatDetected":   0
+     }
+```
+
+### Webhook Trigger node (Step 1)
 
 - **Method:** POST
-- **Path:** `/webhook/generate-letter`
-- **Authentication:** Header Auth (`X-Webhook-Secret`, matched against `$env.N8N_WEBHOOK_SECRET`)
-- **Response Mode:** Wait for Completion
+- **Path:** `/webhook/legal-letter-submission` (must match `N8N_WEBHOOK_URL`)
+- **Authentication:** Header Auth — header name `X-Auth-Token`, credential value = app's `N8N_CALLBACK_SECRET`.
+- **Response Mode:** Respond Immediately (just an ack — the real result goes via the callback).
 
-### Step 2 — Extract Jurisdiction (Code / JavaScript)
+### Research Stage (Step 3)
 
-```javascript
-const item = $input.item.json
-const intake = item.intake
-const valid = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL',
-  'IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA',
-  'WV','WI','WY'])
+Use an HTTP Request node against the Perplexity `/chat/completions` endpoint with `model: "sonar-pro"`. Persist the response verbatim into `researchPacket.researchSummary`. If Perplexity fails, fall back to the Anthropic node with Claude Sonnet 4 (no web grounding) and set `researchPacket.webGrounded = false` so the attorney knows.
 
-let jurisdiction = (intake.jurisdiction || '').toUpperCase()
-if (!valid.has(jurisdiction)) {
-  const fromSender    = (intake.sender?.address || '').match(/\b([A-Z]{2})\s+\d{5}/)?.[1]
-  const fromRecipient = (intake.recipient?.address || '').match(/\b([A-Z]{2})\s+\d{5}/)?.[1]
-  jurisdiction = fromSender || fromRecipient || 'CA'
-}
+### Draft / Assembly / Vetting Stages (Steps 4–6)
 
-return { json: { ...item, jurisdiction } }
-```
+Anthropic node (or HTTP Request to `/v1/messages`). Use `claude-sonnet-4-20250514` explicitly. The exact prompts live in `server/pipeline/prompts.ts` and `server/pipeline/vetting-prompts.ts` in the app repo — keep the n8n workflow aligned.
 
-### Step 3 — Research (Perplexity sonar-pro preferred)
+Vetting retry loop: on `riskLevel === "high"` or non-empty `factualIssuesFound`, loop back to Assembly with the vetting feedback appended. Cap at 2 retries; then emit the draft with `vettingReport.overallAssessment` flagging remaining concerns.
 
-Use an HTTP Request node against the Perplexity API with the `sonar-pro` model. Persist the response verbatim so `research_runs.jsonRaw` can store it. If Perplexity fails in n8n, fall back to **Claude Opus** (no web grounding) and mark the research_run `webGrounded: false`.
+### Respond to Callback (Step 7)
 
-### Step 4 / 5 — Draft + Assembly (Anthropic Claude Opus)
-
-Use the Anthropic node (or HTTP Request against `/v1/messages`). Refer to the model by brand (`claude-opus-*`); exact pinned model IDs live in `server/pipeline/providers.ts` and should not be duplicated in n8n configs without a version note.
-
-### Step 6 — Vetting (Anthropic Claude Sonnet)
-
-Vetting is a separate call that audits the assembled draft for:
-- Hallucinated or miscited statutes
-- Jurisdiction mismatch
-- Factual errors
-- Bloat / tone issues
-
-On a "critical issues" response, loop back to Step 5 (Assembly) with the vetting feedback appended. After N retries (default 2), mark `quality_degraded = true` and append `qualityWarnings` but continue to the write stage.
-
-### Step 7 — Supabase Writes
-
-Use the Supabase node with the **service_role** key. Order of operations:
-
-1. Insert `research_runs` row (jurisdiction, provider, `jsonRaw`, `webGrounded`)
-2. Insert `letter_versions` row (`letterRequestId`, `versionType = 'ai_draft'`, `contentMarkdown`)
-3. Update `letter_requests`:
-   - `currentVersionId = <inserted version id>`
-   - `status = 'generated_locked'`
-   - `researchUnverified = <true if Perplexity failed>`
-   - `qualityDegraded = <true if vetting exhausted retries>`
-4. Insert `workflow_jobs` rows for each stage (jobType, provider, status, token counts, estimatedCostUsd)
-
-Do **not** write to any legacy table like `letters` — the canonical table is `letter_requests`.
-
-### Step 8 — Respond to Webhook
-
-Return a minimal JSON payload matching `N8nPipelineResult` so the orchestrator can verify and log.
-
-```json
-{
-  "ok": true,
-  "letterRequestId": "<uuid>",
-  "status": "generated_locked",
-  "aiDraftVersionId": "<uuid>",
-  "researchRunId": "<uuid>"
-}
-```
+**Do not** use the Webhook node's built-in "Respond to Webhook" for the final result — that only works inside the 10s ack window. Use a separate HTTP Request node that POSTs to `callbackUrl` (which the app passed in the original payload), with `x-ttml-callback-secret` header set to `$json.callbackSecret`.
 
 ---
 
 ## Error Handling in n8n
 
-### Workflow Error Catcher
-
-Attach an **Error Trigger** to the workflow. On any step error:
+Attach an Error Trigger to the workflow. On any step error:
 
 ```javascript
-const error = $json.error
-const letterId = $json.letterRequestId
-
-// Write a pipeline_failed workflow_jobs row (service role)
-const failedJob = {
-  letter_request_id: letterId,
-  job_type: 'n8n_' + ($json.$node?.name ?? 'unknown'),
-  provider: 'n8n',
-  status: 'failed',
-  error_message: error?.message?.slice(0, 2000),
-}
-
-// Respond with a structured failure so the orchestrator knows to fall back
+// HTTP Request → POST {{ $json.callbackUrl }}
+// Headers: x-ttml-callback-secret: {{ $json.callbackSecret }}
 return {
   json: {
-    ok: false,
-    letterRequestId: letterId,
-    errorType: 'http_error',
-    error: error?.message ?? 'unknown n8n error',
+    letterId: $json.letterId,
+    success: false,
+    error: ($node["Error Trigger"].json.error?.message ?? "unknown n8n error").slice(0, 2000),
+    provider: "n8n-4stage",
+    stages: [],
   },
-}
+};
 ```
 
-**Do not** set `letter_requests.status = 'pipeline_failed'` from n8n — let the orchestrator decide whether the in-app fallback should run. A false `pipeline_failed` set by n8n would wrongly deny the user a retry.
+The callback will:
+- Revert status to `submitted`
+- Log `action: "pipeline_failed"`
+- **Not** email the subscriber (the orchestrator will either re-trigger this letter or the user can resubmit)
+
+---
+
+## Testing n8n Integration
+
+### Manual webhook test (app → n8n)
+
+```bash
+curl -X POST "$N8N_WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -H "X-Auth-Token: $N8N_CALLBACK_SECRET" \
+  -d '{
+    "letterId": 99999,
+    "letterType": "demand_letter",
+    "userId": "test-sender",
+    "callbackUrl": "https://www.talk-to-my-lawyer.com/api/pipeline/n8n-callback",
+    "callbackSecret": "'"$N8N_CALLBACK_SECRET"'",
+    "intakeData": {
+      "sender":    { "name": "John Doe",   "address": "123 Main St, Los Angeles, CA 90001" },
+      "recipient": { "name": "Jane Smith", "address": "456 Oak Ave, Los Angeles, CA 90002" },
+      "jurisdictionState": "CA",
+      "jurisdictionCountry": "US",
+      "matter": { "subject": "Unpaid invoice", "description": "Services rendered not paid." },
+      "desiredOutcome": "Payment in full within 14 days.",
+      "letterType": "demand_letter",
+      "tonePreference": "professional",
+      "financials": null,
+      "additionalContext": ""
+    }
+  }'
+```
+
+### Manual callback test (n8n → app)
+
+```bash
+curl -X POST "${APP_BASE_URL}/api/pipeline/n8n-callback" \
+  -H "Content-Type: application/json" \
+  -H "x-ttml-callback-secret: $N8N_CALLBACK_SECRET" \
+  -d '{
+    "letterId": 99999,
+    "success": true,
+    "provider": "n8n-4stage",
+    "stages": ["research","draft","assembly","vetting"],
+    "researchPacket": { "researchSummary": "…", "jurisdictionProfile": { "country": "US", "stateProvince": "CA", "city": "", "authorityHierarchy": ["Federal","State","Local"] }, "issuesIdentified": [], "applicableRules": [], "localJurisdictionElements": [], "factualDataNeeded": [], "openQuestions": [], "riskFlags": [], "draftingConstraints": [] },
+    "draftOutput":    { "draftLetter": "…", "attorneyReviewSummary": "…", "openQuestions": [], "riskFlags": [] },
+    "assembledLetter": "FINAL ASSEMBLED LETTER TEXT …",
+    "vettedLetter":    "FINAL VETTED LETTER TEXT …",
+    "vettingReport":   { "citationsVerified": 3, "citationsRemoved": 0, "citationsFlagged": [], "bloatPhrasesRemoved": [], "jurisdictionIssues": [], "factualIssuesFound": [], "changesApplied": ["Tightened phrasing"], "overallAssessment": "Solid draft.", "riskLevel": "low" },
+    "bloatDetected":   0
+  }'
+```
+
+Expect `{"received": true, "letterId": 99999, "provider": "n8n-4stage"}` and a new `letter_versions` row.
+
+### Integration test (vitest)
+
+`server/phase73-n8n-alignment.test.ts` already covers the aligned 4-stage callback happy path. Extend it for:
+
+- Legacy (`draftContent`-only) branch → local assembly invoked
+- Failure branch (`success=false`) → revert to `submitted`
+- 401 on missing `x-ttml-callback-secret`
+- 503 when `N8N_CALLBACK_SECRET` is unset
 
 ---
 
 ## Monitoring & Debugging
 
-### Health Check
-
-```typescript
-// Cron or Railway health-check route
-export async function checkN8nHealth() {
-  if (!isN8nActive()) return
-  try {
-    const url = new URL('/health', process.env.N8N_WEBHOOK_URL!).toString()
-    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5_000) })
-    if (!res.ok) logger.error({ status: res.status }, '[n8n] health check failed')
-  } catch (err) {
-    logger.error({ err }, '[n8n] health check threw')
-  }
-}
-```
-
-### Metrics
-
-`workflow_jobs` already stores per-stage status, provider, and token counts. Roll up via a read-only view:
+Stage history lives on `workflow_jobs`. Roll up with a read-only view:
 
 ```sql
-CREATE VIEW public.n8n_metrics AS
+CREATE OR REPLACE VIEW public.n8n_metrics AS
 SELECT
-  date_trunc('hour', created_at)                                           AS hour,
-  COUNT(*)                                                                 AS total_calls,
-  COUNT(*) FILTER (WHERE status = 'succeeded')                             AS successful_calls,
-  COUNT(*) FILTER (WHERE status = 'failed')                                AS failed_calls,
-  COUNT(*) FILTER (WHERE status = 'failed' AND error_message ILIKE '%timeout%') AS timeout_calls,
-  AVG(EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000)               AS avg_ms
+  date_trunc('hour', created_at)                                                AS hour,
+  COUNT(*)                                                                      AS total_jobs,
+  COUNT(*) FILTER (WHERE status = 'completed')                                  AS completed_jobs,
+  COUNT(*) FILTER (WHERE status = 'failed')                                     AS failed_jobs,
+  COUNT(*) FILTER (WHERE status = 'failed' AND error_message ILIKE '%timeout%') AS timeout_jobs
 FROM public.workflow_jobs
 WHERE provider = 'n8n'
 GROUP BY 1
 ORDER BY 1 DESC;
 ```
 
-Expose this only to `service_role` / admins; do not grant to `authenticated`.
+Expose only to `service_role` / admins — not to `authenticated`.
 
----
-
-## Testing n8n Integration
-
-### Manual Webhook Test
-
-```bash
-curl -X POST https://n8n.example.com/webhook/generate-letter \
-  -H "Content-Type: application/json" \
-  -H "X-Webhook-Secret: $N8N_WEBHOOK_SECRET" \
-  -d '{
-    "letterRequestId": "00000000-0000-0000-0000-000000000001",
-    "userId":          "00000000-0000-0000-0000-000000000002",
-    "letterType":      "demand-letter",
-    "intake": {
-      "sender":    { "name": "John Doe",   "address": "123 Main St, Los Angeles, CA 90001" },
-      "recipient": { "name": "Jane Smith", "address": "456 Oak Ave, Los Angeles, CA 90002" },
-      "details":   { "amountOwed": "5000.00", "deadlineDate": "2026-03-01",
-                     "incidentDescription": "Unpaid invoice for services rendered" },
-      "jurisdiction": "CA"
-    },
-    "metadata": { "userEmail": "john@example.com", "createdAt": "2026-04-18T00:00:00Z",
-                  "pipelineVersion": "2026.04" }
-  }'
-```
-
-### Integration Test (vitest)
-
-```typescript
-describe('n8n Integration (dormant path)', () => {
-  beforeAll(() => { process.env.N8N_PRIMARY = 'true' })
-  afterAll(() => { delete process.env.N8N_PRIMARY })
-
-  it('writes an ai_draft version + generated_locked status', async () => {
-    const request: N8nPipelineRequest = buildTestRequest('demand-letter')
-    const result = await triggerN8nPipeline({ ...ctxFixture, ...request })
-
-    expect(result.ok).toBe(true)
-    expect(result.status).toBe('generated_locked')
-
-    const version = await db.query.letterVersions.findFirst({
-      where: eq(letterVersions.id, result.aiDraftVersionId!),
-    })
-    expect(version?.versionType).toBe('ai_draft')
-  })
-
-  it('falls back to in-app pipeline when n8n times out', async () => {
-    mockFetch.timeout()
-    const result = await runPipeline(ctxFixture) // orchestrator entry point
-    // Expect in-app chain to have produced the ai_draft, not n8n
-    expect(result.producedBy).toBe('in_app')
-  })
-})
-```
+**Sentry tags** already emitted by `n8nCallback.ts`: `component: "n8n_callback"`, `error_type: "post_response_processing_failed"`. The orchestrator logs n8n failures at `warn` level with the `letterId`.
 
 ---
 
 ## Related Skills
 
-- `ttml-pipeline-expert` — the 4-stage pipeline semantics
-- `ttml-pipeline-orchestrator` — implementation companion (`server/pipeline/`, pg-boss, provider table)
-- `ttml-langgraph-pipeline` — optional LangGraph replacement for the in-app path
+- **`ttml-pipeline-expert`** — 4-stage pipeline semantics
+- **`ttml-pipeline-orchestrator`** — implementation companion (`server/pipeline/orchestrator.ts`, pg-boss, workflow_jobs)
+- **`ttml-langgraph-pipeline`** — optional LangGraph replacement for the in-app path (separate env gate, runs before the n8n gate when set)
+- **`ttml-payment-subscription-management`** — what happens to the letter after n8n lands it in `generated_locked`
