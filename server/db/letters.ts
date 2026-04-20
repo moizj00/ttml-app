@@ -144,6 +144,7 @@ export async function getLetterRequestSafeForSubscriber(
       priority: letterRequests.priority,
       currentFinalVersionId: letterRequests.currentFinalVersionId,
       pdfStoragePath: letterRequests.pdfStoragePath,
+      pdfUrl: letterRequests.pdfUrl,
       qualityDegraded: letterRequests.qualityDegraded,
       submittedByAdmin: letterRequests.submittedByAdmin,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,

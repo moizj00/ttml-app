@@ -1,6 +1,12 @@
 import { generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import type { ResearchPacket, CitationRegistryEntry, CitationAuditReport, CitationAuditEntry, TokenUsage } from "../../shared/types";
+import type {
+  ResearchPacket,
+  CitationRegistryEntry,
+  CitationAuditReport,
+  CitationAuditEntry,
+  TokenUsage,
+} from "../../shared/types";
 import { accumulateTokens } from "./providers";
 import { captureServerException } from "../sentry";
 import { logger } from "../logger";
@@ -9,7 +15,9 @@ import { logger } from "../logger";
 // CITATION REGISTRY & ANTI-HALLUCINATION ENGINE
 // ═══════════════════════════════════════════════════════
 
-export function buildCitationRegistry(research: ResearchPacket): CitationRegistryEntry[] {
+export function buildCitationRegistry(
+  research: ResearchPacket
+): CitationRegistryEntry[] {
   const registry: CitationRegistryEntry[] = [];
   let idx = 1;
 
@@ -89,10 +97,13 @@ export function buildCitationRegistry(research: ResearchPacket): CitationRegistr
   return registry;
 }
 
-export function buildCitationRegistryPromptBlock(registry: CitationRegistryEntry[]): string {
+export function buildCitationRegistryPromptBlock(
+  registry: CitationRegistryEntry[]
+): string {
   if (registry.length === 0) return "";
   const lines = registry.map(
-    r => `  [REF-${r.registryNumber}] ${r.citationText} (${r.ruleType}, confidence: ${r.confidence})`
+    r =>
+      `  [REF-${r.registryNumber}] ${r.citationText} (${r.ruleType}, confidence: ${r.confidence})`
   );
   return `
 ## CITATION REGISTRY — MANDATORY CONSTRAINT
@@ -249,9 +260,10 @@ export function runCitationAudit(
 
   for (const citation of extractedCitations) {
     const citNorm = normalizeCitation(citation);
-    const matchedEntry = normalizedRegistry.find(r =>
-      r.normalized.includes(citNorm) || citNorm.includes(r.normalized)
-    )?.entry ?? null;
+    const matchedEntry =
+      normalizedRegistry.find(
+        r => r.normalized.includes(citNorm) || citNorm.includes(r.normalized)
+      )?.entry ?? null;
 
     if (matchedEntry) {
       verified.push({
@@ -273,7 +285,8 @@ export function runCitationAudit(
   }
 
   const total = verified.length + unverified.length;
-  const riskScore = total > 0 ? Math.round((unverified.length / total) * 100) : 0;
+  const riskScore =
+    total > 0 ? Math.round((unverified.length / total) * 100) : 0;
 
   return {
     verifiedCitations: verified,
@@ -282,6 +295,63 @@ export function runCitationAudit(
     hallucinationRiskScore: riskScore,
     auditedAt: new Date().toISOString(),
   };
+}
+
+export async function revalidateCitationsWithPerplexity(
+  registry: CitationRegistryEntry[],
+  jurisdiction: string,
+  letterId: number,
+  tokenAcc?: TokenUsage
+): Promise<CitationRevalidationResult> {
+  const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+  if (!perplexityApiKey || perplexityApiKey.trim().length === 0) {
+    logger.warn(
+      `[Pipeline] PERPLEXITY_API_KEY not set — falling back to OpenAI for citation revalidation for letter #${letterId}`
+    );
+    return revalidateCitationsWithOpenAI(
+      registry,
+      jurisdiction,
+      letterId,
+      tokenAcc
+    );
+  }
+
+  const prompt = buildCitationRevalidationPrompt(registry, jurisdiction);
+  const perplexityProvider = createOpenAI({
+    apiKey: perplexityApiKey,
+    baseURL: "https://api.perplexity.ai",
+  });
+
+  try {
+    logger.info(
+      `[Pipeline] Revalidating ${registry.length} citations with Perplexity sonar-pro for letter #${letterId}`
+    );
+    const { text, usage: citationUsage } = await generateText({
+      model: perplexityProvider("sonar-pro"),
+      system: "You are a legal citation verification assistant.",
+      prompt,
+      maxOutputTokens: 1000,
+      abortSignal: AbortSignal.timeout(60_000),
+    });
+    if (tokenAcc) accumulateTokens(tokenAcc, citationUsage);
+
+    const updatedRegistry = parseCitationRevalidationResponse(text, registry);
+    logger.info(
+      `[Pipeline] Citation revalidation complete (Perplexity) for letter #${letterId}: ${updatedRegistry.filter(r => r.revalidated).length}/${registry.length} checked`
+    );
+    return { registry: updatedRegistry, modelKey: "sonar-pro" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      `[Pipeline] Perplexity citation revalidation failed for letter #${letterId}: ${msg}. Falling back to OpenAI.`
+    );
+    return revalidateCitationsWithOpenAI(
+      registry,
+      jurisdiction,
+      letterId,
+      tokenAcc
+    );
+  }
 }
 
 export function replaceUnverifiedCitations(

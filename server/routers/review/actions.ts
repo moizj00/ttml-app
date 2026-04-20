@@ -18,12 +18,12 @@ import {
   getUserById,
   logReviewAction,
   updateLetterStatus,
+  updateLetterPdfUrl,
   updateLetterStoragePath,
   updateLetterVersionPointers,
   createClientPortalToken,
   createDeliveryLogEntry,
 } from "../../db";
-import { storageGet } from "../../storage";
 import {
   sendLetterRejectedEmail,
   sendLetterApprovedEmail,
@@ -291,9 +291,8 @@ export const reviewActionsRouter = router({
         });
         pdfKey = pdfResult.pdfKey;
         await updateLetterStoragePath(input.letterId, pdfKey);
-        // Resolve a short-lived URL for immediate use in this response only
-        const resolved = await storageGet(pdfKey);
-        pdfUrl = resolved.url;
+        pdfUrl = pdfResult.pdfUrl;
+        await updateLetterPdfUrl(input.letterId, pdfUrl);
         logger.info(`[Approve] PDF generated for letter #${input.letterId}: key=${pdfKey}`);
       } catch (pdfErr) {
         captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });

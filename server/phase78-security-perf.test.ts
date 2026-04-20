@@ -42,7 +42,7 @@ describe("plainTextToHtml XSS sanitization", () => {
     }));
 
     // Dynamically import after mock is set up
-    const mod = await import("../client/src/components/shared/RichTextEditor");
+    const mod = await import("../client/src/lib/plainTextToHtml");
     plainTextToHtml = mod.plainTextToHtml;
   });
 

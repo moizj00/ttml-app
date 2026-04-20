@@ -172,7 +172,7 @@ function buildTemplateData(opts: PdfGenerationOptions): LetterTemplateData {
  */
 export async function generateAndUploadApprovedPdf(
   opts: PdfGenerationOptions
-): Promise<{ pdfKey: string }> {
+): Promise<{ pdfKey: string; pdfUrl: string }> {
   if (!opts.content || opts.content.trim().length === 0) {
     throw new Error(`[PDF] Letter #${opts.letterId}: content is empty — cannot generate PDF`);
   }
@@ -188,10 +188,10 @@ export async function generateAndUploadApprovedPdf(
     .replace(/\s+/g, "-");
   const fileKey = `approved-letters/${opts.letterId}-${safeSubject}-${timestamp}.pdf`;
 
-  const { key } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+  const { key, url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
 
   logger.info(`[PDF] Approved PDF uploaded for letter #${opts.letterId}: ${key} (${pdfBuffer.length} bytes)`);
-  return { pdfKey: key };
+  return { pdfKey: fileKey, pdfUrl: url };
 }
 
 /**
