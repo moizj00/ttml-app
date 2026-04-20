@@ -7,7 +7,12 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import BrandLogo from "@/components/shared/BrandLogo";
 
-type VerifyState = "loading" | "success" | "success-redirect" | "error" | "resend";
+type VerifyState =
+  | "loading"
+  | "success"
+  | "success-redirect"
+  | "error"
+  | "resend";
 
 export default function VerifyEmail() {
   const [, setLocation] = useLocation();
@@ -22,7 +27,7 @@ export default function VerifyEmail() {
   useEffect(() => {
     if (state !== "success-redirect") return;
     const timer = setInterval(() => {
-      setRedirectCountdown((c) => {
+      setRedirectCountdown(c => {
         if (c <= 1) {
           clearInterval(timer);
           setLocation(redirectPath);
@@ -36,7 +41,9 @@ export default function VerifyEmail() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const hashParams = new URLSearchParams(
+      window.location.hash.replace(/^#/, "")
+    );
     const token = params.get("token");
     const code = params.get("code");
     const tokenHash = params.get("token_hash");
@@ -50,13 +57,23 @@ export default function VerifyEmail() {
     };
 
     const verifyCustomToken = async () => {
-      const res = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token!)}`, { credentials: "include" });
+      const res = await fetch(
+        `/api/auth/verify-email?token=${encodeURIComponent(token!)}`,
+        { credentials: "include" }
+      );
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Verification failed. The link may have expired.");
+        throw new Error(
+          data.error || "Verification failed. The link may have expired."
+        );
       }
       clearAuthParams();
-      setState("success");
+      if (data.redirectPath) {
+        setRedirectPath(data.redirectPath);
+      } else {
+        setRedirectPath("/dashboard");
+      }
+      setState("success-redirect");
     };
 
     const verifySupabaseFlow = async (payload: Record<string, string>) => {
@@ -68,15 +85,17 @@ export default function VerifyEmail() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Verification failed. The link may have expired.");
+        throw new Error(
+          data.error || "Verification failed. The link may have expired."
+        );
       }
       clearAuthParams();
-      if (data.sessionSet && data.redirectPath) {
+      if (data.redirectPath) {
         setRedirectPath(data.redirectPath);
-        setState("success-redirect");
       } else {
-        setState("success");
+        setRedirectPath("/dashboard");
       }
+      setState("success-redirect");
     };
 
     if (!token && !code && !tokenHash && !accessToken) {
@@ -110,7 +129,9 @@ export default function VerifyEmail() {
           return;
         }
 
-        setErrorMessage("This verification link is invalid or incomplete. Please request a new one.");
+        setErrorMessage(
+          "This verification link is invalid or incomplete. Please request a new one."
+        );
         setState("error");
       } catch (err: any) {
         setErrorMessage(err?.message || "Network error. Please try again.");
@@ -133,12 +154,19 @@ export default function VerifyEmail() {
       const data = await res.json();
       if (res.ok) {
         setResendSent(true);
-        toast.success("Verification email sent", { description: data.message || "Check your inbox for the confirmation link." });
+        toast.success("Verification email sent", {
+          description:
+            data.message || "Check your inbox for the confirmation link.",
+        });
       } else {
-        toast.error("Could not resend email", { description: data.error || "Please wait a moment and try again." });
+        toast.error("Could not resend email", {
+          description: data.error || "Please wait a moment and try again.",
+        });
       }
     } catch {
-        toast.error("Connection error", { description: "Please check your internet connection and try again." });
+      toast.error("Connection error", {
+        description: "Please check your internet connection and try again.",
+      });
     } finally {
       setResendLoading(false);
     }
@@ -157,8 +185,12 @@ export default function VerifyEmail() {
           {state === "loading" && (
             <>
               <Loader2 className="w-16 h-16 text-indigo-600 animate-spin mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Verifying your email…</h1>
-              <p className="text-slate-500">Please wait while we confirm your address.</p>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">
+                Verifying your email…
+              </h1>
+              <p className="text-slate-500">
+                Please wait while we confirm your address.
+              </p>
             </>
           )}
 
@@ -166,9 +198,12 @@ export default function VerifyEmail() {
           {state === "success-redirect" && (
             <>
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Email Verified!</h1>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">
+                Email Verified!
+              </h1>
               <p className="text-slate-600 mb-4">
-                Your email address has been confirmed. Your account is now active.
+                Your email address has been confirmed. Your account is now
+                active.
               </p>
               <p className="text-slate-500 text-sm mb-6">
                 Redirecting to your dashboard in {redirectCountdown}...
@@ -187,9 +222,12 @@ export default function VerifyEmail() {
           {state === "success" && (
             <>
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Email Verified!</h1>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">
+                Email Verified!
+              </h1>
               <p className="text-slate-600 mb-6">
-                Your email address has been confirmed. Your account is now active and ready to use.
+                Your email address has been confirmed. Your account is now
+                active and ready to use.
               </p>
               <Button
                 onClick={() => setLocation("/login")}
@@ -205,7 +243,9 @@ export default function VerifyEmail() {
           {state === "error" && (
             <>
               <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Verification Failed</h1>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">
+                Verification Failed
+              </h1>
               <p className="text-slate-600 mb-6">{errorMessage}</p>
               <Button
                 variant="outline"
@@ -228,11 +268,14 @@ export default function VerifyEmail() {
           {state === "resend" && (
             <>
               <Mail className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Resend Verification Email</h1>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">
+                Resend Verification Email
+              </h1>
               {resendSent ? (
                 <>
                   <p className="text-green-600 mb-6">
-                    A new verification link has been sent to <strong>{resendEmail}</strong>. Please check your inbox.
+                    A new verification link has been sent to{" "}
+                    <strong>{resendEmail}</strong>. Please check your inbox.
                   </p>
                   <Link href="/login" data-testid="link-back-to-login-success">
                     <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
@@ -243,7 +286,8 @@ export default function VerifyEmail() {
               ) : (
                 <form onSubmit={handleResend} className="text-left mt-4">
                   <p className="text-slate-500 text-sm mb-4 text-center">
-                    Enter your email address and we'll send you a new verification link.
+                    Enter your email address and we'll send you a new
+                    verification link.
                   </p>
                   <div className="mb-4">
                     <Label htmlFor="email">Email Address</Label>
@@ -251,7 +295,7 @@ export default function VerifyEmail() {
                       id="email"
                       type="email"
                       value={resendEmail}
-                      onChange={(e) => setResendEmail(e.target.value)}
+                      onChange={e => setResendEmail(e.target.value)}
                       placeholder="you@example.com"
                       required
                       className="mt-1"
@@ -265,13 +309,19 @@ export default function VerifyEmail() {
                     data-testid="button-resend-verification"
                   >
                     {resendLoading ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending…
+                      </>
                     ) : (
                       "Send Verification Email"
                     )}
                   </Button>
                   <Link href="/login" data-testid="link-back-to-login-resend">
-                    <Button variant="ghost" className="w-full mt-2 text-slate-600">
+                    <Button
+                      variant="ghost"
+                      className="w-full mt-2 text-slate-600"
+                    >
                       Back to Sign In
                     </Button>
                   </Link>
@@ -283,7 +333,11 @@ export default function VerifyEmail() {
 
         <p className="text-center text-sm text-slate-500 mt-6">
           Need help?{" "}
-          <a href="mailto:support@talk-to-my-lawyer.com" className="text-indigo-600 hover:underline" data-testid="link-contact-support">
+          <a
+            href="mailto:support@talk-to-my-lawyer.com"
+            className="text-indigo-600 hover:underline"
+            data-testid="link-contact-support"
+          >
             Contact support
           </a>
         </p>

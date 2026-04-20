@@ -89,6 +89,9 @@ export const PAID_PLANS = [
 /** Affiliate discount percentage */
 export const AFFILIATE_DISCOUNT_PERCENT = 20;
 
+/** Affiliate commission rate in basis points (500 = 5%). Applied to sale amount in cents. */
+export const AFFILIATE_COMMISSION_BASIS_POINTS = 500;
+
 /** Single letter price in cents (for Stripe) */
 export const SINGLE_LETTER_PRICE_CENTS = PRICING.singleLetter.price * 100;
 

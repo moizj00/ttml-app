@@ -60,7 +60,9 @@ export default function ReviewDetail() {
       >
         <div className="text-center py-16">
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
-          <h3 className="font-semibold text-foreground mb-2">Invalid letter ID</h3>
+          <h3 className="font-semibold text-foreground mb-2">
+            Invalid letter ID
+          </h3>
           <p className="text-sm text-muted-foreground">
             The letter ID in the URL is not valid.
           </p>
@@ -94,7 +96,9 @@ export default function ReviewDetail() {
       >
         <div className="text-center py-16">
           <AlertCircle className="w-12 h-12 text-destructive/40 mx-auto mb-4" />
-          <h3 className="font-semibold text-foreground mb-2">Letter not found</h3>
+          <h3 className="font-semibold text-foreground mb-2">
+            Letter not found
+          </h3>
           <p className="text-sm text-muted-foreground">
             This letter doesn't exist or you don't have access to it.
           </p>
@@ -122,9 +126,13 @@ export default function ReviewDetail() {
               {letter!.subject}
             </h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <StatusBadge status={letter!.status} data-testid="status-badge-letter" />
+              <StatusBadge
+                status={letter!.status}
+                data-testid="status-badge-letter"
+              />
               <span className="text-xs text-muted-foreground">
-                {LETTER_TYPE_CONFIG[letter!.letterType]?.label ?? letter!.letterType}
+                {LETTER_TYPE_CONFIG[letter!.letterType]?.label ??
+                  letter!.letterType}
                 {letter!.jurisdictionState && ` · ${letter!.jurisdictionState}`}
                 {" · "}
                 Submitted {new Date(letter!.createdAt).toLocaleDateString()}
@@ -151,7 +159,11 @@ export default function ReviewDetail() {
             onEnterEditMode={rd.enterEditMode}
             onRelease={() => {
               if (rd.hasUnsavedChanges) {
-                if (!window.confirm("You have unsaved changes. Release this letter anyway?"))
+                if (
+                  !window.confirm(
+                    "You have unsaved changes. Release this letter anyway?"
+                  )
+                )
                   return;
               }
               rd.handleUnclaim();
@@ -170,10 +182,13 @@ export default function ReviewDetail() {
           >
             <ShieldAlert className="w-5 h-5 text-red-600 flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-800">RESEARCH UNVERIFIED</p>
+              <p className="text-sm font-semibold text-red-800">
+                RESEARCH UNVERIFIED
+              </p>
               <p className="text-xs text-red-700 mt-0.5">
-                This letter's legal research was not web-verified (Perplexity was unavailable).
-                Citations require manual attorney validation before approval.
+                This letter's legal research was not web-verified (Perplexity
+                was unavailable). Citations require manual attorney validation
+                before approval.
               </p>
             </div>
           </div>
@@ -189,8 +204,9 @@ export default function ReviewDetail() {
                 QUALITY FLAGS — EXTRA SCRUTINY REQUIRED
               </p>
               <p className="text-xs text-amber-700 mt-0.5">
-                This draft was produced with quality warnings (e.g. jurisdiction mismatch,
-                vetting issues, or pipeline fallback). Please review carefully before approving.
+                This draft was produced with quality warnings (e.g. jurisdiction
+                mismatch, vetting issues, or pipeline fallback). Please review
+                carefully before approving.
               </p>
             </div>
           </div>
@@ -259,10 +275,7 @@ export default function ReviewDetail() {
 
             {/* Editor body */}
             <div className="flex-1 overflow-auto">
-              {letter!.status === "pending_review" ||
-              letter!.status === "client_revision_requested" ||
-              letter!.status === "researching" ||
-              letter!.status === "drafting" ? (
+              {!rd.latestDraft?.content ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
                   {letter!.status === "pending_review" ||
                   letter!.status === "client_revision_requested" ? (
@@ -271,7 +284,7 @@ export default function ReviewDetail() {
                       <p className="text-sm text-muted-foreground">
                         {letter!.status === "client_revision_requested"
                           ? "Client requested revisions. Claim to review their notes and update the letter."
-                          : "Claim this letter to load the draft into the editor."}
+                          : "Claim this letter to begin your review. The draft will load below."}
                       </p>
                       {letter!.status === "client_revision_requested" &&
                         (() => {
@@ -279,7 +292,8 @@ export default function ReviewDetail() {
                             .reverse()
                             .find(
                               a =>
-                                a.action === "client_revision_requested" && a.noteText
+                                a.action === "client_revision_requested" &&
+                                a.noteText
                             );
                           return revisionAction?.noteText ? (
                             <div
@@ -300,7 +314,8 @@ export default function ReviewDetail() {
                     <>
                       <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
                       <p className="text-sm text-muted-foreground">
-                        Drafting pipeline is running — draft will appear here shortly.
+                        Drafting pipeline is running — draft will appear here
+                        shortly.
                       </p>
                     </>
                   )}
@@ -339,7 +354,10 @@ export default function ReviewDetail() {
           {/* Right: Intake / Research / Citations / History panel */}
           <div className="w-full lg:w-80 flex-shrink-0 flex flex-col min-h-[40vh] lg:min-h-0">
             <Tabs defaultValue="intake" className="flex flex-col h-full">
-              <TabsList className="w-full flex-shrink-0 overflow-x-auto" data-testid="tabs-review-panel">
+              <TabsList
+                className="w-full flex-shrink-0 overflow-x-auto"
+                data-testid="tabs-review-panel"
+              >
                 <TabsTrigger
                   value="intake"
                   className="flex-1 text-xs"
@@ -395,13 +413,24 @@ export default function ReviewDetail() {
                   jurisdictionState={letter!.jurisdictionState}
                 />
               </TabsContent>
-              <TabsContent value="research" className="flex-1 overflow-auto mt-2">
+              <TabsContent
+                value="research"
+                className="flex-1 overflow-auto mt-2"
+              >
                 <ResearchPanel research={research} />
               </TabsContent>
-              <TabsContent value="citations" className="flex-1 overflow-auto mt-2">
-                <CitationAuditPanel citationAuditReport={rd.citationAuditReport} />
+              <TabsContent
+                value="citations"
+                className="flex-1 overflow-auto mt-2"
+              >
+                <CitationAuditPanel
+                  citationAuditReport={rd.citationAuditReport}
+                />
               </TabsContent>
-              <TabsContent value="counter-args" className="flex-1 overflow-auto mt-2">
+              <TabsContent
+                value="counter-args"
+                className="flex-1 overflow-auto mt-2"
+              >
                 <CounterArgumentPanel
                   counterArguments={rd.counterArguments}
                   counterArgumentGaps={rd.counterArgumentGaps}
@@ -410,7 +439,10 @@ export default function ReviewDetail() {
               <TabsContent value="diff" className="flex-1 overflow-auto mt-2">
                 <DiffPanel versions={versions} />
               </TabsContent>
-              <TabsContent value="history" className="flex-1 overflow-auto mt-2">
+              <TabsContent
+                value="history"
+                className="flex-1 overflow-auto mt-2"
+              >
                 <HistoryPanel actions={actions} />
               </TabsContent>
             </Tabs>
@@ -431,7 +463,7 @@ export default function ReviewDetail() {
         acknowledgedUnverified={rd.acknowledgedUnverified}
         onAcknowledgeChange={rd.setAcknowledgedUnverified}
         isPending={rd.approvePending}
-        onConfirm={(opts) => rd.handleApprove(opts)}
+        onConfirm={opts => rd.handleApprove(opts)}
       />
       <RejectDialog
         open={rd.rejectDialog}
