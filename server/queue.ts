@@ -60,9 +60,17 @@ interface PgBossClient {
   send(
     queueName: string,
     data: object,
-    options?: { id?: string; singletonKey?: string; retryLimit?: number; expireInSeconds?: number }
+    options?: {
+      id?: string;
+      singletonKey?: string;
+      retryLimit?: number;
+      expireInSeconds?: number;
+    }
   ): Promise<string | null | undefined>;
-  createQueue(queueName: string, options: PgBossCreateQueueOptions): Promise<void>;
+  createQueue(
+    queueName: string,
+    options: PgBossCreateQueueOptions
+  ): Promise<void>;
   getQueueStats(queueName: string): Promise<PgBossQueueStats | undefined>;
   findJobs<T = unknown>(queueName: string): Promise<Array<PgBossFoundJob<T>>>;
   work<T>(
@@ -87,9 +95,7 @@ export const QUEUE_NAME = "pipeline";
 
 // ─── Job Data Types ────────────────────────────────────────────────────────
 
-export type PipelineJobType =
-  | "runPipeline"
-  | "retryPipelineFromStage";
+export type PipelineJobType = "runPipeline" | "retryPipelineFromStage";
 
 export interface RunPipelineJobData {
   type: "runPipeline";
@@ -98,7 +104,10 @@ export interface RunPipelineJobData {
   userId: number | undefined;
   appUrl: string;
   label: string;
-  usageContext?: { shouldRefundOnFailure: true; isFreeTrialSubmission: boolean };
+  usageContext?: {
+    shouldRefundOnFailure: true;
+    isFreeTrialSubmission: boolean;
+  };
 }
 
 export interface RetryFromStageJobData {
@@ -139,11 +148,15 @@ function getConnectionString(): string {
   const masked = url.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
   logger.info(`[Queue] Using ${envSource} for pg-boss connection: ${masked}`);
 
-  if (url.includes(":6543") || url.includes("pooler.supabase.com") || url.includes("pgbouncer=true")) {
+  if (
+    url.includes(":6543") ||
+    url.includes("pooler.supabase.com") ||
+    url.includes("pgbouncer=true")
+  ) {
     logger.warn(
       `[Queue] WARNING: ${envSource} appears to be a connection pooler URL. ` +
-      `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
-      `Set SUPABASE_DIRECT_URL to the direct connection string.`
+        `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
+        `Set SUPABASE_DIRECT_URL to the direct connection string.`
     );
   }
 
@@ -155,7 +168,9 @@ function getConnectionString(): string {
  * This is needed because Railway's network resolves Supabase pooler hostnames
  * to IPv6 addresses that are unreachable (ENETUNREACH).
  */
-async function resolveConnectionToIPv4(connectionString: string): Promise<string> {
+async function resolveConnectionToIPv4(
+  connectionString: string
+): Promise<string> {
   try {
     const url = new URL(connectionString);
     const hostname = url.hostname;
@@ -168,12 +183,18 @@ async function resolveConnectionToIPv4(connectionString: string): Promise<string
     const addresses = await dns.promises.resolve4(hostname);
     if (addresses.length > 0) {
       const ipv4 = addresses[0];
-      logger.info({ hostname, ipv4 }, "[Queue] Resolved hostname to IPv4 for pg-boss connection");
+      logger.info(
+        { hostname, ipv4 },
+        "[Queue] Resolved hostname to IPv4 for pg-boss connection"
+      );
       url.hostname = ipv4;
       return url.toString();
     }
   } catch (err) {
-    logger.warn({ err }, "[Queue] Failed to resolve hostname to IPv4, using original connection string");
+    logger.warn(
+      { err },
+      "[Queue] Failed to resolve hostname to IPv4, using original connection string"
+    );
   }
   return connectionString;
 }
@@ -206,7 +227,10 @@ export async function getBoss(): Promise<PgBossClient> {
     try {
       await boss.start();
     } catch (startErr) {
-      logger.error({ err: startErr }, "[Queue] pg-boss failed to start — database connection issue");
+      logger.error(
+        { err: startErr },
+        "[Queue] pg-boss failed to start — database connection issue"
+      );
       throw startErr;
     }
     // Ensure the pipeline queue exists with desired retention settings.
@@ -224,14 +248,21 @@ export async function getBoss(): Promise<PgBossClient> {
     };
     try {
       await boss.createQueue(QUEUE_NAME, DESIRED_QUEUE_OPTIONS);
-      logger.info(`[Queue] Created queue "${QUEUE_NAME}" with policy=${DESIRED_QUEUE_OPTIONS.policy}`);
+      logger.info(
+        `[Queue] Created queue "${QUEUE_NAME}" with policy=${DESIRED_QUEUE_OPTIONS.policy}`
+      );
     } catch (queueErr) {
       // Queue already exists — that's fine.
-      logger.debug({ err: queueErr }, "[Queue] createQueue (queue may already exist):");
+      logger.debug(
+        { err: queueErr },
+        "[Queue] createQueue (queue may already exist):"
+      );
     }
 
     _boss = boss;
-    logger.info("[Queue] pg-boss started successfully (PostgreSQL-native queue)");
+    logger.info(
+      "[Queue] pg-boss started successfully (PostgreSQL-native queue)"
+    );
     return boss;
   })();
 
@@ -245,19 +276,26 @@ export async function getBoss(): Promise<PgBossClient> {
 
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
-export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<string> {
+export async function enqueuePipelineJob(
+  data: RunPipelineJobData
+): Promise<string> {
   let boss: PgBossClient;
   try {
     boss = await getBoss();
   } catch (firstErr) {
-    logger.warn({ err: firstErr }, "[Queue] First getBoss() attempt failed, retrying once...");
+    logger.warn(
+      { err: firstErr },
+      "[Queue] First getBoss() attempt failed, retrying once..."
+    );
     _boss = null;
     boss = await getBoss();
   }
   // singletonKey provides application-level deduplication hint.
   // With 'standard' policy, pg-boss does NOT block on failed jobs with the same key.
   // Actual deduplication is enforced by the pipeline lock (acquirePipelineLock).
-  logger.info(`[Queue] Sending pipeline job for letter #${data.letterId} (${data.label})...`);
+  logger.info(
+    `[Queue] Sending pipeline job for letter #${data.letterId} (${data.label})...`
+  );
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
     singletonKey: `letter-${data.letterId}`,
 
@@ -267,14 +305,20 @@ export async function enqueuePipelineJob(data: RunPipelineJobData): Promise<stri
   });
   if (id === null) {
     // Duplicate suppressed — a job for this letter is already active or queued.
-    logger.warn(`[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`);
+    logger.warn(
+      `[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`
+    );
     return `pipeline-${data.letterId}-deduplicated`;
   }
-  logger.info(`[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`);
-  return id;
+  logger.info(
+    `[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`
+  );
+  return id!;
 }
 
-export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Promise<string> {
+export async function enqueueRetryFromStageJob(
+  data: RetryFromStageJobData
+): Promise<string> {
   const boss = await getBoss();
   // singletonKey deduplicates at the queue level — same as enqueuePipelineJob
   const id = await boss.send(QUEUE_NAME, data as unknown as object, {
@@ -283,13 +327,16 @@ export async function enqueueRetryFromStageJob(data: RetryFromStageJobData): Pro
     expireInSeconds: 30 * 60,
   });
   if (id === null) {
-    logger.warn(`[Queue] Duplicate retry-from-stage job suppressed for letter #${data.letterId} (stage: ${data.stage}) — already active/queued`);
+    logger.warn(
+      `[Queue] Duplicate retry-from-stage job suppressed for letter #${data.letterId} (stage: ${data.stage}) — already active/queued`
+    );
     return `retry-${data.letterId}-${data.stage}-deduplicated`;
   }
-  logger.info(`[Queue] Enqueued retry-from-stage job ${id} for letter #${data.letterId} (stage: ${data.stage})`);
-  return id;
+  logger.info(
+    `[Queue] Enqueued retry-from-stage job ${id} for letter #${data.letterId} (stage: ${data.stage})`
+  );
+  return id!;
 }
-
 
 // ─── Admin Dashboard Shim ──────────────────────────────────────────────────
 // admin/jobs.ts calls getPipelineQueue() and uses BullMQ-specific methods
@@ -301,19 +348,29 @@ export interface PipelineQueueShim {
   getCompletedCount(): Promise<number>;
   getFailedCount(): Promise<number>;
   getDelayedCount(): Promise<number>;
-  getFailed(start: number, end: number): Promise<Array<{
-    id: string;
-    name: string;
-    failedReason: string;
-    finishedOn: number | null;
-    data: PipelineJobData;
-  }>>;
-  getCompleted(start: number, end: number): Promise<Array<{
-    id: string;
-    finishedOn: number | null;
-    processedOn: number | null;
-    data: PipelineJobData;
-  }>>;
+  getFailed(
+    start: number,
+    end: number
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      failedReason: string;
+      finishedOn: number | null;
+      data: PipelineJobData;
+    }>
+  >;
+  getCompleted(
+    start: number,
+    end: number
+  ): Promise<
+    Array<{
+      id: string;
+      finishedOn: number | null;
+      processedOn: number | null;
+      data: PipelineJobData;
+    }>
+  >;
 }
 export function getPipelineQueue(): PipelineQueueShim {
   return {
@@ -322,28 +379,36 @@ export function getPipelineQueue(): PipelineQueueShim {
         const boss = await getBoss();
         const stats = await boss.getQueueStats(QUEUE_NAME);
         return (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
-      } catch { return 0; }
+      } catch {
+        return 0;
+      }
     },
     async getActiveCount() {
       try {
         const boss = await getBoss();
         const stats = await boss.getQueueStats(QUEUE_NAME);
         return stats?.activeCount ?? 0;
-      } catch { return 0; }
+      } catch {
+        return 0;
+      }
     },
     async getCompletedCount() {
       try {
         const boss = await getBoss();
         const stats = await boss.getQueueStats(QUEUE_NAME);
         return stats?.totalCount ?? 0;
-      } catch { return 0; }
+      } catch {
+        return 0;
+      }
     },
     async getFailedCount() {
       try {
         const boss = await getBoss();
         const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
-        return jobs.filter((j) => j.state === "failed").length;
-      } catch { return 0; }
+        return jobs.filter(j => j.state === "failed").length;
+      } catch {
+        return 0;
+      }
     },
     async getDelayedCount() {
       return 0; // pg-boss doesn't have a separate "delayed" state
@@ -353,31 +418,37 @@ export function getPipelineQueue(): PipelineQueueShim {
         const boss = await getBoss();
         const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
         return jobs
-          .filter((j) => j.state === "failed")
+          .filter(j => j.state === "failed")
           .slice(start, end + 1)
-          .map((j) => ({
+          .map(j => ({
             id: j.id,
             name: j.name,
-            failedReason: (j.output as { message?: string } | null)?.message ?? "Unknown error",
+            failedReason:
+              (j.output as { message?: string } | null)?.message ??
+              "Unknown error",
             finishedOn: j.completedOn ? j.completedOn.getTime() : null,
             data: j.data,
           }));
-      } catch { return []; }
+      } catch {
+        return [];
+      }
     },
     async getCompleted(start: number, end: number) {
       try {
         const boss = await getBoss();
         const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
         return jobs
-          .filter((j) => j.state === "completed")
+          .filter(j => j.state === "completed")
           .slice(start, end + 1)
-          .map((j) => ({
+          .map(j => ({
             id: j.id,
             finishedOn: j.completedOn ? j.completedOn.getTime() : null,
             processedOn: j.startedOn ? j.startedOn.getTime() : null,
             data: j.data,
           }));
-      } catch { return []; }
+      } catch {
+        return [];
+      }
     },
   };
 }
