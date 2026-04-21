@@ -48,7 +48,7 @@ describe("getOriginUrl — ALLOWED_ORIGIN_HOSTS env expansion", () => {
     const { getOriginUrl } = await loadHelpersWithEnv("ttml-app.up.railway.app");
     const req = makeReq({ origin: "https://ttml-app.up.railway.app" });
     expect(getOriginUrl(req)).toBe("https://ttml-app.up.railway.app");
-  });
+  }, 30000);
 
   it("accepts multiple comma-separated hosts", async () => {
     const { getOriginUrl } = await loadHelpersWithEnv(

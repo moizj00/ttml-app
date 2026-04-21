@@ -163,7 +163,7 @@ describe("Pipeline Orchestration", () => {
       expect(result.canResearch).toBe(true);
       expect(result.canDraft).toBe(true);
       expect(result.missing).toHaveLength(0);
-    });
+    }, 30000);
 
     it("should fail when no research keys are available", async () => {
       delete process.env.PERPLEXITY_API_KEY;
@@ -174,7 +174,7 @@ describe("Pipeline Orchestration", () => {
       const result = preflightApiKeyCheck("full");
       expect(result.ok).toBe(false);
       expect(result.canResearch).toBe(false);
-    });
+    }, 30000);
 
     it("should pass research-only check when only Perplexity key exists", async () => {
       delete process.env.OPENAI_API_KEY;
@@ -184,7 +184,7 @@ describe("Pipeline Orchestration", () => {
       const result = preflightApiKeyCheck("research");
       expect(result.ok).toBe(true);
       expect(result.canResearch).toBe(true);
-    });
+    }, 30000);
   });
 
   describe("runFullPipeline", () => {

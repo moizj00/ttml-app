@@ -55,17 +55,16 @@ export interface PaywallEmailResult {
 // ─── Core Logic ───────────────────────────────────────────────────────────────
 
 /**
- * Find all letters eligible for the initial paywall notification email and send it.
+ * Find all letters eligible for the "Your draft is ready" paywall email and send it.
  * Returns a summary of what happened.
  *
  * Eligibility:
- *   - status = 'generated_locked' (or legacy 'generated_unlocked')
- *   - initial_paywall_email_sent_at IS NULL
- *   - createdAt is between PAYWALL_EMAIL_MIN_DELAY_MINUTES and
- *     PAYWALL_EMAIL_MAX_DELAY_MINUTES ago (anchored to submit time)
+ *   - status = 'generated_locked'
+ *   - draft_ready_email_sent = false
+ *   - lastStatusChangedAt is older than DRAFT_READY_EMAIL_DELAY_HOURS (24h)
  *   - submittedByAdmin = false
  *
- * Idempotency: initial_paywall_email_sent_at is stamped immediately after a
+ * Idempotency: draft_ready_email_sent is flipped to true immediately after a
  * successful send, so re-runs of the cron will not re-send.
  */
 export async function processPaywallEmails(): Promise<PaywallEmailResult> {
