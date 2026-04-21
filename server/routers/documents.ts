@@ -317,8 +317,17 @@ export const documentsRouter = router({
           : documentText;
 
         // Build OpenAI prompt
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (!openaiApiKey) {
+          logger.error("[DocumentAnalyzer] OPENAI_API_KEY is not configured");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Document analysis service is not configured. Please contact support.",
+          });
+        }
+
         const openai = (await import("@ai-sdk/openai")).createOpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
+          apiKey: openaiApiKey,
         });
         const { generateText: aiGenerateText } = await import("ai");
 
