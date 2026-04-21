@@ -46,8 +46,9 @@ export function useReviewModal(letterId: number, open: boolean) {
   const [retrigger, setRetrigger] = useState(false);
 
   const invalidate = useCallback(() => {
-    utils.review.letterDetail.invalidate({ id: letterId });
-    utils.review.queue.invalidate();
+    void utils.review.letterDetail.invalidate({ id: letterId });
+    void utils.review.queue.invalidate();
+    void utils.review.myClaimed.invalidate();
   }, [utils, letterId]);
 
   // Mutations

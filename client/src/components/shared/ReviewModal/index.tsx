@@ -48,6 +48,7 @@ export default function ReviewModal({
     isLoading,
     isPending,
     isUnderReview,
+    isClientRevisionRequested,
     editContent,
     isEditing,
     hasUnsavedChanges,
@@ -194,7 +195,7 @@ export default function ReviewModal({
 
           {/* Action bar row */}
           <div className="flex items-center gap-2 px-4 sm:px-6 pb-3 overflow-x-auto scrollbar-none">
-            {isPending && (
+            {(isPending || isClientRevisionRequested) && (
               <Button
                 onClick={() => claimMutation.mutate({ letterId })}
                 disabled={claimMutation.isPending}
@@ -209,7 +210,9 @@ export default function ReviewModal({
                 ) : (
                   <>
                     <ClipboardList className="w-4 h-4 mr-1.5" />
-                    Claim for Review
+                    {isClientRevisionRequested
+                      ? "Claim for Revision"
+                      : "Claim for Review"}
                   </>
                 )}
               </Button>
