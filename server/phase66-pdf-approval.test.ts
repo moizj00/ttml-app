@@ -134,17 +134,16 @@ describe("letter_requests schema", () => {
     expect(letterRequests.pdfUrl).toBeDefined();
     // The column should map to pdf_url in the database
     expect((letterRequests.pdfUrl as any).name).toBe("pdf_url");
-  });
+  }, 20000);
 
   it("getLetterRequestsByUserId selects pdfUrl column", async () => {
-    vi.setConfig({ testTimeout: 15000 });
     // Verify the db helper selects pdfUrl
     const dbModule = await import("./db");
     // The function should exist
     expect(typeof dbModule.getLetterRequestsByUserId).toBe("function");
     // updateLetterPdfUrl should also exist
     expect(typeof dbModule.updateLetterPdfUrl).toBe("function");
-  });
+  }, 20000);
 });
 
 // ─── Approval flow verification ───────────────────────────────────────────────

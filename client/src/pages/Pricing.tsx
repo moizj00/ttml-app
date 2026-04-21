@@ -94,7 +94,11 @@ export default function Pricing() {
 
   const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
-      navigate("/login");
+      if (planId === "single_letter") {
+        navigate(`/signup?next=${encodeURIComponent("/submit")}`);
+      } else {
+        navigate("/signup");
+      }
       return;
     }
     if (planId === "single_letter") {

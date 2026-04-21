@@ -90,7 +90,9 @@ describe("Signup Page — Attorney and Admin Cannot Self-Register", () => {
     // Must not have attorney as a role value in ROLE_OPTIONS or selectedRole type
     expect(content).not.toMatch(/value.*["']attorney["']/i);
     // Check the ROLE_OPTIONS array definition block only (first 500 chars after ROLE_OPTIONS)
-    const roleOptionsMatch = content.match(/const ROLE_OPTIONS[\s\S]{0,500}\];/);
+    const roleOptionsMatch = content.match(
+      /const ROLE_OPTIONS[\s\S]{0,500}\];/
+    );
     if (roleOptionsMatch) {
       expect(roleOptionsMatch[0]).not.toContain("attorney");
     }
@@ -105,7 +107,9 @@ describe("Signup Page — Attorney and Admin Cannot Self-Register", () => {
 
   it("clears onboarding flag for new signups (triggers onboarding modal)", () => {
     const content = readFileSync(filePath, "utf-8");
-    expect(content).toContain('localStorage.removeItem("ttml_onboarding_seen")');
+    expect(content).toContain(
+      'localStorage.removeItem("ttml_onboarding_seen")'
+    );
   });
 
   it("supports Google OAuth signup", () => {
@@ -162,7 +166,9 @@ describe("App.tsx — Attorney Routes", () => {
   it("attorney routes include both attorney and admin roles", () => {
     const content = readFileSync(filePath, "utf-8");
     // Attorney routes should allow both attorney and admin access
-    expect(content).toMatch(/allowedRoles.*attorney.*admin|allowedRoles.*admin.*attorney/);
+    expect(content).toMatch(
+      /allowedRoles.*attorney.*admin|allowedRoles.*admin.*attorney/
+    );
   });
 
   it("subscriber routes do NOT allow attorney role", () => {
@@ -180,7 +186,13 @@ describe("App.tsx — Attorney Routes", () => {
 // ─── 5. ReviewModal — No AI Mentions in User-Visible Strings ─────────────────
 
 describe("ReviewModal — AI Branding Removed", () => {
-  const filePath = join(CLIENT_SRC, "components", "shared", "ReviewModal", "index.tsx");
+  const filePath = join(
+    CLIENT_SRC,
+    "components",
+    "shared",
+    "ReviewModal",
+    "index.tsx"
+  );
 
   it("file exists", () => {
     expect(existsSync(filePath)).toBe(true);
@@ -212,7 +224,14 @@ describe("ReviewModal — AI Branding Removed", () => {
   it("uses 'ai_draft' as the DB enum comparison value", () => {
     // After the component was split into a directory, the enum comparison
     // moved to the hooks file — check the whole ReviewModal directory
-    const hooksPath = join(CLIENT_SRC, "components", "shared", "ReviewModal", "hooks", "useReviewModal.ts");
+    const hooksPath = join(
+      CLIENT_SRC,
+      "components",
+      "shared",
+      "ReviewModal",
+      "hooks",
+      "useReviewModal.ts"
+    );
     const hooksContent = readFileSync(hooksPath, "utf-8");
     // The DB enum value must remain ai_draft
     expect(hooksContent).toContain('"ai_draft"');
@@ -238,7 +257,12 @@ describe("ReviewModal — AI Branding Removed", () => {
 // ─── 6. RichTextEditor — Exists and Has Toolbar ──────────────────────────────
 
 describe("RichTextEditor Component", () => {
-  const filePath = join(CLIENT_SRC, "components", "shared", "RichTextEditor.tsx");
+  const filePath = join(
+    CLIENT_SRC,
+    "components",
+    "shared",
+    "RichTextEditor.tsx"
+  );
 
   it("file exists", () => {
     expect(existsSync(filePath)).toBe(true);
@@ -264,7 +288,7 @@ describe("RichTextEditor Component", () => {
 
   it("exports plainTextToHtml utility function", () => {
     const content = readFileSync(filePath, "utf-8");
-    expect(content).toContain("export function plainTextToHtml");
+    expect(content).toContain("export { plainTextToHtml }");
   });
 
   it("does not contain AI branding", () => {
@@ -310,7 +334,12 @@ describe("Pipeline Progress Modal — AI Branding Removed", () => {
 
 describe("Attorney Dashboard", () => {
   const dashboardPath = join(CLIENT_SRC, "pages", "attorney", "Dashboard.tsx");
-  const reviewQueuePath = join(CLIENT_SRC, "pages", "attorney", "ReviewQueue.tsx");
+  const reviewQueuePath = join(
+    CLIENT_SRC,
+    "pages",
+    "attorney",
+    "ReviewQueue.tsx"
+  );
 
   it("attorney Dashboard exists", () => {
     expect(existsSync(dashboardPath)).toBe(true);
@@ -339,7 +368,9 @@ describe("Server — No AI Mentions in User-Facing Notification/Email Strings", 
 
   it("review.approve notification does not mention AI", () => {
     // Find the approve mutation notification block
-    const approveSection = routersFile.match(/approve[\s\S]{0,2000}notification/);
+    const approveSection = routersFile.match(
+      /approve[\s\S]{0,2000}notification/
+    );
     if (approveSection) {
       expect(approveSection[0]).not.toContain("AI");
       expect(approveSection[0]).not.toContain("Perplexity");

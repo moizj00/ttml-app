@@ -103,11 +103,11 @@ describe("enqueuePipelineJob", () => {
     });
   });
 
-  it("passes a string jobId containing the letterId", async () => {
+  it("passes a singletonKey containing the letterId", async () => {
     await enqueuePipelineJob(baseRunData);
     const [, , jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
-    expect(typeof (jobOpts as { id: string }).id).toBe("string");
-    expect((jobOpts as { id: string }).id).toContain(String(LETTER_ID));
+    expect(typeof (jobOpts as { singletonKey: string }).singletonKey).toBe("string");
+    expect((jobOpts as { singletonKey: string }).singletonKey).toContain(String(LETTER_ID));
   });
 
   it("returns the job ID from boss.send", async () => {

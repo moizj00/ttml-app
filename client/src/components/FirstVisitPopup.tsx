@@ -52,7 +52,7 @@ export default function FirstVisitPopup() {
   const handleGetStarted = useCallback(() => {
     localStorage.setItem(FIRST_VISIT_KEY, "true");
     setVisible(false);
-    navigate("/login");
+    navigate("/signup");
   }, [navigate]);
 
   if (!visible) return null;

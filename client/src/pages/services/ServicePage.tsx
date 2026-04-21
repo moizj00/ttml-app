@@ -21,7 +21,7 @@ import type { ServiceData } from "./serviceData";
 
 export default function ServicePage({ service }: { service: ServiceData }) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const goToLogin = () => { window.location.href = "/login"; };
+  const goToSignup = () => { window.location.href = "/signupup"; };
 
   const jsonLd = [
     {
@@ -96,7 +96,7 @@ export default function ServicePage({ service }: { service: ServiceData }) {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={goToLogin}
+                    onClick={goToSignup}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
                     data-testid="hero-cta"
                   >
@@ -186,7 +186,7 @@ export default function ServicePage({ service }: { service: ServiceData }) {
                     ))}
                   </ul>
                   <button
-                    onClick={goToLogin}
+                    onClick={goToSignup}
                     className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition-colors"
                     data-testid="pricing-cta-ttml"
                   >
@@ -306,7 +306,7 @@ export default function ServicePage({ service }: { service: ServiceData }) {
                 Your first attorney-reviewed letter is free — no credit card required.
               </p>
               <button
-                onClick={goToLogin}
+                onClick={goToSignup}
                 className="bg-white text-blue-700 hover:bg-blue-50 px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg inline-flex items-center gap-2"
                 data-testid="bottom-cta"
               >

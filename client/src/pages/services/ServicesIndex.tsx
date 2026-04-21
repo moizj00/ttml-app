@@ -32,7 +32,7 @@ const SERVICE_ICONS: Record<string, typeof FileText> = {
 };
 
 export default function ServicesIndex() {
-  const goToLogin = () => { window.location.href = "/login"; };
+  const goToSignup = () => { window.location.href = "/signup"; };
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -124,7 +124,7 @@ export default function ServicesIndex() {
                 Start for free — describe your situation and we will help you determine the right letter type.
               </p>
               <button
-                onClick={goToLogin}
+                onClick={goToSignup}
                 className="bg-white text-blue-700 hover:bg-blue-50 px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg inline-flex items-center gap-2"
                 data-testid="bottom-cta"
               >

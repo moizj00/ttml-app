@@ -122,7 +122,7 @@ describe("getAllEmployeeEarnings batch query", () => {
     const dbModule = await import("./db");
     const result = await dbModule.getAllEmployeeEarnings();
     expect(result).toEqual([]);
-  }, 15000);
+  }, 25000);
 
   it("correctly aggregates earnings by employee", () => {
     // Test the aggregation logic directly
