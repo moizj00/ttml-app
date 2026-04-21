@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import {
-  Lock,
   CheckCircle,
   ArrowRight,
   Shield,
@@ -10,6 +9,7 @@ import {
   AlertCircle,
   CreditCard,
   Tag,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,13 +42,40 @@ interface LetterPaywallProps {
   subject: string;
   draftContent?: string;
   qualityDegraded?: boolean;
+  /** ISO string or Date — when the letter entered generated_locked */
+  lastStatusChangedAt?: string | Date | null;
+  /** True once the 24h draft-ready email has been sent */
+  draftReadyEmailSent?: boolean;
 }
+
+const DRAFT_REVEAL_HOURS = 24;
 
 export function LetterPaywall({
   letterId,
+  letterType,
+  subject,
   draftContent,
   qualityDegraded,
+  lastStatusChangedAt,
+  draftReadyEmailSent,
 }: LetterPaywallProps) {
+  // Determine whether the 24h reveal window has passed
+  const isDraftRevealed = useMemo(() => {
+    if (draftReadyEmailSent) return true;
+    if (!lastStatusChangedAt) return false;
+    const lockedAt = new Date(lastStatusChangedAt).getTime();
+    const hoursElapsed = (Date.now() - lockedAt) / (1000 * 60 * 60);
+    return hoursElapsed >= DRAFT_REVEAL_HOURS;
+  }, [lastStatusChangedAt, draftReadyEmailSent]);
+
+  // Hours remaining until draft is revealed (0 when already revealed)
+  const hoursRemaining = useMemo(() => {
+    if (isDraftRevealed) return 0;
+    if (!lastStatusChangedAt) return DRAFT_REVEAL_HOURS;
+    const lockedAt = new Date(lastStatusChangedAt).getTime();
+    const elapsed = (Date.now() - lockedAt) / (1000 * 60 * 60);
+    return Math.max(0, Math.ceil(DRAFT_REVEAL_HOURS - elapsed));
+  }, [lastStatusChangedAt, isDraftRevealed]);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [appliedDiscount, setAppliedDiscount] =
     useState<DiscountCodeResult | null>(null);
@@ -126,7 +153,7 @@ export function LetterPaywall({
     isRedirecting ||
     subscriptionSubmitMutation.isPending;
 
-  const hasDraft = !!draftContent && draftContent.length > 0;
+  const hasDraft = !!draftContent && draftContent.length > 0 && isDraftRevealed;
 
   const basePrice = 299;
   const discountedPrice = appliedDiscount
@@ -228,7 +255,9 @@ export function LetterPaywall({
               </h2>
             </div>
             <p className="text-emerald-100 text-base max-w-lg mb-6">
-              Subscribe to get this letter professionally reviewed, edited, signed, and delivered by a licensed attorney. Plans include unlimited drafts and priority support.
+              Subscribe to get this letter professionally reviewed, edited,
+              signed, and delivered by a licensed attorney. Plans include
+              unlimited drafts and priority support.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
               {[
@@ -262,14 +291,17 @@ export function LetterPaywall({
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
             Prefer a one-time option?
           </h3>
-          
+
           {isFreeReviewAvailable ? (
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-lg font-bold text-slate-800 mb-1">First Letter Review</h4>
+                  <h4 className="text-lg font-bold text-slate-800 mb-1">
+                    First Letter Review
+                  </h4>
                   <p className="text-sm text-slate-500 mb-3 max-w-md">
-                    Pay a nominal fee to verify identity and cover processing costs for one-time attorney review.
+                    Pay a nominal fee to verify identity and cover processing
+                    costs for one-time attorney review.
                   </p>
                   <div className="flex items-end gap-2">
                     <span className="text-2xl font-extrabold text-slate-900">
@@ -299,24 +331,35 @@ export function LetterPaywall({
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="flex-1">
-                  <h4 className="text-lg font-bold text-slate-800 mb-1">Single Letter Review</h4>
+                  <h4 className="text-lg font-bold text-slate-800 mb-1">
+                    Single Letter Review
+                  </h4>
                   <p className="text-sm text-slate-500 mb-4 max-w-md">
-                    One-time attorney review, signature, and PDF delivery without a subscription.
+                    One-time attorney review, signature, and PDF delivery
+                    without a subscription.
                   </p>
                   <DiscountCodeInput
                     className="mb-4 max-w-sm"
                     initialCode={urlCouponCode}
-                    onCodeChange={(result) => setAppliedDiscount(result)}
+                    onCodeChange={result => setAppliedDiscount(result)}
                   />
                   <div className="flex items-end gap-2">
                     {discountedPrice !== null ? (
                       <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-extrabold text-slate-900">${discountedPrice}</span>
-                        <span className="text-sm text-slate-400 line-through">${basePrice}</span>
-                        <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">${appliedDiscount!.discountPercent}% off</span>
+                        <span className="text-2xl font-extrabold text-slate-900">
+                          ${discountedPrice}
+                        </span>
+                        <span className="text-sm text-slate-400 line-through">
+                          ${basePrice}
+                        </span>
+                        <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                          ${appliedDiscount!.discountPercent}% off
+                        </span>
                       </div>
                     ) : (
-                      <span className="text-2xl font-extrabold text-slate-900">${basePrice}</span>
+                      <span className="text-2xl font-extrabold text-slate-900">
+                        ${basePrice}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -353,12 +396,46 @@ export function LetterPaywall({
 
   return (
     <>
-      {hasDraft && (
+      {/* Waiting state — draft not yet revealed */}
+      {!isDraftRevealed && (
+        <Card className="mb-6 border-blue-200 bg-blue-50/50">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-slate-800 mb-1">
+                  Your draft is being finalized
+                </h3>
+                <p className="text-sm text-slate-600 mb-3">
+                  We give every AI-drafted letter a full 24-hour review period
+                  before presenting it to you. This ensures your draft is
+                  thorough and accurate.
+                </p>
+                <div className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg px-3 py-2 w-fit">
+                  <Clock className="w-4 h-4" />
+                  {hoursRemaining <= 1
+                    ? "Your draft will be ready in less than 1 hour"
+                    : `Your draft will be ready in approximately ${hoursRemaining} hours`}
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  You'll receive an email notification when your draft is ready
+                  to read. No action required.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Revealed state — show full watermarked draft */}
+      {isDraftRevealed && hasDraft && (
         <Card className="mb-6 border-slate-200 overflow-hidden">
           <CardHeader className="bg-slate-50 border-b border-slate-200 px-6 py-4">
             <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
               <FileText className="w-5 h-5 text-slate-500" />
-              Your AI-drafted legal letter — preview only
+              Your AI-drafted legal letter — read-only preview
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -370,7 +447,7 @@ export function LetterPaywall({
           </CardContent>
           <CardFooter className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-between items-center">
             <p className="text-sm text-slate-600 hidden sm:block">
-              Review your draft layout. Attorney review required for final
+              Read your full draft above. Attorney review required for final
               delivery.
             </p>
             <Button
@@ -378,19 +455,20 @@ export function LetterPaywall({
               className="w-full sm:w-auto shadow-md"
               onClick={() => setShowPaywallModal(true)}
             >
-              Proceed to Attorney Review &rarr; Choose a Plan
+              Subscribe or Pay to Submit &rarr;
             </Button>
           </CardFooter>
         </Card>
       )}
 
-      {!hasDraft && !showPaywallModal && (
+      {/* Revealed but no draft content — fallback CTA */}
+      {isDraftRevealed && !hasDraft && !showPaywallModal && (
         <Button
           onClick={() => setShowPaywallModal(true)}
           className="w-full mt-4"
           size="lg"
         >
-          Unlock Attorney Review
+          Submit for Attorney Review
         </Button>
       )}
 
@@ -398,11 +476,11 @@ export function LetterPaywall({
         <DialogContent className="sm:max-w-2xl p-0 overflow-hidden border-0 bg-transparent flex flex-col max-h-[90vh]">
           <div className="bg-slate-900 px-6 py-5 text-white flex-shrink-0">
             <DialogTitle className="text-2xl font-bold tracking-tight">
-              You've reviewed your free draft!
+              Submit your draft for attorney review
             </DialogTitle>
             <DialogDescription className="text-slate-300 mt-2 text-base font-medium">
-              To have a licensed attorney review, sign, and send this on a
-              company's letterhead, please choose from the options below.
+              A licensed attorney will review, edit, sign, and deliver your
+              letter. Choose a plan or pay once below.
             </DialogDescription>
           </div>
           <div className="p-6 overflow-y-auto bg-slate-50 relative flex-1">

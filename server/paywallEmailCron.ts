@@ -1,32 +1,25 @@
 /**
- * Paywall Email Cron Handler
+ * Draft-Ready Email Cron Handler
  *
  * Queries all letter_requests that:
- *   - Have status = 'generated_locked' (draft ready, not yet paid)
- *   - Were submitted (createdAt) 10–15 minutes ago — the cron window is
- *     anchored to the subscriber's submit time, not to the pipeline
- *     completion time, so the "your draft is ready" nudge always fires
- *     ~10–15 min after submit regardless of pipeline speed.
- *   - Have initial_paywall_email_sent_at IS NULL (email not yet sent)
+ *   - Have status = 'generated_locked'
+ *   - lastStatusChangedAt is >= 24 hours ago (letter is mature enough to show)
+ *   - draft_ready_email_sent = false (not yet notified)
+ *   - submittedByAdmin = false
  *
  * For each matching letter, sends sendPaywallNotificationEmail to the subscriber
- * and stamps initial_paywall_email_sent_at to prevent duplicate sends.
+ * and sets draft_ready_email_sent = true to prevent duplicate sends.
  *
- * Designed to be called by a cron scheduler every 5 minutes, or an external
+ * Designed to be called by a cron scheduler every 15 minutes, or an external
  * cron service hitting POST /api/cron/paywall-emails with the correct secret.
  *
  * STATUS FLOW CONTEXT:
- *   submitted → researching → drafting → generated_locked → [subscriber pays]
- *     → pending_review → under_review → approved
- *
- * The status filter (generated_locked / generated_unlocked) acts as a safety
- * gate: if the pipeline hasn't finished by the time the cron window opens,
- * we skip the email rather than send a broken "unlock your draft" link.
- * The existing 48-hour sendDraftReminderEmail (draftReminders.ts) continues
- * to fire as a follow-up for subscribers who still haven't acted.
+ *   submitted → researching → drafting → generated_locked → [24h wait]
+ *     → email sent → subscriber views watermarked read-only modal
+ *     → subscribes / pays → pending_review → under_review → approved
  */
 
-import { inArray, and, isNull, lt, gte, eq } from "drizzle-orm";
+import { and, lt, eq } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -38,14 +31,8 @@ const paywallLogger = createLogger({ module: "PaywallEmails" });
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-/**
- * Minimum minutes after the subscriber submits before the paywall email fires.
- * The window between MIN and MAX is the cron-job polling window.
- * With a 5-minute cron, use 10 min min / 15 min max so every letter is caught
- * in exactly one cron run.
- */
-export const PAYWALL_EMAIL_MIN_DELAY_MINUTES = 10;
-export const PAYWALL_EMAIL_MAX_DELAY_MINUTES = 15;
+/** Hours after draft generation before the "Your draft is ready" email fires. */
+export const DRAFT_READY_EMAIL_DELAY_HOURS = 24;
 
 function getAppBaseUrl(): string {
   return process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";

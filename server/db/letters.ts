@@ -172,6 +172,7 @@ export async function getLetterRequestSafeForSubscriber(
       qualityDegraded: letterRequests.qualityDegraded,
       submittedByAdmin: letterRequests.submittedByAdmin,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,
+      draftReadyEmailSent: letterRequests.draftReadyEmailSent,
       createdAt: letterRequests.createdAt,
       updatedAt: letterRequests.updatedAt,
     })

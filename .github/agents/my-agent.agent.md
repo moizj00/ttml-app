@@ -6,15 +6,27 @@ description: >
   Use this agent to manage the database, trigger the letter pipeline via n8n,
   debug errors in Sentry, and operate across the entire TTML stack.
 version: "2.0.0"
-tools:vscode, execute, read, agent, browser, 'supabase-2/*', edit, search, web, todo, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, github.vscode-pull-request-github/create_pull_request, github.vscode-pull-request-github/resolveReviewThread, ms-toolsai.jupyter/configureNotebook, ms-toolsai.jupyter/listNotebookPackages, ms-toolsai.jupyter/installNotebookPackages, ms-azuretools.vscode-containers/containerToolsConfig
-[vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, vscode/openFile, vscode/openFolder, vscode/closeFolder, vscode/saveFile, vscode/saveAllFiles, vscode/getActiveFile, vscode/getOpenFiles, vscode/toggleDebugger, vscode/startDebugging, vscode/stopDebugging, vscode/getDebugStatus, vscode/getBreakpoints, vscode/setBreakpoint, vscode/removeBreakpoint, vscode/getDebugVariables, vscode/getCallStack, vscode/stepInto, vscode/stepOver, vscode/stepOut, vscode/continue, vscode/getTerminals, vscode/getProblems, vscode/revealProblem, vscode/setDiagnostics, vscode/clearDiagnostics, vscode/getCodeLens, vscode/getHover, vscode/getDefinition, vscode/getReferences, vscode/getImplementation, vscode/getTypeDefinition, vscode/renameSymbol, vscode/formatDocument, vscode/formatSelection, vscode/organizeImports, vscode/fixAllProblems, vscode/getCompletions, vscode/getSignatureHelp, vscode/getQuickFix, vscode/getRefactorings, vscode/applyCodeAction, vscode/getSettings, vscode/updateSettings, vscode/getTheme, vscode/setTheme, vscode/getColorTheme, vscode/setColorTheme, vscode/getIconTheme, vscode/setIconTheme, vscode/getNotebookKernels, vscode/selectNotebookKernel, vscode/executeNotebookCell, vscode/executePendingNotebookCells, vscode/addLanguageFilter, vscode/removeLanguageFilter, execute/runNotebookCell, execute/testFailure, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/createAndRunTask, execute/runInTerminal, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, browser/openBrowserPage, browser/readPage, browser/screenshotPage, browser/navigatePage, browser/clickElement, browser/dragElement, browser/hoverElement, browser/typeInPage, browser/runPlaywrightCode, browser/handleDialog, vscode.mermaid-chat-features/renderMermaidDiagram, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, github.vscode-pull-request-github/create_pull_request, github.vscode-pull-request-github/resolveReviewThread, ms-azuretools.vscode-containers/containerToolsConfig, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, todo]
-
-mcp_servers:
+tools:
+  - execute
+  - read
+  - edit
+  - search
+  - agent
+  - web
+  - todo
+  - github/*
+  - playwright/*
+  - supabase/*
+  - n8n/*
+  - sentry/*
+mcp-servers:
   supabase:
+    type: local
     command: npx
     args:
       - "-y"
       - "@supabase/mcp-server-supabase@latest"
+    tools: ["*"]
     env:
       SUPABASE_URL: "${SUPABASE_URL}"
       SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
@@ -24,10 +36,12 @@ mcp_servers:
       Supabase Auth users, running raw SQL, and applying migrations.
 
   n8n:
+    type: local
     command: npx
     args:
       - "-y"
       - "@n8n/mcp-server@latest"
+    tools: ["*"]
     env:
       N8N_BASE_URL: "${N8N_BASE_URL}"
       N8N_API_KEY: "${N8N_API_KEY}"
@@ -37,10 +51,12 @@ mcp_servers:
       listing, triggering, and inspecting the legal letter generation workflow.
 
   sentry:
+    type: local
     command: npx
     args:
       - "-y"
       - "@sentry/mcp-server@latest"
+    tools: ["*"]
     env:
       SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN}"
       SENTRY_ORG: "${SENTRY_ORG}"
