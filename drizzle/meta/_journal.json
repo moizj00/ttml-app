@@ -330,6 +330,13 @@
       "when": 1744622820000,
       "tag": "0046_new_tables_and_blog_review",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1776791147060,
+      "tag": "0047_naive_lester",
+      "breakpoints": true
     }
   ]
 }
