@@ -14,7 +14,7 @@ CONFIG_DIR="$HOME/.claude"
 CONFIG_FILE="$CONFIG_DIR/settings.json"
 API_BASE_URL="https://api.z.ai/api/anthropic"
 API_KEY_URL="https://z.ai/manage-apikey/apikey-list"
-API_TIMEOUT_MS=3000000
+API_TIMEOUT_MS=60000
 
 # ========================
 #       Functions
