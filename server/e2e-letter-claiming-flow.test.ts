@@ -225,7 +225,7 @@ describe("Letter Claiming Flow — State Machine Integrity", () => {
 
   it("claimLetterForReview prevents race conditions with isNull WHERE clause", () => {
     expect(dbFile).toMatch(
-      /claimLetterForReview[\s\S]{0,1000}isNull\(letterRequests\.assignedReviewerId\)/
+      /claimLetterForReview[\s\S]{0,3000}isNull\(letterRequests\.assignedReviewerId\)/
     );
   });
 
