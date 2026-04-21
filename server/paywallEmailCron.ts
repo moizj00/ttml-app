@@ -142,13 +142,13 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         isFirstLetter,
       });
 
-      // Stamp the email timestamp to prevent re-sending
+      // Flip the flag to prevent re-sending
       await db
         .update(letterRequests)
         .set({
           draftReadyEmailSent: true,
           updatedAt: new Date(),
-        } as any)
+        })
         .where(eq(letterRequests.id, letter.id));
 
       result.sent++;

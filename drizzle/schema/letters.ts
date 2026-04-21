@@ -103,9 +103,6 @@ export const letterRequests = pgTable(
     draftReadyEmailSent: boolean("draft_ready_email_sent")
       .default(false)
       .notNull(),
-    initialPaywallEmailSentAt: timestamp("initial_paywall_email_sent_at", {
-      withTimezone: true,
-    }),
     researchUnverified: boolean("research_unverified").default(false).notNull(),
     qualityDegraded: boolean("quality_degraded").default(false).notNull(),
     pipelineLockedAt: timestamp("pipeline_locked_at", { withTimezone: true }),
