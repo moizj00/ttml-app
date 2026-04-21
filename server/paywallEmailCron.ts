@@ -160,7 +160,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
       await db
         .update(letterRequests)
         .set({
-          initialPaywallEmailSentAt: new Date(),
+          draftReadyEmailSent: true,
           updatedAt: new Date(),
         } as any)
         .where(eq(letterRequests.id, letter.id));
