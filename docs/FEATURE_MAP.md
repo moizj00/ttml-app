@@ -12,18 +12,18 @@
 
 ## 1. Platform Overview
 
-Talk-to-My-Lawyer is an AI-powered legal letter platform with mandatory attorney review. It features a four-stage AI pipeline (OpenAI Research → Claude Drafting → Claude Assembly → Claude Sonnet Vetting). The platform enforces a strict paywall: subscribers see a blurred draft preview and must pay $200 for attorney review before any letter is finalized.
+Talk-to-My-Lawyer is an AI-powered legal letter platform with mandatory attorney review. It features a four-stage AI pipeline (OpenAI Research → Claude Drafting → Claude Assembly → Claude Sonnet Vetting). The platform enforces a strict paywall: after draft generation, the user waits 24 hours for a "Draft Ready" email. Upon clicking the link in the email, subscribers view an uncopyable, watermarked draft inside a modal and must subscribe or pay $200 for attorney review before jumping into the attorney queue.
 
 ---
 
 ## 2. Role System
 
-| Role | DB Enum Value | Access Scope | Dashboard Route |
-| --- | --- | --- | --- |
-| Subscriber | `subscriber` | Own letters, billing, profile | `/dashboard` |
-| Employee | `employee` | Affiliate dashboard, discount codes, commissions, payouts | `/employee` |
-| Attorney | `attorney` | Review Center (queue + detail), SLA dashboard | `/attorney` |
-| Super Admin | `admin` | Full platform access, user management, jobs, letters, affiliate oversight | `/admin` |
+| Role        | DB Enum Value | Access Scope                                                              | Dashboard Route |
+| ----------- | ------------- | ------------------------------------------------------------------------- | --------------- |
+| Subscriber  | `subscriber`  | Own letters, billing, profile                                             | `/dashboard`    |
+| Employee    | `employee`    | Affiliate dashboard, discount codes, commissions, payouts                 | `/employee`     |
+| Attorney    | `attorney`    | Review Center (queue + detail), SLA dashboard                             | `/attorney`     |
+| Super Admin | `admin`       | Full platform access, user management, jobs, letters, affiliate oversight | `/admin`        |
 
 ---
 
@@ -32,6 +32,7 @@ Talk-to-My-Lawyer is an AI-powered legal letter platform with mandatory attorney
 The platform underwent a major technical debt remediation to decompose monolithic files into maintainable directory modules.
 
 ### 3.1 Frontend Directory Modules
+
 Each major feature is now a directory with a thin `index.tsx` orchestrator, a `hooks/` subfolder, and focused sub-components.
 
 - **DocumentAnalyzer/**: `useDocumentAnalyzer`, `FileUploadZone`, `AnalysisResults`.
@@ -43,6 +44,7 @@ Each major feature is now a directory with a thin `index.tsx` orchestrator, a `h
 - **SubscriberLetterPreviewModal/**: New modal for `client_approval_pending` status.
 
 ### 3.2 Backend Decomposition
+
 - **server/stripe/**: Split into `client`, `checkouts`, `subscriptions`, `coupons`.
 - **server/learning/**: Split into `extraction`, `quality`, `categories`, `dedup`.
 - **server/emailPreview/**: Split into `builder`, `templates`.
@@ -54,25 +56,27 @@ Each major feature is now a directory with a thin `index.tsx` orchestrator, a `h
 
 A new **Subscriber Letter Preview Modal** was added to the `client_approval_pending` status.
 
-| Feature | Implementation |
-|---|---|
-| **Read-Only Preview** | Full-screen modal showing the `final_approved` version content. |
-| **Approve & Send** | Subscriber approves the letter and provides recipient email for delivery. |
-| **Request Changes** | Subscriber can request revisions (limited to 5 per letter). |
-| **Revision Paywall** | Re-triggers Stripe checkout if the free revision count is exceeded. |
-| **Auto-Open** | Modal auto-opens when a letter transitions to `client_approval_pending`. |
+| Feature               | Implementation                                                            |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Read-Only Preview** | Full-screen modal showing the `final_approved` version content.           |
+| **Approve & Send**    | Subscriber approves the letter and provides recipient email for delivery. |
+| **Request Changes**   | Subscriber can request revisions (limited to 5 per letter).               |
+| **Revision Paywall**  | Re-triggers Stripe checkout if the free revision count is exceeded.       |
+| **Auto-Open**         | Modal auto-opens when a letter transitions to `client_approval_pending`.  |
 
 ---
 
 ## 5. Letter Pipeline & Resilience
 
 ### 5.1 Pipeline Stages
+
 1. **Research** (OpenAI `gpt-4o-search-preview` with web search)
 2. **Drafting** (Claude `claude-opus-4-5`)
 3. **Assembly** (Claude `claude-opus-4-5`)
 4. **Vetting** (Claude `claude-sonnet`)
 
 ### 5.2 Stale Lock Recovery (Phase 108+)
+
 - **New Cron**: `server/stalePipelineLockRecovery.ts` runs every 15 minutes.
 - **Function**: Automatically detects and resets letters stuck in `researching` or `drafting` for >30 minutes.
 - **Recovery**: Releases the lock, resets status to `submitted`, and re-enqueues for a fresh run.

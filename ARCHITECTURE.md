@@ -15,35 +15,35 @@
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, Vite 7, TypeScript, Tailwind CSS v4 (OKLCH), shadcn/ui, wouter, TanStack Query |
-| Backend | Node.js, Express 4.21, tRPC 11.6, TypeScript |
-| Database | PostgreSQL on Supabase, Drizzle ORM 0.44 |
-| Auth | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security |
-| AI — Research | OpenAI `gpt-4o-search-preview` (web search); Perplexity `sonar-pro` optional failover |
-| AI — Drafting/Assembly | Anthropic Claude Opus |
-| AI — Vetting | Anthropic Claude Sonnet |
-| AI — Doc Analysis | OpenAI GPT-4o |
-| Payments | Stripe (subscriptions + one-time $200 per-letter unlock) |
-| Email | Resend (17 transactional templates) |
-| Background Jobs | pg-boss (PostgreSQL-native queue) |
-| Rate Limiting | Upstash Redis via @upstash/ratelimit (fail-open for general; fail-closed for auth) |
-| Rich Text Editing | Tiptap (attorney review) |
-| PDF Generation | PDFKit (server-side) |
-| Monitoring | Sentry (frontend + backend) + Pino structured logger |
-| Deployment | Railway (Docker multi-stage build) |
+| Layer                  | Technology                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| Frontend               | React 19, Vite 7, TypeScript, Tailwind CSS v4 (OKLCH), shadcn/ui, wouter, TanStack Query |
+| Backend                | Node.js, Express 4.21, tRPC 11.6, TypeScript                                             |
+| Database               | PostgreSQL on Supabase, Drizzle ORM 0.44                                                 |
+| Auth                   | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security                 |
+| AI — Research          | OpenAI `gpt-4o-search-preview` (web search); Perplexity `sonar-pro` optional failover    |
+| AI — Drafting/Assembly | Anthropic Claude Opus                                                                    |
+| AI — Vetting           | Anthropic Claude Sonnet                                                                  |
+| AI — Doc Analysis      | OpenAI GPT-4o                                                                            |
+| Payments               | Stripe (subscriptions + one-time $200 per-letter unlock)                                 |
+| Email                  | Resend (17 transactional templates)                                                      |
+| Background Jobs        | pg-boss (PostgreSQL-native queue)                                                        |
+| Rate Limiting          | Upstash Redis via @upstash/ratelimit (fail-open for general; fail-closed for auth)       |
+| Rich Text Editing      | Tiptap (attorney review)                                                                 |
+| PDF Generation         | PDFKit (server-side)                                                                     |
+| Monitoring             | Sentry (frontend + backend) + Pino structured logger                                     |
+| Deployment             | Railway (Docker multi-stage build)                                                       |
 
 ---
 
 ## User Roles
 
-| Role | DB Enum | Access Scope | Dashboard Route |
-|------|---------|-------------|----------------|
-| Subscriber | `subscriber` | Own letters, billing, profile | `/dashboard` |
-| Employee | `employee` | Affiliate dashboard, discount codes, commissions, payouts | `/employee` |
-| Attorney | `attorney` | Review Center (queue + detail), SLA dashboard | `/attorney` |
-| Super Admin | `admin` | Full platform access, user management, jobs, letters, affiliate oversight | `/admin` |
+| Role        | DB Enum      | Access Scope                                                              | Dashboard Route |
+| ----------- | ------------ | ------------------------------------------------------------------------- | --------------- |
+| Subscriber  | `subscriber` | Own letters, billing, profile                                             | `/dashboard`    |
+| Employee    | `employee`   | Affiliate dashboard, discount codes, commissions, payouts                 | `/employee`     |
+| Attorney    | `attorney`   | Review Center (queue + detail), SLA dashboard                             | `/attorney`     |
+| Super Admin | `admin`      | Full platform access, user management, jobs, letters, affiliate oversight | `/admin`        |
 
 > **Full access matrix →** [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md)
 
@@ -62,7 +62,7 @@ submitted → researching → drafting → generated_locked
                                     pending_review → under_review → approved (transient)
                                                                   → rejected → submitted
                                                                   → needs_changes → submitted
-    
+
 approved → client_approval_pending → client_approved → sent
                                    → client_revision_requested → pending_review
 
@@ -70,7 +70,8 @@ pipeline_failed → submitted (admin retry)
 ```
 
 **Key rules:**
-- `generated_locked` is the **PAYWALL** status — subscriber sees blurred preview, must pay to proceed
+
+- `generated_locked` is the **PAYWALL** status — letters process immediately, but subscriber waits 24h, receives an email, then views a read-only watermarked draft modal. Must subscribe/pay to proceed to attorney review.
 - `approved` is transient — auto-forwards to `client_approval_pending`
 - Admin can force ANY transition (bypasses map with `force=true`)
 - Any pipeline stage can reach `pipeline_failed` (except post-review stages)
@@ -103,6 +104,7 @@ pipeline_failed → submitted (admin retry)
 ```
 
 **Modularized Pages** (directory pattern with `index.tsx` + `hooks/` + sub-components):
+
 - `DocumentAnalyzer/`, `ReviewModal/`, `Learning/`, `Affiliate/`, `AffiliateDashboard/`, `ReviewDetail/`, `SubscriberLetterPreviewModal/`
 
 ### Backend (`server/`)
@@ -148,20 +150,20 @@ pipeline_failed → submitted (admin retry)
 
 ## Database Schema (Key Tables)
 
-| Table | Purpose |
-|-------|---------|
-| `users` | Role-based accounts (subscriber, employee, attorney, admin) |
-| `letter_requests` | Core entity; tracks full lifecycle from `submitted` to `sent` |
-| `letter_versions` | Immutable history of drafts and edits (ai_draft, attorney_edit, final_approved) |
-| `review_actions` | Audit trail for status changes and review notes |
-| `workflow_jobs` | Pipeline stage execution logs (tokens, errors) |
-| `research_runs` | AI research results per letter |
-| `subscriptions` | Stripe billing state (plan, letters_allowed, letters_used) |
-| `pipeline_lessons` | Recursive learning: attorney feedback → future AI prompt improvements |
-| `document_analyses` | Results from the free AI document analyzer |
-| `commission_ledger` | Employee affiliate earnings |
-| `discount_codes` | Affiliate discount codes with usage tracking |
-| `blog_posts` | CMS content for the blog section |
+| Table               | Purpose                                                                         |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `users`             | Role-based accounts (subscriber, employee, attorney, admin)                     |
+| `letter_requests`   | Core entity; tracks full lifecycle from `submitted` to `sent`                   |
+| `letter_versions`   | Immutable history of drafts and edits (ai_draft, attorney_edit, final_approved) |
+| `review_actions`    | Audit trail for status changes and review notes                                 |
+| `workflow_jobs`     | Pipeline stage execution logs (tokens, errors)                                  |
+| `research_runs`     | AI research results per letter                                                  |
+| `subscriptions`     | Stripe billing state (plan, letters_allowed, letters_used)                      |
+| `pipeline_lessons`  | Recursive learning: attorney feedback → future AI prompt improvements           |
+| `document_analyses` | Results from the free AI document analyzer                                      |
+| `commission_ledger` | Employee affiliate earnings                                                     |
+| `discount_codes`    | Affiliate discount codes with usage tracking                                    |
+| `blog_posts`        | CMS content for the blog section                                                |
 
 ---
 
@@ -169,17 +171,17 @@ pipeline_failed → submitted (admin retry)
 
 Root router: `server/routers/index.ts` → `appRouter`. Mounted at `/api/trpc`.
 
-| Sub-Router | Auth Level | Key Procedures |
-|------------|-----------|----------------|
-| `system` | Public | `healthCheck`, `stats` |
-| `auth` | Public/Protected | `me`, `logout`, `completeOnboarding` |
-| `letters` | Subscriber | `submit`, `myLetters`, `detail`, `clientApprove`, `clientRequestRevision` |
-| `review` | Attorney | `queue`, `claim`, `approve`, `reject`, `requestChanges`, `saveEdit` |
-| `admin` | Admin + 2FA | `updateRole`, `allLetters`, `users`, `payouts`, `forceStatusTransition` |
-| `billing` | Protected | `checkout`, `portal`, `subscriptionStatus` |
-| `affiliate` | Employee | `dashboard`, `earnings`, `payouts` |
-| `documents` | Protected | `analyze`, `upload` |
-| `blog` | Admin (write) / Public (read) | `getPost`, `createPost`, `updatePost` |
+| Sub-Router  | Auth Level                    | Key Procedures                                                            |
+| ----------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `system`    | Public                        | `healthCheck`, `stats`                                                    |
+| `auth`      | Public/Protected              | `me`, `logout`, `completeOnboarding`                                      |
+| `letters`   | Subscriber                    | `submit`, `myLetters`, `detail`, `clientApprove`, `clientRequestRevision` |
+| `review`    | Attorney                      | `queue`, `claim`, `approve`, `reject`, `requestChanges`, `saveEdit`       |
+| `admin`     | Admin + 2FA                   | `updateRole`, `allLetters`, `users`, `payouts`, `forceStatusTransition`   |
+| `billing`   | Protected                     | `checkout`, `portal`, `subscriptionStatus`                                |
+| `affiliate` | Employee                      | `dashboard`, `earnings`, `payouts`                                        |
+| `documents` | Protected                     | `analyze`, `upload`                                                       |
+| `blog`      | Admin (write) / Public (read) | `getPost`, `createPost`, `updatePost`                                     |
 
 **REST-only endpoints:** auth signup/login, Stripe webhooks, n8n callback, PDF streaming, health checks.
 
@@ -189,12 +191,12 @@ Root router: `server/routers/index.ts` → `appRouter`. Mounted at `/api/trpc`.
 
 Defined in `server/pipeline/orchestrator.ts`.
 
-| Stage | Model | Purpose | Output |
-|-------|-------|---------|--------|
-| 1 — Research | OpenAI `gpt-4o-search-preview` | Web-grounded legal research (with `webSearchPreview` tool) | `ResearchPacket` |
-| 2 — Drafting | Claude Opus | Initial letter draft from research + intake | `DraftOutput` |
-| 3 — Assembly | Claude Opus | Polish into formal legal letter format | Assembled letter text |
-| 4 — Vetting | Claude Sonnet | Anti-hallucination, citation check, bloat removal | Vetted letter text |
+| Stage        | Model                          | Purpose                                                    | Output                |
+| ------------ | ------------------------------ | ---------------------------------------------------------- | --------------------- |
+| 1 — Research | OpenAI `gpt-4o-search-preview` | Web-grounded legal research (with `webSearchPreview` tool) | `ResearchPacket`      |
+| 2 — Drafting | Claude Opus                    | Initial letter draft from research + intake                | `DraftOutput`         |
+| 3 — Assembly | Claude Opus                    | Polish into formal legal letter format                     | Assembled letter text |
+| 4 — Vetting  | Claude Sonnet                  | Anti-hallucination, citation check, bloat removal          | Vetted letter text    |
 
 - **RAG/Recursive Learning:** Attorney-approved letters are embedded (OpenAI `text-embedding-3-small`) and used as reference examples in Stage 2 drafting.
 - **Research failover chain:** OpenAI gpt-4o-search-preview → Perplexity sonar-pro (if key set) → OpenAI stored prompt → Groq Llama 3.3 70B → synthetic fallback.
@@ -220,15 +222,15 @@ These invariants are enforced across the codebase. Detailed enforcement rules li
 
 Each piece of information lives in **exactly one place**. This table maps every topic to its authoritative file.
 
-| Topic | Authoritative File | Scope |
-|-------|-------------------|-------|
-| Architecture, tech stack, module map, roles, status machine | `ARCHITECTURE.md` (this file) | System-wide reference |
-| Agent behavioral rules, architectural invariant summaries | `CLAUDE.md` | AI agent instructions |
-| Architectural pattern enforcement rules | `skills/architectural-patterns/*.md` | Per-pattern detailed rules |
-| AI pipeline deep-dive (stages, RAG, resilience, n8n) | `docs/PIPELINE_ARCHITECTURE.md` | Pipeline-specific |
-| Developer workflow, gotchas, conventions, common pitfalls | `docs/AGENT_GUIDE.md` | Day-to-day dev reference |
-| Feature inventory (all phases) | `docs/FEATURE_MAP.md` | What's been built |
-| SEO content strategy, blog calendar, keyword map | `CONTENT-STRATEGY.md` | Marketing/content |
-| Complete task and bug tracking (all phases) | `todo.md` | Historical task log |
-| Workflow summary (letter lifecycle, end-to-end) | `docs/workflow_summary.md` | Business logic walkthrough |
-| Feature inventory (all phases) | `docs/FEATURE_MAP.md` | What's been built |
+| Topic                                                       | Authoritative File                   | Scope                      |
+| ----------------------------------------------------------- | ------------------------------------ | -------------------------- |
+| Architecture, tech stack, module map, roles, status machine | `ARCHITECTURE.md` (this file)        | System-wide reference      |
+| Agent behavioral rules, architectural invariant summaries   | `CLAUDE.md`                          | AI agent instructions      |
+| Architectural pattern enforcement rules                     | `skills/architectural-patterns/*.md` | Per-pattern detailed rules |
+| AI pipeline deep-dive (stages, RAG, resilience, n8n)        | `docs/PIPELINE_ARCHITECTURE.md`      | Pipeline-specific          |
+| Developer workflow, gotchas, conventions, common pitfalls   | `docs/AGENT_GUIDE.md`                | Day-to-day dev reference   |
+| Feature inventory (all phases)                              | `docs/FEATURE_MAP.md`                | What's been built          |
+| SEO content strategy, blog calendar, keyword map            | `CONTENT-STRATEGY.md`                | Marketing/content          |
+| Complete task and bug tracking (all phases)                 | `todo.md`                            | Historical task log        |
+| Workflow summary (letter lifecycle, end-to-end)             | `docs/workflow_summary.md`           | Business logic walkthrough |
+| Feature inventory (all phases)                              | `docs/FEATURE_MAP.md`                | What's been built          |
