@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 dotenv.config();
 
 const url = process.env.SUPABASE_URL;
@@ -13,31 +13,67 @@ if (!url || !key) {
 const supabase = createClient(url, key);
 
 async function createUser(email, password, role) {
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: `E2E ${role}` }
+  // 1. Create or update auth user
+  const { data: listData } = await supabase.auth.admin.listUsers({
+    perPage: 1000,
   });
-  
-  if (error) {
-    if (error.message.includes('already registered')) {
-        console.log(`${email} already registered, attempting password update`);
-        const { data: users } = await supabase.auth.admin.listUsers();
-        const user = users.users.find(u => u.email === email);
-        if (user) {
-            const { error: resetErr } = await supabase.auth.admin.updateUserById(user.id, { password });
-            if (resetErr) console.error("Failed to update password:", resetErr);
-            else console.log(`Updated password for ${email}`);
-        }
-    } else {
-        console.error(`Error creating ${email}:`, error);
+  const existing = listData?.users?.find(u => u.email === email);
+
+  let authUserId;
+  if (existing) {
+    console.log(`${email} already exists in auth, updating password...`);
+    const { error: upErr } = await supabase.auth.admin.updateUserById(
+      existing.id,
+      {
+        password,
+        email_confirm: true,
+      }
+    );
+    if (upErr) {
+      console.error(`  Failed to update password:`, upErr.message);
+      return;
     }
+    authUserId = existing.id;
   } else {
-    console.log(`Created ${email}`);
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: `E2E ${role}` },
+    });
+    if (error) {
+      console.error(`Error creating ${email}:`, error.message);
+      return;
+    }
+    authUserId = data.user.id;
+    console.log(`Created auth user: ${email} (${authUserId})`);
+  }
+
+  // 2. Upsert into public.users with the correct role
+  const { error: dbErr } = await supabase.from("users").upsert(
+    {
+      open_id: authUserId,
+      email,
+      name: `E2E ${role}`,
+      login_method: "email",
+      role: role.toLowerCase(),
+      is_active: true,
+      email_verified: true,
+    },
+    { onConflict: "open_id" }
+  );
+  if (dbErr) {
+    console.error(`  DB upsert failed for ${email}:`, dbErr.message);
+  } else {
+    console.log(`  ✓ public.users synced — role="${role.toLowerCase()}"`);
   }
 }
 
-await createUser("test.subscriber@e2e.ttml.test", "TestPassword123!", "Subscriber");
-await createUser("test.attorney@e2e.ttml.test", "TestAttorney123!", "Attorney");
-await createUser("test.admin@e2e.ttml.test", "TestAdmin123!", "Admin");
+await createUser(
+  "test.subscriber@e2e.ttml.test",
+  "TestSubscriber123!",
+  "subscriber"
+);
+await createUser("test.attorney@e2e.ttml.test", "TestAttorney123!", "attorney");
+await createUser("test.admin@e2e.ttml.test", "TestAdmin123!", "admin");
+console.log("\nAll E2E users ready.");

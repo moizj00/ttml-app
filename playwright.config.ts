@@ -1,7 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import { execSync } from "child_process";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${process.env.PORT || "5000"}`;
+const BASE_URL =
+  process.env.PLAYWRIGHT_BASE_URL ||
+  `http://localhost:${process.env.PORT || "3000"}`;
 
 function detectChromiumPath(): string | undefined {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
