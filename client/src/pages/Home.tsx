@@ -79,12 +79,16 @@ export default function Home() {
     navigate("/login");
   };
 
+  const goToSignup = () => {
+    navigate("/signup");
+  };
+
   const goToLoginWithCategory = (categoryId: string) => {
     const submitPath = `/submit?type=${encodeURIComponent(categoryId)}`;
     if (isAuthenticated) {
       navigate(submitPath);
     } else {
-      navigate(`/login?redirect=${encodeURIComponent(submitPath)}`);
+      navigate(`/signup?next=${encodeURIComponent(submitPath)}`);
     }
   };
 
@@ -330,7 +334,7 @@ export default function Home() {
               Sign In
             </button>
             <button
-              onClick={goToLogin}
+              onClick={goToSignup}
               className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-full text-[13px] font-bold transition-all shadow-md shadow-blue-600/20 inline-flex items-center gap-1.5"
               data-testid="nav-cta"
             >
@@ -410,7 +414,7 @@ export default function Home() {
                 Sign In
               </button>
               <button
-                onClick={goToLogin}
+                onClick={goToSignup}
                 className="bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-bold w-full text-center"
                 data-testid="mobile-cta"
               >
@@ -457,7 +461,7 @@ export default function Home() {
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
               <button
-                onClick={goToLogin}
+                onClick={goToSignup}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-base font-semibold flex items-center justify-center gap-2 shadow-xl shadow-blue-600/20 transition-all"
                 data-testid="hero-cta"
               >
@@ -647,7 +651,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
-                  onClick={goToLogin}
+                  onClick={goToSignup}
                   className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
                   data-testid="pricing-cta-single-letter"
                 >
@@ -681,7 +685,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
-                  onClick={goToLogin}
+                  onClick={goToSignup}
                   className="w-full md:w-auto px-6 py-2.5 bg-white text-blue-700 hover:bg-slate-50 font-bold rounded-lg transition-colors shadow-lg text-center"
                   data-testid="pricing-cta-monthly"
                 >
@@ -714,7 +718,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/3 flex justify-start md:justify-end">
                 <button
-                  onClick={goToLogin}
+                  onClick={goToSignup}
                   className="w-full md:w-auto px-6 py-2.5 bg-white text-slate-900 hover:bg-slate-100 font-semibold rounded-lg transition-colors text-center"
                   data-testid="pricing-cta-yearly"
                 >
@@ -800,7 +804,7 @@ export default function Home() {
             Your first letter is completely free.
           </p>
           <button
-            onClick={goToLogin}
+            onClick={goToSignup}
             className="bg-white text-blue-600 hover:bg-slate-50 px-6 py-3 rounded-lg text-base font-bold shadow-2xl transition-transform hover:-translate-y-1 inline-block"
             data-testid="final-cta"
           >
