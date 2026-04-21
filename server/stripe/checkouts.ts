@@ -20,8 +20,9 @@ export async function createCheckoutSession(params: {
   planId: string;
   origin: string;
   discountCode?: string;
+  returnTo?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  const { userId, email, name, planId, origin, discountCode } = params;
+  const { userId, email, name, planId, origin, discountCode, returnTo } = params;
   const plan = getPlanConfig(planId);
   if (!plan) throw new Error(`Invalid plan: ${planId}`);
   const stripe = getStripe();
@@ -56,8 +57,8 @@ export async function createCheckoutSession(params: {
           }
         : {}),
     },
-    success_url: `${origin}/subscriber/billing?success=true&plan=${planId}`,
-    cancel_url: `${origin}/pricing?canceled=true`,
+    success_url: returnTo ? `${origin}${returnTo}?success=true&plan=${planId}` : `${origin}/subscriber/billing?success=true&plan=${planId}`,
+    cancel_url: returnTo ? `${origin}/pricing?returnTo=${encodeURIComponent(returnTo)}&canceled=true` : `${origin}/pricing?canceled=true`,
   };
 
   if (plan.interval === "one_time") {

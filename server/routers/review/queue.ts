@@ -48,9 +48,12 @@ export const reviewQueueRouter = router({
       if (input?.myAssigned)
         return getAllLetterRequests({ assignedReviewerId: ctx.user.id });
 
-      // Default: only unclaimed (pending_review) letters
+      // Default: only unclaimed (pending_review) letters — oldest first (FIFO)
       if (!input?.status && !input?.unassigned)
-        return getAllLetterRequests({ status: "pending_review" });
+        return getAllLetterRequests({
+          status: "pending_review",
+          orderDirection: "asc",
+        });
 
       return getAllLetterRequests({
         status: input?.status,

@@ -68,6 +68,8 @@ export default function Pricing() {
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const returnTo = urlParams.get("returnTo");
 
   // Extract ?code= or ?coupon= URL parameter (employee referral links use ?coupon=)
   const urlCode = useMemo(() => {
@@ -97,7 +99,7 @@ export default function Pricing() {
       if (planId === "single_letter") {
         navigate(`/signup?next=${encodeURIComponent("/submit")}`);
       } else {
-        navigate("/signup");
+        navigate(`/signup${returnTo ? '?next=' + encodeURIComponent(`/pricing?returnTo=${returnTo}`) : ''}`);
       }
       return;
     }
@@ -105,10 +107,7 @@ export default function Pricing() {
       navigate("/submit");
       return;
     }
-    checkoutMutation.mutate({
-      planId,
-      discountCode: appliedDiscount?.code,
-    });
+    checkoutMutation.mutate({ planId, discountCode: appliedDiscount?.code, returnTo: returnTo || undefined });
   };
 
   // Calculate discounted prices for display

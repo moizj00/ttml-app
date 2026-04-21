@@ -1,4 +1,16 @@
-import { and, desc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { captureServerException } from "../sentry";
 import { storageGet } from "../storage";
 import {
@@ -22,7 +34,11 @@ import {
   clientPortalTokens,
   letterDeliveryLog,
 } from "../../drizzle/schema";
-import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
+import type {
+  InsertUser,
+  InsertPipelineLesson,
+  InsertLetterQualityScore,
+} from "../../drizzle/schema";
 import { getDb } from "./core";
 import { assignRoleId } from "./admin";
 
@@ -47,7 +63,11 @@ export async function createLetterRequest(data: {
   if (!db) throw new Error("Database not available");
   let submitterRoleId: string | null = null;
   try {
-    const submitter = await db.select({ subscriberId: users.subscriberId, role: users.role }).from(users).where(eq(users.id, data.userId)).limit(1);
+    const submitter = await db
+      .select({ subscriberId: users.subscriberId, role: users.role })
+      .from(users)
+      .where(eq(users.id, data.userId))
+      .limit(1);
     if (submitter.length > 0) {
       if (submitter[0].subscriberId) {
         submitterRoleId = submitter[0].subscriberId;
@@ -55,7 +75,9 @@ export async function createLetterRequest(data: {
         submitterRoleId = await assignRoleId(data.userId, "subscriber");
       }
     }
-  } catch { /* non-blocking */ }
+  } catch {
+    /* non-blocking */
+  }
   const result = await db
     .insert(letterRequests)
     .values({
@@ -110,13 +132,15 @@ export async function getLetterRequestsByUserId(userId: number) {
 
   // Resolve presigned URLs on-demand — never persist public URLs in DB
   return Promise.all(
-    rows.map(async (row) => {
+    rows.map(async row => {
       let pdfUrl: string | null = null;
       if (row.pdfStoragePath) {
         try {
           const resolved = await storageGet(row.pdfStoragePath);
           pdfUrl = resolved.url;
-        } catch { /* non-blocking: PDF URL unavailable */ }
+        } catch {
+          /* non-blocking: PDF URL unavailable */
+        }
       }
       return { ...row, pdfUrl };
     })
@@ -162,7 +186,9 @@ export async function getLetterRequestSafeForSubscriber(
     try {
       const resolved = await storageGet(row.pdfStoragePath);
       pdfUrl = resolved.url;
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
   return { ...row, pdfUrl };
 }
@@ -171,6 +197,8 @@ export async function getAllLetterRequests(filters?: {
   status?: string;
   assignedReviewerId?: number | null;
   unassigned?: boolean;
+  /** Sort direction for createdAt. Default 'desc' (newest first). Use 'asc' for FIFO queues. */
+  orderDirection?: "asc" | "desc";
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -186,10 +214,11 @@ export async function getAllLetterRequests(filters?: {
     conditions.push(
       eq(letterRequests.assignedReviewerId, filters.assignedReviewerId)
     );
-  const query = db
-    .select()
-    .from(letterRequests)
-    .orderBy(desc(letterRequests.createdAt));
+  const order =
+    filters?.orderDirection === "asc"
+      ? asc(letterRequests.createdAt)
+      : desc(letterRequests.createdAt);
+  const query = db.select().from(letterRequests).orderBy(order);
   if (conditions.length > 0) return query.where(and(...conditions));
   return query;
 }
@@ -203,7 +232,11 @@ export { ALLOWED_TRANSITIONS as VALID_TRANSITIONS, isValidTransition };
 export async function updateLetterStatus(
   id: number,
   status: string,
-  options?: { assignedReviewerId?: number | null; force?: boolean; reason?: string }
+  options?: {
+    assignedReviewerId?: number | null;
+    force?: boolean;
+    reason?: string;
+  }
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -242,7 +275,8 @@ export async function updateLetterStatus(
         action: "force_transition",
         fromStatus,
         toStatus: status,
-        noteText: options.reason ?? `Forced transition: ${fromStatus} → ${status}`,
+        noteText:
+          options.reason ?? `Forced transition: ${fromStatus} → ${status}`,
         noteVisibility: "internal",
       });
     } catch {
@@ -265,12 +299,7 @@ export async function updateLetterStatus(
   const result = await db
     .update(letterRequests)
     .set(updateData as any)
-    .where(
-      and(
-        eq(letterRequests.id, id),
-        or(...statusConditions),
-      )
-    )
+    .where(and(eq(letterRequests.id, id), or(...statusConditions)))
     .returning({ id: letterRequests.id, status: letterRequests.status });
 
   if (result.length === 0) {
@@ -308,10 +337,7 @@ export async function setLetterResearchUnverified(
     .where(eq(letterRequests.id, id));
 }
 
-export async function setLetterQualityDegraded(
-  id: number,
-  degraded: boolean
-) {
+export async function setLetterQualityDegraded(id: number, degraded: boolean) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db
@@ -328,7 +354,11 @@ export async function claimLetterForReview(
   if (!db) throw new Error("Database not available");
   let reviewerRoleId: string | null = null;
   try {
-    const reviewer = await db.select({ attorneyId: users.attorneyId, role: users.role }).from(users).where(eq(users.id, reviewerId)).limit(1);
+    const reviewer = await db
+      .select({ attorneyId: users.attorneyId, role: users.role })
+      .from(users)
+      .where(eq(users.id, reviewerId))
+      .limit(1);
     if (reviewer.length > 0) {
       if (reviewer[0].attorneyId) {
         reviewerRoleId = reviewer[0].attorneyId;
@@ -336,23 +366,33 @@ export async function claimLetterForReview(
         reviewerRoleId = await assignRoleId(reviewerId, "attorney");
       }
     }
-  } catch { /* non-blocking */ }
-  const result = await db.update(letterRequests).set({
-    assignedReviewerId: reviewerId,
-    reviewerRoleId,
-    status: "under_review",
-    lastStatusChangedAt: new Date(),
-    updatedAt: new Date(),
-  }).where(
-    and(
-      eq(letterRequests.id, letterId),
-      inArray(letterRequests.status, ["pending_review", "under_review", "client_revision_requested"] as any),
-      or(
-        isNull(letterRequests.assignedReviewerId),
-        eq(letterRequests.assignedReviewerId, reviewerId),
-      ),
+  } catch {
+    /* non-blocking */
+  }
+  const result = await db
+    .update(letterRequests)
+    .set({
+      assignedReviewerId: reviewerId,
+      reviewerRoleId,
+      status: "under_review",
+      lastStatusChangedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(letterRequests.id, letterId),
+        inArray(letterRequests.status, [
+          "pending_review",
+          "under_review",
+          "client_revision_requested",
+        ] as any),
+        or(
+          isNull(letterRequests.assignedReviewerId),
+          eq(letterRequests.assignedReviewerId, reviewerId)
+        )
+      )
     )
-  ).returning({ id: letterRequests.id });
+    .returning({ id: letterRequests.id });
 
   if (result.length === 0) {
     // Either letter doesn't exist, was already claimed by someone else, or is in wrong status
@@ -361,7 +401,10 @@ export async function claimLetterForReview(
     if (letter.assignedReviewerId && letter.assignedReviewerId !== reviewerId) {
       throw new Error("Letter is already claimed by another reviewer");
     }
-    if (letter.status !== "pending_review" && letter.status !== "under_review") {
+    if (
+      letter.status !== "pending_review" &&
+      letter.status !== "under_review"
+    ) {
       throw new Error(`Letter cannot be claimed in status: ${letter.status}`);
     }
     throw new Error("Letter claim failed");
@@ -416,7 +459,12 @@ export async function countCompletedLetters(
   if (!db) return 0;
   // pipeline_failed is included as an "early" (non-completed) status so that
   // a failed first pipeline attempt does not block free-trial eligibility.
-  const earlyStatuses = ["submitted", "researching", "drafting", "pipeline_failed"];
+  const earlyStatuses = [
+    "submitted",
+    "researching",
+    "drafting",
+    "pipeline_failed",
+  ];
   const conditions = [
     eq(letterRequests.userId, userId),
     sql`${letterRequests.status} NOT IN (${sql.join(
@@ -441,7 +489,9 @@ export async function countCompletedLetters(
  * Uses letter history as the source of truth — NOT freeReviewUsedAt, because
  * claimFreeTrialSlot sets that at submission time before the draft is generated.
  */
-export async function isUserFirstLetterEligible(userId: number): Promise<boolean> {
+export async function isUserFirstLetterEligible(
+  userId: number
+): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
   const unlockedLetters = await db
@@ -487,10 +537,7 @@ export async function hasLetterBeenPreviouslyUnlocked(
       and(
         eq(reviewActions.letterRequestId, letterId),
         or(
-          inArray(reviewActions.action, [
-            "payment_received",
-            "free_unlock",
-          ]),
+          inArray(reviewActions.action, ["payment_received", "free_unlock"]),
           inArray(reviewActions.toStatus, [
             "pending_review",
             "under_review",
@@ -516,7 +563,16 @@ export async function markPriorPipelineRunsSuperseded(
   if (!db) return;
   await db
     .update(workflowJobs)
-    .set({ status: "failed", errorMessage: JSON.stringify({ code: "SUPERSEDED", message: "Superseded by new pipeline run", stage: "pipeline", category: "permanent" }), updatedAt: new Date() } as any)
+    .set({
+      status: "failed",
+      errorMessage: JSON.stringify({
+        code: "SUPERSEDED",
+        message: "Superseded by new pipeline run",
+        stage: "pipeline",
+        category: "permanent",
+      }),
+      updatedAt: new Date(),
+    } as any)
     .where(
       and(
         eq(workflowJobs.letterRequestId, letterId),
@@ -525,7 +581,16 @@ export async function markPriorPipelineRunsSuperseded(
     );
   await db
     .update(researchRuns)
-    .set({ status: "failed", errorMessage: JSON.stringify({ code: "SUPERSEDED", message: "Superseded by new pipeline run", stage: "pipeline", category: "permanent" }), updatedAt: new Date() } as any)
+    .set({
+      status: "failed",
+      errorMessage: JSON.stringify({
+        code: "SUPERSEDED",
+        message: "Superseded by new pipeline run",
+        stage: "pipeline",
+        category: "permanent",
+      }),
+      updatedAt: new Date(),
+    } as any)
     .where(
       and(
         eq(researchRuns.letterRequestId, letterId),
@@ -533,7 +598,6 @@ export async function markPriorPipelineRunsSuperseded(
       )
     );
 }
-
 
 // ═══════════════════════════════════════════════════════
 // CLIENT PORTAL TOKEN HELPERS

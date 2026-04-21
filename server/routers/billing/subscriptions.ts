@@ -6,7 +6,11 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure, emailVerifiedProcedure } from "../../_core/trpc";
+import {
+  router,
+  protectedProcedure,
+  emailVerifiedProcedure,
+} from "../../_core/trpc";
 import { checkTrpcRateLimit } from "../../rateLimiter";
 import {
   getUserSubscription,
@@ -30,7 +34,11 @@ export const billingSubscriptionsRouter = router({
 
   createCheckout: emailVerifiedProcedure
     .input(
-      z.object({ planId: z.string(), discountCode: z.string().optional() })
+      z.object({
+        planId: z.string(),
+        discountCode: z.string().optional(),
+        returnTo: z.string().optional(),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
@@ -46,6 +54,7 @@ export const billingSubscriptionsRouter = router({
             ? `https://${ctx.req.headers["x-forwarded-host"]}`
             : "https://www.talk-to-my-lawyer.com") as string,
         discountCode: input.discountCode,
+        returnTo: input.returnTo,
       });
       return result;
     }),
@@ -76,7 +85,8 @@ export const billingSubscriptionsRouter = router({
     if (isSubscribed) return { state: "subscribed" as const, eligible: false };
 
     const db = await (await import("../../db")).getDb();
-    if (!db) return { state: "subscription_required" as const, eligible: false };
+    if (!db)
+      return { state: "subscription_required" as const, eligible: false };
     const { letterRequests } = await import("../../../drizzle/schema");
     const { eq, and, notInArray } = await import("drizzle-orm");
     const unlockedLetters = await db
