@@ -272,6 +272,22 @@ export const versionsRouter = router({
               letter.userId === ctx.user.id &&
               letter.status === "generated_locked"
             ) {
+              // ── Free-preview lead-magnet override (migration 0048) ──
+              // First-letter free-preview path: once the 24-hour cooling window
+              // has elapsed, return the FULL ai_draft with no truncation and no
+              // redaction. The UI is responsible for rendering it non-selectable
+              // with a DRAFT watermark. The only CTA the subscriber sees in this
+              // mode is "Submit For Attorney Review" → subscribe flow.
+              const now = Date.now();
+              const freePreviewUnlocked =
+                letter.isFreePreview &&
+                letter.freePreviewUnlockAt instanceof Date &&
+                letter.freePreviewUnlockAt.getTime() <= now;
+              if (freePreviewUnlocked) {
+                return { ...version, truncated: false, freePreview: true as const };
+              }
+
+              // Standard paid-paywall preview: truncated to 20% of lines.
               if (version.content) {
                 const lines = version.content.split("\n");
                 const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));

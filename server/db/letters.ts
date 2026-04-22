@@ -58,6 +58,13 @@ export async function createLetterRequest(data: {
   priority?: "low" | "normal" | "high" | "urgent";
   templateId?: number;
   submittedByAdmin?: boolean;
+  /**
+   * Free-preview lead-magnet flow: when true, marks this letter for the
+   * 24-hour-delayed free preview email. `freePreviewUnlockAt` is required
+   * when this is true. See migration 0048 for the column definitions.
+   */
+  isFreePreview?: boolean;
+  freePreviewUnlockAt?: Date;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -95,6 +102,8 @@ export async function createLetterRequest(data: {
       submitterRoleId,
       templateId: data.templateId ?? null,
       submittedByAdmin: data.submittedByAdmin ?? false,
+      isFreePreview: data.isFreePreview ?? false,
+      freePreviewUnlockAt: data.freePreviewUnlockAt ?? null,
     })
     .returning({ insertId: letterRequests.id });
   return result[0];
@@ -173,6 +182,10 @@ export async function getLetterRequestSafeForSubscriber(
       submittedByAdmin: letterRequests.submittedByAdmin,
       lastStatusChangedAt: letterRequests.lastStatusChangedAt,
       draftReadyEmailSent: letterRequests.draftReadyEmailSent,
+      isFreePreview: letterRequests.isFreePreview,
+      freePreviewUnlockAt: letterRequests.freePreviewUnlockAt,
+      freePreviewEmailSentAt: letterRequests.freePreviewEmailSentAt,
+      freePreviewViewedAt: letterRequests.freePreviewViewedAt,
       createdAt: letterRequests.createdAt,
       updatedAt: letterRequests.updatedAt,
     })

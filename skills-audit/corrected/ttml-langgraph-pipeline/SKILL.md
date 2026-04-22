@@ -1,58 +1,98 @@
 ---
 name: ttml-langgraph-pipeline
-description: >
-  Implementation expert for the TTML LangGraph pipeline — the 4-node StateGraph
-  (research → draft → assembly → vetting → finalize/fail) that runs as an
-  optional parallel entry point (gated by `LANGGRAPH_PIPELINE=true`) alongside
-  the canonical in-app 4-stage pipeline and the dormant n8n path. Use
-  AGGRESSIVELY whenever work touches `server/pipeline/graph/`,
-  `server/pipeline/graph/nodes/`, `state.ts`, `index.ts`, or
-  `pipeline_stream_chunks`. Trigger on: graph topology changes,
-  adding/removing nodes, routing logic (`routeAfterVetting`), streaming tokens
-  to Supabase Realtime, `LANGGRAPH_PIPELINE=true` env gate, finalize node,
-  fail node, vetting retry loop, `errorRetryCount`, `qualityDegraded`, status
-  transitions inside graph nodes, LangGraph imports (`@langchain/langgraph`),
-  `pipeline_stream_chunks` table, `useLetterStream` React hook, AbortSignal
-  timeouts, or any "letter is stuck in the LangGraph path" report.
-  Also trigger when someone asks "how does LangGraph fit with n8n", "what happens
-  when vetting fails", "why is the fail node unreachable", or "how does streaming work".
+description: |
+  Implementation expert for the TTML LangGraph pipeline — the 6-node StateGraph
+  (research → draft → assembly → vetting → finalize | fail) that runs either as
+  a worker-side route (`LANGGRAPH_PIPELINE=true` in `server/worker.ts`) or as an
+  orchestrator-level bypass (`PIPELINE_MODE=langgraph` in
+  `server/pipeline/orchestrator.ts`). Use AGGRESSIVELY whenever work touches
+  `server/pipeline/graph/`, `server/pipeline/graph/nodes/`, `state.ts`,
+  `graph/index.ts`, `server/pipeline/langgraph.ts` (compatibility shim), or
+  `pipeline_stream_chunks`. Trigger on: graph topology changes, adding/removing
+  nodes, routing logic (`routeAfterVetting`), streaming tokens to Supabase
+  Realtime, env gates, finalize node, fail node, vetting retry loop,
+  `errorRetryCount`, `qualityDegraded`, status transitions inside graph nodes,
+  LangGraph imports (`@langchain/langgraph`), `pipeline_stream_chunks` table,
+  `useLetterStream` React hook, AbortSignal timeouts, or any "letter is stuck
+  in the LangGraph path" report. Verified baseline: 2026-04-20.
 ---
 
 # TTML LangGraph Pipeline
 
-Implementation reference for the TTML LangGraph StateGraph pipeline, established
-April 2026. This is an **optional parallel entry point** — it runs instead of
-the canonical in-app 4-stage pipeline when `LANGGRAPH_PIPELINE=true` is set on
-the Railway worker service. The canonical pipeline and the dormant n8n chain
-(active only when `N8N_PRIMARY=true`) remain intact.
+Implementation reference for the TTML LangGraph StateGraph pipeline. The graph
+can be invoked from either direction:
 
-## Where the code lives
+1. **Worker-side route** — `LANGGRAPH_PIPELINE=true` in `server/worker.ts`. The
+   pg-boss worker still owns the job, acquires the pipeline lock, and routes
+   LangGraph first. **Graceful fall-through to the classic in-app pipeline** if
+   LangGraph throws.
+2. **Orchestrator bypass** — `PIPELINE_MODE=langgraph`. The bypass happens at
+   the top of `runFullPipeline()` *before* any n8n/in-app logic runs. When
+   LangGraph fails here it throws a `PipelineError` — there is no secondary
+   fall-through at this layer; the fallback is the worker's normal retry loop.
+
+Both switches call the same compiled `StateGraph`. The differences are where
+the call originates and what happens on failure.
+
+---
+
+## 1. Where the Code Lives
 
 ```
-server/pipeline/graph/
-├── index.ts          — buildPipelineGraph(), runLangGraphPipeline(), streamLangGraphPipeline()
-├── state.ts          — PipelineState (Annotation.Root), PipelineStateType
-└── nodes/
-    ├── research.ts   — Perplexity sonar-pro → Claude Opus (non-web-grounded) fallback
-    ├── draft.ts      — Claude Opus streaming → pipeline_stream_chunks inserts
-    ├── assembly.ts   — optional light assembly pass
-    ├── vetting.ts    — Claude Sonnet QA vetting, returns VettingReport
-    └── finalize.ts   — writes letter_versions row, transitions status
+server/pipeline/
+├── langgraph.ts              — compatibility shim (PipelineResult, runPipeline, streaming stub)
+└── graph/
+    ├── index.ts              — buildPipelineGraph(), runLangGraphPipeline(), streamLangGraphPipeline()
+    ├── state.ts              — PipelineState (Annotation.Root), PipelineStateType
+    └── nodes/
+        ├── research.ts       — Perplexity sonar-pro → Claude Sonnet 4 fallback (non-web-grounded)
+        ├── draft.ts          — Claude Sonnet 4 streaming → pipeline_stream_chunks
+        ├── assembly.ts       — Claude Sonnet 4 assembly pass
+        ├── vetting.ts        — Claude Sonnet 4 vetting, returns VettingReport
+        └── finalize.ts       — finalizeNode + failNode
 ```
 
-The worker checks `LANGGRAPH_PIPELINE=true` and calls `runLangGraphPipeline()` instead
-of the in-app `runFullPipeline()`. The dormant n8n chain is unaffected.
+The `langgraph.ts` shim adapts `runLangGraphPipeline(opts)` into the
+`runPipeline(letterId, intake, userId) → PipelineResult` signature that
+`orchestrator.ts` imports via `runLangGraphPipeline` (aliased as
+`runLangGraphPipeline` but resolved through `./langgraph`).
 
-## Graph topology
+---
+
+## 2. The Two Env Gates
+
+| Env var                  | Observed at                    | Fall-through behaviour on LangGraph failure |
+| ------------------------ | ------------------------------ | ------------------------------------------- |
+| `PIPELINE_MODE=langgraph` | `orchestrator.ts` line 167     | No fall-through at this layer; `PipelineError` bubbles up and the worker's retry loop handles it. |
+| `LANGGRAPH_PIPELINE=true` | `server/worker.ts` line 72     | Graceful: logs warn, releases and re-acquires the pipeline lock, and proceeds to the classic in-app `runFullPipeline()`. If the re-acquire fails the letter is marked `pipeline_failed` (`force: true`). |
+
+Do not use both switches simultaneously. If you set `PIPELINE_MODE=langgraph`
+the worker gate never runs because the orchestrator returns before the
+classic path is reached. If you set only `LANGGRAPH_PIPELINE=true` the
+orchestrator-level branch is skipped and the worker takes over.
+
+Other `PIPELINE_MODE` values worth knowing:
+
+- `PIPELINE_MODE=simple` — the Claude-only ultra-simple pipeline. Bypasses
+  pg-boss entirely (server startup skips pg-boss warmup in
+  `server/_core/index.ts:394`) and the letter service runs it inline
+  (`server/services/letters.ts:153`).
+- `PIPELINE_MODE=langgraph` — StateGraph bypass described above.
+- `PIPELINE_MODE` unset (default) — classic path: n8n webhook primary if
+  configured, else in-app 4-stage pipeline.
+
+---
+
+## 3. Graph Topology
 
 ```
 START
   │
   ▼
-research  ──error──▶ errorRetryCount++
+research  ──error──▶ errorRetryCount++ (currentStage="error")
   │
   ▼
-draft     ──error──▶ errorRetryCount++  (also streams tokens → pipeline_stream_chunks)
+draft     ──error──▶ errorRetryCount++   (also streams tokens → pipeline_stream_chunks)
   │
   ▼
 assembly  ──error──▶ errorRetryCount++
@@ -60,22 +100,29 @@ assembly  ──error──▶ errorRetryCount++
   ▼
 vetting   ──error──▶ errorRetryCount++
   │
-  ├── qualityDegraded && retryCount < 2  ──▶  draft  (max 2 retries)
+  ├── qualityDegraded && retryCount < 2  ──▶  draft (max 2 quality-driven redraft loops)
   ├── errorRetryCount >= 3 || !assembledLetter  ──▶  fail
-  └── else  ──▶  finalize
+  └── else                               ──▶  finalize
   │
   ├── finalize ──▶ END
   └── fail     ──▶ END
 ```
 
-**Key invariants:**
-- All nodes except `finalize` and `fail` are wrapped with `withErrorRecovery()`, which
-  catches any thrown error, increments `errorRetryCount`, and sets `currentStage: "error"`
-  without crashing the graph.
-- `vettingRouterNode` wraps `vettingNode` and increments `retryCount` if `qualityDegraded`.
-- `routeAfterVetting` is the only conditional edge and owns all routing logic.
+Invariants:
 
-## `routeAfterVetting` — routing rules (post-audit canonical form)
+- All nodes except `finalize` and `fail` are wrapped with `withErrorRecovery()`
+  (graph/index.ts:53-70). It catches any thrown error, increments
+  `errorRetryCount`, writes `lastErrorStage`, and sets
+  `currentStage: "error"` without crashing the graph.
+- `vettingRouterNode` wraps `vettingNode` and increments `retryCount` only
+  when `qualityDegraded` is true (graph/index.ts:42-49).
+- `routeAfterVetting` (graph/index.ts:17-38) is the only conditional edge.
+  It owns all routing. Do not add additional conditional edges — keep the
+  routing centralised.
+
+---
+
+## 4. `routeAfterVetting` — Canonical Form
 
 ```typescript
 function routeAfterVetting(state: PipelineStateType): string {
@@ -101,97 +148,134 @@ function routeAfterVetting(state: PipelineStateType): string {
 .addConditionalEdges("vetting", routeAfterVetting, {
   draft: "draft",
   finalize: "finalize",
-  fail: "fail",   // ← REQUIRED — without this, returning "fail" crashes the graph
+  fail: "fail",   // REQUIRED — without this LangGraph throws when routeAfterVetting returns "fail"
 })
 ```
 
-Without the `fail` key in the map, LangGraph throws at runtime when `routeAfterVetting`
-returns `"fail"`. The `fail` node must be registered AND wired. Do not leave it as
-dead code.
+The `fail` node must be registered AND wired; don't leave it as dead code.
+This was the single most important bug fix during the April 2026 audit.
 
-## The fail node
+---
+
+## 5. The `fail` Node
 
 ```typescript
 export async function failNode(state: PipelineStateType): Promise<Partial<PipelineStateType>> {
-  await updateLetterStatus(letterId, "pipeline_failed");
+  await updateLetterStatus(state.letterId, "pipeline_failed");
   return { currentStage: "failed", messages: [...] };
 }
 ```
 
-`pipeline_failed` is a valid `ALLOWED_TRANSITIONS` target from `drafting`. From
-`pipeline_failed`, users can resubmit (transitions to `submitted`).
+`pipeline_failed` is a valid `ALLOWED_TRANSITIONS` target from `researching`,
+`drafting`, and `submitted` in `shared/types/letter.ts`. From
+`pipeline_failed`, users can resubmit (transition back to `submitted`).
 
-## State shape (`PipelineStateType`)
+In `runLangGraphPipeline` (graph/index.ts:155-159) a final state with
+`currentStage === "failed"` causes an `Error("LangGraph pipeline failed for
+letter #N")` to be thrown. In the worker-side route this triggers the
+fall-through to the classic pipeline. In the orchestrator bypass it becomes
+a `PipelineError` returned from the `runPipeline` shim.
 
-| Field | Type | Reducer | Purpose |
-|-------|------|---------|---------|
-| `letterId` | `number` | last-write | Primary key into `letter_requests` |
-| `userId` | `number` | last-write | For notifications |
-| `intake` | `Record<string, any>` | last-write | Raw intake JSON |
-| `messages` | `BaseMessage[]` | **append** | LangChain message history |
-| `qualityWarnings` | `string[]` | **append** | Accumulates across retries |
-| `researchPacket` | `Record | null` | last-write | Perplexity/Claude output |
-| `researchProvider` | `string` | last-write | "perplexity" or "anthropic-fallback" |
-| `researchUnverified` | `boolean` | last-write | True when Claude fallback used |
-| `assembledLetter` | `string` | last-write | Full letter text after assembly |
-| `vettedLetter` | `string` | last-write | Same text (vetting evaluates, doesn't rewrite) |
-| `qualityDegraded` | `boolean` | last-write | Vetting flagged serious issues |
-| `retryCount` | `number` | last-write | Draft redraft iterations (max 2) |
-| `errorRetryCount` | `number` | last-write | Node-level error count (fail at 3) |
-| `lastErrorStage` | `string` | last-write | Which node last threw |
-| `vettingReport` | `Record | null` | last-write | Full VettingReport JSON |
-| `workflowJobId` | `number` | last-write | FK to `workflow_jobs` |
-| `currentStage` | `string` | last-write | Tracking / error routing hint |
+---
 
-Note: `messages` and `qualityWarnings` use **append reducers** — do not overwrite them,
-only extend them. All other fields use last-write reducers.
+## 6. State Shape (`PipelineStateType`)
 
-## finalize node — hard rules
+Source: `server/pipeline/graph/state.ts`. Reducer column tells you which
+fields accumulate vs. overwrite.
 
-The finalize node must use ONLY the canonical helpers, never raw Drizzle. This was
-a deployment bug found April 2026 and fixed before launch.
+| Field                | Type                        | Reducer     | Purpose                                               |
+| -------------------- | --------------------------- | ----------- | ----------------------------------------------------- |
+| `letterId`           | `number`                    | last-write  | Primary key into `letter_requests`                    |
+| `userId`             | `number`                    | last-write  | For notifications                                     |
+| `intake`             | `Record<string, any>`       | last-write  | Raw intake JSON                                       |
+| `messages`           | `BaseMessage[]`             | **append**  | LangChain message history                             |
+| `qualityWarnings`    | `string[]`                  | **append**  | Accumulates across vetting iterations                 |
+| `researchPacket`     | `Record \| null`            | last-write  | Perplexity or Claude fallback output                  |
+| `researchProvider`   | `string`                    | last-write  | `"perplexity"` or `"anthropic-fallback"`              |
+| `researchUnverified` | `boolean`                   | last-write  | True when Claude fallback used (no web grounding)     |
+| `assembledLetter`    | `string`                    | last-write  | Full letter text after assembly                       |
+| `vettedLetter`       | `string`                    | last-write  | Post-vetting text (vetting evaluates, not rewrites)   |
+| `qualityDegraded`    | `boolean`                   | last-write  | Vetting flagged serious issues                        |
+| `retryCount`         | `number`                    | last-write  | Quality-driven redraft iterations (max 2)             |
+| `errorRetryCount`    | `number`                    | last-write  | Node-level error count (fail at 3)                    |
+| `lastErrorStage`     | `string`                    | last-write  | Which node last threw                                 |
+| `vettingReport`      | `Record \| null`            | last-write  | Full VettingReport JSON                               |
+| `workflowJobId`      | `number`                    | last-write  | FK to `workflow_jobs`                                 |
+| `currentStage`       | `string`                    | last-write  | Tracking / error-routing hint                         |
+
+Only `messages` and `qualityWarnings` append. Everything else is last-write.
+Don't accidentally make a field append-reducer — the state will grow unbounded.
+
+---
+
+## 7. Model Pins
+
+All four AI-driven nodes resolve to **Claude Sonnet 4** via `providers.ts`
+(`claude-sonnet-4-20250514`) as of 2026-04-20. Do not reference Claude Opus
+in LangGraph code or docs.
+
+| Node       | Primary                                     | Fallback                                 |
+| ---------- | ------------------------------------------- | ---------------------------------------- |
+| research   | Perplexity `sonar-pro`                      | Claude Sonnet 4 (sets `researchUnverified=true`) |
+| draft      | Claude Sonnet 4 (streaming)                  | `gpt-4o-mini`                            |
+| assembly   | Claude Sonnet 4                              | `gpt-4o-mini`                            |
+| vetting    | Claude Sonnet 4                              | `gpt-4o-mini`                            |
+
+Timeouts are inherited from `providers.ts`: `RESEARCH_TIMEOUT_MS`,
+`DRAFT_TIMEOUT_MS`, `ASSEMBLY_TIMEOUT_MS` — all currently **90 seconds**. The
+draft node also sets `STREAM_FLUSH_INTERVAL_MS = 300` and
+`STREAM_MIN_BUFFER_CHARS = 50` for Supabase Realtime flushes.
+
+---
+
+## 8. `finalize` Node — Hard Rules
+
+The finalize node must use ONLY the canonical helpers, never raw Drizzle
+writes to `letterRequests.status`. This was a deployment bug found in the
+April 2026 audit and must not regress.
 
 ```typescript
 // CORRECT — use canonical helpers
-await db.update(letterRequests).set({ researchUnverified, qualityDegraded, updatedAt: new Date() })
-  .where(eq(letterRequests.id, letterId));                 // quality flags only — no status
+await db.update(letterRequests)
+  .set({ researchUnverified, qualityDegraded, updatedAt: new Date() })
+  .where(eq(letterRequests.id, letterId));             // quality flags only — no status
+
 await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
-await updateLetterStatus(letterId, "generated_locked");   // enforces ALLOWED_TRANSITIONS
+await updateLetterStatus(letterId, "generated_locked"); // enforces ALLOWED_TRANSITIONS
 
 // WRONG — never do this
-await db.update(letterRequests).set({ status: "generated_locked" }).where(...); // bypasses state machine
+await db.update(letterRequests)
+  .set({ status: "generated_locked" })
+  .where(eq(letterRequests.id, letterId));             // bypasses state machine
 ```
 
-**Why:** `updateLetterStatus()` enforces `ALLOWED_TRANSITIONS`, writes `review_actions`
-audit rows, and is the single source of truth for state transitions. Raw Drizzle status
-updates silently bypass all of this. The transition `drafting → generated_locked` is
-valid per `shared/types/letter.ts`.
+`updateLetterStatus()` enforces `ALLOWED_TRANSITIONS`, writes `review_actions`
+audit rows, and is the single source of truth for state changes. Raw Drizzle
+status updates silently bypass all of that. The transition
+`drafting → generated_locked` is valid per `shared/types/letter.ts`.
 
-## draft node — streaming to Supabase Realtime
+---
 
-The draft node streams Claude Opus tokens into the `pipeline_stream_chunks` table so
-the frontend's `useLetterStream` hook can show live generation progress.
+## 9. `draft` Node — Streaming to Supabase Realtime
 
-```typescript
-// Requires env vars on the worker service:
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+The draft node streams Claude Sonnet 4 tokens into the
+`pipeline_stream_chunks` table so the frontend's `useLetterStream` hook can
+show live generation progress.
 
-// Streaming config constants:
-DRAFT_TIMEOUT_MS = 120_000          // AbortSignal hard cap on the LLM call
-STREAM_FLUSH_INTERVAL_MS = 300      // Flush to Supabase every 300ms
-STREAM_MIN_BUFFER_CHARS = 50        // Min chars before an early flush
-```
+Required env vars (worker service):
 
-The draft node uses `AnySupabaseClient` (typed as `SupabaseClient<any>`) because the
-generated Supabase DB types do not include `pipeline_stream_chunks` — the table was
-added via a standalone Supabase migration, not a Drizzle migration. This is intentional.
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-If `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing, streaming is disabled
-gracefully — the draft still runs, chunks just aren't written. The letter generation
-itself does not fail.
+If either is missing, streaming is disabled gracefully — the draft still
+runs, chunks just aren't written. Letter generation does not fail.
 
-## `pipeline_stream_chunks` table
+The draft node uses `AnySupabaseClient` (typed as `SupabaseClient<any>`)
+because the generated Supabase DB types do not include
+`pipeline_stream_chunks` — the table was added via a standalone Supabase
+migration, not a Drizzle migration. This is intentional.
+
+### `pipeline_stream_chunks` table
 
 Applied to Supabase production April 14, 2026 via
 `supabase/migrations/20260414000001_pipeline_stream_chunks.sql`.
@@ -207,86 +291,118 @@ CREATE TABLE pipeline_stream_chunks (
 );
 ```
 
-**RLS policies** (aligned with TTML's existing `app_user_id()` / `is_app_employee_or_admin()` helpers):
-- `stream_chunks_select_own`: users see chunks for their own letters via `app_user_id()`
-- `stream_chunks_select_staff`: employees/admins see all via `is_app_employee_or_admin()`
+RLS policies (aligned with TTML's existing helpers):
+
+- `stream_chunks_select_own` — users see chunks for their own letters via `app_user_id()`
+- `stream_chunks_select_staff` — employees/admins see all via `is_app_employee_or_admin()`
 - No INSERT policy needed — service role key bypasses RLS.
 
-**Important:** The original migration used `u.supabase_auth_id` but TTML's `users` table
-has no such column — it uses `open_id`. Use `app_user_id()` instead. This was caught
-on apply and corrected.
+The original migration referenced `u.supabase_auth_id`, but TTML's `users`
+table uses `open_id`. The applied version uses `app_user_id()`. Don't
+reintroduce the `supabase_auth_id` reference.
 
-The table is published to `supabase_realtime` so `postgres_changes` subscriptions fire.
-A `cleanup_old_stream_chunks()` procedure deletes rows older than 24h (schedule via pg_cron).
+The table is published to `supabase_realtime` so `postgres_changes`
+subscriptions fire. A `cleanup_old_stream_chunks()` procedure deletes rows
+older than 24h (schedule via pg_cron).
 
-## research node
+---
 
-Primary: Perplexity `sonar-pro` (REST, 90s timeout)
-Fallback: **Claude Opus** (non-web-grounded; sets `researchUnverified=true`)
+## 10. Vetting Node — `VettingReport`
 
-If both fail, the node throws — `withErrorRecovery` catches it and increments `errorRetryCount`.
-
-## vetting node
-
-Uses **Claude Sonnet**, 60s timeout. Exact dated model ID lives in code; refer to the brand here.
-Returns a `VettingReport`:
+Uses Claude Sonnet 4, 90s timeout. Returns a `VettingReport`:
 
 ```typescript
 interface VettingReport {
   riskLevel: "low" | "medium" | "high" | "critical";
-  qualityDegraded: boolean;  // true → triggers redraft
+  qualityDegraded: boolean;       // true → triggers redraft
   jurisdictionIssues: string[];
   citationsFlagged: string[];
   factualIssuesFound: string[];
-  overallScore: number;      // 0-10, <6 → qualityDegraded should be true
+  overallScore: number;           // 0–10; < 6 → qualityDegraded should be true
   summary: string;
   recommendations: string[];
 }
 ```
 
-If JSON parsing fails, vetting returns a safe default (`qualityDegraded: false, score: 7`)
-so the pipeline doesn't get stuck. `retryCount` is passed to the vetting prompt — on
-retry #1+, the model is instructed to be more lenient about minor issues.
+If JSON parsing fails, vetting returns a safe default (`qualityDegraded:
+false, score: 7`) so the pipeline doesn't get stuck. `retryCount` is passed
+to the vetting prompt — on retry #1+, the model is instructed to be more
+lenient about minor issues to avoid infinite redraft loops.
 
-## Activation
+---
 
-Set `LANGGRAPH_PIPELINE=true` on the Railway **worker** service (not the app service).
-The app service doesn't run the pipeline — the worker does.
+## 11. Activation Checklist
 
-Required env vars on the worker for LangGraph path:
-- `ANTHROPIC_API_KEY` — draft, vetting, and Claude fallback research
-- `PERPLEXITY_API_KEY` — research node primary (graceful fallback to Claude Opus if absent)
-- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — streaming chunks (graceful fallback if absent)
-- `DATABASE_URL` — Drizzle ORM access (always required)
+For the worker-side route (`LANGGRAPH_PIPELINE=true`):
 
-## Known bugs fixed before launch (April 2026 audit)
+- Set `LANGGRAPH_PIPELINE=true` on the Railway **worker** service (not the app service).
+- `ANTHROPIC_API_KEY` — draft, assembly, vetting, and Claude fallback research.
+- `PERPLEXITY_API_KEY` — research node primary (graceful Claude fallback if absent).
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — streaming chunks (graceful fallback if absent).
+- `SUPABASE_DIRECT_URL` (port 5432) — required for pg-boss; the worker still runs through pg-boss on this route.
+- `DATABASE_URL` / `SUPABASE_DATABASE_URL` — Drizzle ORM access.
 
-| Bug | Symptom | Fix |
-|-----|---------|-----|
-| finalize bypassed state machine | Raw Drizzle `.set({ status: "generated_locked" })` — no audit rows, no transition validation | Replaced with `updateLetterStatus()` + `updateLetterVersionPointers()` |
-| fail node unreachable | `routeAfterVetting` never returned `"fail"`; `routeAfterError` defined but never wired; `fail` key missing from `addConditionalEdges` map | Rewrote routing function with `errorRetryCount >= 3 \|\| !assembledLetter` check; added `fail: "fail"` to edge map |
-| Migration 0044 missing from journal | `drizzle/0044_startup_migrations_extraction.sql` on disk but `_journal.json` jumped from idx 43 → 45 — fresh DB would skip `pipeline_locked_at`, enum values, `intake_form_templates` | Added idx 44 entry to `drizzle/meta/_journal.json` |
+For the orchestrator bypass (`PIPELINE_MODE=langgraph`):
 
-## State machine (pipeline-relevant subset)
+- All of the above except the pg-boss bits are technically optional because
+  the bypass skips the pg-boss worker. In practice, leave the database URLs
+  configured — `finalizeNode` and `failNode` write via Drizzle.
+- Do NOT set `LANGGRAPH_PIPELINE=true` simultaneously (harmless, but
+  confusing when reading logs).
+
+Don't set either gate on the app service — the app service doesn't run the
+pipeline. The worker does (or, under `PIPELINE_MODE=langgraph`, whichever
+process called `runFullPipeline`).
+
+---
+
+## 12. Status Machine (Pipeline-Relevant Subset)
 
 ```
-submitted → researching → drafting → generated_locked → pending_review → ...
-submitted → pipeline_failed → submitted (retry)
-researching → pipeline_failed
-drafting → pipeline_failed
+submitted       → researching   (researchNode entry)
+researching     → drafting      (draftNode entry)
+drafting        → generated_locked (finalizeNode)
+researching     → pipeline_failed (failNode)
+drafting        → pipeline_failed (failNode)
+submitted       → pipeline_failed (worker lock-loss bailout, force:true)
+pipeline_failed → submitted      (user-driven resubmit, elsewhere)
 ```
 
-The LangGraph pipeline calls:
-- `researchNode`: `submitted → researching`
-- `draftNode`: `researching → drafting`  (note: skips `submitted → researching` since research already set it)
-- `finalizeNode`: `drafting → generated_locked`
-- `failNode`: current → `pipeline_failed`
+All status changes go through `updateLetterStatus()` in `server/db/` which
+validates against `ALLOWED_TRANSITIONS` in `shared/types/letter.ts`. Never
+use raw SQL or Drizzle for the `status` column.
 
-All transitions go through `updateLetterStatus()` in `server/db.ts`. Never use raw SQL or
-Drizzle for status fields.
+`generated_locked → pending_review` is **not** owned by the LangGraph
+pipeline — that transition happens in the Stripe webhook's
+`unlockLetterForReview` (`server/stripeWebhook/handlers/checkout.ts`) after
+the user pays.
 
-## Model ID discipline
+---
 
-Exact Anthropic/Perplexity model pins live in `server/pipeline/orchestrator.ts` and
-`server/pipeline/providers.ts`. Skill files reference the **brand** ("Claude Opus",
-"Claude Sonnet", "Perplexity `sonar-pro`") so documentation doesn't rot every release.
+## 13. Debugging "LangGraph Letter Is Stuck"
+
+1. **Which gate is active?** `echo $PIPELINE_MODE` and `echo $LANGGRAPH_PIPELINE` on the worker service.
+2. **Which node errored?** `pipeline_stream_chunks` and `review_actions` rows for the letter; also `currentStage` / `lastErrorStage` if you can query the live graph state.
+3. **Quality-redraft loop?** `retryCount >= 2` and `qualityDegraded = true` → the graph should route to `finalize` regardless. If it's still looping, check that `retryCount` isn't being reset between runs.
+4. **Error-retry ceiling?** `errorRetryCount >= 3` → route to `fail`. If the letter isn't transitioning to `pipeline_failed`, the `fail: "fail"` entry in `addConditionalEdges` may be missing again — verify in `graph/index.ts:95-99`.
+5. **Streaming disabled?** If `useLetterStream` shows nothing but the letter eventually completes, check `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` on the worker.
+6. **Worker fall-through?** If `LANGGRAPH_PIPELINE=true` is set and the log shows `"LangGraph pipeline failed for letter #N — falling back to standard pipeline"`, the classic pipeline is handling it now; follow the orchestrator playbook in `ttml-pipeline-orchestrator`.
+
+---
+
+## 14. Verification Baseline (2026-04-20)
+
+Verified against:
+
+- `server/pipeline/graph/index.ts`
+- `server/pipeline/graph/state.ts`
+- `server/pipeline/graph/nodes/{research,draft,assembly,vetting,finalize}.ts`
+- `server/pipeline/langgraph.ts` (shim)
+- `server/pipeline/orchestrator.ts` (PIPELINE_MODE branches, lines 164-198)
+- `server/worker.ts` (LANGGRAPH_PIPELINE branch, lines 68-100)
+- `server/pipeline/providers.ts` (model pins)
+- `shared/types/letter.ts` (`ALLOWED_TRANSITIONS`)
+- `supabase/migrations/20260414000001_pipeline_stream_chunks.sql`
+
+If any of these change materially, re-verify and update this skill in the
+same PR.

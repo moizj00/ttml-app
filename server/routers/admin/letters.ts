@@ -5,6 +5,7 @@ import { getAppUrl } from "../_shared";
 import {
   claimLetterForReview,
   getAllLetterRequests,
+  getDb,
   getLetterRequestById,
   getLetterVersionsByRequestId,
   getReviewActions,
@@ -20,6 +21,9 @@ import {
 import { captureServerException } from "../../sentry";
 import { forceStatusTransition, diagnoseAndRepairLetterState } from "../../services/admin";
 import { logger } from "../../logger";
+import { letterRequests } from "../../../drizzle/schema";
+import { eq } from "drizzle-orm";
+import { dispatchFreePreviewIfReady } from "../../freePreviewEmailCron";
 
 export const adminLettersProcedures = {
   allLetters: adminProcedure
@@ -178,4 +182,112 @@ export const adminLettersProcedures = {
     .mutation(async ({ ctx, input }) =>
       diagnoseAndRepairLetterState(input.letterId, ctx.user.id)
     ),
+
+  /**
+   * Force-unlock the first-letter free-preview flow for a specific letter.
+   *
+   * By default a free-preview letter waits 24 hours (`free_preview_unlock_at`)
+   * before the "your draft is ready" email fires. This mutation collapses
+   * that cooling window by setting `free_preview_unlock_at = NOW()`, and
+   * then invokes the shared atomic dispatcher. If the pipeline has already
+   * saved the ai_draft, the email fires immediately. If the pipeline is
+   * still running, the dispatcher no-ops (no draft yet) — the pipeline
+   * finalize hook in simple/graph/fallback.ts will call the dispatcher
+   * again once the draft is saved, and the email fires at that moment.
+   *
+   * Guards:
+   *   - Letter must be on the free-preview path (`is_free_preview = TRUE`).
+   *     Non-free-preview letters would bypass the normal Stripe paywall
+   *     invariant, so this path is not allowed for them.
+   *   - Does NOT resend if `free_preview_email_sent_at` is already stamped;
+   *     the dispatcher's atomic claim enforces this.
+   *
+   * Audit:
+   *   Logs a `free_preview_force_unlock` review action with the previous
+   *   unlockAt and the admin's reason so the full history is queryable
+   *   from the admin letter detail view.
+   */
+  forceFreePreviewUnlock: adminProcedure
+    .input(
+      z.object({
+        letterId: z.number(),
+        reason: z.string().min(5).max(1000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+
+      if (!letter.isFreePreview) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Letter is not on the free-preview path. This action is only available for letters flagged as first-letter free preview.",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database unavailable",
+        });
+      }
+
+      const previousUnlockAt = letter.freePreviewUnlockAt;
+      const alreadySent = letter.freePreviewEmailSentAt != null;
+      const now = new Date();
+
+      // Collapse the cooling window. We do NOT touch freePreviewEmailSentAt
+      // here — the dispatcher's atomic UPDATE…RETURNING owns that stamp and
+      // will skip cleanly if it was already sent.
+      await db
+        .update(letterRequests)
+        .set({
+          freePreviewUnlockAt: now,
+          updatedAt: now,
+        } as any)
+        .where(eq(letterRequests.id, input.letterId));
+
+      await logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.user.id,
+        actorType: "admin",
+        action: "free_preview_force_unlock",
+        noteText: [
+          `Admin force-unlocked free-preview window.`,
+          `Previous unlockAt: ${previousUnlockAt?.toISOString() ?? "null"}.`,
+          `emailAlreadySent: ${alreadySent}.`,
+          `Reason: ${input.reason}`,
+        ].join(" "),
+        noteVisibility: "internal",
+      });
+
+      // Attempt immediate dispatch. If the draft is already saved the email
+      // fires now; if the pipeline is still running this is a clean no-op
+      // and the pipeline finalize hook will re-invoke the dispatcher once
+      // the draft lands in letter_versions.
+      const dispatchResult = await dispatchFreePreviewIfReady(input.letterId);
+
+      logger.info(
+        {
+          letterId: input.letterId,
+          adminId: ctx.user.id,
+          previousUnlockAt: previousUnlockAt?.toISOString() ?? null,
+          alreadySent,
+          dispatchStatus: dispatchResult.status,
+          dispatchReason: dispatchResult.reason ?? null,
+        },
+        "[Admin] Free-preview force-unlock"
+      );
+
+      return {
+        success: true,
+        dispatched: dispatchResult.status === "sent",
+        dispatchStatus: dispatchResult.status,
+        dispatchReason: dispatchResult.reason ?? null,
+        previousUnlockAt: previousUnlockAt?.toISOString() ?? null,
+        alreadySent,
+      };
+    }),
 };

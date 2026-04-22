@@ -1,118 +1,145 @@
-# Talk to My Lawyer
+# CLAUDE.md
 
-## Overview
-Talk to My Lawyer is a full-stack legal letter platform that provides AI-drafted, attorney-reviewed legal letters for common disputes, specifically within California jurisdiction. The platform aims to improve accessibility and efficiency in legal correspondence through email-based delivery and simplified pricing. Key capabilities include a multi-stage AI pipeline for drafting and vetting, a recursive learning system, and a document analyzer, all supported by human attorney oversight. The project's vision is to streamline legal assistance and make it more widely available.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## User Preferences
-I prefer iterative development, with a focus on delivering small, functional pieces of the project regularly.
-I value clear and concise communication. Please avoid overly technical jargon where simpler explanations suffice.
-When proposing changes or new features, please provide a brief overview of the impact and reasoning.
-I prefer to be asked before major architectural changes or significant refactoring efforts are undertaken.
-All UI/UX decisions should prioritize a clean, intuitive, and user-friendly experience.
-Ensure that the [client/public/logo-full.png](client/public/logo-full.png) file is always the latest brand asset.
-The system should prioritize California-specific legal requirements and user experience.
-The delivery method for legal letters should strictly be "Email Only."
-The legal letter generation process should be a clear, multi-step flow for the user.
-Pricing plans should be simple and easy for users to understand, with attorney review explicitly included.
-All mentions of the "employee" role in the UI should be presented as "Affiliate."
-The onboarding experience for new subscribers should be guided and informative.
-PDF downloads of approved letters should maintain professional formatting and clear indicators of attorney approval.
-The review process for attorneys should be efficient and provide all necessary information for approval.
-Interactive elements, like the "How It Works" section, should be engaging with scroll-paced animations while respecting user accessibility preferences (`prefers-reduced-motion`).
-The anti-hallucination pipeline should be robust, with clear flagging for unverified research and enforced attorney acknowledgment.
+> **For architecture, tech stack, module map, and status machine details, see [`ARCHITECTURE.md`](ARCHITECTURE.md).**  
+> **For day-to-day developer workflow, conventions, and pitfalls, see [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md).**
 
-## System Architecture
+---
 
-### UI/UX Decisions
-- **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui components, wouter for routing.
-- **Branding**: Consistent use of [client/public/logo-full.png](client/public/logo-full.png).
-- **Homepage**: Features a "View Your First Letter For Free" badge and "Get Started" CTA, with a first-visit popup.
-- **Role Terminology**: "Employee" displayed as "Affiliate".
-- **Onboarding**: Multi-step modal for new subscribers.
-- **PDF Download**: Professional PDF generation with rich text, attorney-approved badge, and certified footer.
-- **How It Works**: Scroll-paced animations with SVG gradients, respecting `prefers-reduced-motion`.
-- **Shared Footer**: 4-column layout ([client/src/components/shared/Footer.tsx](client/src/components/shared/Footer.tsx)) with brand info, services, company links, newsletter signup, and social media.
-- **Competitive Positioning**: Homepage hero, pricing page, and homepage pricing section all use the unified positioning: "AI drafting + attorney review, delivered in hours, starting at \$200."
-- **Trust Section**: Homepage "By the Numbers" section with 4 stat-driven trust badges.
-- **Competitive FAQ**: FAQ page has a "Why Talk to My Lawyer" category with 5 competitive comparison entries.
+## Commands
 
-### Technical Implementations
-- **Frontend**: React 19 + Vite, TypeScript, Tailwind CSS v4, shadcn/ui, wouter.
-- **Backend**: Express.js + tRPC (type-safe API), Node.js 20.
-- **Database**: PostgreSQL via Replit's built-in database (migrated from Supabase), accessed with Drizzle ORM + `postgres-js`. All 24 schema tables are applied via the migrations in [drizzle/migrations/](drizzle/migrations/) and `drizzle/*.sql`.
-- **Authentication**: Supabase Auth (cookie-first, Google OAuth PKCE with SameSite=None), custom Resend verification emails. Admin 2FA enforced.
-- **AI Pipeline**: 4-stage pipeline: (1) OpenAI `gpt-4o-search-preview` Research with web search (Perplexity `sonar-pro` optional failover), (2) OpenAI GPT-4o Drafting (Claude Sonnet fallback), (3) Claude Sonnet Assembly (OpenAI GPT-4o-mini fallback), (4) Claude Sonnet Vetting (OpenAI GPT-4o-mini fallback). Two-tier failover per stage. Groq OSS last-resort for research.
-- **n8n MCP Integration**: When `N8N_PRIMARY=true`, the pipeline routes through the user's n8n cloud instance (`designtec.app.n8n.cloud`) via MCP (Model Context Protocol) as the primary path. Falls back to legacy webhook, then to the in-app 4-stage pipeline if n8n is unavailable. MCP client module: [server/n8nMcp.ts](server/n8nMcp.ts). Direct connection using `N8N_MCP_URL` + `N8N_MCP_BEARER_TOKEN` env vars. Tool selection: explicit via `N8N_MCP_TOOL_NAME` env var, or single-tool auto-select, or keyword match (`legal-letter`, `letter-submission`, `legal-pipeline`, `ttml`). The n8n callback endpoint (`/api/pipeline/n8n-callback`) remains functional for async workflow results.
-- **Recursive Learning System**: Self-optimizing knowledge engine that captures structured lessons from attorney feedback, including AI-powered categorization, deduplication, and effectiveness tracking.
-- **RAG Embedding + Training Pipeline**: Generates OpenAI embeddings for approved letters, captures training examples, injects similar approved letters as few-shot RAG context, and auto-triggers Vertex AI fine-tuning. Vector similarity search uses **pgvector** (built into Supabase PostgreSQL) as the active vector store. Vertex AI Vector Search is an optional upgrade path for very large vector volumes (millions of vectors); pgvector handles current scale well and avoids the ~\$70–110/month cost of Vertex AI Vector Search.
-- **Pipeline Worker**: Uses pg-boss (PostgreSQL-native) for job queues, eliminating the Redis dependency for processing.
-- **Rate Limiting**: Fine-grained, per-user limits using Upstash Redis (fail-open for general usage).
-- **Database Security Hardening**: RLS enabled on all tables, `search_path = ''` on public helper functions.
-- **Database Architecture**: Uses a primary + read replica topology with transparent fallback.
-- **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, OpenAI, Cloudflare R2.
-- **Error Tracking**: Sentry.
-- **Deployment**: Railway (previously); now also runs on Replit.
+```bash
+pnpm install          # install dependencies
+pnpm dev              # start dev server (port 3000, hot reload)
+pnpm check            # TypeScript check (tsc --noEmit) — must pass before commit
+pnpm test             # run Vitest unit suite (~1300 tests, 54 files)
+pnpm test -- --reporter=verbose   # single test file: pnpm test -- server/phase23.test.ts
+pnpm build            # Vite (frontend) + esbuild (backend) — must succeed before deploy
+```
 
-### Replit Environment Configuration
-- **Primary workflow**: `Start application` — runs `npm run dev` on port 5000 (webview)
-- **Database**: Supabase PostgreSQL (via `SUPABASE_DATABASE_URL` direct connection string). SSL is applied conditionally — enabled for Supabase/cloud URLs, skipped for local connections.
-- **Auth**: Supabase Auth (JWT tokens) — requires `SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-- **Required secrets** (set in Replit Secrets): `SUPABASE_URL`, `SUPABASE_DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
-- **Pipeline AI secrets** (required for pipeline): `OPENAI_API_KEY` (primary research + drafting), `ANTHROPIC_API_KEY` (assembly/vetting + draft fallback). Optional: `PERPLEXITY_API_KEY` (research failover).
-- **n8n MCP secrets** (for n8n pipeline): `N8N_MCP_URL`, `N8N_MCP_BEARER_TOKEN`. Env vars: `N8N_PRIMARY=true` (shared), optional `N8N_MCP_TOOL_NAME` (explicit tool binding).
-- **Optional secrets**: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `JWT_SECRET`.
-- **Port**: 5000 (configured via `PORT` env var in shared environment).
+**Validation gate** (run before every PR): `pnpm check` → `pnpm test` → `pnpm build`
 
-### Feature Specifications
-- **Demand Letter Template Library**: Database-driven template gallery (`letter_templates` table) with seed scenarios and admin CRUD panel.
-- **Dynamic Intake Forms**: `LETTER_TYPE_CONFIG` in [shared/types.ts](shared/types.ts) defines `situationFields` per letter type, rendering dynamically. Users can create custom intake templates.
-- **Multi-step Letter Generation Form**: Guides users through letter type, jurisdiction, parties, incident details, desired outcome, and exhibit uploads. Address fields use Google Places Autocomplete for real-time suggestions.
-- **Google Places Autocomplete**: `AddressAutocomplete` component ([client/src/components/shared/AddressAutocomplete.tsx](client/src/components/shared/AddressAutocomplete.tsx)) provides address auto-suggestions on sender and recipient address fields. Requires `VITE_GOOGLE_MAPS_API_KEY` secret. Restricted to US addresses. Gracefully degrades to plain text input if API key is missing or API fails.
-- **Pricing Plans**: Three tiers (Single Letter, Monthly, Yearly), all including attorney review.
-- **Role-Specific IDs**: Sequential human-readable IDs (SUB-XXXX, EMP-XXXX, ATT-XXXX).
-- **Affiliate Program**: Single-use rotating discount codes with commission settlement.
-- **Anti-Hallucination Pipeline**: Employs deterministic validation, token-level grounding, citation registry, word count enforcement, and jurisdiction consistency checks, flagging unverified research.
-- **Counter-Argument Anticipation**: Stage 2 drafting generates 3–5 likely opposing arguments with strength ratings; Stage 4 vetting validates coverage. Displayed in a dedicated "Counter" tab in attorney review.
-- **Evidence Intelligence**: Document Analyzer extracts structured evidence items with confidence levels. Evidence is displayed in analysis results and carried through to the letter submission form via `AnalysisPrefill`.
+---
 
-## External Dependencies
-- **Supabase**: PostgreSQL database, authentication services.
-- **Drizzle ORM**: Object-relational mapping.
-- **postgres-js**: PostgreSQL client.
-- **Resend**: Transactional email sending.
-- **Stripe**: Payment processing.
-- **OpenAI API**: Primary research (gpt-4o-search-preview with web search), drafting, embeddings, document analysis.
-- **Anthropic API (Claude Opus/Sonnet)**: Assembly, vetting, draft fallback.
-- **Perplexity API** (optional): Research failover (`sonar-pro`).
-- **Upstash Redis**: Rate limiting only (fail-open).
-- **pg-boss**: PostgreSQL-native job queue for pipeline worker process.
-- **Sentry**: Error tracking and monitoring.
-- **Cloudflare R2**: S3-compatible object storage.
-- **Google Cloud Platform**: Vertex AI for fine-tuning, Cloud Storage for training data. Note: Vertex AI Vector Search is **not currently active** — the system uses pgvector (via Supabase) for vector similarity search and gracefully falls back to it. Vertex AI Vector Search is an optional upgrade reserved for very high vector volumes.
-- **OpenAI**: Embeddings for RAG pipeline; GPT-4o as failover provider.
-- **Google Maps JavaScript API + Places API**: Address autocomplete in letter submission forms.
-- **Railway**: Hosting and deployment.
-- **Playwright**: E2E browser tests.
+## Core Architectural Invariants
+
+Detailed enforcement rules live in `skills/architectural-patterns/`. **Never violate these.**
+
+1. **Mandatory Attorney Review** — Every AI-generated letter must be reviewed by an attorney. The `ai_draft` letter version is immutable — always create a new `attorney_edit` version. Log all attorney actions via `logReviewAction` in `server/db/review-actions.ts`.
+
+2. **Strict Status Machine** — All transitions validated against `ALLOWED_TRANSITIONS` in `shared/types/letter.ts`. No skipping states. Use `isValidTransition()`. Only admin with `force=true` can bypass. Never hardcode status strings — import from `shared/types/letter.ts`.
+
+3. **RBAC Enforcement** — Use tRPC procedure guards (`publicProcedure`, `protectedProcedure`, `subscriberProcedure`, `attorneyProcedure`, `adminProcedure`) from `server/_core/trpc.ts`. Never rely on client-side checks. Admin also requires 2FA (`admin_2fa` cookie via `server/_core/admin2fa.ts`).
+
+4. **Super Admin Whitelist** — `SUPER_ADMIN_EMAILS` is hard-coded in `server/supabaseAuth.ts`. Cannot be modified via UI or API. Do not generate any endpoint or UI to assign the `admin` role dynamically.
+
+5. **Payment Gate** — Letter content is truncated server-side (~100 chars) in `server/routers/versions.ts` / `server/db/letter-versions.ts` when status is `generated_locked`. Transition to `pending_review` only after confirmed Stripe payment. Frontend blur via `client/src/components/LetterPaywall.tsx`.
+   - **Documented exception — first-letter free preview**: If `letter_requests.is_free_preview = TRUE` AND `letter_requests.free_preview_unlock_at <= NOW()` (24h cooling window elapsed), the subscriber router (`server/routers/letters/subscriber.ts`) sets `freePreviewUnlocked = true` and `getLetterVersionsByRequestId` returns the FULL un-truncated, un-redacted `ai_draft` tagged with `freePreview: true`. The client then renders `FreePreviewViewer` (non-selectable + DRAFT watermark) instead of `LetterPaywall`. The 24h window is stamped at submit time and enforced server-side — never trust the client. This is a lead-magnet path; the only CTA inside the viewer is "Submit For Attorney Review" which routes to `/pricing` for subscription. Subsequent letters follow the normal paywall flow.
+   - **Admin force-unlock override**: Admins can collapse the 24h cooling window via the `forceFreePreviewUnlock` tRPC mutation (`server/routers/admin/letters.ts`). It sets `free_preview_unlock_at = NOW()`, logs a `free_preview_force_unlock` review action, and invokes the shared dispatcher `dispatchFreePreviewIfReady` in `server/freePreviewEmailCron.ts`. The "your preview is ready" email fires immediately if the draft is already saved; if the pipeline is still running it fires the moment the draft lands (pipeline finalize in `simple.ts` / `graph/nodes/finalize.ts` / `fallback.ts` also calls the dispatcher). The dispatcher uses an atomic `UPDATE ... RETURNING` claim on `free_preview_email_sent_at` so cron, pipeline, and admin paths cannot double-send; a failed send rolls the stamp back so the cron retries. Non-free-preview letters cannot use this path — the mutation rejects with `BAD_REQUEST`.
+
+6. **Session Refresh** — Role changes take effect via `invalidateUserCache()` + frontend `refetchOnWindowFocus`.
+
+---
+
+## Pre-Change Checklist
+
+Before making any changes, check:
+
+| Concern | File |
+| ------- | ---- |
+| Schema | `drizzle/schema.ts` |
+| Status transitions | `shared/types/letter.ts` → `ALLOWED_TRANSITIONS` |
+| tRPC procedure guards | `server/routers/` |
+| AI pipeline | `server/pipeline/orchestrator.ts` |
+| Audit trail | `logReviewAction` → `review_actions` table |
+| Pricing | `shared/pricing.ts` (never hardcode: $299/letter, $299/mo, $2,400/yr) |
+| Env vars | `server/_core/env.ts` → `ENV` object |
+
+---
+
+## Critical Gotchas
+
+### Tailwind CSS v4 (NOT v3)
+
+- No `tailwind.config.js` — all config lives in `client/src/index.css` under `@theme inline` blocks.
+- Colors use OKLCH format. CSS property values use `H S% L%` space-separated — do NOT wrap in `hsl()`.
+
+### tRPC vs REST
+
+Almost all client-server calls use tRPC v11. REST is **only** used for:
+
+- `POST /api/auth/signup` and `/api/auth/login`
+- `POST /api/stripe/webhook`
+- `POST /api/pipeline/n8n-callback`
+- `GET /api/letters/:id/draft-pdf` (PDF streaming)
+- `GET /api/system/health`
+
+### TanStack Query v5
+
+- **Object form only**: `useQuery({ queryKey: ['key'] })` — NOT `useQuery(['key'])`.
+- Do NOT define your own `queryFn` on tRPC queries — the default fetcher is pre-configured.
+- After every mutation, invalidate cache: `queryClient.invalidateQueries({ queryKey: [...] })`.
+
+### Drizzle ORM
+
+- Arrays: use `text().array()` — NOT `array(text())`.
+- All DB operations go through `server/db/` data access functions — never write raw Drizzle in routers.
+- Drizzle config reads `SUPABASE_DATABASE_URL` or `DATABASE_URL`.
+
+### Authentication
+
+- Supabase Auth issues JWTs; server syncs to local `users` table on every request (30s cache).
+- JWTs read from `Authorization` header OR `sb_session` httpOnly cookie.
+- `useAuth` hook lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` path).
+
+### Frontend
+
+- Do NOT `import React` — Vite's JSX transformer handles it.
+- Routing: `wouter` (not React Router). Use `Link` / `useLocation`.
+- Every interactive element needs `data-testid` following pattern `{action}-{target}`.
+- Frontend env vars: must be prefixed `VITE_` and accessed via `import.meta.env.VITE_*`.
+- Pages use `React.lazy` with `lazyRetry` wrapper — register new pages in `App.tsx`.
+
+### Do Not Modify Without Cause
+
+- `package.json` scripts — ask first
+- `vite.config.ts` — aliases, chunks, plugins are pre-configured, do NOT add a proxy
+- `server/_core/vite.ts` — dev/prod server integration
+- `drizzle.config.ts` — pre-configured for Supabase PostgreSQL
+- `tsconfig.json` — path aliases are set
+
+---
+
+## Path Aliases
+
+| Alias | Resolves to |
+| ----- | ----------- |
+| `@/*` | `client/src/*` |
+| `@shared/*` | `shared/*` |
+| `@assets/*` | `attached_assets/*` |
+
+---
+
+## Key Workflows
+
+**Letter lifecycle:** `submitted → researching → drafting → generated_locked → [Stripe payment] → pending_review → under_review → approved → client_approval_pending → client_approved → sent`
+
+**PDF generation** is triggered on `clientApprove` (subscriber action) — not when the attorney submits.
+
+**Pipeline worker** (`server/worker.ts`) consumes pg-boss jobs. Do not call pipeline stages directly from tRPC routers.
+
+**Recursive learning** (`server/learning/`): attorney edits generate lessons stored in `pipeline_lessons`, injected into future AI prompts. Managed at `/admin/learning`.
+
+---
 
 ## Testing
 
-### Unit/Integration Tests (Vitest)
-- Config: [vitest.config.ts](vitest.config.ts)
-- Scope: `server/**/*.test.ts`, `server/**/*.spec.ts`
-- Run: `npm test` or `vitest run`
+Test files: `server/*.test.ts` (phase-numbered, e.g. `phase23.test.ts`). Run a single file:
 
-### E2E Tests (Playwright)
-- Config: [playwright.config.ts](playwright.config.ts)
-- Test directory: [e2e/](e2e/)
-- Run: `npm run test:e2e` or `npx playwright test`
-- 5 suites: auth, intake form, subscriber dashboard, attorney review, admin dashboard
-- Uses system Chromium (auto-detected from NixOS)
-- Requires test user accounts (env vars `E2E_SUBSCRIBER_EMAIL`, etc.)
-- CI: runs as separate `e2e` job in `.github/workflows/ci.yml`
-- Does NOT interfere with vitest — completely separate test directories and configs
+```bash
+pnpm test -- server/phase67-pricing.test.ts
+```
 
-### Enum Drift Prevention
-- Canonical reference: [docs/LIFECYCLE_AND_ENUMS.md](docs/LIFECYCLE_AND_ENUMS.md)
-- Source of truth for enum values: [drizzle/schema/constants.ts](drizzle/schema/constants.ts)
-- Drift-detection tests: [server/__tests__/statusMachine.test.ts](server/__tests__/statusMachine.test.ts) — verifies TS consts match pgEnums, `ALLOWED_TRANSITIONS` keys match `LETTER_STATUSES`, `STATUS_CONFIG` covers all statuses, and `letterStages.ts` stage mappings cover all statuses
-- Legacy pgEnum-only values (`generated_unlocked`, `upsell_dismissed`) are marked with inline comments in [drizzle/schema/constants.ts](drizzle/schema/constants.ts)
+Test credentials (seeded via `scripts/seed-test-users.ts`, password `TestPass123!`):
+`test-subscriber@ttml.dev` / `test-employee@ttml.dev` / `test-attorney@ttml.dev` / `test-admin@ttml.dev`

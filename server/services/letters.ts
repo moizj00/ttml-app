@@ -75,7 +75,7 @@ export interface SubmitLetterContext {
 export async function submitLetter(
   input: SubmitLetterInput,
   ctx: SubmitLetterContext
-): Promise<{ letterId: number; status: string }> {
+): Promise<{ letterId: number; status: string; isFreePreview: boolean }> {
   const entitlement = await checkLetterSubmissionAllowed(ctx.userId);
   if (!entitlement.allowed) {
     throw new TRPCError({
@@ -104,6 +104,18 @@ export async function submitLetter(
     }
   }
 
+  // ── Free-preview lead-magnet flow ─────────────────────────────────────
+  // For first-letter-free submissions, enter the 24-hour free-preview flow:
+  // the subscriber sees a progress modal now, the pipeline runs in the
+  // background, and 24 hours after submit the email-scheduler cron sends
+  // the "your draft is ready — preview it" email. The preview is the raw
+  // ai_draft (no attorney review) with a DRAFT watermark and a single
+  // "Submit For Attorney Review" CTA that routes to subscribe.
+  const FREE_PREVIEW_DELAY_HOURS = 24;
+  const freePreviewUnlockAt = isFreeTrialSubmission
+    ? new Date(Date.now() + FREE_PREVIEW_DELAY_HOURS * 60 * 60 * 1000)
+    : undefined;
+
   let result: { insertId: number };
   try {
     result = await createLetterRequest({
@@ -117,6 +129,8 @@ export async function submitLetter(
       intakeJson: input.intakeJson,
       priority: input.priority,
       templateId: input.templateId,
+      isFreePreview: isFreeTrialSubmission,
+      freePreviewUnlockAt,
     });
   } catch (createErr) {
     await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
@@ -218,7 +232,7 @@ export async function submitLetter(
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
   });
 
-  return { letterId, status: "submitted" };
+  return { letterId, status: "submitted", isFreePreview: isFreeTrialSubmission };
 }
 
 /** Refund free-trial slot or decrement subscription letter count after a failure. */

@@ -46,7 +46,7 @@ Core Tables:
 
 5. **[HELPER FUNCTIONS]** Use `is_subscriber()`, `is_employee()`, `is_attorney()`, `is_admin()` for role checks in policies. `SECURITY DEFINER` + `SET search_path = public` ensures consistent execution. **Do not** reference any `admin_sub_role` — it does not exist.
 
-6. **[NO DIRECT UPDATES]** Never `UPDATE subscriptions.remaining_letters` directly from application code. Use the `check_and_deduct_allowance` / `refund_letter_allowance` RPCs.
+6. **[NO DIRECT UPDATES]** Never `UPDATE subscriptions.letters_used` directly from application code. Use the `check_and_deduct_allowance` / `refund_letter_allowance` RPCs (or their TypeScript wrappers `incrementLettersUsed` / `refundLetterUsage` in `server/db/stripe.ts`).
 
 7. **[ENUM TYPES]** Use PostgreSQL ENUMs for status fields so invalid states are rejected at the DB layer. Canonical enums: `user_role`, `letter_status` (matches `ALLOWED_TRANSITIONS` in `shared/types/letter.ts`), `version_type`, `subscription_status`, `commission_status`.
 
@@ -110,44 +110,47 @@ CREATE POLICY users_admin_update ON public.users
 
 ### Table: `subscriptions`
 
-**Purpose:** Stripe subscription rows. Canonical pricing: **$200/letter**, **$200/month**, **$2000/year**.
+**Purpose:** Stripe subscription rows. Canonical pricing: **$299 single-letter** / **$299/month for 4 letters** / **$2,400/year for 8 letters** (plus a one-time **$50** first-letter review fee). All prices live in `shared/pricing.ts` — never hardcode.
 
 ```sql
+-- subscription_plan_enum mirrors SUBSCRIPTION_PLANS in drizzle/schema/billing.ts
+-- ("per_letter" | "monthly" | "annual" | "free_trial_review"
+--  | "starter" | "professional" | "single_letter" | "yearly")
 CREATE TABLE public.subscriptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER UNIQUE REFERENCES public.users(id) ON DELETE SET NULL,
 
   -- Stripe integration
-  stripe_session_id TEXT UNIQUE,
-  stripe_subscription_id TEXT UNIQUE,
-  stripe_customer_id TEXT,
+  stripe_customer_id VARCHAR(255),
+  stripe_subscription_id VARCHAR(255),
+  stripe_payment_intent_id VARCHAR(255),
 
   -- Plan details
-  status subscription_status NOT NULL DEFAULT 'pending',  -- active | canceled | past_due | pending
-  plan_type TEXT NOT NULL,                                -- per-letter | monthly | annual
-  price_cents INTEGER NOT NULL,
-  discount_cents INTEGER NOT NULL DEFAULT 0,
-  final_price_cents INTEGER NOT NULL,
+  plan subscription_plan_enum NOT NULL,
+  status subscription_status_enum NOT NULL DEFAULT 'none', -- none | active | canceled | past_due | incomplete
 
-  -- Letter allowances
-  remaining_letters INTEGER,     -- NULL = unlimited (monthly/annual)
-  credits_remaining INTEGER NOT NULL DEFAULT 0,
-  monthly_allowance INTEGER,     -- NULL = unlimited
-  total_letters INTEGER,         -- total ever purchased on this row
+  -- Letter allowances (canonical columns — there is NO remaining_letters / credits_remaining / monthly_allowance column)
+  letters_allowed INTEGER NOT NULL DEFAULT 0,
+  letters_used INTEGER NOT NULL DEFAULT 0,
 
+  -- Billing period (Stripe-synced)
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+
+  metadata_json JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  canceled_at TIMESTAMPTZ,
 
-  CONSTRAINT check_non_negative_price CHECK (price_cents >= 0),
-  CONSTRAINT check_non_negative_final_price CHECK (final_price_cents >= 0),
-  CONSTRAINT check_non_negative_letters CHECK (remaining_letters IS NULL OR remaining_letters >= 0)
+  CONSTRAINT check_non_negative_allowed CHECK (letters_allowed >= 0),
+  CONSTRAINT check_non_negative_used CHECK (letters_used >= 0),
+  CONSTRAINT check_used_le_allowed CHECK (letters_used <= letters_allowed)
 );
 
 CREATE INDEX idx_subscriptions_user ON public.subscriptions(user_id);
 CREATE INDEX idx_subscriptions_status ON public.subscriptions(status);
-CREATE INDEX idx_subscriptions_plan_type ON public.subscriptions(plan_type);
-CREATE INDEX idx_subscriptions_stripe_session ON public.subscriptions(stripe_session_id);
+CREATE INDEX idx_subscriptions_plan ON public.subscriptions(plan);
+CREATE INDEX idx_subscriptions_stripe_sub ON public.subscriptions(stripe_subscription_id);
 
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions FORCE ROW LEVEL SECURITY;
@@ -427,86 +430,79 @@ GRANT EXECUTE ON FUNCTION public.is_subscriber  TO authenticated;
 
 ## Atomic Operations (RPC Functions)
 
-### `check_and_deduct_allowance`
+### `check_and_deduct_allowance` (a.k.a. `increment_letters_used`)
 
-Atomically verify and decrement the user's available letter allowance inside a single transaction.
+Atomically verify and increment `letters_used` against `letters_allowed` inside a single transaction. This mirrors `incrementLettersUsed()` in `server/db/stripe.ts`. The canonical schema has **no** `remaining_letters` or `credits_remaining` column — allowance is always `letters_allowed - letters_used`.
 
 ```sql
 CREATE OR REPLACE FUNCTION public.check_and_deduct_allowance(
-  p_user_id UUID,
-  p_amount INTEGER DEFAULT 1
+  p_user_id INTEGER,
+  p_amount  INTEGER DEFAULT 1
 )
 RETURNS TABLE(success BOOLEAN, remaining INTEGER, error_message TEXT)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
-  v_subscription_id UUID;
-  v_remaining INTEGER;
-  v_credits INTEGER;
+  v_subscription_id INTEGER;
+  v_letters_allowed INTEGER;
+  v_letters_used    INTEGER;
 BEGIN
-  SELECT id, remaining_letters, credits_remaining
-  INTO v_subscription_id, v_remaining, v_credits
-  FROM public.subscriptions
-  WHERE user_id = p_user_id AND status = 'active'
-  ORDER BY created_at DESC
-  LIMIT 1
-  FOR UPDATE;
+  -- One active subscription row per user (user_id is UNIQUE on subscriptions)
+  SELECT id, letters_allowed, letters_used
+    INTO v_subscription_id, v_letters_allowed, v_letters_used
+    FROM public.subscriptions
+   WHERE user_id = p_user_id AND status = 'active'
+   FOR UPDATE;
 
   IF v_subscription_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0, 'No active subscription found';
     RETURN;
   END IF;
 
-  -- NULL = unlimited (monthly / annual)
-  IF v_remaining IS NULL THEN
-    RETURN QUERY SELECT TRUE, -1, NULL::TEXT;
+  -- Atomic guard: only deduct if the remaining allowance covers the request
+  UPDATE public.subscriptions
+     SET letters_used = letters_used + p_amount,
+         updated_at   = NOW()
+   WHERE id = v_subscription_id
+     AND letters_used + p_amount <= letters_allowed
+  RETURNING letters_allowed - letters_used INTO v_letters_used;
+
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT FALSE, v_letters_allowed - v_letters_used,
+                        'Insufficient letter allowance';
     RETURN;
   END IF;
 
-  IF v_remaining >= p_amount THEN
-    UPDATE public.subscriptions
-       SET remaining_letters = remaining_letters - p_amount,
-           updated_at = NOW()
-     WHERE id = v_subscription_id;
-    RETURN QUERY SELECT TRUE, v_remaining - p_amount, NULL::TEXT;
-  ELSIF v_credits >= p_amount THEN
-    UPDATE public.subscriptions
-       SET credits_remaining = credits_remaining - p_amount,
-           updated_at = NOW()
-     WHERE id = v_subscription_id;
-    RETURN QUERY SELECT TRUE, v_credits - p_amount, NULL::TEXT;
-  ELSE
-    RETURN QUERY SELECT FALSE, COALESCE(v_remaining, 0), 'Insufficient letter allowance';
-  END IF;
+  RETURN QUERY SELECT TRUE, v_letters_used, NULL::TEXT;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.check_and_deduct_allowance TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_and_deduct_allowance TO service_role;
+-- Do NOT grant to `authenticated` — usage is claimed server-side inside the
+-- letters.submit mutation, never directly from the browser.
 ```
 
 ### `refund_letter_allowance`
 
-Atomically refund an allowance when a pipeline run fails terminally (`pipeline_failed`) or an attorney rejects without asking for a retry.
+Atomically refund a usage slot when a pipeline run fails terminally (`pipeline_failed`), the attorney rejects without retry, or the initial `letters.submit` mutation fails after usage was claimed (refund in the catch block — see `ttml-data-api-expert`). The refund decrements `letters_used` (clamped at 0) rather than restoring a phantom `remaining_letters` column.
 
 ```sql
 CREATE OR REPLACE FUNCTION public.refund_letter_allowance(
-  p_user_id UUID,
-  p_letter_request_id UUID,
-  p_amount INTEGER DEFAULT 1
+  p_user_id            INTEGER,
+  p_letter_request_id  INTEGER,
+  p_amount             INTEGER DEFAULT 1
 )
 RETURNS TABLE(success BOOLEAN, new_remaining INTEGER, error_message TEXT)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
-  v_subscription_id UUID;
-  v_new_remaining INTEGER;
+  v_subscription_id INTEGER;
+  v_new_remaining   INTEGER;
 BEGIN
   SELECT id INTO v_subscription_id
-  FROM public.subscriptions
-  WHERE user_id = p_user_id AND status = 'active'
-  ORDER BY created_at DESC
-  LIMIT 1
-  FOR UPDATE;
+    FROM public.subscriptions
+   WHERE user_id = p_user_id AND status = 'active'
+   FOR UPDATE;
 
   IF v_subscription_id IS NULL THEN
     RETURN QUERY SELECT FALSE, 0, 'No active subscription found';
@@ -514,15 +510,12 @@ BEGIN
   END IF;
 
   UPDATE public.subscriptions
-     SET remaining_letters = CASE
-           WHEN remaining_letters IS NULL THEN NULL          -- keep unlimited
-           ELSE remaining_letters + p_amount
-         END,
-         updated_at = NOW()
+     SET letters_used = GREATEST(letters_used - p_amount, 0),
+         updated_at   = NOW()
    WHERE id = v_subscription_id
-   RETURNING remaining_letters INTO v_new_remaining;
+  RETURNING letters_allowed - letters_used INTO v_new_remaining;
 
-  -- Record the refund in the review_actions audit trail
+  -- Audit trail entry in review_actions (action_type 'allowance_refund')
   INSERT INTO public.review_actions(
     letter_request_id, actor_id, action_type, visibility, metadata
   ) VALUES (
@@ -533,12 +526,14 @@ BEGIN
     jsonb_build_object('amount', p_amount, 'subscription_id', v_subscription_id)
   );
 
-  RETURN QUERY SELECT TRUE, COALESCE(v_new_remaining, -1), NULL::TEXT;
+  RETURN QUERY SELECT TRUE, v_new_remaining, NULL::TEXT;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.refund_letter_allowance TO authenticated;
+GRANT EXECUTE ON FUNCTION public.refund_letter_allowance TO service_role;
 ```
+
+> For free-first-letter flows, there is a parallel atomic helper: `claimFreeTrialSlot(userId)` in `server/db/users.ts` uses `UPDATE ... SET free_review_used_at = NOW() WHERE free_review_used_at IS NULL` — it does **not** touch the `subscriptions` table.
 
 ---
 
@@ -645,13 +640,18 @@ ALTER TABLE public.table_name ADD COLUMN IF NOT EXISTS new_column TEXT DEFAULT '
 ### 3. Data Backfill
 
 ```sql
+-- Backfill letters_allowed from the canonical pricing table (shared/pricing.ts).
+-- Monthly: 4 letters per period; Annual: 8 letters per period; Single letter: 1.
 UPDATE public.subscriptions
-   SET monthly_allowance = CASE plan_type
-     WHEN 'monthly' THEN NULL
-     WHEN 'annual'  THEN 48
-     WHEN 'per-letter' THEN 1
+   SET letters_allowed = CASE plan
+     WHEN 'monthly'       THEN 4
+     WHEN 'annual'        THEN 8
+     WHEN 'yearly'        THEN 8
+     WHEN 'single_letter' THEN 1
+     WHEN 'per_letter'    THEN 1
+     ELSE letters_allowed
    END
- WHERE monthly_allowance IS NULL;
+ WHERE status = 'active' AND letters_allowed = 0;
 ```
 
 ---

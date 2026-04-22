@@ -30,6 +30,7 @@ import {
 import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
 import { processPaywallEmails } from "./paywallEmailCron";
+import { processFreePreviewEmails } from "./freePreviewEmailCron";
 import {
   runAutomatedConsolidation,
   archiveIneffectiveLessons,
@@ -155,6 +156,30 @@ export function startCronScheduler(): void {
       logger.error(`[Cron] Paywall email job failed: ${msg}`);
       captureServerException(err, {
         tags: { component: "cron", job: "paywall_emails" },
+      });
+    }
+  });
+
+  // Free-preview-ready email notification: runs every 5 minutes
+  // Sends the "your draft is ready to preview" email to subscribers on the
+  // first-letter free-preview lead-magnet path, 24 hours after their submit.
+  // Idempotent: free_preview_email_sent_at column prevents duplicate sends.
+  cron.schedule("*/5 * * * *", async () => {
+    const startTime = Date.now();
+    logger.info(
+      `[Cron] [${new Date().toISOString()}] Running free-preview-ready emails...`
+    );
+    try {
+      const result = await processFreePreviewEmails();
+      const elapsed = Date.now() - startTime;
+      logger.info(
+        `[Cron] Free-preview emails done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Cron] Free-preview email job failed: ${msg}`);
+      captureServerException(err, {
+        tags: { component: "cron", job: "free_preview_emails" },
       });
     }
   });

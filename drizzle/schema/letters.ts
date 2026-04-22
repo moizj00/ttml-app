@@ -110,6 +110,23 @@ export const letterRequests = pgTable(
     templateId: integer("template_id").references(() => letterTemplates.id, {
       onDelete: "set null",
     }),
+    // ── Free-preview lead-magnet flow (migration 0048) ──
+    // When TRUE, this letter is on the first-letter "free preview" path:
+    //   - At `freePreviewUnlockAt` (submit + 24h) a cron emails the subscriber.
+    //   - The subscriber can view the FULL ai_draft (no truncation, no PII
+    //     redaction) but the UI renders it non-selectable with a DRAFT watermark.
+    //   - The only CTA is "Submit For Attorney Review" which redirects to subscribe.
+    // Defaults to FALSE so the normal paid-review flow is unaffected.
+    isFreePreview: boolean("is_free_preview").default(false).notNull(),
+    freePreviewUnlockAt: timestamp("free_preview_unlock_at", {
+      withTimezone: true,
+    }),
+    freePreviewEmailSentAt: timestamp("free_preview_email_sent_at", {
+      withTimezone: true,
+    }),
+    freePreviewViewedAt: timestamp("free_preview_viewed_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -126,6 +143,10 @@ export const letterRequests = pgTable(
       t.status,
       t.assignedReviewerId
     ),
+    // NOTE: the partial index idx_letter_requests_free_preview_due is defined
+    // in drizzle/0048_free_preview_columns.sql (WHERE is_free_preview = true
+    // AND free_preview_email_sent_at IS NULL) — Drizzle's schema DSL cannot
+    // express partial indexes, so the cron's polling index lives in raw SQL.
   ]
 );
 

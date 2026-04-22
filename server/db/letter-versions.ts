@@ -53,7 +53,16 @@ export async function createLetterVersion(data: {
 export async function getLetterVersionsByRequestId(
   letterRequestId: number,
   includeInternal = false,
-  letterStatus?: string
+  letterStatus?: string,
+  /**
+   * When true, the ai_draft is returned un-truncated even if the letter is in
+   * `generated_locked`. This is the free-preview lead-magnet path — the caller
+   * (subscriber router) sets this once the 24h cooling-off window has elapsed
+   * (letter.isFreePreview AND letter.freePreviewUnlockAt <= NOW()).
+   * The UI is responsible for rendering the content non-selectable with a
+   * DRAFT watermark (see client/src/components/FreePreviewViewer.tsx).
+   */
+  freePreviewUnlocked = false
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -79,6 +88,12 @@ export async function getLetterVersionsByRequestId(
   if (letterStatus === "generated_locked") {
     return rows.map((v) => {
       if (v.versionType === "ai_draft" && v.content) {
+        // Free-preview lead-magnet override: return the full draft, stamped
+        // with `freePreview: true` so the frontend can route to the
+        // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
+        if (freePreviewUnlocked) {
+          return { ...v, truncated: false, freePreview: true as const };
+        }
         return { ...v, content: truncateContent(v.content), truncated: true };
       }
       return { ...v, truncated: false };

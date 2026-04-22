@@ -104,7 +104,7 @@ export function LetterPaywall({
   const payFirstLetterMutation = trpc.billing.payFirstLetterReview.useMutation({
     onSuccess: data => {
       setIsRedirecting(true);
-      window.location.href = data.checkoutUrl;
+      window.location.href = data.url;
     },
     onError: err => {
       toast.error("Could not initialize checkout", {
@@ -116,15 +116,10 @@ export function LetterPaywall({
 
   const payToUnlock = trpc.billing.payToUnlock.useMutation({
     onSuccess: data => {
-      if (data.status === "unlocked") {
-        toast.success("Payment successful", {
-          description: "Your letter is now under attorney review.",
-        });
-        window.location.reload();
-      } else if (data.status === "checkout_required" && data.checkoutUrl) {
-        setIsRedirecting(true);
-        window.location.href = data.checkoutUrl;
-      }
+      // Router always returns a Stripe checkout session URL — no "already unlocked"
+      // branch today (createLetterUnlockCheckout cannot short-circuit).
+      setIsRedirecting(true);
+      window.location.href = data.url;
     },
     onError: err => {
       toast.error("Payment failed", { description: err.message });
