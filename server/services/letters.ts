@@ -75,7 +75,7 @@ export interface SubmitLetterContext {
 export async function submitLetter(
   input: SubmitLetterInput,
   ctx: SubmitLetterContext
-): Promise<{ letterId: number; status: string }> {
+): Promise<{ letterId: number; status: string; isFreePreview: boolean }> {
   const entitlement = await checkLetterSubmissionAllowed(ctx.userId);
   if (!entitlement.allowed) {
     throw new TRPCError({
@@ -232,7 +232,7 @@ export async function submitLetter(
     captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
   });
 
-  return { letterId, status: "submitted" };
+  return { letterId, status: "submitted", isFreePreview: isFreeTrialSubmission };
 }
 
 /** Refund free-trial slot or decrement subscription letter count after a failure. */

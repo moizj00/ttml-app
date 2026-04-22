@@ -29,6 +29,7 @@ import { useLocation } from "wouter";
 import { ArrowRight, FileText, Gavel, Shield, CheckCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PRICING } from "@shared/pricing";
 
 interface FreePreviewViewerProps {
   letterId: number;
@@ -184,13 +185,6 @@ export function FreePreviewViewer({
               </span>
             </div>
 
-            {/* Transparent overlay to further resist pointer-based selection.
-                pointer-events: auto captures clicks but still lets the user
-                scroll via wheel events on the underlying pre. */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              aria-hidden="true"
-            />
           </div>
         </CardContent>
       </Card>
@@ -229,11 +223,11 @@ export function FreePreviewViewer({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <span className="text-3xl font-extrabold text-white">
-              From $299
+              From {PRICING.monthly.priceDisplay}
               <span className="text-base font-normal text-white/60">/mo</span>
             </span>
             <p className="text-xs text-white/60 mt-0.5">
-              4 letters/month · cancel anytime
+              {PRICING.monthly.lettersIncluded} letters/month · cancel anytime
             </p>
           </div>
           <Button

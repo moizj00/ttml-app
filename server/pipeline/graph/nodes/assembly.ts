@@ -31,7 +31,7 @@ export async function assemblyNode(
 
   const llm = new ChatAnthropic({
     apiKey,
-    model: "claude-3-5-sonnet-20241022",
+    model: "claude-sonnet-4-20250514",
     maxTokens: 4000,
   });
 
@@ -85,7 +85,7 @@ Desired outcome: ${ctx.desiredOutcome}`;
     currentStage: "vetting",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("assembly", "anthropic", promptTokens, completionTokens, "claude-3-5-sonnet-20241022"),
+        recordTokenUsage("assembly", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-20250514"),
       ],
       breadcrumbs: [
         breadcrumb(

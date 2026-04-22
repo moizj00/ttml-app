@@ -272,7 +272,7 @@ export const versionsRouter = router({
               letter.userId === ctx.user.id &&
               letter.status === "generated_locked"
             ) {
-              // ── Free-preview lead-magnet override (migration 0047) ──
+              // ── Free-preview lead-magnet override (migration 0048) ──
               // First-letter free-preview path: once the 24-hour cooling window
               // has elapsed, return the FULL ai_draft with no truncation and no
               // redaction. The UI is responsible for rendering it non-selectable

@@ -229,7 +229,7 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
 
   // Query: free-preview letters whose 24h unlock time has passed and which
   // have not yet received the preview-ready email. Uses the partial index
-  // `idx_letter_requests_free_preview_due` created in migration 0047.
+  // `idx_letter_requests_free_preview_due` created in migration 0048.
   const eligibleLetters = await db
     .select()
     .from(letterRequests)

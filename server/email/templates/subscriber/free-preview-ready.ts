@@ -1,4 +1,4 @@
-import { dispatchToWorker, buildEmailHtml, buildPlainText, sendEmail, APP_NAME } from "../../core";
+import { dispatchToWorker, buildEmailHtml, buildPlainText, sendWithRetry, APP_NAME } from "../../core";
 
 /**
  * Notify subscriber that their FIRST letter's free-preview draft is now
@@ -106,7 +106,10 @@ export async function sendFreePreviewReadyEmail(opts: {
     accentColor: "#D97706",
   });
 
-  await sendEmail({
+  // Use sendWithRetry (throws on exhausted retries) so the atomic-claim rollback
+  // in freePreviewEmailCron.dispatchFreePreviewIfReady actually fires when Resend
+  // is flaky — sendEmail is fire-and-forget and would swallow the error.
+  await sendWithRetry({
     to: opts.to,
     subject: `[${APP_NAME}] Your first letter draft is ready to preview`,
     html,

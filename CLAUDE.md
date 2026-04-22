@@ -53,7 +53,7 @@ Before making any changes, check:
 | tRPC procedure guards | `server/routers/` |
 | AI pipeline | `server/pipeline/orchestrator.ts` |
 | Audit trail | `logReviewAction` → `review_actions` table |
-| Pricing | `shared/pricing.ts` (never hardcode: $200/letter, $200/mo, $2000/yr) |
+| Pricing | `shared/pricing.ts` (never hardcode: $299/letter, $299/mo, $2,400/yr) |
 | Env vars | `server/_core/env.ts` → `ENV` object |
 
 ---

@@ -530,12 +530,16 @@ export default function SubmitLetter() {
       }
       // Clear saved draft on successful submission
       localStorage.removeItem(DRAFT_KEY);
-      // Instead of navigating straight to the letter detail page, open the
-      // 90s progress modal. The modal explains the free-preview flow and
-      // the 24h email gate; when the subscriber dismisses it after the
-      // timer completes we route them to their letters list.
       setSubmittedLetterId(letterId);
-      setProgressModalOpen(true);
+      // Only show the progress modal for first-letter free-preview submissions —
+      // its copy (90s timer + "we'll email you in 24 hours") is wrong for paid
+      // subscribers whose letters flow straight into the paywall/attorney-review
+      // track. For those, navigate directly to the letter detail page.
+      if ((result as any).isFreePreview === true) {
+        setProgressModalOpen(true);
+      } else {
+        navigate(`/letters/${letterId}`);
+      }
     } catch (err: any) {
       toast.error("Submission failed", {
         description: err?.message ?? "Please check your inputs and try again.",
