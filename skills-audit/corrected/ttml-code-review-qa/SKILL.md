@@ -11,7 +11,7 @@ description: Comprehensive code review checklist, testing strategies, and qualit
 **Zero TypeScript Errors:** 0 errors across the monorepo
 **Security-First:** All vulnerabilities fixed before production
 
-> **Canonical stack:** React 19 + Vite 7 + Tailwind v4 (client), Express 4.21 + tRPC 11.6 + Drizzle ORM 0.44 (server), Supabase Postgres + Auth, Stripe, Resend, pg-boss queue, Upstash Redis rate-limit, Railway deploy (Docker multi-stage). **NOT** Next.js, **NOT** Vercel, **NOT** BullMQ.
+> **Canonical stack (2026-04-20):** React 19 + Vite 7 + wouter + TanStack Query v5 + Tailwind v4 (client); Express 4.21 + tRPC 11 + Drizzle ORM 0.44/0.45 (server); Supabase Postgres + Supabase Auth (JWT → local `users` table with 30s cache); Stripe Checkout + raw-body webhook; Resend for email; **pg-boss** queue on `SUPABASE_DIRECT_URL` (IPv4); Upstash Redis `@upstash/ratelimit` for rate limits; LangGraph StateGraph (`server/pipeline/graph/`) behind `PIPELINE_MODE=langgraph` / `LANGGRAPH_PIPELINE=true`; Railway multi-service deploy (app / worker / migrate) from a single Dockerfile. **NOT** Next.js, **NOT** Vercel, **NOT** BullMQ, **NOT** Redis-for-queue.
 
 ---
 
@@ -19,9 +19,9 @@ description: Comprehensive code review checklist, testing strategies, and qualit
 
 1. **[SECURITY FIRST]** NEVER merge code with security vulnerabilities. Check: SQL injection, XSS, CSRF, RLS bypass, credential exposure.
 
-2. **[TYPESCRIPT STRICT]** Zero TypeScript errors required. Run `pnpm type-check` before commit. Fix all `any` types, missing properties, type mismatches.
+2. **[TYPESCRIPT STRICT]** Zero TypeScript errors required. The gate is `pnpm check` (`tsc --noEmit`) — there is **no** `pnpm type-check` script. Fix all `any` types, missing properties, type mismatches before commit.
 
-3. **[RLS VERIFICATION]** ALL database queries must respect Row Level Security. Test with different user roles from the flat `user_role` enum: `subscriber`, `employee`, `attorney`, `admin`. Super admin status is enforced app-side via the hardcoded whitelist in `server/supabaseAuth.ts` — it is NOT a separate role column.
+3. **[RLS VERIFICATION]** ALL database queries must respect Row Level Security. Test with different user roles from the flat `user_role` enum: `subscriber`, `employee`, `attorney`, `admin`. Super admin status is enforced app-side via the hardcoded whitelist `SUPER_ADMIN_EMAILS` in `server/supabaseAuth/client.ts:12` (`ravivo@homes.land`, `moizj00@gmail.com`) — it is **NOT** a separate role column and cannot be granted via UI/API. Admin procedures additionally require the `admin_2fa` cookie via `server/_core/admin2fa.ts`.
 
 4. **[ATOMIC OPERATIONS]** Payment/subscription/entitlement operations MUST use Supabase RPC functions or Drizzle transactions. Never separate INSERT/UPDATE for related data (subscription + commission + discount code).
 
@@ -43,8 +43,9 @@ description: Comprehensive code review checklist, testing strategies, and qualit
 
 ### Code Quality
 
-- [ ] Run `pnpm type-check` → 0 errors
-- [ ] Run `pnpm lint` → No violations
+- [ ] Run `pnpm check` → 0 errors (`tsc --noEmit`)
+- [ ] Run `pnpm test` → vitest suite green (~1300 tests)
+- [ ] Run `pnpm build` → vite + 4 esbuild bundles emit cleanly (`index.js`, `worker.js`, `migrate.js`, `instrument.js`)
 - [ ] Run `pnpm format` → Code formatted
 - [ ] Remove `console.log` (except intentional server logging)
 - [ ] Remove commented-out code
@@ -231,25 +232,31 @@ Railway injects environment variables at container start — confirm required ke
 
 **Smell:**
 ```typescript
-// Check allowance, then deduct — two round-trips, not atomic
+// Check allowance, then deduct — two round-trips, not atomic.
+// Also uses a column that does NOT exist: there is no `remainingLetters`.
 const sub = await ctx.db.query.subscriptions.findFirst({
   where: eq(subscriptions.userId, userId),
 })
 
-if (sub && sub.remainingLetters > 0) {
+if (sub && sub.lettersUsed < sub.lettersAllowed) {
   await ctx.db.update(subscriptions)
-    .set({ remainingLetters: sub.remainingLetters - 1 })
+    .set({ lettersUsed: sub.lettersUsed + 1 })
     .where(eq(subscriptions.userId, userId))
 }
 ```
 
 **Fix:**
 ```typescript
-// Atomic RPC (preferred) or transaction with SELECT FOR UPDATE
-const result = await ctx.supabase.rpc('check_and_deduct_allowance', {
-  p_user_id: userId,
-  p_amount: 1,
-})
+// Atomic helper — UPDATE ... WHERE letters_used < letters_allowed RETURNING id.
+// Returns false if the row did not update (out of allowance or lost race).
+import { incrementLettersUsed } from "@/server/stripe/subscriptions";
+
+const claimed = await incrementLettersUsed(ctx.user.id);
+if (!claimed) {
+  throw new TRPCError({ code: "FORBIDDEN", message: "No allowance remaining" });
+}
+// Free-first-letter path uses claimFreeTrialSlot(userId) from server/db/users.ts
+// (atomic UPDATE ... WHERE free_review_used_at IS NULL).
 ```
 
 ### 2. N+1 Queries
@@ -425,12 +432,14 @@ describe('Payment Flow E2E', () => {
     // 4. Verify subscription active
     const sub = await getSubscription('u_1')
     expect(sub.status).toBe('active')
-    expect(sub.remainingLetters).toBe(1)
+    expect(sub.lettersAllowed).toBe(4)   // monthly $299 plan: 4 letters
+    expect(sub.lettersUsed).toBe(0)
 
-    // 5. Verify commission ledger entry
+    // 5. Verify commission ledger entry (5% of $299 = $14.95 in cents)
     const commission = await getCommission(employeeId)
     expect(commission.subscriptionId).toBe(sub.id)
-    expect(commission.amountCents).toBe(1196) // 5% of $239.20 in cents
+    expect(commission.commissionAmount).toBe(1495)
+    expect(commission.commissionRate).toBe(500) // 500 bps == 5%
   })
 })
 ```
@@ -464,33 +473,22 @@ CREATE INDEX idx_letter_requests_user_recent
 
 ### Caching Strategy
 
-**Redis Caching (Upstash):**
+TTML's **only** shared cache is Upstash Redis, and it is reserved for the `@upstash/ratelimit` sliding-window rate limiters wired up in `server/rateLimiter.ts`. There is no Redis-backed domain cache; do not invent one. Short-lived per-request memoization happens in process:
+
+**User session cache (in-process, 30s):**
 ```typescript
-import { redis } from '@/server/redis'
+// server/supabaseAuth/user-cache.ts — maps a Supabase open_id to the local
+// users row and the derived role. 30-second TTL so role changes land quickly
+// after invalidateUserCache() is called.
+import { invalidateUserCache } from "@/server/supabaseAuth";
 
-async function getUserSubscription(userId: string) {
-  const cacheKey = `subscription:${userId}`
-  const cached = await redis.get<string>(cacheKey)
-  if (cached) return JSON.parse(cached)
-
-  const sub = await db.query.subscriptions.findFirst({
-    where: and(eq(subscriptions.userId, userId), eq(subscriptions.status, 'active')),
-  })
-
-  if (sub) {
-    await redis.set(cacheKey, JSON.stringify(sub), { ex: 300 }) // 5 min TTL
-  }
-  return sub
+export async function promoteToAttorney(userId: number, openId: string) {
+  await updateUserRole(userId, "attorney"); // server/db/users.ts
+  invalidateUserCache(openId);              // next request re-reads from DB
 }
 ```
 
-**Cache Invalidation:**
-```typescript
-async function updateSubscription(userId: string, updates: Partial<Subscription>) {
-  await db.update(subscriptions).set(updates).where(eq(subscriptions.userId, userId))
-  await redis.del(`subscription:${userId}`)
-}
-```
+**When you genuinely need a warm read (e.g., Perplexity research provenance),** store it in the `research_runs` table with a KV-cache key rather than Redis. This keeps the cache under RLS and survives worker restarts.
 
 ---
 
@@ -507,8 +505,8 @@ async function updateSubscription(userId: string, updates: Partial<Subscription>
 
 ### Production Deployment (Railway)
 
-- [ ] Apply database migrations first (Supabase)
-- [ ] Railway deploys both the app service and the `pipeline-worker` service
+- [ ] Apply database migrations first — the `migrate` Railway service runs `dist/migrate.js` as a one-shot against `SUPABASE_DIRECT_URL` (IPv4 via `--dns-result-order=ipv4first`)
+- [ ] Railway deploys three services from the same image: `app` (web), `worker` (pg-boss), `migrate` (one-shot) — see `railway.toml`
 - [ ] Confirm the new deployment is `SUCCESS` in Railway before routing traffic
 - [ ] Run smoke tests against the public URL
 - [ ] Monitor error rates (first 10 minutes) in Sentry
@@ -519,8 +517,8 @@ async function updateSubscription(userId: string, updates: Partial<Subscription>
 
 - [ ] Monitor logs for errors (Railway log tail + Sentry)
 - [ ] Check performance metrics
-- [ ] Verify `pipeline-worker` is processing pg-boss jobs
-- [ ] Verify email queue is draining
+- [ ] Verify the `worker` service is processing pg-boss jobs (check `workflow_jobs` status transitions)
+- [ ] Verify the email queue is draining (Resend enqueues via pg-boss)
 - [ ] Test critical user flows
 - [ ] Alert team of deployment completion
 
@@ -535,15 +533,16 @@ async function updateSubscription(userId: string, updates: Partial<Subscription>
 **Manual Rollback Process:**
 ```bash
 # 1. Revert the code deployment on Railway — redeploy the previous SUCCESS build
-#    via the Railway dashboard or:
-railway redeploy --service ttml-app --deployment <previous-deployment-id>
+#    via the Railway dashboard (or the Railway MCP `redeploy` tool). All three
+#    services (app / worker / migrate) share one image; only redeploy app + worker.
 
-# 2. Revert the database migration only if the new migration was destructive
-#    (Drizzle migrations are otherwise forward-only — prefer forward-fix over
-#    `supabase db reset`, which drops data).
+# 2. Drizzle migrations are forward-only. If the new migration was destructive
+#    (column drop, NOT NULL add), author a follow-up migration to restore shape
+#    — never run `drizzle-kit drop` or `supabase db reset` against production.
 
-# 3. Invalidate Redis cache if schema shape changed
-#    (call the internal admin procedure, do not FLUSHALL a shared Upstash db).
+# 3. Bust the in-process user cache if role/auth shape changed by calling
+#    invalidateUserCache() on affected users — do NOT FLUSHALL the shared
+#    Upstash Redis instance (it also holds rate-limit state).
 
 # 4. Notify team
 # 5. Investigate root cause
@@ -561,9 +560,12 @@ railway redeploy --service ttml-app --deployment <previous-deployment-id>
  *
  * Procedure: letters.submit (subscriberProcedure.mutation)
  *
- * Kicks off the 4-stage AI pipeline (Perplexity research → Claude Opus draft →
- * Claude Opus assembly → Claude Sonnet vetting). Requires an active subscription
- * OR an available per-letter entitlement. The entitlement claim is atomic.
+ * Kicks off the 4-stage AI pipeline: Perplexity `sonar-pro` research →
+ * Claude Sonnet 4 (`claude-sonnet-4-20250514`) draft → Sonnet 4 assembly →
+ * Sonnet 4 vetting. (Opus is NOT used — the legacy `claude-opus-4-5` entry in
+ * the pricing table is historical only.) Requires an active subscription OR
+ * an available free-first-letter slot. The entitlement claim is atomic via
+ * `incrementLettersUsed` / `claimFreeTrialSlot`.
  *
  * @input {SubmitLetterInput}
  *   - letterType: Type of letter (demand-letter, cease-and-desist, etc.)
@@ -647,8 +649,8 @@ CREATE TABLE webhook_events (...);
 **Infrastructure:**
 - Supabase Postgres CPU / memory
 - Supabase storage usage
-- Upstash Redis memory / request rate
-- Railway container CPU / memory / restart count
+- Upstash Redis request rate (rate-limit token bucket)
+- Railway container CPU / memory / restart count (app + worker + migrate)
 
 ### Alert Thresholds
 

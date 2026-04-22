@@ -1,6 +1,6 @@
 ---
 name: ttml-backend-patterns
-description: "Backend architecture patterns for the Talk-to-My-Lawyer (TTML) platform: tRPC routers, Drizzle ORM helpers, role-based guards, 4-stage AI pipeline, Stripe webhooks, n8n callback, email notifications, and audit logging. Use when designing tRPC procedures, Drizzle queries, role-based authorization, pipeline orchestration, or Stripe/affiliate flows."
+description: "Backend architecture patterns for the Talk-to-My-Lawyer (TTML) platform: tRPC routers, Drizzle ORM helpers, role-based guards, 4-stage AI pipeline (Perplexity + Claude Sonnet 4), Stripe webhooks, LangGraph StateGraph, email notifications, and audit logging. Use when designing tRPC procedures, Drizzle queries, role-based authorization, pipeline orchestration, or Stripe/affiliate flows."
 ---
 
 # TTML Backend Patterns
@@ -38,8 +38,10 @@ talk-to-my-lawyer/
 │   ├── db/                # Drizzle query helpers (functional, no classes)
 │   ├── pipeline/          # 4-stage AI pipeline orchestration
 │   │   └── orchestrator.ts
-│   ├── n8nMcp.ts          # n8n MCP client (dormant path)
-│   ├── n8nCallback.ts     # n8n webhook callback handler
+│   ├── n8nMcp.ts          # Empty deprecated stub — MCP path removed 2026-04-16 (no dependency on @modelcontextprotocol/sdk)
+│   ├── n8nCallback.ts     # n8n webhook callback handler (used only when N8N_PRIMARY=true)
+│   ├── pipeline/graph/    # LangGraph StateGraph (alternative to orchestrator); 4 nodes + finalize
+│   │   └── nodes/         # research.ts, draft.ts, assembly.ts, vetting.ts, finalize.ts
 │   ├── stripeWebhook.ts   # Stripe event handler (raw Express route)
 │   ├── stripe.ts          # Stripe session helpers
 │   ├── email.ts           # Resend email notifications (17 templates)
@@ -54,7 +56,7 @@ talk-to-my-lawyer/
     ├── types/
     │   ├── letter.ts      # ALLOWED_TRANSITIONS, STATUS_CONFIG, letter types
     │   └── pipeline.ts    # IntakeJson, ResearchPacket, DraftOutput, PipelineError
-    ├── pricing.ts         # Canonical pricing ($200/letter, $200/mo, $2000/yr)
+    ├── pricing.ts         # Canonical pricing ($299 single / $299 per month for 4 letters / $2,400 per year for 8 letters); FIRST_LETTER_REVIEW_PRICE = $50
     └── const.ts           # Shared constants
 ```
 
@@ -122,7 +124,8 @@ Source of truth: `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
 submitted         → researching | pipeline_failed
 researching       → drafting | submitted | pipeline_failed
 drafting          → generated_locked | submitted | pipeline_failed
-generated_locked  → pending_review                     (after freeUnlock or payToUnlock $200)
+generated_locked  → pending_review                     (after freeUnlock or payToUnlock $299 — or $50 first-letter-review fee)
+generated_unlocked → pending_review                    (alternate unlock path; same downstream flow)
 pending_review    → under_review
 under_review      → approved | rejected | needs_changes | pending_review
 needs_changes     → submitted | pending_review
@@ -315,15 +318,18 @@ if (letter.status !== "generated_locked")
 ```
 Stage 1: Perplexity sonar-pro (RESEARCH_TIMEOUT_MS = 90s)
          ↓ ResearchPacket (validated)
-Stage 2: Claude Opus (DRAFT_TIMEOUT_MS)  — drafting
+Stage 2: Claude Sonnet 4 — claude-sonnet-4-20250514 (DRAFT_TIMEOUT_MS = 90s)  — drafting
          ↓ DraftOutput
-Stage 3: Claude Opus (ASSEMBLY_TIMEOUT_MS) — assembly / formatting
+Stage 3: Claude Sonnet 4 — claude-sonnet-4-20250514 (ASSEMBLY_TIMEOUT_MS = 90s) — assembly / formatting
          ↓ assembled letter
-Stage 4: Claude Sonnet (VETTING_TIMEOUT_MS) — vetting / anti-hallucination
+Stage 4: Claude Sonnet 4 (VETTING) — vetting / anti-hallucination
          ↓ final letter string → letter_versions (ai_draft) → status: generated_locked
 ```
 
-**Model fallback:** If `PERPLEXITY_API_KEY` is missing, Stage 1 falls back to Claude Opus (non-web-grounded; sets `researchUnverified=true`). OpenAI is **not** used in the letter pipeline — OpenAI GPT-4o is reserved for the `documents.analyze` free analyzer.
+**Model fallback chain (`server/pipeline/providers.ts`):**
+- Stage 1 primary: Perplexity `sonar-pro`. Failover 1: OpenAI `gpt-4o-search-preview` via Responses API + `webSearchPreview` tool. Failover 2 (if no Perplexity key): Claude Sonnet 4 (non-web-grounded — sets `researchUnverified=true`).
+- Stages 2/3/4 primary: Claude Sonnet 4 (`claude-sonnet-4-20250514`). Failover: OpenAI `gpt-4o-mini`. Last resort OSS: Groq `llama-3.3-70b-versatile` (requires `GROQ_API_KEY`).
+- OpenAI GPT-4o is **also** used outside the pipeline for the free `documents.analyze` analyzer.
 
 **Key exports:**
 - `runFullPipeline(letterId, intakeJson)` — runs all 4 stages (with optional n8n fallback chain when `N8N_PRIMARY=true`)
@@ -361,8 +367,8 @@ Acknowledge immediately with `res.json({ received: true })`, then process async.
 Raw Express route at `POST /api/stripe/webhook`. Validates Stripe signature via `STRIPE_WEBHOOK_SECRET` before processing. Idempotency via Stripe event `id`.
 
 Key events handled:
-- `checkout.session.completed` (mode: `payment`) → per-letter unlock ($200) → `updateLetterStatus(letterId, "pending_review")` + commission tracking
-- `checkout.session.completed` (mode: `subscription`) → activate subscription plan ($200/mo or $2000/yr)
+- `checkout.session.completed` (mode: `payment`) → per-letter unlock ($299 single-letter or $50 first-letter-review) → `updateLetterStatus(letterId, "pending_review")` + commission tracking
+- `checkout.session.completed` (mode: `subscription`) → activate subscription plan ($299/mo for 4 letters or $2,400/yr for 8 letters)
 - `customer.subscription.updated/deleted` → update subscription record
 - `invoice.paid` → refresh subscription status
 
@@ -432,7 +438,7 @@ Employee creates discount code (auto-generated on first myCode query)
   → Admin reviews and processes (completed → marks commissions paid | rejected → rejectionReason)
 ```
 
-Commission rate: 500 basis points = 5% of sale amount. Stored in cents. Base letter price is `$200` per `shared/pricing.ts` — so per-letter commission is $10.00 (1000 cents).
+Commission rate: 500 basis points = 5% of sale amount. Stored in cents via `commission_ledger.commission_amount`. Base single-letter price is `$299` per `shared/pricing.ts` — so per-letter commission is $14.95 (1495 cents). Idempotency on `stripe_payment_intent_id` (unique index).
 
 ---
 
@@ -479,7 +485,7 @@ PDF generation (PDFKit, server-side) is the exception — it runs as part of the
 Per CLAUDE.md invariant #7: full letter content is locked at `generated_locked`. Enforcement:
 - **Server side**: `versions.get` truncates content for subscribers when status is `generated_locked` and they haven't unlocked
 - **Client side**: frontend blurs the truncated preview — defense in depth, not the primary gate
-- **Unlock paths**: `freeUnlock` (first letter free or active subscription) or `payToUnlock` ($200 Stripe Checkout → webhook)
+- **Unlock paths**: `freeUnlock` (active subscription with `letters_used < letters_allowed`) or `payToUnlock` ($299 single-letter Stripe Checkout → webhook), or the `$50` first-letter attorney-review fee when applicable
 
 ---
 
