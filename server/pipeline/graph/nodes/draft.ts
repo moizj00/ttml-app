@@ -5,6 +5,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
 import type { PipelineStateType } from "../state";
+import { breadcrumb, buildLessonsBlock, recordTokenUsage } from "../memory";
 
 const log = createLogger({ module: "LangGraph:DraftNode" });
 
@@ -58,8 +59,10 @@ async function flushBufferToSupabase(
 export async function draftNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, intake, researchPacket, researchUnverified } = state;
-  log.info({ letterId }, "[DraftNode] Starting draft stage");
+  const { letterId, researchPacket, researchUnverified, sharedContext } = state;
+  const ctx = sharedContext.normalized;
+  const lessons = sharedContext.lessons ?? [];
+  log.info({ letterId, jurisdiction: ctx.jurisdiction, letterType: ctx.letterType }, "[DraftNode] Starting draft stage");
 
   // Update letter status to 'drafting'
   await updateLetterStatus(letterId, "drafting");
@@ -74,32 +77,29 @@ export async function draftNode(
     streaming: true,
   });
 
-  const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-  const letterType = intake.letterType ?? "legal";
-  const subject = intake.matter?.subject ?? "Legal Matter";
-
   const researchContext = researchPacket
     ? `\n\nResearch findings:\n${JSON.stringify(researchPacket, null, 2)}`
     : "";
   const unverifiedWarning = researchUnverified
     ? "\n\nNOTE: Research was not web-grounded. Proceed with standard legal caution."
     : "";
+  const lessonsBlock = buildLessonsBlock(lessons);
 
   const systemPrompt = `You are an expert legal letter writer. Draft professional, persuasive legal correspondence.
 Format: Formal legal letter with proper salutation, body paragraphs, and closing.
-Jurisdiction: ${jurisdiction}
-Letter type: ${letterType}
-${researchContext}${unverifiedWarning}`;
+Jurisdiction: ${ctx.jurisdiction}
+Letter type: ${ctx.letterType}
+${researchContext}${unverifiedWarning}${lessonsBlock}`;
 
-  const userPrompt = `Draft a ${letterType} legal letter with:
-Subject: ${subject}
-Issue: ${intake.matter?.description ?? ""}
-Sender: ${JSON.stringify(intake.sender ?? {})}
-Recipient: ${JSON.stringify(intake.recipient ?? {})}
-Desired outcome: ${intake.desiredOutcome ?? "Favorable resolution"}
-Tone: ${intake.tonePreference ?? "professional"}
-${intake.financials ? `Financial details: ${JSON.stringify(intake.financials)}` : ""}
-${intake.additionalContext ? `Additional context: ${intake.additionalContext}` : ""}`;
+  const userPrompt = `Draft a ${ctx.letterType} legal letter with:
+Subject: ${ctx.subject}
+Issue: ${ctx.description}
+Sender: ${ctx.senderName}${ctx.senderEmail ? ` <${ctx.senderEmail}>` : ""}
+Recipient: ${ctx.recipientName}${ctx.recipientEmail ? ` <${ctx.recipientEmail}>` : ""}${ctx.recipientAddress ? `\nAddress: ${ctx.recipientAddress}` : ""}
+Desired outcome: ${ctx.desiredOutcome}
+Tone: ${ctx.tonePreference}
+${ctx.financials ? `Financial details: ${JSON.stringify(ctx.financials)}` : ""}
+${ctx.additionalContext ? `Additional context: ${ctx.additionalContext}` : ""}`;
 
   // ─── Stream tokens with buffered Supabase inserts ───
 
@@ -117,6 +117,8 @@ ${intake.additionalContext ? `Additional context: ${intake.additionalContext}` :
   let buffer = "";
   let sequenceNumber = 0;
   let lastFlushTime = Date.now();
+  let promptTokens = 0;
+  let completionTokens = 0;
 
   // Stream via LangGraph's streamEvents
   const stream = await llm.stream(
@@ -129,6 +131,15 @@ ${intake.additionalContext ? `Additional context: ${intake.additionalContext}` :
 
   for await (const chunk of stream) {
     const text = typeof chunk.content === "string" ? chunk.content : "";
+
+    // Capture usage metadata from the final chunk when streaming completes.
+    // LangChain Anthropic emits usage_metadata on the terminal chunk.
+    const usageMeta = (chunk as any).usage_metadata;
+    if (usageMeta) {
+      promptTokens = usageMeta.input_tokens ?? promptTokens;
+      completionTokens = usageMeta.output_tokens ?? completionTokens;
+    }
+
     if (!text) continue;
 
     fullContent += text;
@@ -154,11 +165,22 @@ ${intake.additionalContext ? `Additional context: ${intake.additionalContext}` :
     await flushBufferToSupabase(supabase, letterId, buffer, sequenceNumber++, "draft_complete");
   }
 
-  log.info({ letterId, chars: fullContent.length, chunks: sequenceNumber }, "[DraftNode] Draft streaming completed");
+  log.info({ letterId, chars: fullContent.length, chunks: sequenceNumber, promptTokens, completionTokens }, "[DraftNode] Draft streaming completed");
 
   return {
     assembledLetter: fullContent,
     currentStage: "assembly",
+    sharedContext: {
+      tokenUsage: [
+        recordTokenUsage("draft", "anthropic", promptTokens, completionTokens, "claude-opus-4-5"),
+      ],
+      breadcrumbs: [
+        breadcrumb(
+          "draft",
+          `Draft streamed (${fullContent.length} chars, ${sequenceNumber} chunks, tokens=${promptTokens + completionTokens})`,
+        ),
+      ],
+    } as any,
     messages: [new AIMessage(fullContent.slice(0, 200) + "…")],
   };
 }

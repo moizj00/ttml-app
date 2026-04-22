@@ -3,6 +3,7 @@ import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
 import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers, createWorkflowJob, updateWorkflowJob, getAllUsers } from "../db";
 import { sendAdminAlertEmail } from "../email";
+import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
 
 const logger = createLogger({ module: "simple-pipeline" });
 
@@ -95,7 +96,7 @@ export async function runSimplePipeline(
 
     // Call Claude
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-3-5-sonnet-20241022",
       max_tokens: 4096,
       messages: [
         {
@@ -131,7 +132,7 @@ export async function runSimplePipeline(
       createdByType: "system",
       createdByUserId: userId,
       metadataJson: {
-        model: "claude-sonnet-4-20250514",
+        model: "claude-3-5-sonnet-20241022",
         provider: "anthropic",
         mode: "simple",
         promptTokens: message.usage?.input_tokens,
@@ -146,6 +147,18 @@ export async function runSimplePipeline(
 
     // Mark as complete - this triggers the paywall state
     await updateLetterStatus(letterId, "generated_locked");
+
+    // Free-preview hook: if this letter is on the lead-magnet path and admin
+    // has force-unlocked it, fire the "your preview is ready" email now that
+    // the draft exists. Normal free-preview letters still wait 24h (the cron
+    // polls them); non-free-preview letters are no-op'd by the dispatcher.
+    // Fire-and-forget — must never abort the pipeline.
+    dispatchFreePreviewIfReady(letterId).catch((err) =>
+      logger.warn(
+        { letterId, err: err instanceof Error ? err.message : String(err) },
+        "[Simple] dispatchFreePreviewIfReady threw (non-fatal)"
+      )
+    );
 
     // Mark workflow job as completed with token usage for cost tracking
     await updateWorkflowJob(jobId, {

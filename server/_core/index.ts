@@ -45,6 +45,7 @@ import { registerN8nCallbackRoute } from "../n8nCallback";
 import { registerEmailPreviewRoute } from "../emailPreview";
 import { registerDraftRemindersRoute } from "../draftReminders";
 import { registerPaywallEmailRoute } from "../paywallEmailCron";
+import { registerFreePreviewEmailRoute } from "../freePreviewEmailCron";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
 import { registerSitemapRoute } from "../sitemapRoute";
@@ -351,6 +352,7 @@ async function startServer() {
   registerEmailPreviewRoute(app);
   registerDraftRemindersRoute(app);
   registerPaywallEmailRoute(app);
+  registerFreePreviewEmailRoute(app);
   registerDraftPdfRoute(app);
   registerBlogInternalRoutes(app);
   registerSitemapRoute(app);

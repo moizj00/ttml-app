@@ -1,6 +1,7 @@
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { createLogger } from "../../logger";
 import { PipelineState, type PipelineStateType } from "./state";
+import { initNode } from "./nodes/init";
 import { researchNode } from "./nodes/research";
 import { draftNode } from "./nodes/draft";
 import { assemblyNode } from "./nodes/assembly";
@@ -76,6 +77,11 @@ function withErrorRecovery(
 function buildPipelineGraph() {
   const graph = new StateGraph(PipelineState)
     // ─── Add nodes ───────────────────────────────────────
+    // Init runs first: normalizes intake into sharedContext.normalized,
+    // creates a workflow_jobs row for admin monitor visibility, and
+    // fetches recursive-learning lessons once for this letterType +
+    // jurisdiction so downstream prompts can inject them.
+    .addNode("init", withErrorRecovery("init", initNode))
     .addNode("research", withErrorRecovery("research", researchNode))
     .addNode("draft", withErrorRecovery("draft", draftNode))
     .addNode("assembly", withErrorRecovery("assembly", assemblyNode))
@@ -84,9 +90,10 @@ function buildPipelineGraph() {
     .addNode("fail", failNode)
 
     // ─── Entry point ──────────────────────────────────────
-    .addEdge(START, "research")
+    .addEdge(START, "init")
 
     // ─── Linear edges ─────────────────────────────────────
+    .addEdge("init", "research")
     .addEdge("research", "draft")
     .addEdge("draft", "assembly")
     .addEdge("assembly", "vetting")
@@ -149,7 +156,7 @@ export async function runLangGraphPipeline(
     retryCount: 0,
     errorRetryCount: 0,
     qualityWarnings: [],
-    currentStage: "research",
+    currentStage: "init",
   };
 
   const finalState = await graph.invoke(initialState);

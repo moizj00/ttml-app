@@ -3,6 +3,12 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
 import type { PipelineStateType } from "../state";
+import {
+  breadcrumb,
+  buildLessonsBlock,
+  recordTokenUsage,
+  type NormalizedIntake,
+} from "../memory";
 
 const log = createLogger({ module: "LangGraph:ResearchNode" });
 
@@ -13,21 +19,19 @@ const PERPLEXITY_MODEL = "sonar";
 // ─── Perplexity fetch (direct REST, same pattern as existing research.ts) ───
 
 async function fetchPerplexityResearch(
-  intake: Record<string, any>,
+  ctx: NormalizedIntake,
   letterId: number,
-): Promise<{ content: string; provider: string }> {
+): Promise<{ content: string; provider: string; usage: { promptTokens: number; completionTokens: number } }> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error("PERPLEXITY_API_KEY not set");
 
-  const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-  const letterType = intake.letterType ?? "legal";
-  const subject = intake.matter?.subject ?? "legal matter";
+  const { jurisdiction, letterType, subject, description, desiredOutcome } = ctx;
 
   const prompt = `Research the following legal matter in ${jurisdiction}:
 Letter type: ${letterType}
 Subject: ${subject}
-Issue: ${intake.matter?.description ?? "See intake data"}
-Desired outcome: ${intake.desiredOutcome ?? "Favorable resolution"}
+Issue: ${description || "See intake data"}
+Desired outcome: ${desiredOutcome}
 
 Provide:
 1. Relevant laws and statutes for ${jurisdiction}
@@ -63,14 +67,18 @@ Return structured JSON with keys: laws, statutes, precedents, jurisdiction_notes
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content ?? "";
-  return { content, provider: "perplexity" };
+  const usage = {
+    promptTokens: data.usage?.prompt_tokens ?? 0,
+    completionTokens: data.usage?.completion_tokens ?? 0,
+  };
+  return { content, provider: "perplexity", usage };
 }
 
 // ─── Claude fallback for research ───
 
 async function fetchClaudeResearch(
-  intake: Record<string, any>,
-): Promise<{ content: string; provider: string }> {
+  ctx: NormalizedIntake,
+): Promise<{ content: string; provider: string; usage: { promptTokens: number; completionTokens: number } }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
@@ -80,20 +88,23 @@ async function fetchClaudeResearch(
     maxTokens: 2000,
   });
 
-  const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
-  const letterType = intake.letterType ?? "legal";
-  const subject = intake.matter?.subject ?? "legal matter";
+  const { jurisdiction, letterType, subject, description, desiredOutcome } = ctx;
 
   const result = await llm.invoke(
     [
       new SystemMessage("You are a legal research assistant. Return structured JSON with keys: laws, statutes, precedents, jurisdiction_notes, recommended_approach."),
-      new HumanMessage(`Research this ${letterType} letter matter in ${jurisdiction}: ${subject}. Issue: ${intake.matter?.description ?? ""}. Desired outcome: ${intake.desiredOutcome ?? ""}.`),
+      new HumanMessage(`Research this ${letterType} letter matter in ${jurisdiction}: ${subject}. Issue: ${description}. Desired outcome: ${desiredOutcome}.`),
     ],
     { signal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS) },
   );
 
   const content = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
-  return { content, provider: "anthropic-fallback" };
+  // LangChain Anthropic returns usage_metadata on the AIMessage
+  const usage = {
+    promptTokens: (result as any).usage_metadata?.input_tokens ?? 0,
+    completionTokens: (result as any).usage_metadata?.output_tokens ?? 0,
+  };
+  return { content, provider: "anthropic-fallback", usage };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -103,8 +114,9 @@ async function fetchClaudeResearch(
 export async function researchNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, intake } = state;
-  log.info({ letterId }, "[ResearchNode] Starting research stage");
+  const { letterId, sharedContext } = state;
+  const ctx = sharedContext.normalized;
+  log.info({ letterId, jurisdiction: ctx.jurisdiction, letterType: ctx.letterType }, "[ResearchNode] Starting research stage");
 
   // Update letter status to 'researching'
   await updateLetterStatus(letterId, "researching");
@@ -112,12 +124,14 @@ export async function researchNode(
   let researchContent: string;
   let researchProvider: string;
   let researchUnverified = false;
+  let usage = { promptTokens: 0, completionTokens: 0 };
 
   try {
     // Primary: Perplexity sonar with AbortSignal.timeout
-    const result = await fetchPerplexityResearch(intake, letterId);
+    const result = await fetchPerplexityResearch(ctx, letterId);
     researchContent = result.content;
     researchProvider = result.provider;
+    usage = result.usage;
     log.info({ letterId, provider: researchProvider }, "[ResearchNode] Perplexity research succeeded");
   } catch (perplexityErr) {
     const errMsg = perplexityErr instanceof Error ? perplexityErr.message : String(perplexityErr);
@@ -125,10 +139,11 @@ export async function researchNode(
 
     try {
       // Fallback: Claude Haiku (no web grounding)
-      const result = await fetchClaudeResearch(intake);
+      const result = await fetchClaudeResearch(ctx);
       researchContent = result.content;
       researchProvider = result.provider;
       researchUnverified = true; // No web grounding
+      usage = result.usage;
       log.info({ letterId }, "[ResearchNode] Claude fallback research succeeded (researchUnverified=true)");
     } catch (claudeErr) {
       const claudeMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
@@ -152,6 +167,17 @@ export async function researchNode(
     researchProvider,
     researchUnverified,
     currentStage: "draft",
+    sharedContext: {
+      tokenUsage: [
+        recordTokenUsage("research", researchProvider, usage.promptTokens, usage.completionTokens),
+      ],
+      breadcrumbs: [
+        breadcrumb(
+          "research",
+          `Research completed by ${researchProvider} (unverified=${researchUnverified}, tokens=${usage.promptTokens + usage.completionTokens})`,
+        ),
+      ],
+    } as any,
     messages: [
       new HumanMessage(`Research completed by ${researchProvider}. Unverified: ${researchUnverified}`),
     ],

@@ -35,6 +35,7 @@ import { PIPELINE_ERROR_CODES } from "../../shared/types";
 import { sendLetterReadyEmail, sendStatusUpdateEmail, sendAdminAlertEmail } from "../email";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
+import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
 
 const fallbackLogger = createLogger({ module: "PipelineFallback" });
 
@@ -231,6 +232,17 @@ export async function bestEffortFallback(opts: {
         toStatus: "generated_locked",
       }),
     ]);
+
+    // Free-preview hook: even a degraded-fallback draft is a valid ai_draft,
+    // so admin-forced free-preview letters can be dispatched now. Normal
+    // free-preview letters remain on the 24h timer via the cron. Non-free-
+    // preview letters are no-op'd by the dispatcher. Fire-and-forget.
+    dispatchFreePreviewIfReady(letterId).catch((err) =>
+      fallbackLogger.warn(
+        { letterId, err: err instanceof Error ? err.message : String(err) },
+        "[Pipeline] dispatchFreePreviewIfReady threw in fallback (non-fatal)"
+      )
+    );
 
     // Notify admins (parallelized fan-out)
     try {

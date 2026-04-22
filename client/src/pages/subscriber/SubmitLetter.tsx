@@ -29,6 +29,7 @@ import { Step4Details } from "./intake-steps/Step4Details";
 import { Step5Outcome } from "./intake-steps/Step5Outcome";
 import { Step6Exhibits } from "./intake-steps/Step6Exhibits";
 import type { FormData, ExhibitRow, PendingFile } from "./intake-steps/types";
+import { LetterSubmitProgressModal } from "@/components/LetterSubmitProgressModal";
 
 const STEPS = [
   { id: 1, label: "Letter Type", icon: <FileText className="w-4 h-4" /> },
@@ -210,6 +211,15 @@ export default function SubmitLetter() {
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
+
+  // ── Post-submit free-preview progress modal state ───────────────────────
+  // When a letter is successfully submitted we open a 90-second progress
+  // modal that masks the real background pipeline and explains the 24-hour
+  // free-preview lead-magnet flow. See client/src/components/LetterSubmitProgressModal.tsx
+  // for the full rationale. The letter id is stored so the CTA can route
+  // the user to their letters list when the timer completes.
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [submittedLetterId, setSubmittedLetterId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (prefillFromAnalyzer.current) {
@@ -520,10 +530,12 @@ export default function SubmitLetter() {
       }
       // Clear saved draft on successful submission
       localStorage.removeItem(DRAFT_KEY);
-      toast.success("Intake received", {
-        description: "Your letter intake has been received. You'll get an email when your draft is ready.",
-      });
-      navigate(`/letters/${letterId}`);
+      // Instead of navigating straight to the letter detail page, open the
+      // 90s progress modal. The modal explains the free-preview flow and
+      // the 24h email gate; when the subscriber dismisses it after the
+      // timer completes we route them to their letters list.
+      setSubmittedLetterId(letterId);
+      setProgressModalOpen(true);
     } catch (err: any) {
       toast.error("Submission failed", {
         description: err?.message ?? "Please check your inputs and try again.",
@@ -531,6 +543,12 @@ export default function SubmitLetter() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleProgressModalClose = () => {
+    setProgressModalOpen(false);
+    const destination = submittedLetterId ? `/letters/${submittedLetterId}` : "/letters";
+    navigate(destination);
   };
 
   // Show subscription gate if user cannot submit
@@ -574,6 +592,15 @@ export default function SubmitLetter() {
         { label: "Submit Letter" },
       ]}
     >
+      {/* Post-submit free-preview progress modal — 90-second fake timer that
+          masks the background pipeline and communicates the 24h email gate.
+          Rendered as a sibling so it overlays the whole intake flow. */}
+      <LetterSubmitProgressModal
+        open={progressModalOpen}
+        letterId={submittedLetterId}
+        onClose={handleProgressModalClose}
+      />
+
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Prefill Banner — from Document Analyzer */}
         {showPrefillBanner && (

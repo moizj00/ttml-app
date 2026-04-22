@@ -337,6 +337,13 @@
       "when": 1776791147060,
       "tag": "0047_naive_lester",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1776832800000,
+      "tag": "0048_free_preview_columns",
+      "breakpoints": true
     }
   ]
 }

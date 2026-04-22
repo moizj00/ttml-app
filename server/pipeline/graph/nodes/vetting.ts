@@ -2,6 +2,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import type { PipelineStateType } from "../state";
+import { breadcrumb, recordTokenUsage } from "../memory";
 
 const log = createLogger({ module: "LangGraph:VettingNode" });
 
@@ -27,24 +28,23 @@ interface VettingReport {
 export async function vettingNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, assembledLetter, researchPacket, intake, retryCount } = state;
-  log.info({ letterId, retryCount }, "[VettingNode] Starting vetting stage");
+  const { letterId, assembledLetter, retryCount, sharedContext } = state;
+  const ctx = sharedContext.normalized;
+  log.info({ letterId, retryCount, jurisdiction: ctx.jurisdiction }, "[VettingNode] Starting vetting stage");
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — vetting stage cannot proceed");
 
   const llm = new ChatAnthropic({
     apiKey,
-    model: "claude-sonnet-4-20250514",
+    model: "claude-3-5-sonnet-20241022",
     maxTokens: 2000,
   });
-
-  const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
 
   const systemPrompt = `You are a senior attorney reviewing a legal letter for quality assurance.
 
 Evaluate the letter on:
-1. Legal accuracy and jurisdiction compliance for ${jurisdiction}
+1. Legal accuracy and jurisdiction compliance for ${ctx.jurisdiction}
 2. Citation correctness and formatting
 3. Factual claims — flag anything unsupported or potentially inaccurate
 4. Professional tone and clarity
@@ -69,9 +69,9 @@ Set qualityDegraded=true if the letter has serious issues (score < 6, any critic
 ${assembledLetter}
 
 Context:
-- Jurisdiction: ${jurisdiction}
-- Letter type: ${intake.letterType ?? "legal"}
-- Desired outcome: ${intake.desiredOutcome ?? "Favorable resolution"}
+- Jurisdiction: ${ctx.jurisdiction}
+- Letter type: ${ctx.letterType}
+- Desired outcome: ${ctx.desiredOutcome}
 - Research was web-grounded: ${!state.researchUnverified}
 - This is retry #${retryCount} (if > 0, be more lenient about minor issues)`;
 
@@ -84,6 +84,8 @@ Context:
   );
 
   const rawContent = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+  const promptTokens = (result as any).usage_metadata?.input_tokens ?? 0;
+  const completionTokens = (result as any).usage_metadata?.output_tokens ?? 0;
 
   // Parse vetting report
   let vettingReport: VettingReport;
@@ -138,6 +140,17 @@ Context:
     vettingReport,
     qualityWarnings: newWarnings,
     currentStage: qualityDegraded && retryCount < 2 ? "draft" : "finalize",
+    sharedContext: {
+      tokenUsage: [
+        recordTokenUsage("vetting", "anthropic", promptTokens, completionTokens, "claude-3-5-sonnet-20241022"),
+      ],
+      breadcrumbs: [
+        breadcrumb(
+          "vetting",
+          `Score=${vettingReport.overallScore}/10, risk=${vettingReport.riskLevel}, degraded=${qualityDegraded}, retry=${retryCount}`,
+        ),
+      ],
+    } as any,
     messages: [
       new AIMessage(
         `[Vetting] Score: ${vettingReport.overallScore}/10, Risk: ${vettingReport.riskLevel}, Degraded: ${qualityDegraded}`,
