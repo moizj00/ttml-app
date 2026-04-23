@@ -1,6 +1,11 @@
 import { AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
-import { getDb, updateLetterStatus, updateLetterVersionPointers, updateWorkflowJob } from "../../../db";
+import {
+  getDb,
+  updateLetterStatus,
+  updateLetterVersionPointers,
+  updateWorkflowJob,
+} from "../../../db";
 import { letterRequests, letterVersions } from "../../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { PipelineStateType } from "../state";
@@ -19,7 +24,7 @@ const log = createLogger({ module: "LangGraph:FinalizeNode" });
 // ═══════════════════════════════════════════════════════
 
 export async function finalizeNode(
-  state: PipelineStateType,
+  state: PipelineStateType
 ): Promise<Partial<PipelineStateType>> {
   const {
     letterId,
@@ -43,12 +48,14 @@ export async function finalizeNode(
       totalTokens: tokenTotals.totalTokens,
       stages: (sharedContext.tokenUsage ?? []).length,
     },
-    "[FinalizeNode] Saving final letter version",
+    "[FinalizeNode] Saving final letter version"
   );
 
   const db = await getDb();
   if (!db) {
-    throw new Error("[FinalizeNode] Database connection unavailable — cannot finalize letter");
+    throw new Error(
+      "[FinalizeNode] Database connection unavailable — cannot finalize letter"
+    );
   }
 
   // Insert letter version (immutable record)
@@ -88,13 +95,17 @@ export async function finalizeNode(
 
   // Update the version pointer via the canonical helper
   if (versionId !== null) {
-    await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
+    await updateLetterVersionPointers(letterId, {
+      currentAiDraftVersionId: versionId,
+    });
   }
 
   // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
   // If this is a free preview, set status to AI_GENERATION_COMPLETED_HIDDEN (Procedure 4)
   const isFreePreview = state.isFreePreview ?? false;
-  const finalStatus = isFreePreview ? "AI_GENERATION_COMPLETED_HIDDEN" : "generated_locked";
+  const finalStatus = isFreePreview
+    ? "AI_GENERATION_COMPLETED_HIDDEN"
+    : "generated_locked";
   await updateLetterStatus(letterId, finalStatus);
 
   // Close out the workflow_jobs row so admin monitor shows this run as
@@ -110,8 +121,12 @@ export async function finalizeNode(
       });
     } catch (err) {
       log.warn(
-        { letterId, workflowJobId, err: err instanceof Error ? err.message : String(err) },
-        "[FinalizeNode] Failed to close workflow_jobs row — letter finalized anyway",
+        {
+          letterId,
+          workflowJobId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "[FinalizeNode] Failed to close workflow_jobs row — letter finalized anyway"
       );
     }
   }
@@ -122,7 +137,7 @@ export async function finalizeNode(
   // letters the 24h unlockAt is still in the future and the dispatcher
   // no-ops; the cron will pick them up when the window elapses.
   // Fire-and-forget — a dispatch failure must never abort the pipeline.
-  dispatchFreePreviewIfReady(letterId).catch((err) =>
+  dispatchFreePreviewIfReady(letterId).catch(err =>
     log.warn(
       { letterId, err: err instanceof Error ? err.message : String(err) },
       "[FinalizeNode] dispatchFreePreviewIfReady threw (non-fatal)"
@@ -130,8 +145,14 @@ export async function finalizeNode(
   );
 
   log.info(
-    { letterId, versionId, qualityDegraded, researchUnverified, totalTokens: tokenTotals.totalTokens },
-    `[FinalizeNode] Letter finalized → ${finalStatus}`,
+    {
+      letterId,
+      versionId,
+      qualityDegraded,
+      researchUnverified,
+      totalTokens: tokenTotals.totalTokens,
+    },
+    `[FinalizeNode] Letter finalized → ${finalStatus}`
   );
 
   return {
@@ -140,13 +161,13 @@ export async function finalizeNode(
       breadcrumbs: [
         breadcrumb(
           "finalize",
-          `Letter saved as version ${versionId}, totalTokens=${tokenTotals.totalTokens}`,
+          `Letter saved as version ${versionId}, totalTokens=${tokenTotals.totalTokens}`
         ),
       ],
     } as any,
     messages: [
       new AIMessage(
-        `[Finalize] Letter #${letterId} saved as version ${versionId} → ${finalStatus}`,
+        `[Finalize] Letter #${letterId} saved as version ${versionId} → ${finalStatus}`
       ),
     ],
   };
@@ -159,13 +180,13 @@ export async function finalizeNode(
 // ═══════════════════════════════════════════════════════
 
 export async function failNode(
-  state: PipelineStateType,
+  state: PipelineStateType
 ): Promise<Partial<PipelineStateType>> {
   const { letterId, workflowJobId, lastErrorStage, sharedContext } = state;
   const tokenTotals = totalTokens(sharedContext.tokenUsage ?? []);
   log.error(
     { letterId, lastErrorStage, totalTokens: tokenTotals.totalTokens },
-    "[FailNode] Pipeline exhausted all retries → pipeline_failed",
+    "[FailNode] Pipeline exhausted all retries → pipeline_failed"
   );
 
   await updateLetterStatus(letterId, "pipeline_failed");
@@ -176,13 +197,19 @@ export async function failNode(
         status: "failed",
         promptTokens: tokenTotals.promptTokens,
         completionTokens: tokenTotals.completionTokens,
-        errorMessage: lastErrorStage ? `Failed at stage: ${lastErrorStage}` : "Pipeline retries exhausted",
+        errorMessage: lastErrorStage
+          ? `Failed at stage: ${lastErrorStage}`
+          : "Pipeline retries exhausted",
         completedAt: new Date(),
       });
     } catch (err) {
       log.warn(
-        { letterId, workflowJobId, err: err instanceof Error ? err.message : String(err) },
-        "[FailNode] Failed to close workflow_jobs row",
+        {
+          letterId,
+          workflowJobId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "[FailNode] Failed to close workflow_jobs row"
       );
     }
   }
@@ -191,7 +218,10 @@ export async function failNode(
     currentStage: "failed",
     sharedContext: {
       breadcrumbs: [
-        breadcrumb("fail", `Pipeline failed at stage=${lastErrorStage || "unknown"}`),
+        breadcrumb(
+          "fail",
+          `Pipeline failed at stage=${lastErrorStage || "unknown"}`
+        ),
       ],
     } as any,
     messages: [new AIMessage(`[Fail] Letter #${letterId} → pipeline_failed`)],
