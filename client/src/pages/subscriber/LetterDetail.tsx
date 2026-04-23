@@ -500,6 +500,11 @@ export default function LetterDetail() {
           )
         ) : null}
 
+        {(letter.status === "client_approval_pending" ||
+          letter.status === "needs_changes") && (
+          <div id="attorney-review" className="scroll-mt-24" />
+        )}
+
         {letter.status === "client_approval_pending" && (
           <ClientApprovalBlock
             letterId={letterId}
