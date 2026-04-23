@@ -416,7 +416,7 @@ export function LetterPaywall({
                   Your draft is being finalized
                 </h3>
                 <p className="text-sm text-slate-600 mb-3">
-                  We give every AI-drafted letter a full 24-hour review period
+                  We give every letter draft a full 24-hour review period
                   before presenting it to you. This ensures your draft is
                   thorough and accurate.
                 </p>
@@ -442,7 +442,7 @@ export function LetterPaywall({
           <CardHeader className="bg-slate-50 border-b border-slate-200 px-6 py-4">
             <CardTitle className="text-lg flex items-center gap-2 text-slate-800">
               <FileText className="w-5 h-5 text-slate-500" />
-              Your AI-drafted legal letter — read-only preview
+              Your letter draft — read-only preview
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
