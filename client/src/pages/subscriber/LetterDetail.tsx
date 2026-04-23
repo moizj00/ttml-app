@@ -105,6 +105,17 @@ export default function LetterDetail() {
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewModalDismissed, setPreviewModalDismissed] = useState(false);
 
+  const { data, isLoading, error } = trpc.letters.detail.useQuery(
+    { id: letterId },
+    {
+      enabled: !!letterId,
+      refetchInterval: query => {
+        const status = query.state.data?.letter?.status;
+        return status && POLLING_STATUSES.includes(status) ? 10000 : false;
+      },
+    }
+  );
+
   useEffect(() => {
     if (
       data?.letter &&
@@ -135,17 +146,6 @@ export default function LetterDetail() {
       });
     }
   }, [search]);
-
-  const { data, isLoading, error } = trpc.letters.detail.useQuery(
-    { id: letterId },
-    {
-      enabled: !!letterId,
-      refetchInterval: query => {
-        const status = query.state.data?.letter?.status;
-        return status && POLLING_STATUSES.includes(status) ? 10000 : false;
-      },
-    }
-  );
 
   const utils = trpc.useUtils();
   const invalidate = () => utils.letters.detail.invalidate({ id: letterId });
@@ -367,7 +367,10 @@ export default function LetterDetail() {
                   {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
                 </p>
                 <div className="flex items-center gap-3 mt-2">
-                  <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} />
+                  <StatusBadge
+                    status={letter.status}
+                    approvedByRole={letter.approvedByRole}
+                  />
                   <span className="text-xs text-muted-foreground">
                     Submitted {new Date(letter.createdAt).toLocaleDateString()}
                   </span>
