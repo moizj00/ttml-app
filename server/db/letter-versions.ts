@@ -62,7 +62,14 @@ export async function getLetterVersionsByRequestId(
    * The UI is responsible for rendering the content non-selectable with a
    * DRAFT watermark (see client/src/components/FreePreviewViewer.tsx).
    */
-  freePreviewUnlocked = false
+  freePreviewUnlocked = false,
+  /**
+   * When true AND `freePreviewUnlocked` is false, the ai_draft is returned with
+   * empty content + `freePreviewWaiting: true`. Prevents leaking even the
+   * truncated 20% slice to free-preview subscribers during the 24h cooling
+   * window — the UI renders <FreePreviewWaiting/> instead of the paywall.
+   */
+  isFreePreview = false
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -93,6 +100,11 @@ export async function getLetterVersionsByRequestId(
         // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
         if (freePreviewUnlocked) {
           return { ...v, truncated: false, freePreview: true as const };
+        }
+        // Pre-unlock free-preview: do NOT leak even the 20% slice. The UI
+        // shows <FreePreviewWaiting/> based on the `freePreviewWaiting` flag.
+        if (isFreePreview) {
+          return { ...v, content: "", truncated: true, freePreviewWaiting: true as const };
         }
         return { ...v, content: truncateContent(v.content), truncated: true };
       }

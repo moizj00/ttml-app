@@ -54,7 +54,8 @@ export const subscriberProcedures = {
         input.id,
         false,
         letter.status,
-        freePreviewUnlocked
+        freePreviewUnlocked,
+        letter.isFreePreview === true
       );
       const attachmentList = await getAttachmentsByLetterId(input.id);
       return { letter, actions, versions, attachments: attachmentList };

@@ -287,6 +287,19 @@ export const versionsRouter = router({
                 return { ...version, truncated: false, freePreview: true as const };
               }
 
+              // Pre-unlock free-preview: return empty content with the
+              // freePreviewWaiting flag so the client renders the waiting
+              // screen instead of the paywall. Mirrors the gate in
+              // server/db/letter-versions.ts.
+              if (letter.isFreePreview === true) {
+                return {
+                  ...version,
+                  content: "",
+                  truncated: true,
+                  freePreviewWaiting: true as const,
+                };
+              }
+
               // Standard paid-paywall preview: truncated to 20% of lines.
               if (version.content) {
                 const lines = version.content.split("\n");
