@@ -4,11 +4,25 @@ import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, PlusCircle, Search, Lock, Download,
-  FileCheck, CreditCard, Eye, ArrowDownUp, ArrowRight,
+  FileText,
+  PlusCircle,
+  Search,
+  Lock,
+  Download,
+  FileCheck,
+  CreditCard,
+  Eye,
+  ArrowDownUp,
+  ArrowRight,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -18,43 +32,101 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 const ACTIVE_STATUSES = ["submitted", "researching", "drafting"];
 const NEEDS_APPROVAL_STATUSES = ["client_approval_pending"];
-const NEEDS_ACTION_STATUSES = ["generated_locked", "needs_changes", "client_approval_pending", "client_revision_requested"];
+const NEEDS_ACTION_STATUSES = [
+  "generated_locked",
+  "needs_changes",
+  "client_approval_pending",
+  "client_revision_requested",
+];
 
 type SortKey = "date_desc" | "date_asc" | "type";
 
 function sortLetters(letters: any[], sort: SortKey) {
   const sorted = [...letters];
-  if (sort === "date_desc") return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  if (sort === "date_asc") return sorted.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  if (sort === "type") return sorted.sort((a, b) => a.letterType.localeCompare(b.letterType));
+  if (sort === "date_desc")
+    return sorted.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  if (sort === "date_asc")
+    return sorted.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  if (sort === "type")
+    return sorted.sort((a, b) => a.letterType.localeCompare(b.letterType));
   return sorted;
 }
 
 function getQuickActions(letter: any) {
-  const actions: Array<{ label: string; icon: any; href: string; variant: "default" | "outline" | "secondary"; color?: string }> = [];
+  const actions: Array<{
+    label: string;
+    icon: any;
+    href: string;
+    variant: "default" | "outline" | "secondary";
+    color?: string;
+  }> = [];
 
   // Subscriber needs to approve the attorney-submitted letter
   if (letter.status === "client_approval_pending") {
-    actions.push({ label: "Review & Approve", icon: Eye, href: `/letters/${letter.id}`, variant: "default", color: "bg-blue-600 hover:bg-blue-700 text-white" });
+    actions.push({
+      label: "Review & Approve",
+      icon: Eye,
+      href: `/letters/${letter.id}`,
+      variant: "default",
+      color: "bg-blue-600 hover:bg-blue-700 text-white",
+    });
   }
 
   // PDF is ready after attorney approval
-  if ((letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && (letter as any).pdfUrl) {
-    actions.push({ label: "Download PDF", icon: Download, href: (letter as any).pdfUrl, variant: "default", color: "bg-green-600 hover:bg-green-700 text-white" });
+  if (
+    (letter.status === "approved" ||
+      letter.status === "client_approved" ||
+      letter.status === "sent") &&
+    (letter as any).pdfUrl
+  ) {
+    actions.push({
+      label: "Download PDF",
+      icon: Download,
+      href: (letter as any).pdfUrl,
+      variant: "default",
+      color: "bg-green-600 hover:bg-green-700 text-white",
+    });
   }
 
   // PDF still generating after approval
-  if ((letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && !(letter as any).pdfUrl) {
-    actions.push({ label: "View Letter", icon: Eye, href: `/letters/${letter.id}`, variant: "secondary" });
+  if (
+    (letter.status === "approved" ||
+      letter.status === "client_approved" ||
+      letter.status === "sent") &&
+    !(letter as any).pdfUrl
+  ) {
+    actions.push({
+      label: "View Letter",
+      icon: Eye,
+      href: `/letters/${letter.id}`,
+      variant: "secondary",
+    });
   }
 
   if (letter.status === "generated_locked") {
-    actions.push({ label: "View Draft", icon: FileText, href: `/letters/${letter.id}`, variant: "default", color: "bg-amber-500 hover:bg-amber-600 text-white" });
+    actions.push({
+      label: "View Draft",
+      icon: FileText,
+      href: `/letters/${letter.id}`,
+      variant: "default",
+      color: "bg-amber-500 hover:bg-amber-600 text-white",
+    });
   }
 
   // Subscriber revision requested — waiting for attorney
   if (letter.status === "client_revision_requested") {
-    actions.push({ label: "View Details", icon: Eye, href: `/letters/${letter.id}`, variant: "outline" });
+    actions.push({
+      label: "View Details",
+      icon: Eye,
+      href: `/letters/${letter.id}`,
+      variant: "outline",
+    });
   }
 
   return actions;
@@ -64,13 +136,17 @@ export default function MyLetters() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { data: letters, isLoading } = trpc.letters.myLetters.useQuery(undefined, {
-    refetchInterval: (query) => {
-      const list = query.state.data;
-      if (list?.some((l: any) => ACTIVE_STATUSES.includes(l.status))) return 8000;
-      return false;
-    },
-  });
+  const { data: letters, isLoading } = trpc.letters.myLetters.useQuery(
+    undefined,
+    {
+      refetchInterval: query => {
+        const list = query.state.data;
+        if (list?.some((l: any) => ACTIVE_STATUSES.includes(l.status)))
+          return 8000;
+        return false;
+      },
+    }
+  );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sort, setSort] = useState<SortKey>("date_desc");
@@ -82,32 +158,65 @@ export default function MyLetters() {
   });
 
   const filtered = sortLetters(
-    (letters ?? []).filter((l) => {
-      const matchSearch = l.subject.toLowerCase().includes(search.toLowerCase());
+    (letters ?? []).filter(l => {
+      const matchSearch = l.subject
+        .toLowerCase()
+        .includes(search.toLowerCase());
       const matchStatus = statusFilter === "all" || l.status === statusFilter;
       return matchSearch && matchStatus;
     }),
-    sort,
+    sort
   );
 
-  const approvedCount = (letters ?? []).filter((l) => ["approved", "client_approved", "sent"].includes(l.status)).length;
-  const pendingCount = (letters ?? []).filter((l) => ["pending_review", "under_review"].includes(l.status)).length;
-  const approvalPendingCount = (letters ?? []).filter((l) => l.status === "client_approval_pending").length;
-  const actionCount = (letters ?? []).filter((l) => NEEDS_ACTION_STATUSES.includes(l.status)).length;
+  const approvedCount = (letters ?? []).filter(l =>
+    ["approved", "client_approved", "sent"].includes(l.status)
+  ).length;
+  const pendingCount = (letters ?? []).filter(l =>
+    ["pending_review", "under_review"].includes(l.status)
+  ).length;
+  const approvalPendingCount = (letters ?? []).filter(
+    l => l.status === "client_approval_pending"
+  ).length;
+  const actionCount = (letters ?? []).filter(l =>
+    NEEDS_ACTION_STATUSES.includes(l.status)
+  ).length;
 
   return (
-    <AppLayout breadcrumb={[{ label: "Dashboard", href: "/dashboard" }, { label: "My Letters" }]}>
+    <AppLayout
+      breadcrumb={[
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "My Letters" },
+      ]}
+    >
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">My Letters</h1>
             <div className="flex items-center gap-2 flex-wrap mt-0.5">
-              <span className="text-sm text-muted-foreground">{letters?.length ?? 0} total</span>
-              {approvedCount > 0 && <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-medium">{approvedCount} approved</span>}
-              {approvalPendingCount > 0 && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-semibold animate-pulse">{approvalPendingCount} awaiting your approval</span>}
-              {pendingCount > 0 && <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-medium">{pendingCount} in review</span>}
-              {actionCount > 0 && <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">{actionCount} need action</span>}
+              <span className="text-sm text-muted-foreground">
+                {letters?.length ?? 0} total
+              </span>
+              {approvedCount > 0 && (
+                <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-medium">
+                  {approvedCount} approved
+                </span>
+              )}
+              {approvalPendingCount > 0 && (
+                <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-semibold animate-pulse">
+                  {approvalPendingCount} awaiting your approval
+                </span>
+              )}
+              {pendingCount > 0 && (
+                <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
+                  {pendingCount} in review
+                </span>
+              )}
+              {actionCount > 0 && (
+                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">
+                  {actionCount} need action
+                </span>
+              )}
             </div>
           </div>
           <Button asChild size="sm">
@@ -124,7 +233,7 @@ export default function MyLetters() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search by subject..."
               className="pl-9"
             />
@@ -142,16 +251,22 @@ export default function MyLetters() {
               <SelectItem value="pending_review">Pending Review</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="needs_changes">Needs Changes</SelectItem>
-              <SelectItem value="client_approval_pending">Awaiting Your Approval</SelectItem>
-              <SelectItem value="client_revision_requested">Revision Requested</SelectItem>
+              <SelectItem value="client_approval_pending">
+                Awaiting Your Approval
+              </SelectItem>
+              <SelectItem value="client_revision_requested">
+                Revision Requested
+              </SelectItem>
               <SelectItem value="approved">Attorney Approved</SelectItem>
-              <SelectItem value="client_approved">Client Approved (Legacy)</SelectItem>
+              <SelectItem value="client_approved">
+                Client Approved (Legacy)
+              </SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="client_declined">Declined</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+          <Select value={sort} onValueChange={v => setSort(v as SortKey)}>
             <SelectTrigger className="w-full sm:w-40">
               <ArrowDownUp className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue />
@@ -167,7 +282,7 @@ export default function MyLetters() {
         {/* Letter List */}
         {isLoading ? (
           <div className="space-y-3">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4].map(i => (
               <div key={i} className="h-24 bg-muted animate-pulse rounded-xl" />
             ))}
           </div>
@@ -175,7 +290,9 @@ export default function MyLetters() {
           <div className="text-center py-16">
             <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-base font-semibold text-foreground mb-2">
-              {search || statusFilter !== "all" ? "No letters match your filters" : "No letters yet"}
+              {search || statusFilter !== "all"
+                ? "No letters match your filters"
+                : "No letters yet"}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {search || statusFilter !== "all"
@@ -193,11 +310,19 @@ export default function MyLetters() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((letter) => {
-              const hasPdf = (letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent") && !!(letter as any).pdfUrl;
-              const isApproved = letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent";
+            {filtered.map(letter => {
+              const hasPdf =
+                (letter.status === "approved" ||
+                  letter.status === "client_approved" ||
+                  letter.status === "sent") &&
+                !!(letter as any).pdfUrl;
+              const isApproved =
+                letter.status === "approved" ||
+                letter.status === "client_approved" ||
+                letter.status === "sent";
               const isLocked = letter.status === "generated_locked";
-              const isAwaitingApproval = letter.status === "client_approval_pending";
+              const isAwaitingApproval =
+                letter.status === "client_approval_pending";
               const needsAction = NEEDS_ACTION_STATUSES.includes(letter.status);
               const quickActions = getQuickActions(letter);
 
@@ -208,19 +333,25 @@ export default function MyLetters() {
                     isApproved
                       ? "border-green-200 bg-green-50/20"
                       : isAwaitingApproval
-                      ? "border-blue-200 bg-blue-50/20 ring-1 ring-blue-200"
-                      : isLocked
-                      ? "border-amber-200 bg-amber-50/20 ring-1 ring-amber-200"
-                      : needsAction
-                      ? "border-orange-200 bg-orange-50/10"
-                      : "border-border"
+                        ? "border-blue-200 bg-blue-50/20 ring-1 ring-blue-200"
+                        : isLocked
+                          ? "border-amber-200 bg-amber-50/20 ring-1 ring-amber-200"
+                          : needsAction
+                            ? "border-orange-200 bg-orange-50/10"
+                            : "border-border"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     {/* Icon */}
                     <div
                       className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        isApproved ? "bg-green-100" : isAwaitingApproval ? "bg-blue-100" : isLocked ? "bg-amber-100" : "bg-primary/10"
+                        isApproved
+                          ? "bg-green-100"
+                          : isAwaitingApproval
+                            ? "bg-blue-100"
+                            : isLocked
+                              ? "bg-amber-100"
+                              : "bg-primary/10"
                       }`}
                     >
                       {isApproved ? (
@@ -244,9 +375,16 @@ export default function MyLetters() {
                           {letter.subject}
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
+                          <StatusBadge
+                            status={letter.status}
+                            approvedByRole={letter.approvedByRole}
+                            size="sm"
+                          />
                           {hasPdf && (
-                            <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50 font-semibold gap-1 hidden sm:flex">
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-green-700 border-green-300 bg-green-50 font-semibold gap-1 hidden sm:flex"
+                            >
                               <Download className="w-3 h-3" />
                               PDF
                             </Badge>
@@ -256,29 +394,51 @@ export default function MyLetters() {
 
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-xs text-muted-foreground">
-                          {LETTER_TYPE_CONFIG[letter.letterType]?.label ?? letter.letterType}
+                          {LETTER_TYPE_CONFIG[letter.letterType]?.label ??
+                            letter.letterType}
                         </span>
                         {letter.jurisdictionState && (
                           <>
-                            <span className="text-muted-foreground/30 text-xs">·</span>
-                            <span className="text-xs text-muted-foreground">{letter.jurisdictionState}</span>
+                            <span className="text-muted-foreground/30 text-xs">
+                              ·
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {letter.jurisdictionState}
+                            </span>
                           </>
                         )}
-                        <span className="text-muted-foreground/30 text-xs">·</span>
+                        <span className="text-muted-foreground/30 text-xs">
+                          ·
+                        </span>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(letter.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {new Date(letter.createdAt).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric", year: "numeric" }
+                          )}
                         </span>
                       </div>
 
                       {/* Quick-action buttons */}
                       {quickActions.length > 0 && (
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          {quickActions.map((action) => {
+                          {quickActions.map(action => {
                             const ActionIcon = action.icon;
                             const isExternal = action.href.startsWith("http");
                             return isExternal ? (
-                              <a key={action.label} href={action.href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                                <Button size="sm" className={`h-7 text-xs px-3 ${action.color ?? ""}`} variant={action.color ? undefined : action.variant}>
+                              <a
+                                key={action.label}
+                                href={action.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <Button
+                                  size="sm"
+                                  className={`h-7 text-xs px-3 ${action.color ?? ""}`}
+                                  variant={
+                                    action.color ? undefined : action.variant
+                                  }
+                                >
                                   <ActionIcon className="w-3.5 h-3.5 mr-1.5" />
                                   {action.label}
                                 </Button>
@@ -288,8 +448,13 @@ export default function MyLetters() {
                                 key={action.label}
                                 size="sm"
                                 className={`h-7 text-xs px-3 ${action.color ?? ""}`}
-                                variant={action.color ? undefined : action.variant}
-                                onClick={(e) => { e.stopPropagation(); navigate(action.href); }}
+                                variant={
+                                  action.color ? undefined : action.variant
+                                }
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  navigate(action.href);
+                                }}
                               >
                                 <ActionIcon className="w-3.5 h-3.5 mr-1.5" />
                                 {action.label}
@@ -301,7 +466,18 @@ export default function MyLetters() {
 
                       {/* Compact progress tracker */}
                       <div className="mt-2.5 w-full">
-                        <LetterStatusTracker status={letter.status} size="compact" />
+                        <LetterStatusTracker
+                          status={letter.status}
+                          size="compact"
+                          isFreePreview={(letter as any).isFreePreview === true}
+                          freePreviewUnlocked={
+                            (letter as any).isFreePreview === true &&
+                            (letter as any).freePreviewUnlockAt &&
+                            new Date(
+                              (letter as any).freePreviewUnlockAt
+                            ).getTime() <= Date.now()
+                          }
+                        />
                       </div>
 
                       {/* No action — view link */}

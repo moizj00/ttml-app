@@ -490,7 +490,11 @@ export default function LetterDetail() {
           letter.status
         ) && <TransitionBanner status={letter.status} />}
 
-        <LetterStatusDisplay status={letter.status} />
+        <LetterStatusDisplay
+          status={letter.status}
+          isFreePreview={letter.isFreePreview === true}
+          freePreviewUnlocked={(aiDraftVersion as any)?.freePreview === true}
+        />
 
         {/*
          * Routing rule (3-way):

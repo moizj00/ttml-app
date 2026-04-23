@@ -15,7 +15,12 @@ export const vector = customType<{ data: number[]; driverParam: string }>({
 });
 
 // ─── User Roles ───
-export const USER_ROLES = ["subscriber", "employee", "attorney", "admin"] as const;
+export const USER_ROLES = [
+  "subscriber",
+  "employee",
+  "attorney",
+  "admin",
+] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 // ─── Letter Statuses (State Machine) ───
@@ -23,6 +28,9 @@ export const LETTER_STATUSES = [
   "submitted",
   "researching",
   "drafting",
+  "ai_generation_completed_hidden", // New: Procedure 4
+  "letter_released_to_subscriber", // New: Procedure 5
+  "attorney_review_upsell_shown", // New: Procedure 7
   "generated_locked",
   "pending_review",
   "under_review",
@@ -60,23 +68,51 @@ export const LETTER_TYPES = [
 export type LetterType = (typeof LETTER_TYPES)[number];
 
 // ─── Version Types ───
-export const VERSION_TYPES = ["ai_draft", "attorney_edit", "final_approved"] as const;
+export const VERSION_TYPES = [
+  "ai_draft",
+  "attorney_edit",
+  "final_approved",
+] as const;
 export type VersionType = (typeof VERSION_TYPES)[number];
 
 // ─── Actor Types ───
-export const ACTOR_TYPES = ["system", "subscriber", "employee", "attorney", "admin"] as const;
+export const ACTOR_TYPES = [
+  "system",
+  "subscriber",
+  "employee",
+  "attorney",
+  "admin",
+] as const;
 export type ActorType = (typeof ACTOR_TYPES)[number];
 
 // ─── Job Statuses ───
-export const JOB_STATUSES = ["queued", "running", "completed", "failed"] as const;
+export const JOB_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 // ─── Job Types ───
-export const JOB_TYPES = ["research", "draft_generation", "generation_pipeline", "retry", "vetting", "assembly"] as const;
+export const JOB_TYPES = [
+  "research",
+  "draft_generation",
+  "generation_pipeline",
+  "retry",
+  "vetting",
+  "assembly",
+] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 // ─── Research Statuses ───
-export const RESEARCH_STATUSES = ["queued", "running", "completed", "failed", "invalid"] as const;
+export const RESEARCH_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "invalid",
+] as const;
 export type ResearchStatus = (typeof RESEARCH_STATUSES)[number];
 
 // ─── Priority Levels ───
@@ -84,61 +120,188 @@ export const PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
 // ─── PostgreSQL Enums ───
-export const userRoleEnum = pgEnum("user_role", ["subscriber", "employee", "admin", "attorney"]);
+export const userRoleEnum = pgEnum("user_role", [
+  "subscriber",
+  "employee",
+  "admin",
+  "attorney",
+]);
 export const letterStatusEnum = pgEnum("letter_status", [
-  "submitted", "researching", "drafting", "generated_locked",
+  "submitted",
+  "researching",
+  "drafting",
+  "ai_generation_completed_hidden",
+  "letter_released_to_subscriber",
+  "attorney_review_upsell_shown",
+  "generated_locked",
   "generated_unlocked", // legacy: kept in pgEnum for backward compatibility, not in active state machine
   "upsell_dismissed", // legacy: kept in pgEnum for backward compatibility, not in active state machine
   "pipeline_failed",
-  "pending_review", "under_review", "needs_changes", "approved",
-  "client_approval_pending", "client_revision_requested", "client_declined", "client_approved", "sent",
+  "pending_review",
+  "under_review",
+  "needs_changes",
+  "approved",
+  "client_approval_pending",
+  "client_revision_requested",
+  "client_declined",
+  "client_approved",
+  "sent",
   "rejected",
 ]);
 export const letterTypeEnum = pgEnum("letter_type", [
-  "demand-letter", "cease-and-desist", "contract-breach", "eviction-notice",
-  "employment-dispute", "consumer-complaint", "general-legal",
-  "pre-litigation-settlement", "debt-collection", "estate-probate",
-  "landlord-tenant", "insurance-dispute", "personal-injury-demand",
-  "intellectual-property", "family-law", "neighbor-hoa",
+  "demand-letter",
+  "cease-and-desist",
+  "contract-breach",
+  "eviction-notice",
+  "employment-dispute",
+  "consumer-complaint",
+  "general-legal",
+  "pre-litigation-settlement",
+  "debt-collection",
+  "estate-probate",
+  "landlord-tenant",
+  "insurance-dispute",
+  "personal-injury-demand",
+  "intellectual-property",
+  "family-law",
+  "neighbor-hoa",
 ]);
-export const versionTypeEnum = pgEnum("version_type", ["ai_draft", "attorney_edit", "final_approved"]);
-export const actorTypeEnum = pgEnum("actor_type", ["system", "subscriber", "employee", "admin", "attorney"]);
-export const jobStatusEnum = pgEnum("job_status", ["queued", "running", "completed", "failed"]);
-export const jobTypeEnum = pgEnum("job_type", ["research", "draft_generation", "generation_pipeline", "retry", "vetting", "assembly"]);
-export const researchStatusEnum = pgEnum("research_status", ["queued", "running", "completed", "failed", "invalid"]);
-export const priorityEnum = pgEnum("priority_level", ["low", "normal", "high", "urgent"]);
-export const noteVisibilityEnum = pgEnum("note_visibility", ["internal", "user_visible"]);
-export const subscriptionPlanEnum = pgEnum("subscription_plan", ["per_letter", "monthly", "monthly_basic", "annual", "free_trial_review", "starter", "professional", "single_letter", "yearly"]);
-export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "canceled", "past_due", "trialing", "incomplete", "none"]);
-export const commissionStatusEnum = pgEnum("commission_status", ["pending", "paid", "voided"]);
-export const payoutStatusEnum = pgEnum("payout_status", ["pending", "processing", "completed", "rejected"]);
+export const versionTypeEnum = pgEnum("version_type", [
+  "ai_draft",
+  "attorney_edit",
+  "final_approved",
+]);
+export const actorTypeEnum = pgEnum("actor_type", [
+  "system",
+  "subscriber",
+  "employee",
+  "admin",
+  "attorney",
+]);
+export const jobStatusEnum = pgEnum("job_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+]);
+export const jobTypeEnum = pgEnum("job_type", [
+  "research",
+  "draft_generation",
+  "generation_pipeline",
+  "retry",
+  "vetting",
+  "assembly",
+]);
+export const researchStatusEnum = pgEnum("research_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "invalid",
+]);
+export const priorityEnum = pgEnum("priority_level", [
+  "low",
+  "normal",
+  "high",
+  "urgent",
+]);
+export const noteVisibilityEnum = pgEnum("note_visibility", [
+  "internal",
+  "user_visible",
+]);
+export const subscriptionPlanEnum = pgEnum("subscription_plan", [
+  "per_letter",
+  "monthly",
+  "monthly_basic",
+  "annual",
+  "free_trial_review",
+  "starter",
+  "professional",
+  "single_letter",
+  "yearly",
+]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "canceled",
+  "past_due",
+  "trialing",
+  "incomplete",
+  "none",
+]);
+export const commissionStatusEnum = pgEnum("commission_status", [
+  "pending",
+  "paid",
+  "voided",
+]);
+export const payoutStatusEnum = pgEnum("payout_status", [
+  "pending",
+  "processing",
+  "completed",
+  "rejected",
+]);
 
 // ─── Pipeline Learning Enums ───
-export const PIPELINE_STAGES = ["research", "drafting", "assembly", "vetting"] as const;
+export const PIPELINE_STAGES = [
+  "research",
+  "drafting",
+  "assembly",
+  "vetting",
+] as const;
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
 export const LESSON_CATEGORIES = [
-  "citation_error", "jurisdiction_error", "tone_issue", "structure_issue",
-  "factual_error", "bloat_detected", "missing_section", "style_preference",
-  "legal_accuracy", "general",
+  "citation_error",
+  "jurisdiction_error",
+  "tone_issue",
+  "structure_issue",
+  "factual_error",
+  "bloat_detected",
+  "missing_section",
+  "style_preference",
+  "legal_accuracy",
+  "general",
 ] as const;
 export type LessonCategory = (typeof LESSON_CATEGORIES)[number];
 
 export const LESSON_SOURCES = [
-  "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
-  "subscriber_update", "subscriber_retry", "consolidation",
+  "attorney_approval",
+  "attorney_rejection",
+  "attorney_changes",
+  "attorney_edit",
+  "manual",
+  "subscriber_update",
+  "subscriber_retry",
+  "consolidation",
 ] as const;
 export type LessonSource = (typeof LESSON_SOURCES)[number];
 
-export const pipelineStageEnum = pgEnum("pipeline_stage", ["research", "drafting", "assembly", "vetting"]);
+export const pipelineStageEnum = pgEnum("pipeline_stage", [
+  "research",
+  "drafting",
+  "assembly",
+  "vetting",
+]);
 export const lessonCategoryEnum = pgEnum("lesson_category", [
-  "citation_error", "jurisdiction_error", "tone_issue", "structure_issue",
-  "factual_error", "bloat_detected", "missing_section", "style_preference",
-  "legal_accuracy", "general",
+  "citation_error",
+  "jurisdiction_error",
+  "tone_issue",
+  "structure_issue",
+  "factual_error",
+  "bloat_detected",
+  "missing_section",
+  "style_preference",
+  "legal_accuracy",
+  "general",
 ]);
 export const lessonSourceEnum = pgEnum("lesson_source", [
-  "attorney_approval", "attorney_rejection", "attorney_changes", "attorney_edit", "manual",
-  "subscriber_update", "subscriber_retry", "consolidation",
+  "attorney_approval",
+  "attorney_rejection",
+  "attorney_changes",
+  "attorney_edit",
+  "manual",
+  "subscriber_update",
+  "subscriber_retry",
+  "consolidation",
 ]);
 
 // ─── Blog Constants ───
@@ -170,7 +333,7 @@ export const BLOG_CATEGORY_MIGRATION: Record<string, BlogCategory> = {
   "contract-disputes": "contract-disputes",
   "document-analysis": "document-analysis",
   "pricing-and-roi": "pricing-and-roi",
-  "general": "general",
+  general: "general",
 };
 
 export const BLOG_STATUSES = ["draft", "published"] as const;

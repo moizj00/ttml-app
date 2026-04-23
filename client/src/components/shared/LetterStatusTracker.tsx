@@ -10,6 +10,8 @@ import { useStepTransition, useProgressFill } from "@/hooks/useAnimations";
 interface LetterStatusTrackerProps {
   status: string;
   size?: "compact" | "standard" | "expanded";
+  isFreePreview?: boolean;
+  freePreviewUnlocked?: boolean;
 }
 
 // ─── Sub-stage descriptions for expanded variant ──────────────────────────────
@@ -44,9 +46,26 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
 
 // ─── Compact: 5-segment horizontal bar (for My Letters rows) ──────────────────
 
-function CompactTracker({ status }: { status: string }) {
+function CompactTracker({
+  status,
+  isFreePreview,
+  freePreviewUnlocked,
+}: {
+  status: string;
+  isFreePreview?: boolean;
+  freePreviewUnlocked?: boolean;
+}) {
   const isError = TERMINAL_ERROR_STATUSES.includes(status);
-  const { stageIndex } = getStageForStatus(status);
+  const { stageIndex: baseStageIndex } = getStageForStatus(status);
+
+  // Lead-magnet logic: if it's a free preview that isn't unlocked yet,
+  // cap the progress at "Research & Draft" (index 1), even if the
+  // status is already "generated_locked" (index 2).
+  const stageIndex =
+    isFreePreview && !freePreviewUnlocked
+      ? Math.min(baseStageIndex, 1)
+      : baseStageIndex;
+
   const targetPercent = isError ? 0 : getStageProgress(status);
   const fill = useProgressFill(targetPercent);
 
@@ -107,9 +126,24 @@ function CompactTracker({ status }: { status: string }) {
 
 // ─── Standard: 5 circles connected by lines (for Dashboard cards) ─────────────
 
-function StandardTracker({ status }: { status: string }) {
+function StandardTracker({
+  status,
+  isFreePreview,
+  freePreviewUnlocked,
+}: {
+  status: string;
+  isFreePreview?: boolean;
+  freePreviewUnlocked?: boolean;
+}) {
   const isError = TERMINAL_ERROR_STATUSES.includes(status);
-  const { stageIndex } = getStageForStatus(status);
+  const { stageIndex: baseStageIndex } = getStageForStatus(status);
+
+  // Lead-magnet logic: cap visual progress at Research & Draft (idx 1).
+  const stageIndex =
+    isFreePreview && !freePreviewUnlocked
+      ? Math.min(baseStageIndex, 1)
+      : baseStageIndex;
+
   const { displayStep } = useStepTransition(stageIndex);
 
   const isActiveProcessing = [
@@ -198,9 +232,24 @@ function StandardTracker({ status }: { status: string }) {
 
 // ─── Expanded: vertical timeline (for Letter Detail) ─────────────────────────
 
-function ExpandedTracker({ status }: { status: string }) {
+function ExpandedTracker({
+  status,
+  isFreePreview,
+  freePreviewUnlocked,
+}: {
+  status: string;
+  isFreePreview?: boolean;
+  freePreviewUnlocked?: boolean;
+}) {
   const isError = TERMINAL_ERROR_STATUSES.includes(status);
-  const { stageIndex } = getStageForStatus(status);
+  const { stageIndex: baseStageIndex } = getStageForStatus(status);
+
+  // Lead-magnet logic: cap visual progress at Research & Draft (idx 1).
+  const stageIndex =
+    isFreePreview && !freePreviewUnlocked
+      ? Math.min(baseStageIndex, 1)
+      : baseStageIndex;
+
   const { displayStep } = useStepTransition(stageIndex);
 
   const isActiveProcessing = [
@@ -321,8 +370,30 @@ function ExpandedTracker({ status }: { status: string }) {
 export default function LetterStatusTracker({
   status,
   size = "standard",
+  isFreePreview,
+  freePreviewUnlocked,
 }: LetterStatusTrackerProps) {
-  if (size === "compact") return <CompactTracker status={status} />;
-  if (size === "expanded") return <ExpandedTracker status={status} />;
-  return <StandardTracker status={status} />;
+  if (size === "compact")
+    return (
+      <CompactTracker
+        status={status}
+        isFreePreview={isFreePreview}
+        freePreviewUnlocked={freePreviewUnlocked}
+      />
+    );
+  if (size === "expanded")
+    return (
+      <ExpandedTracker
+        status={status}
+        isFreePreview={isFreePreview}
+        freePreviewUnlocked={freePreviewUnlocked}
+      />
+    );
+  return (
+    <StandardTracker
+      status={status}
+      isFreePreview={isFreePreview}
+      freePreviewUnlocked={freePreviewUnlocked}
+    />
+  );
 }

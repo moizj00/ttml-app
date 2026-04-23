@@ -351,6 +351,13 @@
       "when": 1776973405416,
       "tag": "0049_natural_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1776986746105,
+      "tag": "0050_flashy_skreet",
+      "breakpoints": true
     }
   ]
 }

@@ -26,9 +26,16 @@ import {
   Calendar,
 } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
-import { LETTER_TYPE_CONFIG, ANALYZE_PREFILL_KEY, US_STATES } from "../../../../shared/types";
+import {
+  LETTER_TYPE_CONFIG,
+  ANALYZE_PREFILL_KEY,
+  US_STATES,
+} from "../../../../shared/types";
 import ApprovedLetterPreviewModal from "@/components/ApprovedLetterPreviewModal";
-import type { AnalysisPrefill, DocumentAnalysisResult } from "../../../../shared/types";
+import type {
+  AnalysisPrefill,
+  DocumentAnalysisResult,
+} from "../../../../shared/types";
 import type { DocumentAnalysis } from "../../../../drizzle/schema";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -46,7 +53,6 @@ const ACTIVE_STATUSES = [
   "client_approval_pending",
   "client_revision_requested",
 ];
-
 
 // CTA config per status
 function getStatusCTA(status: string, letterId: number) {
@@ -175,7 +181,9 @@ export default function SubscriberDashboard() {
   const searchString = useSearch();
   const utils = trpc.useUtils();
 
-  const [approvedQueryParam, setApprovedQueryParam] = useState<number | undefined>(undefined);
+  const [approvedQueryParam, setApprovedQueryParam] = useState<
+    number | undefined
+  >(undefined);
 
   useEffect(() => {
     const params = new URLSearchParams(searchString);
@@ -218,10 +226,14 @@ export default function SubscriberDashboard() {
   });
 
   // Safely cast the jsonb field — Drizzle types jsonb as unknown; we validate fields at runtime
-  const getAnalysisJson = (row: DocumentAnalysis): Partial<DocumentAnalysisResult> =>
+  const getAnalysisJson = (
+    row: DocumentAnalysis
+  ): Partial<DocumentAnalysisResult> =>
     (row.analysisJson ?? {}) as Partial<DocumentAnalysisResult>;
 
-  const resolveJurisdictionCode = (detected: string | null | undefined): string | undefined => {
+  const resolveJurisdictionCode = (
+    detected: string | null | undefined
+  ): string | undefined => {
     if (!detected) return undefined;
     const upper = detected.trim().toUpperCase();
     const byCode = US_STATES.find(s => s.code === upper);
@@ -229,36 +241,62 @@ export default function SubscriberDashboard() {
     const lower = detected.trim().toLowerCase();
     const byName = US_STATES.find(s => s.name.toLowerCase() === lower);
     if (byName) return byName.code;
-    const byPrefix = US_STATES.find(s => lower.startsWith(s.name.toLowerCase()));
+    const byPrefix = US_STATES.find(s =>
+      lower.startsWith(s.name.toLowerCase())
+    );
     if (byPrefix) return byPrefix.code;
     return undefined;
   };
 
   const handleUseAnalysis = (analysisJson: Partial<DocumentAnalysisResult>) => {
     const prefill: AnalysisPrefill = {};
-    if (analysisJson.recommendedLetterType) prefill.letterType = analysisJson.recommendedLetterType;
-    if (analysisJson.recommendedResponseSummary) prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
-    const jurisdictionCode = resolveJurisdictionCode(analysisJson.detectedJurisdiction);
+    if (analysisJson.recommendedLetterType)
+      prefill.letterType = analysisJson.recommendedLetterType;
+    if (analysisJson.recommendedResponseSummary)
+      prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
+    const jurisdictionCode = resolveJurisdictionCode(
+      analysisJson.detectedJurisdiction
+    );
     if (jurisdictionCode) prefill.jurisdictionState = jurisdictionCode;
-    if (analysisJson.detectedParties?.senderName) prefill.senderName = analysisJson.detectedParties.senderName;
-    if (analysisJson.detectedParties?.recipientName) prefill.recipientName = analysisJson.detectedParties.recipientName;
-    if (analysisJson.summary) prefill.description = analysisJson.summary.slice(0, 600);
-    try { sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
+    if (analysisJson.detectedParties?.senderName)
+      prefill.senderName = analysisJson.detectedParties.senderName;
+    if (analysisJson.detectedParties?.recipientName)
+      prefill.recipientName = analysisJson.detectedParties.recipientName;
+    if (analysisJson.summary)
+      prefill.description = analysisJson.summary.slice(0, 600);
+    try {
+      sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill));
+    } catch {
+      /* ignore */
+    }
     navigate("/submit");
   };
 
   const stats = {
     total: letters?.length ?? 0,
     active:
-      letters?.filter(l => !["approved", "rejected", "client_approved", "client_declined", "sent"].includes(l.status))
-        .length ?? 0,
-    approved: letters?.filter(l => ["approved", "client_approved", "sent"].includes(l.status)).length ?? 0,
+      letters?.filter(
+        l =>
+          ![
+            "approved",
+            "rejected",
+            "client_approved",
+            "client_declined",
+            "sent",
+          ].includes(l.status)
+      ).length ?? 0,
+    approved:
+      letters?.filter(l =>
+        ["approved", "client_approved", "sent"].includes(l.status)
+      ).length ?? 0,
     // Note: 'approved' is now the final attorney-approved state (no client approval step)
     needsAttention:
       letters?.filter(l =>
-        ["needs_changes", "generated_locked", "client_approval_pending"].includes(
-          l.status
-        )
+        [
+          "needs_changes",
+          "generated_locked",
+          "client_approval_pending",
+        ].includes(l.status)
       ).length ?? 0,
   };
 
@@ -273,7 +311,7 @@ export default function SubscriberDashboard() {
       {/* Approved letter preview modal — auto-shown for newly approved letters */}
       {letters && letters.length > 0 && (
         <ApprovedLetterPreviewModal
-          letters={letters.map((l) => ({
+          letters={letters.map(l => ({
             id: l.id,
             subject: l.subject,
             pdfUrl: l.pdfUrl ?? null,
@@ -286,11 +324,12 @@ export default function SubscriberDashboard() {
         {/* Welcome Banner */}
         <div className="rounded-2xl bg-linear-to-r from-primary to-primary/80 p-5 text-primary-foreground sm:p-6">
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-xl font-bold">
-              Welcome to Talk to My Lawyer
-            </h1>
+            <h1 className="text-xl font-bold">Welcome to Talk to My Lawyer</h1>
             {user?.subscriberId && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-primary-foreground" data-testid="text-subscriber-id">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-white/20 text-primary-foreground"
+                data-testid="text-subscriber-id"
+              >
                 {user.subscriberId}
               </span>
             )}
@@ -448,7 +487,10 @@ export default function SubscriberDashboard() {
               bg: "bg-red-50",
             },
           ].map((stat, idx) => (
-            <Card key={stat.label} style={staggerStyle(idx, statCardVisible[idx])}>
+            <Card
+              key={stat.label}
+              style={staggerStyle(idx, statCardVisible[idx])}
+            >
               <CardContent className="p-4">
                 <div
                   className={`w-9 h-9 ${stat.bg} rounded-lg flex items-center justify-center mb-3 ${stat.color}`}
@@ -589,13 +631,29 @@ export default function SubscriberDashboard() {
                           </div>
                         </div>
                         <div className="flex justify-start sm:justify-end">
-                          <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
+                          <StatusBadge
+                            status={letter.status}
+                            approvedByRole={letter.approvedByRole}
+                            size="sm"
+                          />
                         </div>
                       </div>
 
                       {/* Pipeline stepper */}
                       <div className="px-4 py-3">
-                        <LetterStatusTracker status={letter.status} size="standard" />
+                        <LetterStatusTracker
+                          status={letter.status}
+                          size="standard"
+                          isFreePreview={letter.isFreePreview === true}
+                          freePreviewUnlocked={
+                            !!(
+                              letter.isFreePreview === true &&
+                              letter.freePreviewUnlockAt &&
+                              new Date(letter.freePreviewUnlockAt).getTime() <=
+                                Date.now()
+                            )
+                          }
+                        />
                       </div>
 
                       {/* Bottom: CTA button */}
@@ -632,10 +690,17 @@ export default function SubscriberDashboard() {
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <ScanSearch className="w-5 h-5 text-blue-600" />
-                <CardTitle className="text-base">Document Analysis History</CardTitle>
+                <CardTitle className="text-base">
+                  Document Analysis History
+                </CardTitle>
               </div>
               <Link href="/analyze">
-                <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-new-analysis">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  data-testid="button-new-analysis"
+                >
                   <ScanSearch className="w-3.5 h-3.5" />
                   New Analysis
                 </Button>
@@ -653,13 +718,21 @@ export default function SubscriberDashboard() {
                     <ScanSearch className="w-6 h-6 text-slate-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-slate-600">No analyses yet</p>
+                    <p className="text-sm font-medium text-slate-600">
+                      No analyses yet
+                    </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      Upload a legal document to get an instant analysis and recommended action.
+                      Upload a legal document to get an instant analysis and
+                      recommended action.
                     </p>
                   </div>
                   <Link href="/analyze">
-                    <Button size="sm" variant="outline" className="gap-1.5 mt-1" data-testid="button-start-analysis-empty">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 mt-1"
+                      data-testid="button-start-analysis-empty"
+                    >
                       <ScanSearch className="w-3.5 h-3.5" />
                       Analyze a Document
                     </Button>
@@ -673,8 +746,12 @@ export default function SubscriberDashboard() {
                     const letterLabel = letterType
                       ? (LETTER_TYPE_CONFIG[letterType]?.label ?? letterType)
                       : null;
-                    const createdAt = row.createdAt ? new Date(row.createdAt) : null;
-                    const hasUsefulPrefill = !!(letterType || analysis.recommendedResponseSummary);
+                    const createdAt = row.createdAt
+                      ? new Date(row.createdAt)
+                      : null;
+                    const hasUsefulPrefill = !!(
+                      letterType || analysis.recommendedResponseSummary
+                    );
 
                     return (
                       <div
@@ -687,24 +764,38 @@ export default function SubscriberDashboard() {
                             <FileText className="w-4 h-4 text-blue-600" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate" data-testid={`text-analysis-name-${row.id}`}>
+                            <p
+                              className="text-sm font-medium text-slate-800 truncate"
+                              data-testid={`text-analysis-name-${row.id}`}
+                            >
                               {row.documentName}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 mt-1">
                               {createdAt && (
                                 <span className="flex items-center gap-1 text-xs text-slate-400">
                                   <Calendar className="w-3 h-3" />
-                                  {createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                  {createdAt.toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
                                 </span>
                               )}
                               {letterLabel && (
-                                <Badge variant="secondary" className="text-xs flex items-center gap-1" data-testid={`badge-analysis-type-${row.id}`}>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs flex items-center gap-1"
+                                  data-testid={`badge-analysis-type-${row.id}`}
+                                >
                                   <Scale className="w-3 h-3" />
                                   {letterLabel}
                                 </Badge>
                               )}
                               {analysis.urgencyLevel === "high" && (
-                                <Badge variant="destructive" className="text-xs">
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
                                   High Urgency
                                 </Badge>
                               )}
