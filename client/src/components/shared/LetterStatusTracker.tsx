@@ -247,7 +247,7 @@ function ExpandedTracker({ status }: { status: string }) {
             {/* Left: icon + vertical line */}
             <div className="flex flex-col items-center flex-shrink-0">
               <div
-                className={`w-10 h-10 rounded-full flex flex-shrink-0 items-center justify-center transition-all duration-300 ${
+                className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex flex-shrink-0 items-center justify-center transition-all duration-300 ${
                   isTerminalStage
                     ? "bg-destructive/10 text-destructive"
                     : isComplete
@@ -259,18 +259,18 @@ function ExpandedTracker({ status }: { status: string }) {
                 data-testid={`stage-expanded-${stage.key}`}
               >
                 {isTerminalStage ? (
-                  <AlertTriangle className="w-5 h-5" />
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
                 ) : isComplete ? (
-                  <CheckCircle className="w-5 h-5" />
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 ) : showSpinner ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                 ) : (
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 )}
               </div>
               {!isLast && (
                 <div
-                  className={`w-0.5 flex-1 my-1 min-h-[28px] rounded-full transition-all duration-300 ${
+                  className={`w-0.5 flex-1 my-1 min-h-[20px] sm:min-h-[28px] rounded-full transition-all duration-300 ${
                     isComplete && !isError ? "bg-violet-300" : "bg-border"
                   }`}
                 />
@@ -278,9 +278,9 @@ function ExpandedTracker({ status }: { status: string }) {
             </div>
 
             {/* Right: label + description */}
-            <div className="pb-6 flex-1 min-w-0">
+            <div className="pb-5 sm:pb-6 flex-1 min-w-0">
               <p
-                className={`text-sm font-semibold leading-tight ${
+                className={`text-xs sm:text-sm font-semibold leading-tight ${
                   isTerminalStage
                     ? "text-destructive"
                     : isComplete
@@ -292,7 +292,7 @@ function ExpandedTracker({ status }: { status: string }) {
                 data-testid={`stage-expanded-label-${stage.key}`}
               >
                 {isCurrent && (
-                  <span className="inline-block bg-violet-600 text-white text-xs font-bold px-2 py-0.5 rounded mr-2">
+                  <span className="inline-block bg-violet-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded mr-1.5 sm:mr-2">
                     {stage.label}
                   </span>
                 )}
@@ -300,7 +300,7 @@ function ExpandedTracker({ status }: { status: string }) {
                   (isTerminalStage ? errorStageLabel : stage.label)}
               </p>
               <p
-                className={`text-xs mt-1 leading-snug ${
+                className={`text-[10px] sm:text-xs mt-1 leading-snug sm:leading-relaxed ${
                   isCurrent || isTerminalStage
                     ? "text-muted-foreground"
                     : "text-muted-foreground/40"
