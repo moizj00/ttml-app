@@ -312,9 +312,10 @@ export const attachments = pgTable(
     letterRequestId: integer("letter_request_id")
       .notNull()
       .references(() => letterRequests.id, { onDelete: "cascade" }),
-    uploadedByUserId: integer("uploaded_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "set null" }),
+    uploadedByUserId: integer("uploaded_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
     storagePath: varchar("storage_path", { length: 1000 }).notNull(),
     storageUrl: varchar("storage_url", { length: 2000 }),
     fileName: varchar("file_name", { length: 500 }).notNull(),
