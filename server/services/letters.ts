@@ -286,6 +286,62 @@ export async function submitLetter(
 }
 
 /**
+ * PROCEDURE 6: getSubscriberReleasedLetterProcedure
+ * Enforces the 24-hour gate for free previews.
+ * If the letter is a free preview and the status is AI_GENERATION_COMPLETED_HIDDEN:
+ * - Checks if freePreviewUnlockAt has passed.
+ * - If yes, transitions status to letter_released_to_subscriber.
+ * - Returns the updated letter details.
+ */
+export async function getSubscriberReleasedLetterProcedure(
+  letterId: number,
+  userId: number
+) {
+  const letter = await getLetterRequestById(letterId);
+  if (!letter) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
+  }
+
+  if (letter.userId !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+  }
+
+  // If already released, just return
+  if (letter.status === "letter_released_to_subscriber") {
+    return letter;
+  }
+
+  // If this is a free preview in the "hidden" state, check if we can release it
+  if (
+    letter.isFreePreview &&
+    letter.status === "AI_GENERATION_COMPLETED_HIDDEN"
+  ) {
+    const unlockAt = letter.freePreviewUnlockAt
+      ? new Date(letter.freePreviewUnlockAt)
+      : null;
+    const now = new Date();
+
+    if (unlockAt && now >= unlockAt) {
+      await updateLetterStatus(letterId, "letter_released_to_subscriber");
+      // Log the release
+      await logReviewAction({
+        letterRequestId: letterId,
+        actorType: "system",
+        action: "ai_pipeline_completed", // reused or add new
+        noteText:
+          "Free professional draft released to subscriber after 24h gate.",
+        noteVisibility: "user_visible",
+        fromStatus: "AI_GENERATION_COMPLETED_HIDDEN",
+        toStatus: "letter_released_to_subscriber",
+      });
+      return await getLetterRequestById(letterId);
+    }
+  }
+
+  return letter;
+}
+
+/**
  * PROCEDURE 2: enqueueLetterGenerationProcedure
  * Enqueues the automated research & drafting pipeline.
  */

@@ -18,7 +18,7 @@ import {
   getDeliveryLogByLetterId,
 } from "../../db";
 import { storagePut } from "../../storage";
-import { processSubscriberFeedback, retryFromRejected, sendLetterToRecipientFlow } from "../../services/letters";
+import { processSubscriberFeedback, retryFromRejected, sendLetterToRecipientFlow, getSubscriberReleasedLetterProcedure } from "../../services/letters";
 
 export const subscriberProcedures = {
   myLetters: subscriberProcedure.query(async ({ ctx }) => {
@@ -28,10 +28,13 @@ export const subscriberProcedures = {
   detail: subscriberProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      const letter = await getLetterRequestSafeForSubscriber(
+      // (PROCEDURE 6: getSubscriberReleasedLetterProcedure)
+      // Check for 24h gate release before returning details
+      const letter = await getSubscriberReleasedLetterProcedure(
         input.id,
         ctx.user.id
       );
+
       if (!letter)
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -41,14 +44,13 @@ export const subscriberProcedures = {
 
       // Free-preview lead-magnet path: if this letter is on the first-letter
       // free-trial path AND the 24-hour cooling window has elapsed, tell the
-      // versions query to skip ai_draft truncation. The UI renders the full
-      // draft with a DRAFT watermark + non-selectable text (see
-      // client/src/components/FreePreviewViewer.tsx). The unlock gate is a
-      // simple server-side timestamp comparison — no payment required.
+      // versions query to skip ai_draft truncation.
+      // Note: Procedurally we now use 'letter_released_to_subscriber' as the released state.
       const freePreviewUnlocked =
-        letter.isFreePreview === true &&
-        letter.freePreviewUnlockAt instanceof Date &&
-        letter.freePreviewUnlockAt.getTime() <= Date.now();
+        letter.status === "letter_released_to_subscriber" ||
+        (letter.isFreePreview === true &&
+          letter.freePreviewUnlockAt instanceof Date &&
+          letter.freePreviewUnlockAt.getTime() <= Date.now());
 
       const versions = await getLetterVersionsByRequestId(
         input.id,
