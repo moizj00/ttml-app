@@ -12,8 +12,8 @@ interface Props {
 }
 
 export function DiffPanel({ versions }: Props) {
-  const aiDraft = versions?.find((v) => v.versionType === "ai_draft");
-  const attorneyEdit = versions?.find((v) => v.versionType === "attorney_edit");
+  const aiDraft = versions?.find(v => v.versionType === "ai_draft");
+  const attorneyEdit = versions?.find(v => v.versionType === "attorney_edit");
 
   const tokens = useMemo(() => {
     if (!aiDraft || !attorneyEdit) return null;
@@ -24,8 +24,12 @@ export function DiffPanel({ versions }: Props) {
 
   const stats = useMemo(() => {
     if (!tokens) return null;
-    const added = tokens.filter((t) => t.type === "added").reduce((n, t) => n + t.value.split(/\s+/).filter(Boolean).length, 0);
-    const removed = tokens.filter((t) => t.type === "removed").reduce((n, t) => n + t.value.split(/\s+/).filter(Boolean).length, 0);
+    const added = tokens
+      .filter(t => t.type === "added")
+      .reduce((n, t) => n + t.value.split(/\s+/).filter(Boolean).length, 0);
+    const removed = tokens
+      .filter(t => t.type === "removed")
+      .reduce((n, t) => n + t.value.split(/\s+/).filter(Boolean).length, 0);
     return { added, removed };
   }, [tokens]);
 
@@ -33,7 +37,9 @@ export function DiffPanel({ versions }: Props) {
     return (
       <Card className="h-full border-border">
         <CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">No versions available to compare.</p>
+          <p className="text-xs text-muted-foreground">
+            No versions available to compare.
+          </p>
         </CardContent>
       </Card>
     );
@@ -44,7 +50,9 @@ export function DiffPanel({ versions }: Props) {
       <Card className="h-full border-border">
         <CardContent className="p-3">
           <p className="text-xs text-muted-foreground">
-            {!aiDraft ? "AI draft not yet available." : "No attorney edits yet — the diff will appear once you make changes."}
+            {!aiDraft
+              ? "Draft not yet available."
+              : "No attorney edits yet — the diff will appear once you make changes."}
           </p>
         </CardContent>
       </Card>
@@ -57,9 +65,15 @@ export function DiffPanel({ versions }: Props) {
         {/* Stats bar */}
         {stats && (
           <div className="flex items-center gap-3 text-xs pb-1 border-b border-border">
-            <span className="text-green-700 font-medium">+{stats.added} words added</span>
-            <span className="text-red-600 font-medium">−{stats.removed} words removed</span>
-            <span className="text-muted-foreground ml-auto">AI draft → Your edit</span>
+            <span className="text-green-700 font-medium">
+              +{stats.added} words added
+            </span>
+            <span className="text-red-600 font-medium">
+              −{stats.removed} words removed
+            </span>
+            <span className="text-muted-foreground ml-auto">
+              Initial draft → Your edit
+            </span>
           </div>
         )}
 
@@ -71,14 +85,20 @@ export function DiffPanel({ versions }: Props) {
             }
             if (token.type === "added") {
               return (
-                <mark key={i} className="bg-green-100 text-green-800 rounded-sm px-0.5 no-underline">
+                <mark
+                  key={i}
+                  className="bg-green-100 text-green-800 rounded-sm px-0.5 no-underline"
+                >
                   {token.value}
                 </mark>
               );
             }
             // removed
             return (
-              <del key={i} className="bg-red-100 text-red-700 rounded-sm px-0.5 line-through">
+              <del
+                key={i}
+                className="bg-red-100 text-red-700 rounded-sm px-0.5 line-through"
+              >
                 {token.value}
               </del>
             );

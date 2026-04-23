@@ -41,7 +41,9 @@ export function ChangesDialog({
           </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground -mt-1">
-          The subscriber will be notified and asked to provide additional information or corrections. The letter will return to the review queue once they respond.
+          The subscriber will be notified and asked to provide additional
+          information or corrections. The letter will return to the review queue
+          once they respond.
         </p>
         <div className="space-y-4">
           <div>
@@ -68,7 +70,10 @@ export function ChangesDialog({
                 className="rounded mt-0.5"
               />
               <div>
-                <label htmlFor="retrigger" className="text-sm font-medium text-foreground cursor-pointer">
+                <label
+                  htmlFor="retrigger"
+                  className="text-sm font-medium text-foreground cursor-pointer"
+                >
                   Re-run research & drafting pipeline
                 </label>
                 <p className="text-xs text-muted-foreground mt-0.5">
