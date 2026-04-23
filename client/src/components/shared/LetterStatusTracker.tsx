@@ -20,12 +20,11 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   researching:
     "We're researching relevant laws and regulations for your matter.",
   drafting: "Your letter is being drafted based on our research.",
-  ai_generation_completed_hidden:
-    "Research and drafting complete. Final quality checks are being performed.",
+  AI_GENERATION_COMPLETED_HIDDEN:
+    "Research and drafting complete. Final quality evaluation is being performed.",
   letter_released_to_subscriber:
-    "Your draft is ready. Review it below and submit for attorney review.",
-  generated_locked:
-    "Your draft is ready. Unlock to proceed with attorney review.",
+    "Your draft is ready. View details to proceed.",
+  generated_locked: "Your draft is ready. Proceed with attorney review.",
   generated_unlocked: "Your draft is ready for attorney review.",
   pending_review:
     "Your letter is in the attorney review queue. A licensed attorney will pick it up shortly.",
