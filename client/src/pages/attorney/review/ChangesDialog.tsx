@@ -69,12 +69,12 @@ export function ChangesDialog({
               />
               <div>
                 <label htmlFor="retrigger" className="text-sm font-medium text-foreground cursor-pointer">
-                  Re-run AI drafting pipeline
+                  Re-run research & drafting pipeline
                 </label>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {retrigger
-                    ? "The full AI pipeline (research + draft) will re-run with the subscriber's updated information."
-                    : "The letter will return to the review queue for a light manual edit — no pipeline re-run."}
+                    ? "The full research & drafting process will re-run with the subscriber's updated information."
+                    : "The letter will return to the review queue for a light manual edit — no automation re-run."}
                 </p>
               </div>
             </div>

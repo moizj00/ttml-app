@@ -8,7 +8,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { FileText, ArrowRight, Clock, AlertTriangle, CheckCircle, Scale } from "lucide-react";
+import {
+  FileText,
+  ArrowRight,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  Scale,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import PublicNav from "@/components/shared/PublicNav";
@@ -40,7 +47,7 @@ export default function ClientPortal() {
     }
 
     fetch(`/api/portal/${encodeURIComponent(token)}`)
-      .then(async (res) => {
+      .then(async res => {
         const json = await res.json();
         if (!res.ok) {
           setState({
@@ -53,7 +60,10 @@ export default function ClientPortal() {
         }
       })
       .catch(() => {
-        setState({ status: "error", message: "Could not load letter. Please try again." });
+        setState({
+          status: "error",
+          message: "Could not load letter. Please try again.",
+        });
       });
   }, [token]);
 
@@ -68,7 +78,6 @@ export default function ClientPortal() {
       <PublicBreadcrumb items={[{ label: "Your Letter" }]} />
 
       <main className="pb-16 px-4 max-w-3xl mx-auto">
-
         {state.status === "loading" && (
           <div className="mt-16 flex flex-col items-center gap-4 text-muted-foreground">
             <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
@@ -81,7 +90,9 @@ export default function ClientPortal() {
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-red-50 mb-4">
               <AlertTriangle className="w-7 h-7 text-red-500" />
             </div>
-            <h1 className="text-xl font-bold text-slate-900 mb-2">Link Unavailable</h1>
+            <h1 className="text-xl font-bold text-slate-900 mb-2">
+              Link Unavailable
+            </h1>
             <p className="text-slate-600 text-sm mb-6 max-w-sm mx-auto">
               {state.message}
               {state.expired && (
@@ -105,8 +116,12 @@ export default function ClientPortal() {
                   <Scale className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-slate-900">Attorney-Reviewed Legal Letter</h1>
-                  <p className="text-xs text-slate-500">Delivered via Talk to My Lawyer</p>
+                  <h1 className="text-lg font-bold text-slate-900">
+                    Attorney-Reviewed Legal Letter
+                  </h1>
+                  <p className="text-xs text-slate-500">
+                    Delivered via Talk to My Lawyer
+                  </p>
                 </div>
               </div>
 
@@ -120,7 +135,10 @@ export default function ClientPortal() {
                     For: {state.data.recipientName}
                   </Badge>
                 )}
-                <Badge variant="outline" className="gap-1.5 text-xs text-slate-500">
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 text-xs text-slate-500"
+                >
                   <Clock className="w-3 h-3" />
                   Expires {new Date(state.data.expiresAt).toLocaleDateString()}
                 </Badge>
@@ -131,7 +149,9 @@ export default function ClientPortal() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <FileText className="w-4 h-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Letter Content</span>
+                <span className="text-sm font-medium text-slate-700">
+                  Letter Content
+                </span>
               </div>
               <div className="px-6 py-6">
                 <pre className="font-['Inter'] text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
@@ -142,12 +162,17 @@ export default function ClientPortal() {
 
             {/* CTA: respond via TTML */}
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-md">
-              <h2 className="text-base font-bold mb-1">Need to respond to this letter?</h2>
+              <h2 className="text-base font-bold mb-1">
+                Need to respond to this letter?
+              </h2>
               <p className="text-blue-100 text-sm mb-4 leading-relaxed">
-                Talk to My Lawyer can help you draft and send an attorney-reviewed response. Our platform
-                connects you with licensed attorneys for a fraction of traditional legal costs.
+                Talk to My Lawyer can help you draft and send an
+                attorney-reviewed response. Our platform connects you with
+                licensed attorneys for a fraction of traditional legal costs.
               </p>
-              <Link href={`/signup?ref=portal&token=${encodeURIComponent(token ?? "")}`}>
+              <Link
+                href={`/signup?ref=portal&token=${encodeURIComponent(token ?? "")}`}
+              >
                 <Button
                   className="bg-white text-blue-700 hover:bg-blue-50 font-semibold gap-2 shadow-sm"
                   size="sm"
@@ -169,12 +194,12 @@ export default function ClientPortal() {
 
             {/* Disclaimer */}
             <p className="text-xs text-slate-400 text-center leading-relaxed">
-              This letter was generated with AI assistance and reviewed by a licensed California attorney.
-              This portal link is private and expires automatically. It is not legal advice.
+              This letter was drafted by professional systems and reviewed by a
+              licensed California attorney. This portal link is private and
+              expires automatically. It is not legal advice.
             </p>
           </div>
         )}
-
       </main>
     </div>
   );
