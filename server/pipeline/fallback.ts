@@ -274,10 +274,19 @@ export async function bestEffortFallback(opts: {
     }
 
     // Send subscriber "letter ready" email (reuse the status-check read from above)
+    // Skip for free-preview letters: they're served by the dedicated
+    // freePreviewEmailCron at the 24h unlock. Sending the generic "$50
+    // attorney review" letter-ready email here would contradict the
+    // waiting-card UI the subscriber sees on the free-preview path.
     try {
       const letterRecord = await getLetterById(letterId);
       const wasAlreadyUnlocked = letterRecord ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
-      if (letterRecord && !wasAlreadyUnlocked && letterRecord.userId != null) {
+      if (
+        letterRecord &&
+        !wasAlreadyUnlocked &&
+        !letterRecord.isFreePreview &&
+        letterRecord.userId != null
+      ) {
         const subscriber = await getUserById(letterRecord.userId);
         if (subscriber?.email) {
           const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterRecord.userId!);
@@ -292,6 +301,11 @@ export async function bestEffortFallback(opts: {
             isFirstLetter,
           }).catch(e => fallbackLogger.error({ err: e, letterId }, "[Pipeline] Failed to send letter-ready email for fallback"));
         }
+      } else if (letterRecord?.isFreePreview) {
+        fallbackLogger.info(
+          { letterId },
+          "[Pipeline] Skipping letter-ready email for fallback — free-preview path owns this"
+        );
       }
     } catch (emailErr) {
       fallbackLogger.error({ err: emailErr, letterId }, "[Pipeline] Failed to send subscriber email for fallback draft");

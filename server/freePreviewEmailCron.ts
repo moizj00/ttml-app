@@ -30,7 +30,7 @@
  *   a failure state — we still send the email so the subscriber is informed.
  */
 
-import { and, isNull, isNotNull, lte, eq } from "drizzle-orm";
+import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -39,6 +39,29 @@ import { sendFreePreviewReadyEmail } from "./email";
 import { createLogger } from "./logger";
 
 const freePreviewLogger = createLogger({ module: "FreePreviewEmails" });
+
+/**
+ * Letter statuses for which the free-preview "your draft is ready to preview"
+ * email is still meaningful. Once a letter advances past these (i.e. the
+ * subscriber paid early or an attorney started reviewing), the cron and the
+ * admin force-unlock mutation must NOT fire the email — the subscriber is
+ * already seeing the attorney-review flow and a stale "preview ready" email
+ * would collide with it.
+ *
+ * `pipeline_failed` is intentionally included: the cron docstring commits to
+ * still emailing the subscriber even when generation bombed, so they aren't
+ * left wondering. The preview page then renders a failure state.
+ *
+ * Exported so server/routers/admin/letters.ts can use the same allow-list for
+ * its `forceFreePreviewUnlock` status guard — single source of truth.
+ */
+export const FREE_PREVIEW_ELIGIBLE_STATUSES = [
+  "submitted",
+  "researching",
+  "drafting",
+  "generated_locked",
+  "pipeline_failed",
+] as const;
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -111,11 +134,19 @@ export async function dispatchFreePreviewIfReady(
 
   // Atomic claim. If another caller beats us to the stamp, the WHERE clause
   // no longer matches and RETURNING is empty — we skip without side effects.
+  // The status filter prevents the email from firing once a subscriber has
+  // paid early (letter transitioned to `pending_review` or beyond) — the
+  // dispatcher would otherwise happily send a "preview is ready" email for
+  // a letter that's already with an attorney or delivered.
   const claimFilters = [
     eq(letterRequests.id, letterId),
     eq(letterRequests.isFreePreview, true),
     isNull(letterRequests.freePreviewEmailSentAt),
     lte(letterRequests.freePreviewUnlockAt, now),
+    inArray(
+      letterRequests.status,
+      FREE_PREVIEW_ELIGIBLE_STATUSES as unknown as any[]
+    ),
   ];
   if (requireDraft) {
     claimFilters.push(isNotNull(letterRequests.currentAiDraftVersionId));
@@ -237,7 +268,14 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
       and(
         eq(letterRequests.isFreePreview, true),
         isNull(letterRequests.freePreviewEmailSentAt),
-        lte(letterRequests.freePreviewUnlockAt, now)
+        lte(letterRequests.freePreviewUnlockAt, now),
+        // Skip letters that have progressed past the pre-review band (e.g.
+        // subscriber paid early, attorney already reviewing). The dispatcher
+        // also enforces this, but filtering here avoids wasted work.
+        inArray(
+          letterRequests.status,
+          FREE_PREVIEW_ELIGIBLE_STATUSES as unknown as any[]
+        )
       )
     );
 

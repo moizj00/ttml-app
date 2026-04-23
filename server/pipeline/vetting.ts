@@ -598,8 +598,18 @@ export async function finalizeLetterAfterVetting(
   const wasAlreadyUnlocked = letterForPaywall ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
 
   // ── Subscriber "letter ready" email (normal completion path) ─────────────────
+  // Skip for free-preview letters: they're served by the dedicated
+  // freePreviewEmailCron (which fires at the 24h unlock), so emitting the
+  // generic "$50 attorney review" letter-ready email now would contradict
+  // the waiting-card UI the subscriber is looking at.
   try {
-    if (letterForPaywall && !letterForPaywall.submittedByAdmin && !wasAlreadyUnlocked && letterForPaywall.userId != null) {
+    if (
+      letterForPaywall &&
+      !letterForPaywall.submittedByAdmin &&
+      !wasAlreadyUnlocked &&
+      !letterForPaywall.isFreePreview &&
+      letterForPaywall.userId != null
+    ) {
       const subscriber = await getUserById(letterForPaywall.userId);
       if (subscriber?.email) {
         const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterForPaywall.userId);
@@ -614,6 +624,10 @@ export async function finalizeLetterAfterVetting(
           isFirstLetter,
         }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to send letter-ready email for #${letterId}:`));
       }
+    } else if (letterForPaywall?.isFreePreview) {
+      logger.info(
+        `[Pipeline] Skipping letter-ready email for #${letterId} — free-preview path owns this`
+      );
     }
   } catch (emailErr) {
     logger.error({ err: emailErr }, `[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`);
