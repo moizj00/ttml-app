@@ -85,6 +85,11 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
   // Letters whose status changed to generated_locked at least 24 hours ago
   const minWaitThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+  // Exclude free-preview letters: they're owned by freePreviewEmailCron,
+  // which sends the dedicated "your preview is ready" email at the 24h
+  // unlock. Without this filter a free-preview letter still in
+  // `generated_locked` after 24h would match BOTH crons and the subscriber
+  // would receive two conflicting emails (free preview + "$50 unlock").
   const eligibleLetters = await db
     .select()
     .from(letterRequests)
@@ -93,6 +98,7 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
         eq(letterRequests.status, "generated_locked"),
         eq(letterRequests.draftReadyEmailSent, false),
         eq(letterRequests.submittedByAdmin, false),
+        eq(letterRequests.isFreePreview, false),
         lt(letterRequests.lastStatusChangedAt, minWaitThreshold)
       )
     );

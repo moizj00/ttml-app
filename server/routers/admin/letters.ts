@@ -23,7 +23,10 @@ import { forceStatusTransition, diagnoseAndRepairLetterState } from "../../servi
 import { logger } from "../../logger";
 import { letterRequests } from "../../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { dispatchFreePreviewIfReady } from "../../freePreviewEmailCron";
+import {
+  dispatchFreePreviewIfReady,
+  FREE_PREVIEW_ELIGIBLE_STATUSES,
+} from "../../freePreviewEmailCron";
 
 export const adminLettersProcedures = {
   allLetters: adminProcedure
@@ -223,6 +226,26 @@ export const adminLettersProcedures = {
           code: "BAD_REQUEST",
           message:
             "Letter is not on the free-preview path. This action is only available for letters flagged as first-letter free preview.",
+        });
+      }
+
+      // Status guard: reject force-unlock on letters that have already
+      // progressed to attorney review or beyond. Without this, an admin could
+      // re-fire the "free preview is ready" email for a letter that's already
+      // approved or delivered — confusing the subscriber and contradicting
+      // the attorney-review UI they're already looking at.
+      if (
+        !(FREE_PREVIEW_ELIGIBLE_STATUSES as readonly string[]).includes(
+          letter.status
+        )
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            `Letter is in '${letter.status}'; free-preview force-unlock is only valid in ` +
+            `pre-review statuses (submitted, researching, drafting, generated_locked, ` +
+            `pipeline_failed). This letter has already progressed to attorney review ` +
+            `or delivery.`,
         });
       }
 
