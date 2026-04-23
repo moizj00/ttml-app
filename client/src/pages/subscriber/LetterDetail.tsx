@@ -444,6 +444,10 @@ export default function LetterDetail() {
           </div>
         </div>
 
+        {["client_approval_pending", "needs_changes"].includes(
+          letter.status
+        ) && <TransitionBanner status={letter.status} />}
+
         <LetterStatusDisplay status={letter.status} />
 
         {/*
