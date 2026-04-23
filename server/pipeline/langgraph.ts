@@ -44,7 +44,9 @@ export function preflightApiKeyCheck(): { ok: boolean; missing: string[] } {
   // Perplexity is preferred for research but the graph will fall back to
   // Claude haiku if missing — so we only warn, not fail.
   if (!process.env.PERPLEXITY_API_KEY) {
-    log.warn("[LangGraph] PERPLEXITY_API_KEY not set — research will fall back to Claude");
+    log.warn(
+      "[LangGraph] PERPLEXITY_API_KEY not set — research will fall back to Claude"
+    );
   }
   return { ok: missing.length === 0, missing };
 }
@@ -55,6 +57,7 @@ export async function runPipeline(
   letterId: number,
   intake: IntakeJson,
   userId?: number,
+  isFreePreview?: boolean
 ): Promise<PipelineResult> {
   const pre = preflightApiKeyCheck();
   if (!pre.ok) {
@@ -66,12 +69,16 @@ export async function runPipeline(
   }
 
   try {
-    log.info({ letterId, userId }, "[LangGraph Shim] Invoking runLangGraphPipeline");
+    log.info(
+      { letterId, userId, isFreePreview },
+      "[LangGraph Shim] Invoking runLangGraphPipeline"
+    );
     const finalState = await runLangGraphPipeline({
       letterId,
       userId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       intake: intake as any,
+      isFreePreview,
     });
 
     // runLangGraphPipeline returns the final StateGraph state which should
@@ -105,7 +112,7 @@ export async function runPipeline(
 export async function* runPipelineStreaming(
   letterId: number,
   intake: IntakeJson,
-  userId?: number,
+  userId?: number
 ): AsyncGenerator<PipelineStreamEvent, PipelineResult, void> {
   yield { type: "stage_start", stage: "research" };
   const result = await runPipeline(letterId, intake, userId);

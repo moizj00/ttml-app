@@ -148,7 +148,8 @@ export async function runFullPipeline(
     jurisdictionCity?: string | null;
     letterType: string;
   },
-  userId?: number
+  userId?: number,
+  isFreePreview?: boolean
 ): Promise<void> {
   const intakeCheck = validateIntakeCompleteness(intake);
   if (!intakeCheck.valid) {
@@ -167,7 +168,7 @@ export async function runFullPipeline(
   const useLangGraph = process.env.PIPELINE_MODE === "langgraph";
   if (useLangGraph) {
     orchLogger.info({ letterId }, "[Pipeline] Using LangGraph pipeline (PIPELINE_MODE=langgraph)");
-    const result = await runLangGraphPipeline(letterId, intake, userId);
+    const result = await runLangGraphPipeline(letterId, intake, userId, isFreePreview);
     if (!result.success) {
       throw new PipelineError(
         (result.errorCode as PipelineErrorCode) ?? PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,

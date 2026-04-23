@@ -57,7 +57,8 @@ export const PipelineState = Annotation.Root({
    * contribute one entry without clobbering prior contributions.
    */
   sharedContext: Annotation<SharedContext>({
-    reducer: (current, update) => mergeSharedContext(current, update as Partial<SharedContext>),
+    reducer: (current, update) =>
+      mergeSharedContext(current, update as Partial<SharedContext>),
     default: emptySharedContext,
   }),
 
@@ -143,6 +144,12 @@ export const PipelineState = Annotation.Root({
   currentStage: Annotation<string>({
     reducer: (_, update) => update,
     default: () => "init",
+  }),
+
+  /** True if this is a free preview letter (affects status on completion) */
+  isFreePreview: Annotation<boolean>({
+    reducer: (_, update) => update,
+    default: () => false,
   }),
 });
 

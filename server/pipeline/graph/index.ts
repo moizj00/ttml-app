@@ -16,13 +16,18 @@ const log = createLogger({ module: "LangGraph:Graph" });
 
 /** After vetting: loop back to draft (max 2 retries), fail on errors, or finalize */
 function routeAfterVetting(state: PipelineStateType): string {
-  const { qualityDegraded, retryCount, errorRetryCount, assembledLetter } = state;
+  const { qualityDegraded, retryCount, errorRetryCount, assembledLetter } =
+    state;
 
   // If too many node errors or no draft content was ever produced → fail fast
   if (errorRetryCount >= 3 || !assembledLetter) {
     log.error(
-      { letterId: state.letterId, errorRetryCount, hasContent: !!assembledLetter },
-      "[Graph] Too many errors or empty draft — routing to fail",
+      {
+        letterId: state.letterId,
+        errorRetryCount,
+        hasContent: !!assembledLetter,
+      },
+      "[Graph] Too many errors or empty draft — routing to fail"
     );
     return "fail";
   }
@@ -30,7 +35,7 @@ function routeAfterVetting(state: PipelineStateType): string {
   if (qualityDegraded && retryCount < 2) {
     log.info(
       { letterId: state.letterId, retryCount, qualityDegraded },
-      "[Graph] Vetting degraded — routing back to draft",
+      "[Graph] Vetting degraded — routing back to draft"
     );
     return "draft";
   }
@@ -40,11 +45,15 @@ function routeAfterVetting(state: PipelineStateType): string {
 
 // ─── Vetting router node (wraps vettingNode + increments retryCount on redraft) ───
 
-async function vettingRouterNode(state: PipelineStateType): Promise<Partial<PipelineStateType>> {
+async function vettingRouterNode(
+  state: PipelineStateType
+): Promise<Partial<PipelineStateType>> {
   const result = await vettingNode(state);
 
   // Increment retryCount for next draft iteration if quality is degraded
-  const retryCount = result.qualityDegraded ? state.retryCount + 1 : state.retryCount;
+  const retryCount = result.qualityDegraded
+    ? state.retryCount + 1
+    : state.retryCount;
 
   return { ...result, retryCount };
 }
@@ -53,14 +62,19 @@ async function vettingRouterNode(state: PipelineStateType): Promise<Partial<Pipe
 
 function withErrorRecovery(
   nodeName: string,
-  nodeFn: (state: PipelineStateType) => Promise<Partial<PipelineStateType>>,
+  nodeFn: (state: PipelineStateType) => Promise<Partial<PipelineStateType>>
 ) {
-  return async (state: PipelineStateType): Promise<Partial<PipelineStateType>> => {
+  return async (
+    state: PipelineStateType
+  ): Promise<Partial<PipelineStateType>> => {
     try {
       return await nodeFn(state);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      log.error({ letterId: state.letterId, node: nodeName, err: errMsg }, "[Graph] Node error");
+      log.error(
+        { letterId: state.letterId, node: nodeName, err: errMsg },
+        "[Graph] Node error"
+      );
       return {
         lastErrorStage: nodeName,
         errorRetryCount: state.errorRetryCount + 1,
@@ -130,6 +144,7 @@ export interface RunLangGraphPipelineOptions {
   letterId: number;
   userId?: number;
   intake: Record<string, any>;
+  isFreePreview?: boolean;
 }
 
 /**
@@ -140,11 +155,11 @@ export interface RunLangGraphPipelineOptions {
  * or it can be called directly for testing.
  */
 export async function runLangGraphPipeline(
-  opts: RunLangGraphPipelineOptions,
+  opts: RunLangGraphPipelineOptions
 ): Promise<PipelineStateType> {
-  const { letterId, userId = 0, intake } = opts;
+  const { letterId, userId = 0, intake, isFreePreview = false } = opts;
 
-  log.info({ letterId }, "[Graph] Starting LangGraph pipeline");
+  log.info({ letterId, isFreePreview }, "[Graph] Starting LangGraph pipeline");
 
   const graph = getCompiledGraph();
 
@@ -152,6 +167,7 @@ export async function runLangGraphPipeline(
     letterId,
     userId,
     intake,
+    isFreePreview,
     messages: [],
     retryCount: 0,
     errorRetryCount: 0,
@@ -173,7 +189,7 @@ export async function runLangGraphPipeline(
       researchUnverified: finalState.researchUnverified,
       retryCount: finalState.retryCount,
     },
-    "[Graph] LangGraph pipeline completed",
+    "[Graph] LangGraph pipeline completed"
   );
 
   return finalState as PipelineStateType;
@@ -184,7 +200,7 @@ export async function runLangGraphPipeline(
  * Yields state snapshots after each node completes.
  */
 export async function* streamLangGraphPipeline(
-  opts: RunLangGraphPipelineOptions,
+  opts: RunLangGraphPipelineOptions
 ): AsyncGenerator<{ node: string; state: Partial<PipelineStateType> }> {
   const { letterId, userId = 0, intake } = opts;
   const graph = getCompiledGraph();
@@ -200,9 +216,14 @@ export async function* streamLangGraphPipeline(
     currentStage: "research",
   };
 
-  for await (const event of await graph.streamEvents(initialState, { version: "v2" })) {
+  for await (const event of await graph.streamEvents(initialState, {
+    version: "v2",
+  })) {
     if (event.event === "on_chain_end" && event.name !== "LangGraph") {
-      yield { node: event.name, state: event.data?.output as Partial<PipelineStateType> };
+      yield {
+        node: event.name,
+        state: event.data?.output as Partial<PipelineStateType>,
+      };
     }
   }
 }
