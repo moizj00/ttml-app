@@ -19,7 +19,11 @@ import {
   users,
   workflowJobs,
 } from "../../drizzle/schema";
-import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
+import type {
+  InsertUser,
+  InsertPipelineLesson,
+  InsertLetterQualityScore,
+} from "../../drizzle/schema";
 import { getDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
@@ -93,25 +97,37 @@ export async function getLetterVersionsByRequestId(
     .orderBy(desc(letterVersions.createdAt));
 
   if (letterStatus === "generated_locked") {
-    return rows.map((v) => {
+    return rows.map(v => {
       if (v.versionType === "ai_draft" && v.content) {
         // Free-preview lead-magnet override: return the full draft, stamped
         // with `freePreview: true` so the frontend can route to the
         // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
         if (freePreviewUnlocked) {
-          return { ...v, truncated: false, freePreview: true as const };
+          // Remove PII redaction for unlocked free previews.
+          return {
+            ...v,
+            truncated: false,
+            freePreview: true as const,
+            isRedacted: false,
+          };
         }
         // Pre-unlock free-preview: do NOT leak even the 20% slice. The UI
         // shows <FreePreviewWaiting/> based on the `freePreviewWaiting` flag.
         if (isFreePreview) {
-          return { ...v, content: "", truncated: true, freePreviewWaiting: true as const };
+          return {
+            ...v,
+            content: "",
+            truncated: true,
+            freePreviewWaiting: true as const,
+          };
         }
+        // Standard truncation for paid paywall
         return { ...v, content: truncateContent(v.content), truncated: true };
       }
       return { ...v, truncated: false };
     });
   }
-  return rows.map((v) => ({ ...v, truncated: false }));
+  return rows.map(v => ({ ...v, truncated: false }));
 }
 
 function truncateContent(content: string): string {
@@ -130,4 +146,3 @@ export async function getLetterVersionById(id: number) {
     .limit(1);
   return result[0];
 }
-
