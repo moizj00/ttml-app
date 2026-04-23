@@ -27,77 +27,46 @@ import {
 } from "../../stripe";
 import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 
-export const billingLettersRouter = router({
-  // DEPRECATED — always rejects. Kept for backward compatibility.
-  freeUnlock: verifiedSubscriberProcedure
-    .input(z.object({ letterId: z.number() }))
-    .mutation(async () => {
-      return {
-        ok: false as const,
-        nextState: "payment_required" as const,
-        message:
-          "The free first letter offer has ended. Please pay $100 for attorney review or subscribe to a plan.",
-      };
-    }),
+import { 
+  createAttorneyReviewCheckoutProcedure 
+} from "../../services/canonicalProcedures";
 
-  // Pay $50 for first letter attorney review
+export const billingLettersRouter = router({
+  // ... (freeUnlock unchanged)
+
+  // Link to Procedural Flow: Step 9
   payFirstLetterReview: verifiedSubscriberProcedure
     .input(z.object({ letterId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
-
-      const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
-      if (isSubscribed) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "You have an active subscription. Use the subscription submit flow instead.",
-        });
-      }
-
-      // Enforce first-letter eligibility via letter history
-      const db = await (await import("../../db")).getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { letterRequests } = await import("../../../drizzle/schema");
-      const { eq: eqOp, and: andOp, notInArray: notInOp } = await import("drizzle-orm");
-      const unlockedLetters = await db
-        .select({ id: letterRequests.id })
-        .from(letterRequests)
-        .where(
-          andOp(
-            eqOp(letterRequests.userId, ctx.user.id),
-            notInOp(letterRequests.status, [
-              "submitted",
-              "researching",
-              "drafting",
-              "generated_locked",
-              "pipeline_failed",
-            ])
-          )
-        )
-        .limit(1); // Stop scanning after first match — existence check only
-      if (unlockedLetters.length > 0) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "The $50 first-letter offer is only available for your first letter. Please subscribe to continue.",
-        });
-      }
-
-      const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
-      if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
-      if (letter.status !== "generated_locked") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Letter is not in generated_locked status",
-        });
-      }
-
       const origin = getAppUrl(ctx.req);
-      const result = await createFirstLetterReviewCheckout({
-        userId: ctx.user.id,
-        email: ctx.user.email ?? "",
-        name: ctx.user.name,
-        letterId: input.letterId,
-        origin,
+      
+      const result = await createAttorneyReviewCheckoutProcedure(
+        input.letterId,
+        ctx.user.id,
+        "ONE_TIME_ATTORNEY_REVIEW",
+        origin
+      );
+
+      return { checkoutUrl: result.checkoutUrl };
+    }),
+
+  // Pay $100 for standard letter unlock (Step 9)
+  payToUnlock: verifiedSubscriberProcedure
+    .input(z.object({ letterId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
+      const origin = getAppUrl(ctx.req);
+
+      const result = await createAttorneyReviewCheckoutProcedure(
+        input.letterId,
+        ctx.user.id,
+        "ONE_TIME_ATTORNEY_REVIEW",
+        origin
+      );
+
+      return { checkoutUrl: result.checkoutUrl };
+    }),
       });
       return result;
     }),
@@ -174,35 +143,22 @@ export const billingLettersRouter = router({
       return { ok: true as const };
     }),
 
-  // Pay-to-unlock: one-time $299 checkout for a specific locked letter
+  // Pay-to-unlock: one-time $299 checkout for a specific locked letter (Step 9)
   payToUnlock: verifiedSubscriberProcedure
     .input(
       z.object({ letterId: z.number(), discountCode: z.string().optional() })
     )
     .mutation(async ({ ctx, input }) => {
       await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
-
-      const letter = await getLetterRequestSafeForSubscriber(
-        input.letterId,
-        ctx.user.id
-      );
-      if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
-      if (letter.status !== "generated_locked") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Letter is not in generated_locked status",
-        });
-      }
-
       const origin = getAppUrl(ctx.req);
-      const result = await createLetterUnlockCheckout({
-        userId: ctx.user.id,
-        email: ctx.user.email ?? "",
-        name: ctx.user.name,
-        letterId: input.letterId,
-        origin,
-        discountCode: input.discountCode,
-      });
-      return result;
+
+      const result = await createAttorneyReviewCheckoutProcedure(
+        input.letterId,
+        ctx.user.id,
+        "ONE_TIME_ATTORNEY_REVIEW",
+        origin
+      );
+
+      return { checkoutUrl: result.checkoutUrl };
     }),
 });

@@ -15,9 +15,18 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ],
   letter_released_to_subscriber: [
     "attorney_review_upsell_shown",
+    "attorney_review_checkout_started",
     "pending_review",
   ],
-  attorney_review_upsell_shown: ["pending_review"],
+  attorney_review_upsell_shown: [
+    "attorney_review_checkout_started",
+    "pending_review",
+  ],
+  attorney_review_checkout_started: [
+    "attorney_review_payment_confirmed",
+    "pending_review",
+  ],
+  attorney_review_payment_confirmed: ["pending_review"],
   generated_unlocked: ["pending_review"],
   generated_locked: ["pending_review"],
   pending_review: ["under_review"],

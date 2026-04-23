@@ -31,6 +31,8 @@ export const LETTER_STATUSES = [
   "ai_generation_completed_hidden", // New: Procedure 4
   "letter_released_to_subscriber", // New: Procedure 5
   "attorney_review_upsell_shown", // New: Procedure 7
+  "attorney_review_checkout_started", // New: Procedure 9
+  "attorney_review_payment_confirmed", // New: Procedure 10
   "generated_locked",
   "pending_review",
   "under_review",
@@ -133,6 +135,8 @@ export const letterStatusEnum = pgEnum("letter_status", [
   "ai_generation_completed_hidden",
   "letter_released_to_subscriber",
   "attorney_review_upsell_shown",
+  "attorney_review_checkout_started",
+  "attorney_review_payment_confirmed",
   "generated_locked",
   "generated_unlocked", // legacy: kept in pgEnum for backward compatibility, not in active state machine
   "upsell_dismissed", // legacy: kept in pgEnum for backward compatibility, not in active state machine

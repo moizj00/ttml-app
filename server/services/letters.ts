@@ -44,6 +44,11 @@ import { logger } from "../logger";
 
 // ─── Submit Letter (subscriber path) ───────────────────────────────────────
 
+import {
+  submitSubscriberIntakeProcedure,
+  getSubscriberReleasedLetterProcedure as canonicalGetReleasedProcedure,
+} from "./canonicalProcedures";
+
 export interface SubmitLetterInput {
   letterType: string;
   subject: string;
@@ -65,184 +70,25 @@ export interface SubmitLetterContext {
 
 /**
  * Atomic claim → create → enqueue for subscriber letter submission.
- * Handles entitlement checking, free-trial and subscription usage claims,
- * letter creation with usage compensation on failure, pipeline enqueue,
- * and submission confirmation email + admin notification.
- *
- * (PROCEDURE 1: submitSubscriberIntakeProcedure)
+ * Delegates to submitSubscriberIntakeProcedure for the canonical flow.
  */
 export async function submitLetter(
   input: SubmitLetterInput,
   ctx: SubmitLetterContext
 ): Promise<{ letterId: number; status: string; isFreePreview: boolean }> {
-  const entitlement = await checkLetterSubmissionAllowed(ctx.userId);
-  if (!entitlement.allowed) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message:
-        entitlement.reason ??
-        "You are not allowed to submit a letter at this time.",
-    });
-  }
+  const result = await submitSubscriberIntakeProcedure(
+    ctx.userId,
+    input.intakeJson,
+    input.letterType
+  );
 
-  let isFreeTrialSubmission = false;
-  if (entitlement.firstLetterFree) {
-    isFreeTrialSubmission = true;
-    const claimed = await claimFreeTrialSlot(ctx.userId);
-    if (!claimed) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message:
-          "Your free first letter has already been used. Please subscribe to continue.",
-      });
-    }
-  } else if (entitlement.subscription) {
-    const incremented = await incrementLettersUsed(ctx.userId);
-    if (!incremented) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: `You have used all letter(s) in your plan. Please upgrade to continue.`,
-      });
-    }
-  }
+  return {
+    letterId: result.requestId,
+    status: result.status,
+    isFreePreview: result.status === "submitted", // Procedure sets it correctly in DB
+  };
+}
 
-  // ── Free-preview lead-magnet flow ─────────────────────────────────────
-  // For first-letter-free submissions, enter the 24-hour free-preview flow:
-  // the subscriber sees a progress modal now, the pipeline runs in the
-  // background, and 24 hours after submit the email-scheduler cron sends
-  // the "your draft is ready — preview it" email. The preview is the raw
-  // ai_draft (no attorney review) with a DRAFT watermark and a single
-  // "Submit For Attorney Review" CTA that routes to subscribe.
-  const FREE_PREVIEW_DELAY_HOURS = 24;
-  const freePreviewUnlockAt = isFreeTrialSubmission
-    ? new Date(Date.now() + FREE_PREVIEW_DELAY_HOURS * 60 * 60 * 1000)
-    : undefined;
-
-  let result: { insertId: number };
-  try {
-    result = await createLetterRequest({
-      userId: ctx.userId,
-      letterType: input.letterType,
-      subject: input.subject,
-      issueSummary: input.issueSummary,
-      jurisdictionCountry: input.jurisdictionCountry,
-      jurisdictionState: input.jurisdictionState,
-      jurisdictionCity: input.jurisdictionCity,
-      intakeJson: input.intakeJson,
-      priority: input.priority,
-      templateId: input.templateId,
-      isFreePreview: isFreeTrialSubmission,
-      freePreviewUnlockAt,
-    });
-  } catch (createErr) {
-    await _refundUsage(
-      ctx.userId,
-      isFreeTrialSubmission,
-      !!entitlement.subscription
-    );
-    throw createErr;
-  }
-  const letterId = result.insertId;
-
-  await logReviewAction({
-    letterRequestId: letterId,
-    reviewerId: ctx.userId,
-    actorType: "subscriber",
-    action: "letter_submitted",
-    fromStatus: undefined,
-    toStatus: "submitted",
-  });
-
-  const appUrl = getAppUrl(ctx.req);
-  if (ctx.email) {
-    sendLetterSubmissionEmail({
-      to: ctx.email,
-      name: ctx.name ?? "Subscriber",
-      subject: input.subject,
-      letterId,
-      letterType: input.letterType,
-      jurisdictionState: input.jurisdictionState,
-      appUrl,
-    }).catch(err => {
-      logger.error({ err }, "[Email] Submission confirmation failed:");
-      captureServerException(err, {
-        tags: { component: "letters", error_type: "submission_email_failed" },
-      });
-    });
-  }
-
-  // ── Simple Pipeline Mode ─────────────────────────────────────────────────
-  // When PIPELINE_MODE=simple, run the pipeline inline as a fire-and-forget
-  // Promise. This avoids setTimeout (which doesn't survive process restarts)
-  // while still returning immediately so the user sees the progress timeline.
-  const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
-  if (useSimplePipeline) {
-    logger.info(
-      { letterId },
-      "[Submit] Launching simple pipeline (PIPELINE_MODE=simple)"
-    );
-
-    // Fire-and-forget: do NOT await — return immediately to the subscriber
-    Promise.resolve().then(async () => {
-      try {
-        const result = await runSimplePipeline(
-          letterId,
-          input.intakeJson,
-          ctx.userId
-        );
-        if (!result.success) {
-          logger.error(
-            { letterId, error: result.error },
-            "[Submit] Simple pipeline failed"
-          );
-          await _refundUsage(
-            ctx.userId,
-            isFreeTrialSubmission,
-            !!entitlement.subscription
-          );
-          await createNotification({
-            userId: ctx.userId,
-            type: "letter_failed",
-            title: "Letter generation failed",
-            body: "We could not generate your letter. Your usage has been refunded. Please try again.",
-            link: `/dashboard/letters/${letterId}`,
-            category: "letters" satisfies NotificationCategory,
-          }).catch(() => {});
-        } else {
-          logger.info(
-            { letterId },
-            "[Submit] Simple pipeline completed successfully"
-          );
-        }
-      } catch (pipelineErr) {
-        logger.error(
-          { err: pipelineErr, letterId },
-          "[Submit] Simple pipeline threw an error"
-        );
-        captureServerException(pipelineErr, {
-          tags: { component: "simple-pipeline", error_type: "pipeline_failed" },
-        });
-        await _refundUsage(
-          ctx.userId,
-          isFreeTrialSubmission,
-          !!entitlement.subscription
-        );
-      }
-    });
-
-    logger.info({ letterId }, "[Submit] Pipeline launched, returning to user");
-  } else {
-    // ── Standard Queue-Based Pipeline ────────────────────────────────────────
-    try {
-      await enqueuePipelineJob({
-        type: "runPipeline",
-        letterId,
-        intake: input.intakeJson,
-        userId: ctx.userId,
-        appUrl,
-        label: "submit",
-        usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
-      });
     } catch (enqueueErr) {
       logger.error(
         { err: enqueueErr },
@@ -293,52 +139,24 @@ export async function submitLetter(
  * - If yes, transitions status to letter_released_to_subscriber.
  * - Returns the updated letter details.
  */
+/**
+ * PROCEDURE 6: getSubscriberReleasedLetterProcedure
+ * Delegates to the canonical implementation.
+ */
 export async function getSubscriberReleasedLetterProcedure(
   letterId: number,
   userId: number
 ) {
+  const result = await canonicalGetReleasedProcedure(letterId, userId);
   const letter = await getLetterRequestById(letterId);
-  if (!letter) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
-  }
+  
+  if (!letter) return null;
 
-  if (letter.userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
-
-  // If already released, just return
-  if (letter.status === "letter_released_to_subscriber") {
-    return letter;
-  }
-
-  // If this is a free preview in the "hidden" state, check if we can release it
-  if (
-    letter.isFreePreview &&
-    letter.status === "AI_GENERATION_COMPLETED_HIDDEN"
-  ) {
-    const unlockAt = letter.freePreviewUnlockAt
-      ? new Date(letter.freePreviewUnlockAt)
-      : null;
-    const now = new Date();
-
-    if (unlockAt && now >= unlockAt) {
-      await updateLetterStatus(letterId, "letter_released_to_subscriber");
-      // Log the release
-      await logReviewAction({
-        letterRequestId: letterId,
-        actorType: "system",
-        action: "ai_pipeline_completed", // reused or add new
-        noteText:
-          "Free professional draft released to subscriber after 24h gate.",
-        noteVisibility: "user_visible",
-        fromStatus: "AI_GENERATION_COMPLETED_HIDDEN",
-        toStatus: "letter_released_to_subscriber",
-      });
-      return await getLetterRequestById(letterId);
-    }
-  }
-
-  return letter;
+  return {
+    ...letter,
+    visibilityStatus: result.status,
+    isReleased: result.status === "visible"
+  };
 }
 
 /**
