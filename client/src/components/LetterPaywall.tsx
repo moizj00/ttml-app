@@ -46,6 +46,13 @@ interface LetterPaywallProps {
   lastStatusChangedAt?: string | Date | null;
   /** True once the 24h draft-ready email has been sent */
   draftReadyEmailSent?: boolean;
+  /**
+   * Defensive guard: free-preview lead-magnet letters must NEVER render the
+   * paid paywall ($299 CTA). The parent should branch to FreePreviewWaiting
+   * or FreePreviewViewer instead — this prop just hard-stops the render in
+   * case the branching order is reshuffled later.
+   */
+  __isFreePreview?: boolean;
 }
 
 const DRAFT_REVEAL_HOURS = 24;
@@ -58,6 +65,7 @@ export function LetterPaywall({
   qualityDegraded,
   lastStatusChangedAt,
   draftReadyEmailSent,
+  __isFreePreview,
 }: LetterPaywallProps) {
   // Determine whether the 24h reveal window has passed
   const isDraftRevealed = useMemo(() => {
@@ -388,6 +396,10 @@ export function LetterPaywall({
       </div>
     );
   };
+
+  // Defensive guard — free-preview lead-magnet letters must NEVER hit the
+  // paid paywall. Placed AFTER all hooks to comply with the rules of hooks.
+  if (__isFreePreview) return null;
 
   return (
     <>

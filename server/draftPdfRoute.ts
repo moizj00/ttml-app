@@ -76,6 +76,19 @@ export function registerDraftPdfRoute(app: Express) {
         return;
       }
 
+      // ── Free-preview cooling-window gate ──────────────────────────────────
+      // Free-preview letters cannot expose the draft PDF until the 24h
+      // unlock timestamp has elapsed (mirrors the in-app gate in
+      // server/db/letter-versions.ts and server/routers/versions.ts).
+      if (
+        letter.isFreePreview === true &&
+        (!(letter.freePreviewUnlockAt instanceof Date) ||
+          letter.freePreviewUnlockAt.getTime() > Date.now())
+      ) {
+        res.status(403).json({ error: "Free preview is not yet available" });
+        return;
+      }
+
       // ── Fetch the AI draft version ────────────────────────────────────────
       const versions = await getLetterVersionsByRequestId(letterId);
       const aiDraftVersion = versions.find(v => v.versionType === "ai_draft");

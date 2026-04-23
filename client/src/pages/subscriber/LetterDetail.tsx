@@ -2,6 +2,7 @@ import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { FreePreviewViewer } from "@/components/FreePreviewViewer";
+import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -239,22 +240,32 @@ export default function LetterDetail() {
 
         <LetterStatusDisplay status={letter.status} />
 
-        {isGeneratedLocked && (
-          /*
-           * Routing rule:
-           *   - If the server has stamped the ai_draft with `freePreview: true`,
-           *     the 24h cooling-off window has elapsed on a first-letter
-           *     free-trial letter → render FreePreviewViewer (full draft,
-           *     non-selectable, DRAFT watermark, subscribe CTA).
-           *   - Otherwise fall back to the standard LetterPaywall (truncated
-           *     preview, payment CTAs).
-           *
-           * The `freePreview` flag is added by server/db/letter-versions.ts
-           * only when letterRequests.isFreePreview === true AND
-           * freePreviewUnlockAt <= NOW() (enforced in subscriber router detail
-           * procedure). The client trusts that flag — it never sees the raw
-           * window logic.
-           */
+        {/*
+         * Routing rule (3-way):
+         *   a) Free-preview letter that hasn't unlocked yet (server has NOT
+         *      stamped the draft with `freePreview: true`) → show the
+         *      FreePreviewWaiting card with the 24h countdown. This branch is
+         *      intentionally hoisted OUT of `isGeneratedLocked` so the user
+         *      sees a consistent "preparing your draft" message throughout the
+         *      whole pre-unlock lifecycle (submitted → researching → drafting
+         *      → generated_locked).
+         *   b) `generated_locked` + free-preview unlocked (24h elapsed) →
+         *      FreePreviewViewer (full draft, non-selectable, DRAFT watermark,
+         *      subscribe CTA).
+         *   c) `generated_locked` non-free-preview → standard LetterPaywall
+         *      (truncated preview, payment CTAs).
+         *
+         * The `freePreview` flag is added by server/db/letter-versions.ts only
+         * when letterRequests.isFreePreview === true AND
+         * freePreviewUnlockAt <= NOW(). The client trusts that flag — it
+         * never sees the raw window logic.
+         */}
+        {letter.isFreePreview === true && (aiDraftVersion as any)?.freePreview !== true ? (
+          <FreePreviewWaiting
+            unlockAt={(letter as any).freePreviewUnlockAt ?? null}
+            subject={letter.subject}
+          />
+        ) : isGeneratedLocked ? (
           (aiDraftVersion as any)?.freePreview === true && aiDraftVersion?.content ? (
             <FreePreviewViewer
               letterId={letterId}
@@ -272,9 +283,10 @@ export default function LetterDetail() {
               qualityDegraded={letter.qualityDegraded === true}
               lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
               draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
+              __isFreePreview={letter.isFreePreview === true}
             />
           )
-        )}
+        ) : null}
 
         {letter.status === "client_approval_pending" && (
           <ClientApprovalBlock letterId={letterId} revisionCount={(letter as any).clientRevisionCount ?? 0} onApprove={invalidate} />
