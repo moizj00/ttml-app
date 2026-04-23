@@ -3,6 +3,7 @@ import StatusBadge from "@/components/shared/StatusBadge";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { FreePreviewViewer } from "@/components/FreePreviewViewer";
 import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
+import { FreePreviewConversionPopup } from "@/components/FreePreviewConversionPopup";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,6 +105,8 @@ export default function LetterDetail() {
   const [updateText, setUpdateText] = useState("");
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewModalDismissed, setPreviewModalDismissed] = useState(false);
+  const [conversionPopupOpen, setConversionPopupOpen] = useState(false);
+  const [lastPopupTime, setLastPopupTime] = useState<number>(0);
 
   const { data, isLoading, error } = trpc.letters.detail.useQuery(
     { id: letterId },
@@ -115,6 +118,32 @@ export default function LetterDetail() {
       },
     }
   );
+
+  // Trigger conversion popup for free preview users who stay on the page
+  useEffect(() => {
+    if (
+      data?.letter?.isFreePreview &&
+      data?.letter?.status === "generated_locked" &&
+      !conversionPopupOpen
+    ) {
+      const now = Date.now();
+      const FIVE_MINUTES = 5 * 60 * 1000;
+
+      // Only show if never shown OR at least 5 minutes have passed since last close
+      if (lastPopupTime === 0 || now - lastPopupTime >= FIVE_MINUTES) {
+        // Delay slightly for better UX (let them look at the draft first for 3 seconds)
+        const timer = setTimeout(() => {
+          setConversionPopupOpen(true);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [
+    data?.letter?.isFreePreview,
+    data?.letter?.status,
+    conversionPopupOpen,
+    lastPopupTime,
+  ]);
 
   useEffect(() => {
     if (
@@ -339,6 +368,16 @@ export default function LetterDetail() {
           if (!open) {
             setPreviewModalDismissed(true);
             invalidate();
+          }
+        }}
+      />
+
+      <FreePreviewConversionPopup
+        open={conversionPopupOpen}
+        onOpenChange={open => {
+          setConversionPopupOpen(open);
+          if (!open) {
+            setLastPopupTime(Date.now());
           }
         }}
       />

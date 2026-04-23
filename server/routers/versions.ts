@@ -1,7 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit, getClientIp } from "../rateLimiter";
-import { documentAnalysisResultLenientSchema, type DocumentAnalysisResult } from "../../shared/types";
+import {
+  documentAnalysisResultLenientSchema,
+  type DocumentAnalysisResult,
+} from "../../shared/types";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
@@ -106,8 +109,20 @@ import {
   sendClientRevisionRequestEmail,
 } from "../email";
 import { captureServerException } from "../sentry";
-import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "../queue";
-import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore, consolidateLessonsForScope } from "../learning";
+import {
+  enqueuePipelineJob,
+  enqueueRetryFromStageJob,
+  getPipelineQueue,
+} from "../queue";
+import {
+  extractLessonFromApproval,
+  extractLessonFromRejection,
+  extractLessonFromChangesRequest,
+  extractLessonFromEdit,
+  extractLessonFromSubscriberFeedback,
+  computeAndStoreQualityScore,
+  consolidateLessonsForScope,
+} from "../learning";
 import type { InsertPipelineLesson } from "../../drizzle/schema";
 import { BLOG_CATEGORIES } from "../../drizzle/schema";
 import { generateAndUploadApprovedPdf } from "../pdfGenerator";
@@ -129,7 +144,10 @@ import {
  * Called fire-and-forget (errors are swallowed) — the Worker degrades gracefully
  * to not redirecting unknown codes; any temporary sync failure is non-critical.
  */
-async function syncCodeToWorkerAllowlist(code: string, action: "add" | "remove"): Promise<void> {
+async function syncCodeToWorkerAllowlist(
+  code: string,
+  action: "add" | "remove"
+): Promise<void> {
   const workerUrl = process.env.AFFILIATE_WORKER_URL ?? "";
   const secret = process.env.AFFILIATE_WORKER_SECRET ?? "";
   if (!workerUrl || !secret) return;
@@ -180,9 +198,7 @@ const intakeJsonSchema = z.object({
   desiredOutcome: z.string(),
   deadlineDate: z.string().optional(),
   additionalContext: z.string().optional(),
-  tonePreference: z
-    .enum(["firm", "moderate", "aggressive"])
-    .optional(),
+  tonePreference: z.enum(["firm", "moderate", "aggressive"]).optional(),
   language: z.string().optional(),
   priorCommunication: z.string().optional(),
   deliveryMethod: z.string().optional(),
@@ -204,7 +220,6 @@ const intakeJsonSchema = z.object({
     })
     .optional(),
 });
-
 
 // ─── Role Guards ──────────────────────────────────────────────────────────────
 
@@ -254,63 +269,73 @@ function getAppUrl(req: {
 // MAIN ROUTER
 // ═══════════════════════════════════════════════════════
 
-
 export const versionsRouter = router({
-    get: protectedProcedure
-      .input(z.object({ id: z.number() }))
-      .query(async ({ ctx, input }) => {
-        const version = await getLetterVersionById(input.id);
-        if (!version) throw new TRPCError({ code: "NOT_FOUND" });
-        if (ctx.user.role === "subscriber") {
-          // Subscribers can view final_approved versions always
-          // They can also view ai_draft when the letter is generated_locked (paywall preview)
-          if (version.versionType === "final_approved") return version;
-          if (version.versionType === "ai_draft") {
-            const letter = await getLetterRequestById(version.letterRequestId);
-            if (
-              letter &&
-              letter.userId === ctx.user.id &&
-              letter.status === "generated_locked"
-            ) {
-              // ── Free-preview lead-magnet override (migration 0048) ──
-              // First-letter free-preview path: once the 24-hour cooling window
-              // has elapsed, return the FULL ai_draft with no truncation and no
-              // redaction. The UI is responsible for rendering it non-selectable
-              // with a DRAFT watermark. The only CTA the subscriber sees in this
-              // mode is "Submit For Attorney Review" → subscribe flow.
-              const now = Date.now();
-              const freePreviewUnlocked =
-                letter.isFreePreview &&
-                letter.freePreviewUnlockAt instanceof Date &&
-                letter.freePreviewUnlockAt.getTime() <= now;
-              if (freePreviewUnlocked) {
-                return { ...version, truncated: false, freePreview: true as const };
-              }
-
-              // Pre-unlock free-preview: return empty content with the
-              // freePreviewWaiting flag so the client renders the waiting
-              // screen instead of the paywall. Mirrors the gate in
-              // server/db/letter-versions.ts.
-              if (letter.isFreePreview === true) {
-                return {
-                  ...version,
-                  content: "",
-                  truncated: true,
-                  freePreviewWaiting: true as const,
-                };
-              }
-
-              // Standard paid-paywall preview: truncated to 20% of lines.
-              if (version.content) {
-                const lines = version.content.split("\n");
-                const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
-                return { ...version, content: lines.slice(0, visibleCount).join("\n"), truncated: true };
-              }
-              return { ...version, truncated: true };
+  get: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const version = await getLetterVersionById(input.id);
+      if (!version) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ctx.user.role === "subscriber") {
+        // Subscribers can view final_approved versions always
+        // They can also view ai_draft when the letter is generated_locked (paywall preview)
+        if (version.versionType === "final_approved") return version;
+        if (version.versionType === "ai_draft") {
+          const letter = await getLetterRequestById(version.letterRequestId);
+          if (
+            letter &&
+            letter.userId === ctx.user.id &&
+            letter.status === "generated_locked"
+          ) {
+            // ── Free-preview lead-magnet override (migration 0048) ──
+            // First-letter free-preview path: once the 24-hour cooling window
+            // has elapsed, return the FULL ai_draft with no truncation and no
+            // redaction. The UI is responsible for rendering it non-selectable
+            // with a DRAFT watermark. The only CTA the subscriber sees in this
+            // mode is "Submit For Attorney Review" → subscribe flow.
+            const now = Date.now();
+            const freePreviewUnlocked =
+              letter.isFreePreview &&
+              letter.freePreviewUnlockAt instanceof Date &&
+              letter.freePreviewUnlockAt.getTime() <= now;
+            if (freePreviewUnlocked) {
+              // Remove PII redaction for unlocked free previews as requested.
+              // The UI (FreePreviewViewer) handles the "DRAFT" watermark and copy-resistance.
+              return {
+                ...version,
+                truncated: false,
+                freePreview: true as const,
+                isRedacted: false,
+              };
             }
+
+            // Pre-unlock free-preview: return empty content with the
+            // freePreviewWaiting flag so the client renders the waiting
+            // screen instead of the paywall. Mirrors the gate in
+            // server/db/letter-versions.ts.
+            if (letter.isFreePreview === true) {
+              return {
+                ...version,
+                content: "",
+                truncated: true,
+                freePreviewWaiting: true as const,
+              };
+            }
+
+            // Standard paid-paywall preview: truncated to 20% of lines.
+            if (version.content) {
+              const lines = version.content.split("\n");
+              const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
+              return {
+                ...version,
+                content: lines.slice(0, visibleCount).join("\n"),
+                truncated: true,
+              };
+            }
+            return { ...version, truncated: true };
           }
-          throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
         }
-        return version;
-      }),
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      return version;
+    }),
 });
