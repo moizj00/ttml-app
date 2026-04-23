@@ -37,10 +37,7 @@ import { enqueuePipelineJob } from "../queue";
 import { extractLessonFromSubscriberFeedback } from "../learning";
 import { runSimplePipeline } from "../pipeline/simple";
 import type { NotificationCategory } from "../db/notifications";
-import {
-  checkLetterSubmissionAllowed,
-  incrementLettersUsed,
-} from "../stripe";
+import { checkLetterSubmissionAllowed, incrementLettersUsed } from "../stripe";
 import type { IntakeJson } from "../../shared/types";
 import { getAppUrl } from "../routers/_shared";
 import { logger } from "../logger";
@@ -71,6 +68,8 @@ export interface SubmitLetterContext {
  * Handles entitlement checking, free-trial and subscription usage claims,
  * letter creation with usage compensation on failure, pipeline enqueue,
  * and submission confirmation email + admin notification.
+ *
+ * (PROCEDURE 1: submitSubscriberIntakeProcedure)
  */
 export async function submitLetter(
   input: SubmitLetterInput,
@@ -80,7 +79,9 @@ export async function submitLetter(
   if (!entitlement.allowed) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: entitlement.reason ?? "You are not allowed to submit a letter at this time.",
+      message:
+        entitlement.reason ??
+        "You are not allowed to submit a letter at this time.",
     });
   }
 
@@ -91,7 +92,8 @@ export async function submitLetter(
     if (!claimed) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Your free first letter has already been used. Please subscribe to continue.",
+        message:
+          "Your free first letter has already been used. Please subscribe to continue.",
       });
     }
   } else if (entitlement.subscription) {
@@ -133,7 +135,11 @@ export async function submitLetter(
       freePreviewUnlockAt,
     });
   } catch (createErr) {
-    await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+    await _refundUsage(
+      ctx.userId,
+      isFreeTrialSubmission,
+      !!entitlement.subscription
+    );
     throw createErr;
   }
   const letterId = result.insertId;
@@ -159,7 +165,9 @@ export async function submitLetter(
       appUrl,
     }).catch(err => {
       logger.error({ err }, "[Email] Submission confirmation failed:");
-      captureServerException(err, { tags: { component: "letters", error_type: "submission_email_failed" } });
+      captureServerException(err, {
+        tags: { component: "letters", error_type: "submission_email_failed" },
+      });
     });
   }
 
@@ -169,15 +177,29 @@ export async function submitLetter(
   // while still returning immediately so the user sees the progress timeline.
   const useSimplePipeline = process.env.PIPELINE_MODE === "simple";
   if (useSimplePipeline) {
-    logger.info({ letterId }, "[Submit] Launching simple pipeline (PIPELINE_MODE=simple)");
+    logger.info(
+      { letterId },
+      "[Submit] Launching simple pipeline (PIPELINE_MODE=simple)"
+    );
 
     // Fire-and-forget: do NOT await — return immediately to the subscriber
     Promise.resolve().then(async () => {
       try {
-        const result = await runSimplePipeline(letterId, input.intakeJson, ctx.userId);
+        const result = await runSimplePipeline(
+          letterId,
+          input.intakeJson,
+          ctx.userId
+        );
         if (!result.success) {
-          logger.error({ letterId, error: result.error }, "[Submit] Simple pipeline failed");
-          await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+          logger.error(
+            { letterId, error: result.error },
+            "[Submit] Simple pipeline failed"
+          );
+          await _refundUsage(
+            ctx.userId,
+            isFreeTrialSubmission,
+            !!entitlement.subscription
+          );
           await createNotification({
             userId: ctx.userId,
             type: "letter_failed",
@@ -187,12 +209,24 @@ export async function submitLetter(
             category: "letters" satisfies NotificationCategory,
           }).catch(() => {});
         } else {
-          logger.info({ letterId }, "[Submit] Simple pipeline completed successfully");
+          logger.info(
+            { letterId },
+            "[Submit] Simple pipeline completed successfully"
+          );
         }
       } catch (pipelineErr) {
-        logger.error({ err: pipelineErr, letterId }, "[Submit] Simple pipeline threw an error");
-        captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "pipeline_failed" } });
-        await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+        logger.error(
+          { err: pipelineErr, letterId },
+          "[Submit] Simple pipeline threw an error"
+        );
+        captureServerException(pipelineErr, {
+          tags: { component: "simple-pipeline", error_type: "pipeline_failed" },
+        });
+        await _refundUsage(
+          ctx.userId,
+          isFreeTrialSubmission,
+          !!entitlement.subscription
+        );
       }
     });
 
@@ -210,12 +244,22 @@ export async function submitLetter(
         usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
       });
     } catch (enqueueErr) {
-      logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-      captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
-      await _refundUsage(ctx.userId, isFreeTrialSubmission, !!entitlement.subscription);
+      logger.error(
+        { err: enqueueErr },
+        "[Queue] Failed to enqueue pipeline job:"
+      );
+      captureServerException(enqueueErr, {
+        tags: { component: "queue", error_type: "enqueue_failed" },
+      });
+      await _refundUsage(
+        ctx.userId,
+        isFreeTrialSubmission,
+        !!entitlement.subscription
+      );
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to start letter processing. Your usage has been refunded. Please try again.",
+        message:
+          "Failed to start letter processing. Your usage has been refunded. Please try again.",
       });
     }
   }
@@ -229,10 +273,16 @@ export async function submitLetter(
     link: `/admin/letters/${letterId}`,
   }).catch(err => {
     logger.error({ err: err }, "[notifyAdmins] letter_submitted:");
-    captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_submitted" } });
+    captureServerException(err, {
+      tags: { component: "letters", error_type: "notify_admins_submitted" },
+    });
   });
 
-  return { letterId, status: "submitted", isFreePreview: isFreeTrialSubmission };
+  return {
+    letterId,
+    status: "submitted",
+    isFreePreview: isFreeTrialSubmission,
+  };
 }
 
 /** Refund free-trial slot or decrement subscription letter count after a failure. */
@@ -249,7 +299,9 @@ async function _refundUsage(
     }
   } catch (refundErr) {
     logger.error({ err: refundErr }, "[Submit] Failed to refund usage:");
-    captureServerException(refundErr, { tags: { component: "letters", error_type: "usage_refund_failed" } });
+    captureServerException(refundErr, {
+      tags: { component: "letters", error_type: "usage_refund_failed" },
+    });
   }
 }
 
@@ -289,7 +341,9 @@ export async function processSubscriberFeedback(
     const reviewActions = await getReviewActions(letterId);
     const latestChangesAction = [...reviewActions]
       .reverse()
-      .find(a => a.action === "requested_changes" && a.noteVisibility === "internal");
+      .find(
+        a => a.action === "requested_changes" && a.noteVisibility === "internal"
+      );
     if (latestChangesAction?.noteText) {
       const parsed = JSON.parse(latestChangesAction.noteText);
       if (typeof parsed.retriggerPipeline === "boolean") {
@@ -313,7 +367,12 @@ export async function processSubscriberFeedback(
     toStatus,
   });
 
-  extractLessonFromSubscriberFeedback(letterId, additionalContext, ctx.userId, "subscriber_update").catch(logger.error);
+  extractLessonFromSubscriberFeedback(
+    letterId,
+    additionalContext,
+    ctx.userId,
+    "subscriber_update"
+  ).catch(logger.error);
 
   if (updatedIntakeJson) {
     const db = await (await import("../db")).getDb();
@@ -339,16 +398,34 @@ export async function processSubscriberFeedback(
         const retriggerUserId = ctx.letter.userId ?? ctx.userId;
         Promise.resolve().then(async () => {
           try {
-            const result = await runSimplePipeline(letterId, intake, retriggerUserId);
+            const result = await runSimplePipeline(
+              letterId,
+              intake,
+              retriggerUserId
+            );
             if (!result.success) {
-              logger.error({ letterId, error: result.error }, "[processSubscriberFeedback] Simple pipeline retry failed");
+              logger.error(
+                { letterId, error: result.error },
+                "[processSubscriberFeedback] Simple pipeline retry failed"
+              );
             }
           } catch (pipelineErr) {
-            logger.error({ err: pipelineErr, letterId }, "[processSubscriberFeedback] Simple pipeline retry threw an error");
-            captureServerException(pipelineErr, { tags: { component: "simple-pipeline", error_type: "retry_pipeline_failed" } });
+            logger.error(
+              { err: pipelineErr, letterId },
+              "[processSubscriberFeedback] Simple pipeline retry threw an error"
+            );
+            captureServerException(pipelineErr, {
+              tags: {
+                component: "simple-pipeline",
+                error_type: "retry_pipeline_failed",
+              },
+            });
           }
         });
-        logger.info({ letterId }, "[processSubscriberFeedback] Simple pipeline re-run launched");
+        logger.info(
+          { letterId },
+          "[processSubscriberFeedback] Simple pipeline re-run launched"
+        );
       } else {
         try {
           await enqueuePipelineJob({
@@ -360,8 +437,13 @@ export async function processSubscriberFeedback(
             label: "updateForChanges",
           });
         } catch (enqueueErr) {
-          logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-          captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+          logger.error(
+            { err: enqueueErr },
+            "[Queue] Failed to enqueue pipeline job:"
+          );
+          captureServerException(enqueueErr, {
+            tags: { component: "queue", error_type: "enqueue_failed" },
+          });
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to start letter reprocessing. Please try again.",
@@ -401,8 +483,13 @@ export async function processSubscriberFeedback(
         });
       }
     } catch (notifyErr) {
-      logger.error({ err: notifyErr }, "[processSubscriberFeedback] Light-edit notification failed:");
-      captureServerException(notifyErr, { tags: { component: "letters", error_type: "light_edit_notify_failed" } });
+      logger.error(
+        { err: notifyErr },
+        "[processSubscriberFeedback] Light-edit notification failed:"
+      );
+      captureServerException(notifyErr, {
+        tags: { component: "letters", error_type: "light_edit_notify_failed" },
+      });
     }
   }
 
@@ -425,13 +512,16 @@ interface RetryFromRejectedCtx {
 
 export async function retryFromRejected(
   input: RetryFromRejectedInput,
-  ctx: RetryFromRejectedCtx,
+  ctx: RetryFromRejectedCtx
 ) {
   const letter = await getLetterRequestById(input.letterId);
   if (!letter || letter.userId !== ctx.userId)
     throw new TRPCError({ code: "NOT_FOUND" });
   if (letter.status !== "rejected")
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Letter must be in rejected status to retry" });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Letter must be in rejected status to retry",
+    });
 
   await logReviewAction({
     letterRequestId: input.letterId,
@@ -445,7 +535,12 @@ export async function retryFromRejected(
   });
 
   if (input.additionalContext) {
-    extractLessonFromSubscriberFeedback(input.letterId, input.additionalContext, ctx.userId, "subscriber_retry").catch(logger.error);
+    extractLessonFromSubscriberFeedback(
+      input.letterId,
+      input.additionalContext,
+      ctx.userId,
+      "subscriber_retry"
+    ).catch(logger.error);
   }
 
   if (input.updatedIntakeJson) {
@@ -464,7 +559,8 @@ export async function retryFromRejected(
   if (!intake) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "No intake data available to re-run the pipeline. Please provide updated details.",
+      message:
+        "No intake data available to re-run the pipeline. Please provide updated details.",
     });
   }
 
@@ -481,8 +577,13 @@ export async function retryFromRejected(
       label: "retryFromRejected",
     });
   } catch (enqueueErr) {
-    logger.error({ err: enqueueErr }, "[Queue] Failed to enqueue pipeline job:");
-    captureServerException(enqueueErr, { tags: { component: "queue", error_type: "enqueue_failed" } });
+    logger.error(
+      { err: enqueueErr },
+      "[Queue] Failed to enqueue pipeline job:"
+    );
+    captureServerException(enqueueErr, {
+      tags: { component: "queue", error_type: "enqueue_failed" },
+    });
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Failed to start letter reprocessing. Please try again.",
@@ -491,7 +592,7 @@ export async function retryFromRejected(
 
   // Parallelize post-enqueue notifications — subscriber email, in-app, and admin are independent
   try {
-    const subscriberPromise = getUserById(ctx.userId).then(async (subscriber) => {
+    const subscriberPromise = getUserById(ctx.userId).then(async subscriber => {
       if (subscriber?.email) {
         await sendStatusUpdateEmail({
           to: subscriber.email,
@@ -520,7 +621,9 @@ export async function retryFromRejected(
     await Promise.allSettled([subscriberPromise, notifPromise, adminPromise]);
   } catch (err) {
     logger.error({ err: err }, "[retryFromRejected] Notification error:");
-    captureServerException(err, { tags: { component: "letters", error_type: "retry_notification_failed" } });
+    captureServerException(err, {
+      tags: { component: "letters", error_type: "retry_notification_failed" },
+    });
   }
 
   return { success: true };
@@ -544,19 +647,23 @@ interface SendToRecipientCtx {
 
 export async function sendLetterToRecipientFlow(
   input: SendToRecipientInput,
-  ctx: SendToRecipientCtx,
+  ctx: SendToRecipientCtx
 ) {
   const letter = await getLetterRequestById(input.letterId);
   if (!letter || letter.userId !== ctx.userId)
     throw new TRPCError({ code: "NOT_FOUND" });
-  if (letter.status !== "approved" && letter.status !== "client_approved" && letter.status !== "sent")
+  if (
+    letter.status !== "approved" &&
+    letter.status !== "client_approved" &&
+    letter.status !== "sent"
+  )
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Only approved or sent letters can be sent to recipients",
     });
 
   const versions = await getLetterVersionsByRequestId(input.letterId, false);
-  const finalVersion = versions.find((v) => v.versionType === "final_approved");
+  const finalVersion = versions.find(v => v.versionType === "final_approved");
   if (!finalVersion)
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -588,8 +695,13 @@ export async function sendLetterToRecipientFlow(
       }),
     ]);
   } catch (err) {
-    logger.error({ err: err }, "[sendToRecipient] Failed to update status to sent:");
-    captureServerException(err, { tags: { component: "letters", error_type: "update_sent_status_failed" } });
+    logger.error(
+      { err: err },
+      "[sendToRecipient] Failed to update status to sent:"
+    );
+    captureServerException(err, {
+      tags: { component: "letters", error_type: "update_sent_status_failed" },
+    });
   }
 
   // Fire-and-forget: admin notification is non-blocking
@@ -601,7 +713,12 @@ export async function sendLetterToRecipientFlow(
     link: `/admin/letters/${input.letterId}`,
   }).catch(err => {
     logger.error({ err: err }, "[notifyAdmins] letter_sent_to_recipient:");
-    captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_sent_to_recipient" } });
+    captureServerException(err, {
+      tags: {
+        component: "letters",
+        error_type: "notify_admins_sent_to_recipient",
+      },
+    });
   });
 
   return { success: true };
@@ -622,7 +739,7 @@ interface ClientDeclineCtx {
 
 export async function clientDeclineLetter(
   input: ClientDeclineInput,
-  ctx: ClientDeclineCtx,
+  ctx: ClientDeclineCtx
 ) {
   const letter = await getLetterRequestById(input.letterId);
   if (!letter || letter.userId !== ctx.userId) {
@@ -665,7 +782,12 @@ export async function clientDeclineLetter(
     });
   } catch (err) {
     logger.error({ err: err }, "[notifyAdmins] client_declined:");
-    captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_declined" } });
+    captureServerException(err, {
+      tags: {
+        component: "letters",
+        error_type: "notify_admins_client_declined",
+      },
+    });
   }
   return { success: true };
 }

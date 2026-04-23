@@ -1,7 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, ChevronRight, Scale } from "lucide-react";
 import { useState } from "react";
-import type { CitationAuditReport, CitationAuditEntry } from "../../../../../shared/types";
+import type {
+  CitationAuditReport,
+  CitationAuditEntry,
+} from "../../../../../shared/types";
 
 interface Props {
   citationAuditReport: CitationAuditReport | null;
@@ -12,7 +15,10 @@ export function CitationAuditPanel({ citationAuditReport }: Props) {
 
   return (
     <Card className="h-full border-border">
-      <CardContent className="p-3 space-y-3" data-testid="panel-citation-report">
+      <CardContent
+        className="p-3 space-y-3"
+        data-testid="panel-citation-report"
+      >
         {!citationAuditReport ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <Scale className="w-7 h-7 text-muted-foreground/30" />
@@ -73,7 +79,8 @@ export function CitationAuditPanel({ citationAuditReport }: Props) {
                   ) : (
                     <ChevronRight className="w-3 h-3" />
                   )}
-                  Verified Citations ({citationAuditReport.verifiedCitations.length})
+                  Verified Citations (
+                  {citationAuditReport.verifiedCitations.length})
                 </button>
                 {citationReportOpen && (
                   <div className="space-y-1.5">
@@ -103,7 +110,9 @@ export function CitationAuditPanel({ citationAuditReport }: Props) {
                             >
                               {entry.confidence}
                             </span>
-                            <span className="text-xs text-green-600">verified</span>
+                            <span className="text-xs text-green-600">
+                              verified
+                            </span>
                           </div>
                         </div>
                       )
@@ -135,7 +144,7 @@ export function CitationAuditPanel({ citationAuditReport }: Props) {
                             unverified
                           </span>
                           <span className="text-xs text-red-600">
-                            added by Claude
+                            added by system
                           </span>
                         </div>
                       </div>
