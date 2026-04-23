@@ -106,7 +106,9 @@ export function LetterPaywall({
   });
 
   const isFreeReviewAvailable =
-    paywallStatus.data?.state === "free_review_available";
+    __isFreePreview === true
+      ? false
+      : paywallStatus.data?.state === "free_review_available";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
   const payFirstLetterMutation = trpc.billing.payFirstLetterReview.useMutation({

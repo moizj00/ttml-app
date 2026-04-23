@@ -115,7 +115,7 @@ export function LetterSubmitProgressModal({
       setProgress(pct);
 
       // Advance the stage once progress crosses that stage's cap.
-      const nextStage = STAGES.findIndex((s) => pct < s.cap);
+      const nextStage = STAGES.findIndex(s => pct < s.cap);
       if (nextStage !== -1) {
         setStageIndex(nextStage);
       }
@@ -139,7 +139,7 @@ export function LetterSubmitProgressModal({
   return (
     <Dialog
       open={open}
-      onOpenChange={(next) => {
+      onOpenChange={next => {
         // Only allow the dialog to close after the timer completes — the
         // subscriber's Got it / Dismiss click drives the onClose handler.
         if (!next && complete) onClose();
@@ -148,10 +148,10 @@ export function LetterSubmitProgressModal({
       <DialogContent
         className="sm:max-w-lg"
         // Prevent "escape to close" and overlay-click dismissal until complete.
-        onEscapeKeyDown={(e) => {
+        onEscapeKeyDown={e => {
           if (!complete) e.preventDefault();
         }}
-        onInteractOutside={(e) => {
+        onInteractOutside={e => {
           if (!complete) e.preventDefault();
         }}
         data-testid="letter-submit-progress-modal"
@@ -173,7 +173,7 @@ export function LetterSubmitProgressModal({
           </DialogTitle>
           <DialogDescription>
             {complete
-              ? "Your intake has been received — we'll email you in 24 hours when your draft is ready to preview."
+              ? "Your intake has been received — your letter will be posted to your Letter area in less than 24 hours."
               : "This usually takes about 90 seconds. Please keep this window open."}
           </DialogDescription>
         </DialogHeader>
@@ -193,16 +193,17 @@ export function LetterSubmitProgressModal({
                     {Math.floor(progress)}%
                   </span>
                 </div>
-                <Progress value={progress} data-testid="letter-submit-progress-bar" />
+                <Progress
+                  value={progress}
+                  data-testid="letter-submit-progress-bar"
+                />
                 <p className="mt-2 text-xs text-gray-500">
                   {currentStage.subtitle}
                 </p>
               </div>
 
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-medium">
-                  What happens next
-                </p>
+                <p className="font-medium">What happens next</p>
                 <p className="mt-1 text-amber-800">
                   We'll email you in 24 hours when your draft is ready to
                   preview. The preview is a full read-only look at your draft —
@@ -213,9 +214,7 @@ export function LetterSubmitProgressModal({
           ) : (
             <div className="space-y-3">
               <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                <p className="font-medium">
-                  Look out for an email in 24 hours
-                </p>
+                <p className="font-medium">Look out for an email in 24 hours</p>
                 <p className="mt-1 text-emerald-800">
                   It'll contain a link to preview your full draft. You can read
                   the entire letter before deciding whether to submit it for
