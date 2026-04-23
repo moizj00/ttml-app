@@ -96,13 +96,21 @@ export async function getLetterVersionsByRequestId(
     )
     .orderBy(desc(letterVersions.createdAt));
 
-  if (letterStatus === "generated_locked") {
+  const isLockedState =
+    letterStatus === "generated_locked" ||
+    letterStatus === "AI_GENERATION_COMPLETED_HIDDEN" ||
+    letterStatus === "letter_released_to_subscriber";
+
+  if (isLockedState) {
     return rows.map(v => {
       if (v.versionType === "ai_draft" && v.content) {
         // Free-preview lead-magnet override: return the full draft, stamped
         // with `freePreview: true` so the frontend can route to the
         // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
-        if (freePreviewUnlocked) {
+        if (
+          freePreviewUnlocked ||
+          letterStatus === "letter_released_to_subscriber"
+        ) {
           // Remove PII redaction for unlocked free previews.
           return {
             ...v,
@@ -113,7 +121,10 @@ export async function getLetterVersionsByRequestId(
         }
         // Pre-unlock free-preview: do NOT leak even the 20% slice. The UI
         // shows <FreePreviewWaiting/> based on the `freePreviewWaiting` flag.
-        if (isFreePreview) {
+        if (
+          isFreePreview ||
+          letterStatus === "AI_GENERATION_COMPLETED_HIDDEN"
+        ) {
           return {
             ...v,
             content: "",

@@ -1,6 +1,17 @@
-import { FileText, FlaskConical, FileCheck, Gavel, CheckCircle2 } from "lucide-react";
+import {
+  FileText,
+  FlaskConical,
+  FileCheck,
+  Gavel,
+  CheckCircle2,
+} from "lucide-react";
 
-export type StageKey = "submitted" | "research_draft" | "draft_ready" | "attorney_review" | "complete";
+export type StageKey =
+  | "submitted"
+  | "research_draft"
+  | "draft_ready"
+  | "attorney_review"
+  | "complete";
 
 export interface LetterStage {
   key: StageKey;
@@ -24,7 +35,8 @@ export const LETTER_STAGES: LetterStage[] = [
     key: "research_draft",
     label: "Research & Draft",
     shortLabel: "Research",
-    description: "Our team is researching your matter and preparing your letter.",
+    description:
+      "Our team is researching your matter and preparing your letter.",
     icon: FlaskConical,
     statuses: ["researching", "drafting", "ai_generation_completed_hidden"],
   },
@@ -34,13 +46,18 @@ export const LETTER_STAGES: LetterStage[] = [
     shortLabel: "Draft",
     description: "Your letter is ready for attorney review.",
     icon: FileCheck,
-    statuses: ["letter_released_to_subscriber", "generated_locked", "generated_unlocked"],
+    statuses: [
+      "letter_released_to_subscriber",
+      "generated_locked",
+      "generated_unlocked",
+    ],
   },
   {
     key: "attorney_review",
     label: "Attorney Review",
     shortLabel: "Review",
-    description: "An attorney is reviewing, finalizing, and preparing your letter.",
+    description:
+      "An attorney is reviewing, finalizing, and preparing your letter.",
     icon: Gavel,
     statuses: [
       "pending_review",
@@ -55,21 +72,32 @@ export const LETTER_STAGES: LetterStage[] = [
     key: "complete",
     label: "Complete",
     shortLabel: "Done",
-    description: "Your letter has been approved by an attorney. Your PDF is ready.",
+    description:
+      "Your letter has been approved by an attorney. Your PDF is ready.",
     icon: CheckCircle2,
     statuses: ["approved", "sent"],
   },
 ];
 
-export const TERMINAL_ERROR_STATUSES = ["rejected", "client_declined", "pipeline_failed"];
+export const TERMINAL_ERROR_STATUSES = [
+  "rejected",
+  "client_declined",
+  "pipeline_failed",
+];
 
-export function getStageForStatus(status: string): { stageIndex: number; stage: LetterStage | null } {
+export function getStageForStatus(status: string): {
+  stageIndex: number;
+  stage: LetterStage | null;
+} {
   if (TERMINAL_ERROR_STATUSES.includes(status)) {
     const lastIdx = LETTER_STAGES.length - 1;
     return { stageIndex: lastIdx, stage: LETTER_STAGES[lastIdx] };
   }
-  const idx = LETTER_STAGES.findIndex((s) => s.statuses.includes(status));
-  return { stageIndex: idx >= 0 ? idx : 0, stage: idx >= 0 ? LETTER_STAGES[idx] : LETTER_STAGES[0] };
+  const idx = LETTER_STAGES.findIndex(s => s.statuses.includes(status));
+  return {
+    stageIndex: idx >= 0 ? idx : 0,
+    stage: idx >= 0 ? LETTER_STAGES[idx] : LETTER_STAGES[0],
+  };
 }
 
 export function getStageProgress(status: string): number {

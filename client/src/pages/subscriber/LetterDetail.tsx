@@ -91,8 +91,7 @@ const STATUS_LABELS: Record<string, string> = {
   generated_locked: "Your professional draft is ready!",
   pending_review: "Sent to attorney review queue.",
   under_review: "An attorney is reviewing your letter.",
-  approved:
-    "Your letter has been approved by an attorney! Your PDF is ready.",
+  approved: "Your letter has been approved by an attorney! Your PDF is ready.",
   client_approval_pending: "Your letter is ready for your final approval.",
   client_revision_requested: "Your revision request has been submitted.",
   client_approved: "You approved the letter for delivery.",
@@ -127,7 +126,8 @@ export default function LetterDetail() {
   useEffect(() => {
     if (
       data?.letter?.isFreePreview &&
-      data?.letter?.status === "generated_locked" &&
+      (data?.letter?.status === "generated_locked" ||
+        data?.letter?.status === "letter_released_to_subscriber") &&
       !conversionPopupOpen
     ) {
       const now = Date.now();
@@ -348,7 +348,8 @@ export default function LetterDetail() {
   const isPolling = POLLING_STATUSES.includes(letter.status);
   const isGeneratedLocked =
     (letter.status === "generated_locked" ||
-      letter.status === "generated_unlocked") &&
+      letter.status === "generated_unlocked" ||
+      letter.status === "letter_released_to_subscriber") &&
     !(letter as any).submittedByAdmin;
   const isApproved =
     letter.status === "approved" ||
@@ -517,11 +518,12 @@ export default function LetterDetail() {
          *
          * The `freePreview` flag is added by server/db/letter-versions.ts only
          * when letterRequests.isFreePreview === true AND
-         * freePreviewUnlockAt <= NOW(). The client trusts that flag — it
-         * never sees the raw window logic.
+         * (freePreviewUnlockAt <= NOW() OR status === 'letter_released_to_subscriber').
+         * The client trusts that flag — it never sees the raw window logic.
          */}
         {letter.isFreePreview === true &&
-        (aiDraftVersion as any)?.freePreview !== true ? (
+        (aiDraftVersion as any)?.freePreview !== true &&
+        letter.status !== "letter_released_to_subscriber" ? (
           <FreePreviewWaiting
             unlockAt={(letter as any).freePreviewUnlockAt ?? null}
             subject={letter.subject}

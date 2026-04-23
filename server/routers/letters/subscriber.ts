@@ -2,10 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit } from "../../rateLimiter";
 import type { IntakeJson } from "../../../shared/types";
-import {
-  intakeJsonSchema,
-  subscriberProcedure,
-} from "../_shared";
+import { intakeJsonSchema, subscriberProcedure } from "../_shared";
 import {
   createAttachment,
   getLetterRequestById,
@@ -18,7 +15,12 @@ import {
   getDeliveryLogByLetterId,
 } from "../../db";
 import { storagePut } from "../../storage";
-import { processSubscriberFeedback, retryFromRejected, sendLetterToRecipientFlow, getSubscriberReleasedLetterProcedure } from "../../services/letters";
+import {
+  processSubscriberFeedback,
+  retryFromRejected,
+  sendLetterToRecipientFlow,
+  getSubscriberReleasedLetterProcedure,
+} from "../../services/letters";
 
 export const subscriberProcedures = {
   myLetters: subscriberProcedure.query(async ({ ctx }) => {
@@ -117,7 +119,15 @@ export const subscriberProcedures = {
       const letter = await getLetterRequestById(input.letterId);
       if (!letter || letter.userId !== ctx.user.id)
         throw new TRPCError({ code: "NOT_FOUND" });
-      if (!["approved", "client_approved", "rejected", "client_declined", "sent"].includes(letter.status))
+      if (
+        ![
+          "approved",
+          "client_approved",
+          "rejected",
+          "client_declined",
+          "sent",
+        ].includes(letter.status)
+      )
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Only completed letters can be archived",
