@@ -285,6 +285,42 @@ export async function submitLetter(
   };
 }
 
+/**
+ * PROCEDURE 2: enqueueLetterGenerationProcedure
+ * Enqueues the automated research & drafting pipeline.
+ */
+export async function enqueueLetterGenerationProcedure(params: {
+  letterId: number;
+  intakeJson: IntakeJson;
+  userId: number;
+  appUrl: string;
+  isFreeTrialSubmission: boolean;
+}) {
+  const { letterId, intakeJson, userId, appUrl, isFreeTrialSubmission } =
+    params;
+  try {
+    await enqueuePipelineJob({
+      type: "runPipeline",
+      letterId,
+      intake: intakeJson,
+      userId,
+      appUrl,
+      label: "submit",
+      usageContext: { shouldRefundOnFailure: true, isFreeTrialSubmission },
+    });
+    logger.info({ letterId }, "[Procedure 2] Enqueued pipeline job");
+  } catch (enqueueErr) {
+    logger.error(
+      { err: enqueueErr },
+      "[Procedure 2] Failed to enqueue pipeline job:"
+    );
+    captureServerException(enqueueErr, {
+      tags: { component: "queue", error_type: "enqueue_failed" },
+    });
+    throw enqueueErr;
+  }
+}
+
 /** Refund free-trial slot or decrement subscription letter count after a failure. */
 async function _refundUsage(
   userId: number,
