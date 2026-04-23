@@ -9,7 +9,10 @@ interface FreePreviewWaitingProps {
 
 const FREE_PREVIEW_HOURS = 24;
 
-export function FreePreviewWaiting({ unlockAt, subject }: FreePreviewWaitingProps) {
+export function FreePreviewWaiting({
+  unlockAt,
+  subject,
+}: FreePreviewWaitingProps) {
   const hoursRemaining = useMemo(() => {
     if (!unlockAt) return FREE_PREVIEW_HOURS;
     const unlockMs = new Date(unlockAt).getTime();
@@ -43,16 +46,20 @@ export function FreePreviewWaiting({ unlockAt, subject }: FreePreviewWaitingProp
           <div className="flex items-start gap-2 rounded-md border border-blue-100 bg-white/70 p-3">
             <Mail className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
             <div className="text-xs text-blue-900/80">
-              <div className="font-medium text-blue-900">Email notification</div>
+              <div className="font-medium text-blue-900">
+                Email notification
+              </div>
               We&apos;ll send a link the moment your preview unlocks.
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-blue-100 bg-white/70 p-3">
             <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
             <div className="text-xs text-blue-900/80">
-              <div className="font-medium text-blue-900">Quality check</div>
-              Our pipeline is finalizing research and citations before you see
-              the draft.
+              <div className="font-medium text-blue-900">
+                Quality evaluation
+              </div>
+              Our systems are finalizing detailed research and citations before
+              the draft is prepared.
             </div>
           </div>
         </div>

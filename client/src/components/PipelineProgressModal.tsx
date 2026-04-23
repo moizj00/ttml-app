@@ -1,7 +1,19 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle, Loader2, Circle, AlertCircle, FileText } from "lucide-react";
+import {
+  CheckCircle,
+  Loader2,
+  Circle,
+  AlertCircle,
+  FileText,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
@@ -12,17 +24,51 @@ interface PipelineProgressModalProps {
 }
 
 const PIPELINE_STAGES = [
-  { key: "submitted", label: "Request Submitted", description: "Your letter request has been received" },
-  { key: "researching", label: "Legal Research", description: "Analyzing relevant laws and precedents" },
-  { key: "drafting", label: "Drafting Letter", description: "Our team is composing your legal letter" },
-  { key: "generated_locked", label: "Draft Complete", description: "Your letter draft is ready for review" },
+  {
+    key: "submitted",
+    label: "Request Submitted",
+    description: "Your letter request has been received",
+  },
+  {
+    key: "researching",
+    label: "Legal Research",
+    description: "Analyzing relevant laws and precedents",
+  },
+  {
+    key: "drafting",
+    label: "Professional Drafting",
+    description: "Our drafting systems are composing your legal letter",
+  },
+  {
+    key: "generated_locked",
+    label: "Draft Complete",
+    description: "Your letter draft is ready for review",
+  },
 ] as const;
 
 type StageStatus = "completed" | "active" | "pending" | "error";
 
 function getStageStatus(currentStatus: string, stageKey: string): StageStatus {
-  const order = ["submitted", "researching", "drafting", "generated_locked"];
+  const order = [
+    "submitted",
+    "researching",
+    "drafting",
+    "AI_GENERATION_COMPLETED_HIDDEN",
+    "letter_released_to_subscriber",
+    "generated_locked",
+  ];
   const currentIdx = order.indexOf(currentStatus);
+
+  // If status is AI_GENERATION_COMPLETED_HIDDEN or letter_released_to_subscriber,
+  // we count drafting as completed and generated_locked as the next/active state.
+  if (
+    currentStatus === "AI_GENERATION_COMPLETED_HIDDEN" ||
+    currentStatus === "letter_released_to_subscriber"
+  ) {
+    if (stageKey === "drafting") return "completed";
+    if (stageKey === "generated_locked") return "completed";
+  }
+
   const stageIdx = order.indexOf(stageKey);
 
   if (currentIdx < 0) return "pending";
@@ -44,7 +90,11 @@ function StageIcon({ status }: { status: StageStatus }) {
   }
 }
 
-export default function PipelineProgressModal({ open, onClose, letterId }: PipelineProgressModalProps) {
+export default function PipelineProgressModal({
+  open,
+  onClose,
+  letterId,
+}: PipelineProgressModalProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const { data } = trpc.letters.detail.useQuery(
@@ -56,14 +106,20 @@ export default function PipelineProgressModal({ open, onClose, letterId }: Pipel
   );
 
   const currentStatus = data?.letter?.status ?? "submitted";
-  const isComplete = currentStatus === "generated_locked";
-  const isPipelineActive = ["submitted", "researching", "drafting"].includes(currentStatus);
+  const isComplete = [
+    "generated_locked",
+    "AI_GENERATION_COMPLETED_HIDDEN",
+    "letter_released_to_subscriber",
+  ].includes(currentStatus);
+  const isPipelineActive = ["submitted", "researching", "drafting"].includes(
+    currentStatus
+  );
 
   // Elapsed time counter
   useEffect(() => {
     if (!open || !isPipelineActive) return;
     setElapsedSeconds(0);
-    const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    const interval = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
     return () => clearInterval(interval);
   }, [open, isPipelineActive]);
 
@@ -74,7 +130,12 @@ export default function PipelineProgressModal({ open, onClose, letterId }: Pipel
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={isOpen => {
+        if (!isOpen) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -83,8 +144,8 @@ export default function PipelineProgressModal({ open, onClose, letterId }: Pipel
           </DialogTitle>
           <DialogDescription>
             {isComplete
-              ? "Your professional letter draft is complete. Review the preview and submit for attorney review."
-              : `Our legal team is researching and drafting your letter. This typically takes 1-2 minutes.`}
+              ? "Your professional letter draft is complete. View details for the next steps."
+              : `Our systems are researching and drafting your letter. This typically takes 1-2 minutes.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -97,20 +158,30 @@ export default function PipelineProgressModal({ open, onClose, letterId }: Pipel
                 <div className="flex flex-col items-center">
                   <StageIcon status={status} />
                   {idx < PIPELINE_STAGES.length - 1 && (
-                    <div className={`w-0.5 h-8 mt-1 ${
-                      status === "completed" ? "bg-green-500" : "bg-muted-foreground/20"
-                    }`} />
+                    <div
+                      className={`w-0.5 h-8 mt-1 ${
+                        status === "completed"
+                          ? "bg-green-500"
+                          : "bg-muted-foreground/20"
+                      }`}
+                    />
                   )}
                 </div>
                 <div className="pb-6">
-                  <p className={`text-sm font-medium ${
-                    status === "active" ? "text-primary" :
-                    status === "completed" ? "text-green-700" :
-                    "text-muted-foreground"
-                  }`}>
+                  <p
+                    className={`text-sm font-medium ${
+                      status === "active"
+                        ? "text-primary"
+                        : status === "completed"
+                          ? "text-green-700"
+                          : "text-muted-foreground"
+                    }`}
+                  >
                     {stage.label}
                   </p>
-                  <p className="text-xs text-muted-foreground">{stage.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {stage.description}
+                  </p>
                 </div>
               </div>
             );

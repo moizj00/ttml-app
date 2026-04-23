@@ -172,9 +172,9 @@ function getNavItems(role: string): NavItem[] {
         icon: <BarChart3 className="w-4 h-4" />,
       },
       {
-        label: "Quality & Learning",
+        label: "Quality & Knowledge",
         href: "/admin/quality",
-        icon: <Brain className="w-4 h-4" />,
+        icon: <BookOpen className="w-4 h-4" />,
       },
       {
         label: "Failed Jobs",
@@ -182,9 +182,9 @@ function getNavItems(role: string): NavItem[] {
         icon: <AlertCircle className="w-4 h-4" />,
       },
       {
-        label: "Learning",
+        label: "System Knowledge",
         href: "/admin/learning",
-        icon: <Brain className="w-4 h-4" />,
+        icon: <BookOpen className="w-4 h-4" />,
       },
       {
         label: "Template Library",
@@ -264,7 +264,7 @@ export default function AppLayout({
         description: "Please try again in a moment.",
       }),
   });
-  const unreadCount = notifications?.filter((n) => !n.readAt).length ?? 0;
+  const unreadCount = notifications?.filter(n => !n.readAt).length ?? 0;
 
   // ─── Role-change detector ────────────────────────────────────────────────
   // When the server promotes this user (e.g. subscriber → attorney), a
@@ -277,7 +277,10 @@ export default function AppLayout({
   useEffect(() => {
     if (!notifications || !user) return;
     const roleNotif = notifications.find(
-      n => n.type === "role_updated" && !n.readAt && !seenRoleUpdateRef.current.has(n.id)
+      n =>
+        n.type === "role_updated" &&
+        !n.readAt &&
+        !seenRoleUpdateRef.current.has(n.id)
     );
     if (!roleNotif) return;
     seenRoleUpdateRef.current.add(roleNotif.id);
@@ -402,7 +405,9 @@ export default function AppLayout({
           }}
           className="sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent w-full"
         >
-          <span className="sidebar-nav-icon inline-flex"><LogOut className="w-4 h-4" /></span>
+          <span className="sidebar-nav-icon inline-flex">
+            <LogOut className="w-4 h-4" />
+          </span>
           Sign Out
         </button>
       </div>
@@ -431,7 +436,9 @@ export default function AppLayout({
             className={`fixed inset-0 bg-black/50 ${sidebarClosing ? "animate-backdrop-out" : "animate-backdrop-in"}`}
             onClick={closeSidebar}
           />
-          <aside className={`relative flex h-full w-[min(18rem,calc(100vw-2rem))] max-w-full flex-col bg-sidebar shadow-xl ${sidebarClosing ? "animate-sidebar-out" : "animate-sidebar-in"}`}>
+          <aside
+            className={`relative flex h-full w-[min(18rem,calc(100vw-2rem))] max-w-full flex-col bg-sidebar shadow-xl ${sidebarClosing ? "animate-sidebar-out" : "animate-sidebar-in"}`}
+          >
             <button
               onClick={closeSidebar}
               className="absolute top-4 right-4 text-sidebar-foreground hover:text-sidebar-primary"
@@ -488,7 +495,10 @@ export default function AppLayout({
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))]">
+              <DropdownMenuContent
+                align="end"
+                className="w-[min(20rem,calc(100vw-2rem))]"
+              >
                 <div className="flex items-center justify-between px-3 py-2 border-b">
                   <span className="font-semibold text-sm">Notifications</span>
                   {unreadCount > 0 && (
@@ -523,13 +533,19 @@ export default function AppLayout({
                               n.category === "users"
                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                                 : n.category === "letters"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                                : n.category === "employee"
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                  : n.category === "employee"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                                    : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                             }`}
                           >
-                            {n.category === "users" ? "Users" : n.category === "letters" ? "Letters" : n.category === "employee" ? "Affiliate" : n.category}
+                            {n.category === "users"
+                              ? "Users"
+                              : n.category === "letters"
+                                ? "Letters"
+                                : n.category === "employee"
+                                  ? "Affiliate"
+                                  : n.category}
                           </span>
                         )}
                       </div>
@@ -551,7 +567,11 @@ export default function AppLayout({
         </header>
 
         {/* Page Content */}
-        <main id="main-content" key={location} className="flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6 animate-page-enter">
+        <main
+          id="main-content"
+          key={location}
+          className="flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6 animate-page-enter"
+        >
           {children}
         </main>
       </div>

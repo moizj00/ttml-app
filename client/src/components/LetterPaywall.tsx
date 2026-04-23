@@ -418,9 +418,9 @@ export function LetterPaywall({
                   Your draft is being finalized
                 </h3>
                 <p className="text-sm text-slate-600 mb-3">
-                  We give every letter draft a full 24-hour review period before
-                  presenting it to you. This ensures your draft is thorough and
-                  accurate.
+                  Your letter draft is undergoing final research and quality
+                  assurance. This ensures every citation and fact is verified
+                  before you receive the draft.
                 </p>
                 <div className="flex items-center gap-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg px-3 py-2 w-fit">
                   <Clock className="w-4 h-4" />
