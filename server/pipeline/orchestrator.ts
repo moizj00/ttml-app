@@ -355,6 +355,7 @@ export async function runFullPipeline(
     letterId,
     userId: userId ?? 0,
     intake,
+    isFreePreview,
   };
 
   try {
