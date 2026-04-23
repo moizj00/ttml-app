@@ -15,15 +15,53 @@ import {
   createNotification,
   setLetterQualityDegraded,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, CitationRegistryEntry, CitationAuditReport, PipelineContext, TokenUsage, PipelineErrorCode, StructuredPipelineError } from "../../shared/types";
+import type {
+  IntakeJson,
+  ResearchPacket,
+  DraftOutput,
+  CitationRegistryEntry,
+  CitationAuditReport,
+  PipelineContext,
+  TokenUsage,
+  PipelineErrorCode,
+  StructuredPipelineError,
+} from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import { buildNormalizedPromptInput, type NormalizedPromptInput } from "../intake-normalizer";
-import { sendNewReviewNeededEmail, sendAdminAlertEmail, sendLetterReadyEmail } from "../email";
+import {
+  buildNormalizedPromptInput,
+  type NormalizedPromptInput,
+} from "../intake-normalizer";
+import {
+  sendNewReviewNeededEmail,
+  sendAdminAlertEmail,
+  sendLetterReadyEmail,
+} from "../email";
 import { captureServerException } from "../sentry";
-import { formatStructuredError, classifyErrorCode, buildLessonsPromptBlock, withModelFailover } from "./shared";
-import { getAnthropicClient, getVettingModelFallback, createTokenAccumulator, accumulateTokens, calculateCost, MODEL_PRICING } from "./providers";
-import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
-import { runCitationAudit, replaceUnverifiedCitations, buildCitationRegistry } from "./citations";
+import {
+  formatStructuredError,
+  classifyErrorCode,
+  buildLessonsPromptBlock,
+  withModelFailover,
+} from "./shared";
+import {
+  getAnthropicClient,
+  getVettingModelFallback,
+  createTokenAccumulator,
+  accumulateTokens,
+  calculateCost,
+  MODEL_PRICING,
+} from "./providers";
+import {
+  validateFinalLetter,
+  validateContentConsistency,
+  retryOnValidationFailure,
+  addValidationResult,
+} from "./validators";
+import {
+  runCitationAudit,
+  replaceUnverifiedCitations,
+  buildCitationRegistry,
+} from "./citations";
 import { runAssemblyStage } from "./assembly";
 import { parseVettingResponse, runPostVetChecks } from "./vetting-parser";
 
@@ -47,7 +85,10 @@ import {
   buildVettingUserPrompt,
   validateVettingOutput,
 } from "./vetting-prompts";
-import type { VettingReport, PostVetDeterministicContext } from "./vetting-prompts";
+import type {
+  VettingReport,
+  PostVetDeterministicContext,
+} from "./vetting-prompts";
 import { logger } from "../logger";
 
 const VETTING_TIMEOUT_MS = 120_000;
@@ -57,8 +98,12 @@ export async function runVettingStage(
   assembledLetter: string,
   intake: IntakeJson,
   research: ResearchPacket,
-  pipelineCtx?: PipelineContext,
-): Promise<{ vettedLetter: string; vettingReport: VettingReport; critical: boolean }> {
+  pipelineCtx?: PipelineContext
+): Promise<{
+  vettedLetter: string;
+  vettingReport: VettingReport;
+  critical: boolean;
+}> {
   let jobId = 0;
   try {
     const job = await createWorkflowJob({
@@ -73,16 +118,25 @@ export async function runVettingStage(
     });
     const rawJobId = (job as any)?.insertId;
     if (rawJobId == null) {
-      logger.warn(`[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`);
+      logger.warn(
+        `[Pipeline] Stage 4: createWorkflowJob returned nullish insertId for letter #${letterId}, falling back to jobId=0`
+      );
     }
     jobId = rawJobId ?? 0;
   } catch (jobCreateErr) {
-    logger.warn({ err: jobCreateErr }, `[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`);
-    captureServerException(jobCreateErr, { tags: { component: "pipeline", error_type: "workflow_job_create_failed" }, extra: { letterId } });
+    logger.warn(
+      { err: jobCreateErr },
+      `[Pipeline] Stage 4: createWorkflowJob INSERT failed for letter #${letterId}, falling back to jobId=0:`
+    );
+    captureServerException(jobCreateErr, {
+      tags: { component: "pipeline", error_type: "workflow_job_create_failed" },
+      extra: { letterId },
+    });
   }
   await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
 
-  const jurisdiction = intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
+  const jurisdiction =
+    intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "US";
   const letterType = intake.letterType ?? "general-legal";
   const citationRegistry = pipelineCtx?.citationRegistry ?? [];
 
@@ -98,7 +152,10 @@ export async function runVettingStage(
     intake
   );
 
-  const preVetCitationAudit = runCitationAudit(assembledLetter, citationRegistry);
+  const preVetCitationAudit = runCitationAudit(
+    assembledLetter,
+    citationRegistry
+  );
   logger.info(
     `[Pipeline] Stage 4: Pre-vet citation audit for letter #${letterId}: ${preVetCitationAudit.verifiedCitations.length} verified, ${preVetCitationAudit.unverifiedCitations.length} unverified, risk score: ${preVetCitationAudit.hallucinationRiskScore}%`
   );
@@ -107,18 +164,27 @@ export async function runVettingStage(
     stage: "vetting",
     check: "pre_vet_citation_audit",
     passed: preVetCitationAudit.unverifiedCitations.length === 0,
-    errors: preVetCitationAudit.unverifiedCitations.map(c => `Unverified citation: "${c.citation}"`),
-    warnings: [`Total citations: ${preVetCitationAudit.totalCitations}, hallucination risk: ${preVetCitationAudit.hallucinationRiskScore}%`],
+    errors: preVetCitationAudit.unverifiedCitations.map(
+      c => `Unverified citation: "${c.citation}"`
+    ),
+    warnings: [
+      `Total citations: ${preVetCitationAudit.totalCitations}, hallucination risk: ${preVetCitationAudit.hallucinationRiskScore}%`,
+    ],
     timestamp: new Date().toISOString(),
   });
 
-  const preVetConsistency = validateContentConsistency(assembledLetter, normalizedIntake);
+  const preVetConsistency = validateContentConsistency(
+    assembledLetter,
+    normalizedIntake
+  );
   addValidationResult(pipelineCtx, {
     stage: "vetting",
     check: "pre_vet_content_consistency",
     passed: preVetConsistency.passed,
     errors: preVetConsistency.jurisdictionMismatch
-      ? [`Jurisdiction mismatch: expected "${preVetConsistency.expectedJurisdiction}" but found "${preVetConsistency.foundJurisdiction}"`]
+      ? [
+          `Jurisdiction mismatch: expected "${preVetConsistency.expectedJurisdiction}" but found "${preVetConsistency.foundJurisdiction}"`,
+        ]
       : [],
     warnings: preVetConsistency.warnings,
     timestamp: new Date().toISOString(),
@@ -133,18 +199,36 @@ export async function runVettingStage(
 
   const preVetIssues: string[] = [];
   if (preVetCitationAudit.unverifiedCitations.length > 0) {
-    preVetIssues.push(`UNVERIFIED CITATIONS FOUND: ${preVetCitationAudit.unverifiedCitations.map(c => `"${c.citation}"`).join(", ")}. These must be removed or replaced with [CITATION REQUIRES ATTORNEY VERIFICATION].`);
+    preVetIssues.push(
+      `UNVERIFIED CITATIONS FOUND: ${preVetCitationAudit.unverifiedCitations.map(c => `"${c.citation}"`).join(", ")}. These must be removed or replaced with [CITATION REQUIRES ATTORNEY VERIFICATION].`
+    );
   }
   if (preVetConsistency.jurisdictionMismatch) {
-    preVetIssues.push(`JURISDICTION MISMATCH: Letter references "${preVetConsistency.foundJurisdiction}" law but should only reference "${preVetConsistency.expectedJurisdiction}". Remove all cross-jurisdiction citations.`);
+    preVetIssues.push(
+      `JURISDICTION MISMATCH: Letter references "${preVetConsistency.foundJurisdiction}" law but should only reference "${preVetConsistency.expectedJurisdiction}". Remove all cross-jurisdiction citations.`
+    );
   }
 
-  const lessonsBlockVetting = await buildLessonsPromptBlock(letterType, jurisdiction, "vetting", undefined, pipelineCtx);
-  const systemPrompt = buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) + lessonsBlockVetting;
-  const baseUserPrompt = buildVettingUserPrompt(assembledLetter, intake, research, citationRegistry);
-  const preVetBlock = preVetIssues.length > 0
-    ? `\n\n## PRE-VET ISSUES DETECTED (MUST FIX)\n${preVetIssues.map((issue, i) => `${i + 1}. ${issue}`).join("\n")}\n`
-    : "";
+  const lessonsBlockVetting = await buildLessonsPromptBlock(
+    letterType,
+    jurisdiction,
+    "vetting",
+    undefined,
+    pipelineCtx
+  );
+  const systemPrompt =
+    buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) +
+    lessonsBlockVetting;
+  const baseUserPrompt = buildVettingUserPrompt(
+    assembledLetter,
+    intake,
+    research,
+    citationRegistry
+  );
+  const preVetBlock =
+    preVetIssues.length > 0
+      ? `\n\n## PRE-VET ISSUES DETECTED (MUST FIX)\n${preVetIssues.map((issue, i) => `${i + 1}. ${issue}`).join("\n")}\n`
+      : "";
   const userPrompt = baseUserPrompt + preVetBlock;
 
   const vettingTokens = createTokenAccumulator();
@@ -158,38 +242,41 @@ export async function runVettingStage(
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
-    const { result: vettingText, failoverTriggered: retryFailover } = await withModelFailover(
-      "Stage 4 (vetting retry)",
-      letterId,
-      async () => {
-        const anthropic = getAnthropicClient();
-        const { text, usage: vettingUsage } = await generateText({
-          model: anthropic("claude-sonnet-4-6-20250514"),
-          system: systemPrompt,
-          prompt: promptWithFeedback,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        });
-        accumulateTokens(vettingTokens, vettingUsage);
-        return text;
-      },
-      async () => {
-        vettingProvider = "openai-failover";
-        vettingModelKey = "gpt-4o-mini";
-        const { text, usage: vettingUsage } = await generateText({
-          model: getVettingModelFallback(),
-          system: systemPrompt,
-          prompt: promptWithFeedback,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        });
-        accumulateTokens(vettingTokens, vettingUsage);
-        return text;
-      }
-    );
+    const { result: vettingText, failoverTriggered: retryFailover } =
+      await withModelFailover(
+        "Stage 4 (vetting retry)",
+        letterId,
+        async () => {
+          const anthropic = getAnthropicClient();
+          const { text, usage: vettingUsage } = await generateText({
+            model: anthropic("claude-sonnet-4-6-20250514"),
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 16000,
+            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+          });
+          accumulateTokens(vettingTokens, vettingUsage);
+          return text;
+        },
+        async () => {
+          vettingProvider = "openai-failover";
+          vettingModelKey = "gpt-4o-mini";
+          const { text, usage: vettingUsage } = await generateText({
+            model: getVettingModelFallback(),
+            system: systemPrompt,
+            prompt: promptWithFeedback,
+            maxOutputTokens: 16000,
+            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+          });
+          accumulateTokens(vettingTokens, vettingUsage);
+          return text;
+        }
+      );
     if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
+      if (
+        !pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))
+      ) {
         pipelineCtx.qualityWarnings.push(
           `VETTING_FAILOVER: Switched to OpenAI GPT-4o-mini during vetting retry due to rate limit on primary model. Heightened attorney scrutiny recommended.`
         );
@@ -203,38 +290,49 @@ export async function runVettingStage(
       `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
     );
 
-      const { result: initialVettingText, failoverTriggered: vettingFailover } = await withModelFailover(
-      "Stage 4 (vetting)",
-      letterId,
-      () => {
-        const anthropic = getAnthropicClient();
-        return generateText({
-          model: anthropic("claude-sonnet-4-6-20250514"),
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        }).then(r => { accumulateTokens(vettingTokens, r.usage); return r.text; });
-      },
-      () => {
-        vettingProvider = "openai-failover";
-        vettingModelKey = "gpt-4o-mini";
-        return generateText({
-          model: getVettingModelFallback(),
-          system: systemPrompt,
-          prompt: userPrompt,
-          maxOutputTokens: 16000,
-          abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
-        }).then(r => { accumulateTokens(vettingTokens, r.usage); return r.text; });
-      }
-    );
+    const { result: initialVettingText, failoverTriggered: vettingFailover } =
+      await withModelFailover(
+        "Stage 4 (vetting)",
+        letterId,
+        () => {
+          const anthropic = getAnthropicClient();
+          return generateText({
+            model: anthropic("claude-sonnet-4-6-20250514"),
+            system: systemPrompt,
+            prompt: userPrompt,
+            maxOutputTokens: 16000,
+            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+          }).then(r => {
+            accumulateTokens(vettingTokens, r.usage);
+            return r.text;
+          });
+        },
+        () => {
+          vettingProvider = "openai-failover";
+          vettingModelKey = "gpt-4o-mini";
+          return generateText({
+            model: getVettingModelFallback(),
+            system: systemPrompt,
+            prompt: userPrompt,
+            maxOutputTokens: 16000,
+            abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
+          }).then(r => {
+            accumulateTokens(vettingTokens, r.usage);
+            return r.text;
+          });
+        }
+      );
     if (vettingFailover) {
       logger.warn(
         `[Pipeline] Stage 4: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${vettingProvider})`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-        if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))) {
+        if (
+          !pipelineCtx.qualityWarnings.some(w =>
+            w.startsWith("VETTING_FAILOVER")
+          )
+        ) {
           pipelineCtx.qualityWarnings.push(
             `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o-mini. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
           );
@@ -251,7 +349,9 @@ export async function runVettingStage(
       );
       rawResponse = await retryOnValidationFailure(
         generateVetting,
-        ["Your previous response was not valid JSON. Return ONLY a JSON object with vettedLetter and vettingReport fields."],
+        [
+          "Your previous response was not valid JSON. Return ONLY a JSON object with vettedLetter and vettingReport fields.",
+        ],
         "Stage 4 (JSON parse retry)"
       );
       parsed = parseVettingResponse(rawResponse);
@@ -276,11 +376,19 @@ export async function runVettingStage(
           ),
           completedAt: new Date(),
         });
-        throw new PipelineError(PIPELINE_ERROR_CODES.JSON_PARSE_FAILED, failMsg, "vetting");
+        throw new PipelineError(
+          PIPELINE_ERROR_CODES.JSON_PARSE_FAILED,
+          failMsg,
+          "vetting"
+        );
       }
     }
 
-    const postVetParams = { citationRegistry, normalizedIntake, assembledLetter };
+    const postVetParams = {
+      citationRegistry,
+      normalizedIntake,
+      assembledLetter,
+    };
 
     let currentLetter = parsed.vettedLetter;
     let currentReport = parsed.vettingReport;
@@ -290,8 +398,12 @@ export async function runVettingStage(
       stage: "vetting",
       check: "post_vet_citation_audit",
       passed: checks.postVetCitationAudit.unverifiedCitations.length === 0,
-      errors: checks.postVetCitationAudit.unverifiedCitations.map(c => `Still unverified after vetting: "${c.citation}"`),
-      warnings: [`Post-vet hallucination risk: ${checks.postVetCitationAudit.hallucinationRiskScore}%`],
+      errors: checks.postVetCitationAudit.unverifiedCitations.map(
+        c => `Still unverified after vetting: "${c.citation}"`
+      ),
+      warnings: [
+        `Post-vet hallucination risk: ${checks.postVetCitationAudit.hallucinationRiskScore}%`,
+      ],
       timestamp: new Date().toISOString(),
     });
 
@@ -300,7 +412,9 @@ export async function runVettingStage(
       check: "post_vet_content_consistency",
       passed: checks.postVetConsistency.passed,
       errors: checks.postVetConsistency.jurisdictionMismatch
-        ? [`Post-vet jurisdiction mismatch persists: "${checks.postVetConsistency.foundJurisdiction}"`]
+        ? [
+            `Post-vet jurisdiction mismatch persists: "${checks.postVetConsistency.foundJurisdiction}"`,
+          ]
         : [],
       warnings: checks.postVetConsistency.warnings,
       timestamp: new Date().toISOString(),
@@ -317,7 +431,11 @@ export async function runVettingStage(
       );
       const retryParsed = parseVettingResponse(retryResponse);
       if (retryParsed) {
-        const retryChecks = runPostVetChecks(retryParsed.vettedLetter, retryParsed.vettingReport, postVetParams);
+        const retryChecks = runPostVetChecks(
+          retryParsed.vettedLetter,
+          retryParsed.vettingReport,
+          postVetParams
+        );
 
         addValidationResult(pipelineCtx, {
           stage: "vetting",
@@ -332,7 +450,9 @@ export async function runVettingStage(
           currentLetter = retryParsed.vettedLetter;
           currentReport = retryParsed.vettingReport;
           checks = retryChecks;
-          logger.info(`[Pipeline] Stage 4: Retry improved results for letter #${letterId}`);
+          logger.info(
+            `[Pipeline] Stage 4: Retry improved results for letter #${letterId}`
+          );
         }
       }
     }
@@ -347,7 +467,9 @@ export async function runVettingStage(
         check: "post_vet_bloat_enforcement",
         passed: true,
         errors: [],
-        warnings: postVetBloat.map(p => `Bloat phrase persists after vetting: "${p}"`),
+        warnings: postVetBloat.map(
+          p => `Bloat phrase persists after vetting: "${p}"`
+        ),
         timestamp: new Date().toISOString(),
       });
     }
@@ -367,7 +489,11 @@ export async function runVettingStage(
       timestamp: new Date().toISOString(),
     });
 
-    const jobStatus = checks.validation.valid ? "completed" : (checks.validation.critical ? "failed" : "completed");
+    const jobStatus = checks.validation.valid
+      ? "completed"
+      : checks.validation.critical
+        ? "failed"
+        : "completed";
 
     if (checks.validation.critical) {
       logger.error(
@@ -404,7 +530,11 @@ export async function runVettingStage(
           critical: true,
         },
       });
-      return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: true };
+      return {
+        vettedLetter: checks.finalLetter,
+        vettingReport: currentReport,
+        critical: true,
+      };
     }
 
     if (!checks.validation.valid) {
@@ -431,12 +561,14 @@ export async function runVettingStage(
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
       estimatedCostUsd: calculateCost(vettingModelKey, vettingTokens),
-      errorMessage: checks.validation.valid ? undefined : formatStructuredError(
-        PIPELINE_ERROR_CODES.VETTING_REJECTED,
-        "Vetting validation issues",
-        "vetting",
-        checks.validation.errors.join("; ")
-      ),
+      errorMessage: checks.validation.valid
+        ? undefined
+        : formatStructuredError(
+            PIPELINE_ERROR_CODES.VETTING_REJECTED,
+            "Vetting validation issues",
+            "vetting",
+            checks.validation.errors.join("; ")
+          ),
       responsePayloadJson: {
         provider: vettingProvider,
         failoverUsed: vettingProvider === "openai-failover",
@@ -460,10 +592,17 @@ export async function runVettingStage(
     logger.info(
       `[Pipeline] Stage 4 complete for letter #${letterId}: provider=${vettingProvider}, risk=${currentReport.riskLevel}`
     );
-    return { vettedLetter: checks.finalLetter, vettingReport: currentReport, critical: false };
+    return {
+      vettedLetter: checks.finalLetter,
+      vettingReport: currentReport,
+      critical: false,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ msg: msg }, `[Pipeline] Stage 4 failed for letter #${letterId}:`);
+    logger.error(
+      { msg: msg },
+      `[Pipeline] Stage 4 failed for letter #${letterId}:`
+    );
     captureServerException(err, {
       tags: { pipeline_stage: "vetting", letter_id: String(letterId) },
       extra: { jobId, errorMessage: msg },
@@ -476,16 +615,26 @@ export async function runVettingStage(
       warnings: [],
       timestamp: new Date().toISOString(),
     });
-    const vettingErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
+    const vettingErrCode =
+      err instanceof PipelineError ? err.code : classifyErrorCode(err);
     await updateWorkflowJob(jobId, {
       status: "failed",
       errorMessage: formatStructuredError(vettingErrCode, msg, "vetting"),
       completedAt: new Date(),
       promptTokens: vettingTokens.promptTokens,
       completionTokens: vettingTokens.completionTokens,
-      estimatedCostUsd: vettingTokens.promptTokens > 0 ? calculateCost(vettingModelKey, vettingTokens) : undefined,
+      estimatedCostUsd:
+        vettingTokens.promptTokens > 0
+          ? calculateCost(vettingModelKey, vettingTokens)
+          : undefined,
     });
-    throw err instanceof PipelineError ? err : new PipelineError(vettingErrCode, `Stage 4 vetting failed for letter #${letterId}: ${msg}`, "vetting");
+    throw err instanceof PipelineError
+      ? err
+      : new PipelineError(
+          vettingErrCode,
+          `Stage 4 vetting failed for letter #${letterId}: ${msg}`,
+          "vetting"
+        );
   }
 }
 
@@ -497,7 +646,7 @@ export async function finalizeLetterAfterVetting(
   letterId: number,
   vettedLetter: string,
   vettingReport: VettingReport,
-  pipelineCtx?: PipelineContext,
+  pipelineCtx?: PipelineContext
 ): Promise<void> {
   const qualityWarnings = pipelineCtx?.qualityWarnings ?? [];
   const isDegraded = qualityWarnings.length > 0;
@@ -513,8 +662,8 @@ export async function finalizeLetterAfterVetting(
       metadataJson: {
         provider: "multi-provider",
         researchProvider: pipelineCtx?.researchProvider,
-        failoverUsed: qualityWarnings.some(w =>
-          w.includes("_FAILOVER:") || w.includes("FAILOVER")
+        failoverUsed: qualityWarnings.some(
+          w => w.includes("_FAILOVER:") || w.includes("FAILOVER")
         ),
         stage: "vetted_final",
         vettingReport,
@@ -539,14 +688,18 @@ export async function finalizeLetterAfterVetting(
     );
   }
 
-  const finalStatus = "generated_locked" as const;
+  const finalStatus = pipelineCtx?.isFreePreview
+    ? "AI_GENERATION_COMPLETED_HIDDEN"
+    : "generated_locked";
   const noteText = isDegraded
-    ? `Draft ready with quality warnings. Our AI completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
-    : `Draft ready. Our legal team has completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`;
+    ? `Draft ready with quality warnings. Our professional drafting models completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
+    : `Draft ready. Our professional drafting models have completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`;
 
   // Parallelize: version pointer update + status transition + review action are independent
   await Promise.all([
-    updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId }),
+    updateLetterVersionPointers(letterId, {
+      currentAiDraftVersionId: versionId,
+    }),
     updateLetterStatus(letterId, finalStatus),
     logReviewAction({
       letterRequestId: letterId,
@@ -563,31 +716,47 @@ export async function finalizeLetterAfterVetting(
   if (isDegraded) {
     (async () => {
       try {
-        const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+        const appBaseUrl =
+          process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
         const admins = await getAllUsers("admin");
-        await Promise.allSettled(admins.map(async (admin) => {
-          if (admin.email) {
-            sendAdminAlertEmail({
-              to: admin.email,
-              name: admin.name ?? "Admin",
-              subject: `Quality-flagged draft produced for letter #${letterId}`,
-              preheader: `Vetting raised quality warnings — attorney scrutiny required`,
-              bodyHtml: `<p>Letter #${letterId} completed the pipeline with quality warnings attached.</p><p>Warnings:</p><ul>${qualityWarnings.map(w => `<li>${w}</li>`).join("")}</ul><p>The draft is in <strong>generated_locked</strong> status and requires heightened attorney scrutiny upon review.</p>`,
-              ctaText: "View Letter",
-              ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
-            }).catch(e => logger.error({ e: e }, `[Pipeline] Failed admin alert email for degraded draft #${letterId}:`));
-          }
-          createNotification({
-            userId: admin.id,
-            type: "quality_alert",
-            category: "letters",
-            title: `Quality-flagged draft: letter #${letterId}`,
-            body: `Vetting quality warnings attached (${qualityWarnings.length}). Extra attorney scrutiny needed.`,
-            link: `/admin/letters/${letterId}`,
-          }).catch(e => logger.error({ e: e }, `[Pipeline] Failed notification for degraded draft #${letterId}:`));
-        }));
+        await Promise.allSettled(
+          admins.map(async admin => {
+            if (admin.email) {
+              sendAdminAlertEmail({
+                to: admin.email,
+                name: admin.name ?? "Admin",
+                subject: `Quality-flagged draft produced for letter #${letterId}`,
+                preheader: `Vetting raised quality warnings — attorney scrutiny required`,
+                bodyHtml: `<p>Letter #${letterId} completed the pipeline with quality warnings attached.</p><p>Warnings:</p><ul>${qualityWarnings.map(w => `<li>${w}</li>`).join("")}</ul><p>The draft is in <strong>generated_locked</strong> status and requires heightened attorney scrutiny upon review.</p>`,
+                ctaText: "View Letter",
+                ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
+              }).catch(e =>
+                logger.error(
+                  { e: e },
+                  `[Pipeline] Failed admin alert email for degraded draft #${letterId}:`
+                )
+              );
+            }
+            createNotification({
+              userId: admin.id,
+              type: "quality_alert",
+              category: "letters",
+              title: `Quality-flagged draft: letter #${letterId}`,
+              body: `Vetting quality warnings attached (${qualityWarnings.length}). Extra attorney scrutiny needed.`,
+              link: `/admin/letters/${letterId}`,
+            }).catch(e =>
+              logger.error(
+                { e: e },
+                `[Pipeline] Failed notification for degraded draft #${letterId}:`
+              )
+            );
+          })
+        );
       } catch (alertErr) {
-        logger.error({ err: alertErr }, `[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`);
+        logger.error(
+          { err: alertErr },
+          `[Pipeline] Failed to notify admins of quality-degraded draft #${letterId}:`
+        );
       }
     })();
   }
@@ -595,7 +764,9 @@ export async function finalizeLetterAfterVetting(
   // Single DB read for the letter record — used for both subscriber email and paywall check
   const letterForPaywall = await getLetterById(letterId);
   // Single unlock check — reused for both subscriber email and paywall logging
-  const wasAlreadyUnlocked = letterForPaywall ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
+  const wasAlreadyUnlocked = letterForPaywall
+    ? await hasLetterBeenPreviouslyUnlocked(letterId)
+    : false;
 
   // ── Subscriber "letter ready" email (normal completion path) ─────────────────
   // Skip for free-preview letters: they're served by the dedicated
@@ -612,17 +783,25 @@ export async function finalizeLetterAfterVetting(
     ) {
       const subscriber = await getUserById(letterForPaywall.userId);
       if (subscriber?.email) {
-        const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterForPaywall.userId);
+        const isFirstLetter =
+          !wasAlreadyUnlocked &&
+          (await isUserFirstLetterEligible(letterForPaywall.userId));
         sendLetterReadyEmail({
           to: subscriber.email,
           name: subscriber.name ?? "Subscriber",
           subject: letterForPaywall.subject,
           letterId,
-          appUrl: process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
+          appUrl:
+            process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
           letterType: letterForPaywall.letterType ?? undefined,
           jurisdictionState: letterForPaywall.jurisdictionState ?? undefined,
           isFirstLetter,
-        }).catch(e => logger.error({ e: e }, `[Pipeline] Failed to send letter-ready email for #${letterId}:`));
+        }).catch(e =>
+          logger.error(
+            { e: e },
+            `[Pipeline] Failed to send letter-ready email for #${letterId}:`
+          )
+        );
       }
     } else if (letterForPaywall?.isFreePreview) {
       logger.info(
@@ -630,7 +809,10 @@ export async function finalizeLetterAfterVetting(
       );
     }
   } catch (emailErr) {
-    logger.error({ err: emailErr }, `[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`);
+    logger.error(
+      { err: emailErr },
+      `[Pipeline] Failed to send subscriber email for normal completion #${letterId}:`
+    );
   }
 
   // ── Paywall logging (uses cached wasAlreadyUnlocked — no redundant DB read) ──
@@ -660,16 +842,40 @@ export async function runAssemblyVettingLoop(
   intake: IntakeJson,
   research: ResearchPacket,
   draft: DraftOutput,
-  pipelineCtx: PipelineContext,
-): Promise<{ vettingResult: { vettedLetter: string; vettingReport: VettingReport; critical: boolean }; assemblyRetries: number }> {
-  let assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-  let vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+  pipelineCtx: PipelineContext
+): Promise<{
+  vettingResult: {
+    vettedLetter: string;
+    vettingReport: VettingReport;
+    critical: boolean;
+  };
+  assemblyRetries: number;
+}> {
+  let assembledLetter = await runAssemblyStage(
+    letterId,
+    intake,
+    research,
+    draft,
+    pipelineCtx
+  );
+  let vettingResult = await runVettingStage(
+    letterId,
+    assembledLetter,
+    intake,
+    research,
+    pipelineCtx
+  );
   let assemblyRetries = 0;
 
-  while (vettingResult.critical && assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES) {
+  while (
+    vettingResult.critical &&
+    assemblyRetries < MAX_ASSEMBLY_VETTING_RETRIES
+  ) {
     assemblyRetries++;
     const lastValidation = pipelineCtx.validationResults
-      ?.filter(r => r.stage === "vetting" && r.check === "vetting_output_validation")
+      ?.filter(
+        r => r.stage === "vetting" && r.check === "vetting_output_validation"
+      )
       .pop();
     const lastErrors = lastValidation?.errors;
     const reportErrors = vettingResult.vettingReport.jurisdictionIssues
@@ -682,7 +888,10 @@ export async function runAssemblyVettingLoop(
     } else if (reportErrors.length > 0) {
       allCriticalErrors = reportErrors;
     } else {
-      allCriticalErrors = [vettingResult.vettingReport.overallAssessment || "Vetting flagged critical issues but no specific errors were provided"];
+      allCriticalErrors = [
+        vettingResult.vettingReport.overallAssessment ||
+          "Vetting flagged critical issues but no specific errors were provided",
+      ];
     }
 
     logger.warn(
@@ -694,16 +903,29 @@ export async function runAssemblyVettingLoop(
       check: `retry_${assemblyRetries}`,
       passed: false,
       errors: allCriticalErrors,
-      warnings: [`Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`],
+      warnings: [
+        `Retry triggered by vetting critical flag (attempt ${assemblyRetries}/${MAX_ASSEMBLY_VETTING_RETRIES})`,
+      ],
       timestamp: new Date().toISOString(),
     });
 
     pipelineCtx.assemblyVettingFeedback = `CRITICAL ISSUES FROM PREVIOUS ATTEMPT (must fix):\n${allCriticalErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`;
 
-    assembledLetter = await runAssemblyStage(letterId, intake, research, draft, pipelineCtx);
-    vettingResult = await runVettingStage(letterId, assembledLetter, intake, research, pipelineCtx);
+    assembledLetter = await runAssemblyStage(
+      letterId,
+      intake,
+      research,
+      draft,
+      pipelineCtx
+    );
+    vettingResult = await runVettingStage(
+      letterId,
+      assembledLetter,
+      intake,
+      research,
+      pipelineCtx
+    );
   }
 
   return { vettingResult, assemblyRetries };
 }
-

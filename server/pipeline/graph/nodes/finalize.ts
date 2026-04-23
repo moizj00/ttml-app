@@ -92,8 +92,10 @@ export async function finalizeNode(
   }
 
   // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
-  // (drafting → generated_locked is valid per shared/types/letter.ts)
-  await updateLetterStatus(letterId, "generated_locked");
+  // If this is a free preview, set status to AI_GENERATION_COMPLETED_HIDDEN (Procedure 4)
+  const isFreePreview = state.isFreePreview ?? false;
+  const finalStatus = isFreePreview ? "AI_GENERATION_COMPLETED_HIDDEN" : "generated_locked";
+  await updateLetterStatus(letterId, finalStatus);
 
   // Close out the workflow_jobs row so admin monitor shows this run as
   // completed with aggregated token totals. Wrapped in try/catch because
@@ -129,7 +131,7 @@ export async function finalizeNode(
 
   log.info(
     { letterId, versionId, qualityDegraded, researchUnverified, totalTokens: tokenTotals.totalTokens },
-    "[FinalizeNode] Letter finalized → generated_locked",
+    `[FinalizeNode] Letter finalized → ${finalStatus}`,
   );
 
   return {
@@ -144,7 +146,7 @@ export async function finalizeNode(
     } as any,
     messages: [
       new AIMessage(
-        `[Finalize] Letter #${letterId} saved as version ${versionId} → generated_locked`,
+        `[Finalize] Letter #${letterId} saved as version ${versionId} → ${finalStatus}`,
       ),
     ],
   };
