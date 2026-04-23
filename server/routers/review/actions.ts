@@ -50,7 +50,13 @@ export const reviewActionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const letter = await getLetterRequestById(input.letterId);
       if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!["pending_review", "under_review", "client_revision_requested"].includes(letter.status))
+      if (
+        ![
+          "pending_review",
+          "under_review",
+          "client_revision_requested",
+        ].includes(letter.status)
+      )
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Letter is not in a reviewable state",
@@ -88,14 +94,23 @@ export const reviewActionsRouter = router({
           });
         }
       } catch (err) {
-        logger.error({ err: err }, "[Notify] Claim subscriber notification failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "claim_notification_failed" } });
+        logger.error(
+          { err: err },
+          "[Notify] Claim subscriber notification failed:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "claim_notification_failed",
+          },
+        });
       }
       // ── Notify attorney: review assignment confirmation ──
       try {
         const attorney = await getUserById(ctx.user.id);
         const appUrl = getAppUrl(ctx.req);
-        const subscriber = letter.userId != null ? await getUserById(letter.userId) : null;
+        const subscriber =
+          letter.userId != null ? await getUserById(letter.userId) : null;
         if (attorney?.email) {
           const jurisdiction =
             [
@@ -117,8 +132,16 @@ export const reviewActionsRouter = router({
           });
         }
       } catch (err) {
-        logger.error({ err: err }, "[Notify] Claim attorney notification failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "attorney_notification_failed" } });
+        logger.error(
+          { err: err },
+          "[Notify] Claim attorney notification failed:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "attorney_notification_failed",
+          },
+        });
       }
       try {
         await notifyAdmins({
@@ -130,7 +153,9 @@ export const reviewActionsRouter = router({
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] letter_claimed:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_claimed" } });
+        captureServerException(err, {
+          tags: { component: "review", error_type: "notify_admins_claimed" },
+        });
       }
       return { success: true };
     }),
@@ -145,12 +170,17 @@ export const reviewActionsRouter = router({
           code: "BAD_REQUEST",
           message: "Letter is not under review",
         });
-      if (ctx.user.role !== "admin" && letter.assignedReviewerId !== ctx.user.id)
+      if (
+        ctx.user.role !== "admin" &&
+        letter.assignedReviewerId !== ctx.user.id
+      )
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You are not assigned to this letter",
         });
-      await updateLetterStatus(input.letterId, "pending_review", { assignedReviewerId: null });
+      await updateLetterStatus(input.letterId, "pending_review", {
+        assignedReviewerId: null,
+      });
       await logReviewAction({
         letterRequestId: input.letterId,
         reviewerId: ctx.user.id,
@@ -163,7 +193,9 @@ export const reviewActionsRouter = router({
       });
       // ── Notify subscriber ──
       try {
-        const subscriber = letter.userId ? await getUserById(letter.userId) : null;
+        const subscriber = letter.userId
+          ? await getUserById(letter.userId)
+          : null;
         const appUrl = getAppUrl(ctx.req);
         if (subscriber?.email) {
           await sendStatusUpdateEmail({
@@ -176,8 +208,16 @@ export const reviewActionsRouter = router({
           });
         }
       } catch (err) {
-        logger.error({ err: err }, "[Notify] Unclaim subscriber notification failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "unclaim_notification_failed" } });
+        logger.error(
+          { err: err },
+          "[Notify] Unclaim subscriber notification failed:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "unclaim_notification_failed",
+          },
+        });
       }
       try {
         await notifyAdmins({
@@ -189,7 +229,9 @@ export const reviewActionsRouter = router({
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] letter_released:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_released" } });
+        captureServerException(err, {
+          tags: { component: "review", error_type: "notify_admins_released" },
+        });
       }
       return { success: true };
     }),
@@ -227,7 +269,8 @@ export const reviewActionsRouter = router({
       if (letter.researchUnverified && !input.acknowledgedUnverifiedResearch)
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "You must acknowledge that research citations are unverified before approving this letter.",
+          message:
+            "You must acknowledge that research citations are unverified before approving this letter.",
         });
       const version = await createLetterVersion({
         letterRequestId: input.letterId,
@@ -244,14 +287,17 @@ export const reviewActionsRouter = router({
       if (typeof versionId !== "number" || isNaN(versionId)) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create final approved version — version ID was not returned. Approval aborted.",
+          message:
+            "Failed to create final approved version — version ID was not returned. Approval aborted.",
         });
       }
       await updateLetterVersionPointers(input.letterId, {
         currentFinalVersionId: versionId,
       });
       // Transition to approved (now the final attorney-approved state)
-      await updateLetterStatus(input.letterId, "approved");
+      await updateLetterStatus(input.letterId, "approved", {
+        approvedByRole: ctx.user.role,
+      });
       await logReviewAction({
         letterRequestId: input.letterId,
         reviewerId: ctx.user.id,
@@ -293,10 +339,18 @@ export const reviewActionsRouter = router({
         await updateLetterStoragePath(input.letterId, pdfKey);
         pdfUrl = pdfResult.pdfUrl;
         await updateLetterPdfUrl(input.letterId, pdfUrl);
-        logger.info(`[Approve] PDF generated for letter #${input.letterId}: key=${pdfKey}`);
+        logger.info(
+          `[Approve] PDF generated for letter #${input.letterId}: key=${pdfKey}`
+        );
       } catch (pdfErr) {
-        captureServerException(pdfErr, { tags: { component: "review", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
-        logger.error({ err: pdfErr }, `[Approve] PDF generation failed for letter #${input.letterId} (non-blocking):`);
+        captureServerException(pdfErr, {
+          tags: { component: "review", error_type: "pdf_generation_failed" },
+          extra: { letterId: input.letterId },
+        });
+        logger.error(
+          { err: pdfErr },
+          `[Approve] PDF generation failed for letter #${input.letterId} (non-blocking):`
+        );
         // Non-blocking: approval still succeeds even if PDF generation fails
       }
       // ── Optionally send letter directly to recipient in one step ──
@@ -304,8 +358,13 @@ export const reviewActionsRouter = router({
       let recipientSendError: string | undefined;
       if (input.recipientEmail) {
         try {
-          const versions = await getLetterVersionsByRequestId(input.letterId, false);
-          const finalVer = versions.find((v) => v.versionType === "final_approved");
+          const versions = await getLetterVersionsByRequestId(
+            input.letterId,
+            false
+          );
+          const finalVer = versions.find(
+            v => v.versionType === "final_approved"
+          );
           await sendLetterToRecipient({
             recipientEmail: input.recipientEmail,
             letterSubject: letter.subject,
@@ -326,21 +385,37 @@ export const reviewActionsRouter = router({
             fromStatus: "approved",
             toStatus: "sent",
           });
-          logger.info(`[Approve] Letter #${input.letterId} sent to ${input.recipientEmail}`);
+          logger.info(
+            `[Approve] Letter #${input.letterId} sent to ${input.recipientEmail}`
+          );
           // Write delivery log entry
           createDeliveryLogEntry({
             letterRequestId: input.letterId,
             recipientEmail: input.recipientEmail,
             deliveryMethod: "email",
-          }).catch((e) => logger.error({ err: e }, "[DeliveryLog] Failed to write log:"));
+          }).catch(e =>
+            logger.error({ err: e }, "[DeliveryLog] Failed to write log:")
+          );
           // Issue a portal token so the recipient can view/respond online
           createClientPortalToken(input.letterId, {
             recipientEmail: input.recipientEmail,
-          }).catch((e) => logger.error({ err: e }, "[PortalToken] Failed to create:"));
+          }).catch(e =>
+            logger.error({ err: e }, "[PortalToken] Failed to create:")
+          );
         } catch (sendErr) {
-          recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
-          captureServerException(sendErr, { tags: { component: "review", error_type: "approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });
-          logger.error({ err: sendErr }, `[Approve] Failed to send letter #${input.letterId} to recipient:`);
+          recipientSendError =
+            sendErr instanceof Error ? sendErr.message : "Failed to send";
+          captureServerException(sendErr, {
+            tags: { component: "review", error_type: "approve_send_failed" },
+            extra: {
+              letterId: input.letterId,
+              recipientEmail: input.recipientEmail,
+            },
+          });
+          logger.error(
+            { err: sendErr },
+            `[Approve] Failed to send letter #${input.letterId} to recipient:`
+          );
         }
       }
       // ── Notify subscriber: letter has been approved ──
@@ -368,36 +443,58 @@ export const reviewActionsRouter = router({
         }
       } catch (err) {
         logger.error({ err: err }, "[Notify] Failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "approval_notification_failed" } });
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "approval_notification_failed",
+          },
+        });
       }
-      extractLessonFromApproval(input.letterId, input.internalNote, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
-      computeAndStoreQualityScore(input.letterId, "approved", input.finalContent).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
+      extractLessonFromApproval(
+        input.letterId,
+        input.internalNote,
+        ctx.user.id
+      ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
+      computeAndStoreQualityScore(
+        input.letterId,
+        "approved",
+        input.finalContent
+      ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
       // ── RAG embedding + training capture (fire-and-forget) ──
       (async () => {
         try {
-          const { embedAndStoreLetterVersion } = await import("../../pipeline/embeddings");
+          const { embedAndStoreLetterVersion } =
+            await import("../../pipeline/embeddings");
           await embedAndStoreLetterVersion(versionId, input.finalContent);
         } catch (embErr) {
-          logger.error({ err: embErr }, `[Approve] Embedding failed for letter #${input.letterId}:`);
+          logger.error(
+            { err: embErr },
+            `[Approve] Embedding failed for letter #${input.letterId}:`
+          );
         }
       })();
       (async () => {
         try {
-          const { captureTrainingExample } = await import("../../pipeline/training-capture");
+          const { captureTrainingExample } =
+            await import("../../pipeline/training-capture");
           await captureTrainingExample(
             input.letterId,
             letter.letterType,
             letter.jurisdictionState ?? null,
             letter.intakeJson as IntakeJson,
-            input.finalContent,
+            input.finalContent
           );
         } catch (trainErr) {
-          logger.error({ err: trainErr }, `[Approve] Training capture failed for letter #${input.letterId}:`);
+          logger.error(
+            { err: trainErr },
+            `[Approve] Training capture failed for letter #${input.letterId}:`
+          );
         }
       })();
       (async () => {
         try {
-          const { checkAndTriggerFineTune } = await import("../../pipeline/fine-tune");
+          const { checkAndTriggerFineTune } =
+            await import("../../pipeline/fine-tune");
           await checkAndTriggerFineTune();
         } catch (ftErr) {
           logger.error({ err: ftErr }, `[Approve] Fine-tune check failed:`);
@@ -421,9 +518,17 @@ export const reviewActionsRouter = router({
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] letter_approved:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_approved" } });
+        captureServerException(err, {
+          tags: { component: "review", error_type: "notify_admins_approved" },
+        });
       }
-      return { success: true, versionId, pdfUrl, recipientSent, recipientSendError };
+      return {
+        success: true,
+        versionId,
+        pdfUrl,
+        recipientSent,
+        recipientSendError,
+      };
     }),
 
   reject: attorneyProcedure
@@ -494,10 +599,21 @@ export const reviewActionsRouter = router({
         }
       } catch (err) {
         logger.error({ err: err }, "[Notify] Failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "rejection_notification_failed" } });
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "rejection_notification_failed",
+          },
+        });
       }
-      extractLessonFromRejection(input.letterId, input.reason, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
-      computeAndStoreQualityScore(input.letterId, "rejected").catch((e) => logger.error({ err: e }, "fire-and-forget error"));
+      extractLessonFromRejection(
+        input.letterId,
+        input.reason,
+        ctx.user.id
+      ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
+      computeAndStoreQualityScore(input.letterId, "rejected").catch(e =>
+        logger.error({ err: e }, "fire-and-forget error")
+      );
       try {
         await notifyAdmins({
           category: "letters",
@@ -508,7 +624,9 @@ export const reviewActionsRouter = router({
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] letter_rejected:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_rejected" } });
+        captureServerException(err, {
+          tags: { component: "review", error_type: "notify_admins_rejected" },
+        });
       }
       return { success: true };
     }),
@@ -538,7 +656,9 @@ export const reviewActionsRouter = router({
           code: "BAD_REQUEST",
           message: "Letter must be under_review",
         });
-      await updateLetterStatus(input.letterId, "needs_changes", { assignedReviewerId: null });
+      await updateLetterStatus(input.letterId, "needs_changes", {
+        assignedReviewerId: null,
+      });
       // Encode retriggerPipeline preference in the internal action noteText
       // so updateForChanges can read it without a schema migration.
       const internalNoteWithRetrigger = JSON.stringify({
@@ -587,9 +707,19 @@ export const reviewActionsRouter = router({
         }
       } catch (err) {
         logger.error({ err: err }, "[Notify] Failed:");
-        captureServerException(err, { tags: { component: "review", error_type: "changes_notification_failed" } });
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "changes_notification_failed",
+          },
+        });
       }
-      extractLessonFromChangesRequest(input.letterId, input.internalNote, input.userVisibleNote, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
+      extractLessonFromChangesRequest(
+        input.letterId,
+        input.internalNote,
+        input.userVisibleNote,
+        ctx.user.id
+      ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
       try {
         await notifyAdmins({
           category: "letters",
@@ -600,7 +730,12 @@ export const reviewActionsRouter = router({
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] letter_changes_requested:");
-        captureServerException(err, { tags: { component: "review", error_type: "notify_admins_changes_requested" } });
+        captureServerException(err, {
+          tags: {
+            component: "review",
+            error_type: "notify_admins_changes_requested",
+          },
+        });
       }
       // Pipeline re-trigger (if requested) is deferred to when subscriber responds via updateForChanges.
       // The retriggerPipeline preference is stored in the internal review action above.
@@ -647,7 +782,12 @@ export const reviewActionsRouter = router({
         noteText: input.note,
         noteVisibility: "internal",
       });
-      extractLessonFromEdit(input.letterId, input.content, input.note, ctx.user.id).catch((e) => logger.error({ err: e }, "fire-and-forget error"));
+      extractLessonFromEdit(
+        input.letterId,
+        input.content,
+        input.note,
+        ctx.user.id
+      ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
       return { versionId: (version as any)?.insertId };
     }),
 });

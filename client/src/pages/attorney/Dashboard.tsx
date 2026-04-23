@@ -209,7 +209,7 @@ export default function AttorneyDashboard() {
                       <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto flex-shrink-0">
                         {isOverdue && <Badge variant="destructive" className="text-xs">{Math.round(hrs)}h</Badge>}
                         {isUrgent && <Badge className="text-xs bg-orange-100 text-orange-700 hover:bg-orange-100">{Math.round(hrs)}h</Badge>}
-                        <StatusBadge status={letter.status} size="sm" />
+                        <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
                         <ArrowRight className="w-3 h-3 text-muted-foreground" />
                       </div>
                     </div>
@@ -244,7 +244,7 @@ export default function AttorneyDashboard() {
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto flex-shrink-0">
-                      <StatusBadge status={letter.status} size="sm" />
+                      <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
                       <ArrowRight className="w-3 h-3 text-muted-foreground" />
                     </div>
                   </div>

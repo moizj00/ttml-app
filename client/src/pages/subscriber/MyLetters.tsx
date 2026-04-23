@@ -244,7 +244,7 @@ export default function MyLetters() {
                           {letter.subject}
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <StatusBadge status={letter.status} size="sm" />
+                          <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
                           {hasPdf && (
                             <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50 font-semibold gap-1 hidden sm:flex">
                               <Download className="w-3 h-3" />

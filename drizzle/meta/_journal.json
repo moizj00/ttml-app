@@ -344,6 +344,13 @@
       "when": 1776832800000,
       "tag": "0048_free_preview_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1776973405416,
+      "tag": "0049_natural_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

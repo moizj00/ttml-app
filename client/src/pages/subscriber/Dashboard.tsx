@@ -589,7 +589,7 @@ export default function SubscriberDashboard() {
                           </div>
                         </div>
                         <div className="flex justify-start sm:justify-end">
-                          <StatusBadge status={letter.status} size="sm" />
+                          <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
                         </div>
                       </div>
 

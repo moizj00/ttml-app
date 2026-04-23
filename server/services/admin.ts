@@ -27,7 +27,10 @@ import {
   getLetterVersionsByRequestId,
   getWorkflowJobsByLetterId,
 } from "../db";
-import { sendAttorneyInvitationEmail, sendNewReviewNeededEmail } from "../email";
+import {
+  sendAttorneyInvitationEmail,
+  sendNewReviewNeededEmail,
+} from "../email";
 import { captureServerException } from "../sentry";
 import { invalidateUserCache, getOriginUrl } from "../supabaseAuth";
 import { hasEverSubscribed } from "../stripe";
@@ -88,8 +91,16 @@ export async function changeUserRole(
         link: "/attorney",
       });
     } catch (err) {
-      logger.error({ err: err }, "[changeUserRole] Failed to send attorney promotion notification:");
-      captureServerException(err, { tags: { component: "admin", error_type: "attorney_promotion_notification_failed" } });
+      logger.error(
+        { err: err },
+        "[changeUserRole] Failed to send attorney promotion notification:"
+      );
+      captureServerException(err, {
+        tags: {
+          component: "admin",
+          error_type: "attorney_promotion_notification_failed",
+        },
+      });
     }
 
     await _notifyAttorneyOfPendingQueue(input.userId, "[changeUserRole]");
@@ -106,7 +117,9 @@ export async function changeUserRole(
     });
   } catch (err) {
     logger.error({ err: err }, "[notifyAdmins] user_role_changed:");
-    captureServerException(err, { tags: { component: "admin", error_type: "notify_admins_role_changed" } });
+    captureServerException(err, {
+      tags: { component: "admin", error_type: "notify_admins_role_changed" },
+    });
   }
 
   return { success: true };
@@ -139,17 +152,23 @@ export async function inviteAttorney(
   const existingUser = await getUserByEmail(email);
   if (existingUser) {
     if (existingUser.role === "attorney") {
-      throw new TRPCError({ code: "CONFLICT", message: "This user is already an attorney." });
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "This user is already an attorney.",
+      });
     }
     const everSubscribed = await hasEverSubscribed(existingUser.id);
     if (everSubscribed) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "This user has a subscription history and cannot be promoted to Attorney. The subscriber role is permanent once a plan has been purchased.",
+        message:
+          "This user has a subscription history and cannot be promoted to Attorney. The subscriber role is permanent once a plan has been purchased.",
       });
     }
     await updateUserRole(existingUser.id, "attorney");
-    try { await assignRoleId(existingUser.id, "attorney"); } catch (e) {
+    try {
+      await assignRoleId(existingUser.id, "attorney");
+    } catch (e) {
       logger.error({ e: e }, "[inviteAttorney] Role ID assignment failed:");
     }
     if (existingUser.openId) invalidateUserCache(existingUser.openId);
@@ -165,30 +184,47 @@ export async function inviteAttorney(
       logger.error({ err: err }, "[inviteAttorney] notification failed:");
     }
     await _notifyAttorneyOfPendingQueue(existingUser.id, "[inviteAttorney]");
-    return { success: true, alreadyExisted: true, message: `${email} already had an account and has been promoted to attorney.` };
+    return {
+      success: true,
+      alreadyExisted: true,
+      message: `${email} already had an account and has been promoted to attorney.`,
+    };
   }
 
   const serviceClient = await _getSupabaseServiceClient();
 
   const crypto = await import("crypto");
   const randomPassword = crypto.randomBytes(32).toString("hex");
-  const { data: createData, error: createError } = await serviceClient.auth.admin.createUser({
-    email,
-    password: randomPassword,
-    email_confirm: true,
-    user_metadata: { name, invited_attorney: true },
-  });
+  const { data: createData, error: createError } =
+    await serviceClient.auth.admin.createUser({
+      email,
+      password: randomPassword,
+      email_confirm: true,
+      user_metadata: { name, invited_attorney: true },
+    });
 
   if (createError) {
-    logger.error({ err: createError }, "[inviteAttorney] Supabase createUser error:");
-    if (createError.message.includes("already") || createError.message.includes("exists")) {
+    logger.error(
+      { err: createError },
+      "[inviteAttorney] Supabase createUser error:"
+    );
+    if (
+      createError.message.includes("already") ||
+      createError.message.includes("exists")
+    ) {
       return await _handleExistingAuthUser(email, name, ctx, serviceClient);
     }
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: createError.message });
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: createError.message,
+    });
   }
 
   if (!createData.user) {
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create auth user." });
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to create auth user.",
+    });
   }
 
   const { upsertUser, getUserByOpenId } = await import("../db");
@@ -205,23 +241,27 @@ export async function inviteAttorney(
 
   const appUser = await getUserByOpenId(createData.user.id);
   if (appUser) {
-    try { await assignRoleId(appUser.id, "attorney"); } catch (e) {
+    try {
+      await assignRoleId(appUser.id, "attorney");
+    } catch (e) {
       logger.error({ e: e }, "[inviteAttorney] Role ID assignment failed:");
     }
   }
 
   const origin = getOriginUrl(ctx.req);
-  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    options: { redirectTo: `${origin}/accept-invitation` },
-  });
+  const { data: linkData, error: linkError } =
+    await serviceClient.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo: `${origin}/accept-invitation` },
+    });
 
   if (linkError || !linkData?.properties?.action_link) {
     logger.error({ err: linkError }, "[inviteAttorney] generateLink error:");
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",
+      message:
+        "User created but failed to generate invitation link. The attorney can use 'Forgot Password' to set their password.",
     });
   }
 
@@ -233,11 +273,20 @@ export async function inviteAttorney(
       invitedByName: ctx.actingAdmin.name || undefined,
     });
   } catch (emailErr) {
-    logger.error({ err: emailErr }, "[inviteAttorney] Failed to send invitation email:");
-    captureServerException(emailErr, { tags: { component: "admin", error_type: "attorney_invitation_email_failed" } });
+    logger.error(
+      { err: emailErr },
+      "[inviteAttorney] Failed to send invitation email:"
+    );
+    captureServerException(emailErr, {
+      tags: {
+        component: "admin",
+        error_type: "attorney_invitation_email_failed",
+      },
+    });
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "Attorney account created but invitation email failed to send. They can use 'Forgot Password' to access their account.",
+      message:
+        "Attorney account created but invitation email failed to send. They can use 'Forgot Password' to access their account.",
     });
   }
 
@@ -263,11 +312,18 @@ export async function inviteAttorney(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Notify a newly-onboarded attorney of any letters already in the pending_review queue. */
-async function _notifyAttorneyOfPendingQueue(userId: number, logPrefix: string): Promise<void> {
+async function _notifyAttorneyOfPendingQueue(
+  userId: number,
+  logPrefix: string
+): Promise<void> {
   try {
-    const pendingLetters = await getAllLetterRequests({ status: "pending_review" });
+    const pendingLetters = await getAllLetterRequests({
+      status: "pending_review",
+    });
     if (pendingLetters.length > 0) {
-      logger.info(`${logPrefix} Attorney #${userId} onboarded — ${pendingLetters.length} pending_review letter(s) already in queue`);
+      logger.info(
+        `${logPrefix} Attorney #${userId} onboarded — ${pendingLetters.length} pending_review letter(s) already in queue`
+      );
       await createNotification({
         userId,
         type: "attorney_onboarding_queue",
@@ -278,7 +334,10 @@ async function _notifyAttorneyOfPendingQueue(userId: number, logPrefix: string):
       });
     }
   } catch (err) {
-    logger.error({ err: err }, `${logPrefix} Onboarding queue notification failed:`);
+    logger.error(
+      { err: err },
+      `${logPrefix} Onboarding queue notification failed:`
+    );
   }
 }
 
@@ -288,7 +347,10 @@ async function _getSupabaseServiceClient() {
   const sbUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const sbServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!sbUrl || !sbServiceKey) {
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Supabase configuration missing." });
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Supabase configuration missing.",
+    });
   }
   return createClient(sbUrl, sbServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -324,8 +386,13 @@ async function _handleExistingAuthUser(
       invalidateUserCache(authUserId);
       const existingAppUser = await getUserByOpenId(authUserId);
       if (existingAppUser) {
-        try { await assignRoleId(existingAppUser.id, "attorney"); } catch (e) {
-          logger.error({ e: e }, "[inviteAttorney] Role ID assignment for existing auth user:");
+        try {
+          await assignRoleId(existingAppUser.id, "attorney");
+        } catch (e) {
+          logger.error(
+            { e: e },
+            "[inviteAttorney] Role ID assignment for existing auth user:"
+          );
         }
       }
       await serviceClient.auth.admin.updateUserById(authUserId, {
@@ -338,14 +405,27 @@ async function _handleExistingAuthUser(
         invitedByName: ctx.actingAdmin.name || undefined,
       });
       if (existingAppUser) {
-        await _notifyAttorneyOfPendingQueue(existingAppUser.id, "[inviteAttorney:recover]");
+        await _notifyAttorneyOfPendingQueue(
+          existingAppUser.id,
+          "[inviteAttorney:recover]"
+        );
       }
-      return { success: true, alreadyExisted: true, message: `${email} had an auth account and has been set up as an attorney. Invitation sent.` };
+      return {
+        success: true,
+        alreadyExisted: true,
+        message: `${email} had an auth account and has been set up as an attorney. Invitation sent.`,
+      };
     }
   } catch (recoveryErr) {
-    logger.error({ err: recoveryErr }, "[inviteAttorney] Recovery attempt for existing auth user failed:");
+    logger.error(
+      { err: recoveryErr },
+      "[inviteAttorney] Recovery attempt for existing auth user failed:"
+    );
   }
-  throw new TRPCError({ code: "CONFLICT", message: "An account with this email already exists in the auth system." });
+  throw new TRPCError({
+    code: "CONFLICT",
+    message: "An account with this email already exists in the auth system.",
+  });
 }
 
 // ─── Pipeline Retry ────────────────────────────────────────────────────────
@@ -368,7 +448,10 @@ export async function retryPipelineJob(input: RetryJobInput) {
   // The singletonKey on send() is a second line of defence, but this gives
   // the admin a clear CONFLICT error instead of a silent no-op.
   const STALE_LOCK_MS = 30 * 60 * 1000; // 30 minutes — matches worker
-  if (letter.pipelineLockedAt && (Date.now() - new Date(letter.pipelineLockedAt).getTime()) < STALE_LOCK_MS) {
+  if (
+    letter.pipelineLockedAt &&
+    Date.now() - new Date(letter.pipelineLockedAt).getTime() < STALE_LOCK_MS
+  ) {
     throw new TRPCError({
       code: "CONFLICT",
       message: `Letter #${input.letterId} is currently being processed (pipeline lock held since ${new Date(letter.pipelineLockedAt).toISOString()}). Wait for it to finish or use the stale-lock recovery tool.`,
@@ -397,7 +480,10 @@ export async function retryPipelineJob(input: RetryJobInput) {
       message: `Retry started for stage: ${input.stage} (job: ${jobId})`,
     };
   } catch (enqueueErr) {
-    logger.error({ err: enqueueErr }, `[Admin] Failed to enqueue retry for letter #${input.letterId}:`);
+    logger.error(
+      { err: enqueueErr },
+      `[Admin] Failed to enqueue retry for letter #${input.letterId}:`
+    );
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: `Failed to enqueue retry job: ${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}`,
@@ -415,7 +501,7 @@ export interface ForceStatusInput {
 
 export async function forceStatusTransition(
   input: ForceStatusInput,
-  ctx: { userId: number; appUrl: string },
+  ctx: { userId: number; appUrl: string }
 ) {
   const letter = await getLetterRequestById(input.letterId);
   if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -430,7 +516,10 @@ export async function forceStatusTransition(
     }
   }
 
-  await updateLetterStatus(input.letterId, input.newStatus, { force: true });
+  await updateLetterStatus(input.letterId, input.newStatus, {
+    force: true,
+    approvedByRole: input.newStatus === "approved" ? "admin" : undefined,
+  });
   await logReviewAction({
     letterRequestId: input.letterId,
     reviewerId: ctx.userId,
@@ -468,7 +557,7 @@ export async function forceStatusTransition(
 
 export async function diagnoseAndRepairLetterState(
   letterId: number,
-  adminUserId: number,
+  adminUserId: number
 ) {
   const letter = await getLetterRequestById(letterId);
   if (!letter) throw new TRPCError({ code: "NOT_FOUND" });

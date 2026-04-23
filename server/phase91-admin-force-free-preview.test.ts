@@ -195,7 +195,69 @@ describe("processFreePreviewEmails — delegates to dispatcher", () => {
 // ─── Admin router — forceFreePreviewUnlock is defined ─────────────────────────
 
 describe("adminLettersProcedures — forceFreePreviewUnlock", () => {
-  it("exports forceFreePreviewUnlock as an admin mutation", async () => {
+  iSearched for regex `forceStatus|forceTransition` (`**/server/routers/admin/letters.ts`), 3 results
+
+Read [](file:///workspaces/ttml-app/server/services/admin.ts#1-1), lines 1 to 200
+
+Searched for regex `force.*Transition|force` (`**/server/services/admin.ts`), 11 results
+
+Read [](file:///workspaces/ttml-app/server/services/admin.ts#408-408), lines 408 to 450
+
+Searched for regex `ALLOWED_TRANSITIONS` (`**/shared/types/letter.ts`), 2 results
+
+Read [](file:///workspaces/ttml-app/shared/types/letter.ts#1-1), lines 1 to 50
+
+Searched for regex `updateLetterStatus` (`**/server/db/letter-requests.ts`), no results
+
+Searched for regex `updateLetterStatus` (`**/server/db/.*\.*`), no results
+
+Searched for regex `updateLetterStatus` (`**/server/db/.*`), no results
+
+Searched for regex `updateLetterStatus` (`**/server/db/**/*.ts`), 1 result
+
+Read [](file:///workspaces/ttml-app/server/db/letters.ts#246-246), lines 246 to 285
+
+Searched for regex `ApprovedBy` (`**/client/src/pages/attorney/ReviewDetail/*.tsx`), no results
+
+Searched for regex `<Badge.*(?:Admin|Attorney|Approved)` (`**/client/src/pages/**/*.tsx`), no results
+
+Searched for regex `badge|` (`**/client/src/pages/attorney/ReviewDetail/*.tsx`), 20 results
+
+Searched for regex `StatusBadge.*status` (`**/client/src/**/*.tsx`), 20 results
+
+Read [](file:///workspaces/ttml-app/client/src/components/shared/StatusBadge.tsx)
+
+Searched for regex `approved.*` (`**/shared/types/letter.ts`), 8 results
+
+Searched for regex `admin_force_status_transition` (`**/server/**/*.ts`), 1 result
+
+### 1. Does "Force Status Transition" work properly to bypass the paywall?
+
+**Yes, it does.** 
+When an admin forces the status to `pending_review`, it completely skips the Stripe payment gate lock (`generated_locked`), skips the user's checkout process, and instantly drops the letter right into the **Review Queue** where any attorney or admin can claim it. 
+
+*(Note: The system has a smart safety guard built-in. If you try to force it to `pending_review` but the AI hasn't actually finished writing the draft yet, the system will block the transition and tell you to wait for the draft to exist first. This prevents empty letters from breaking the Review Center).*
+
+### 2. Can we distinguish between "Admin Approved" and "Attorney Approved" in the UI badges?
+
+Currently, the system uses a shared database status (`approved`), so the UI simply renders a green **"Approved"** badge regardless of who clicked "Submit" or who forced the status.
+
+**However, we can easily build this distinction.** Because the `review_actions` audit log records exactly who approved the letter (and what their role was), we can fetch this data and change the badge to reflect it. 
+
+If you want me to build this, here is the plan:
+
+### Plan: Distinguish Admin vs Attorney Approval Badges
+**TL;DR:** Update the letter queries to include the role of the user who approved the letter, and modify the `StatusBadge` component to render "Admin Approved" or "Attorney Approved" dynamically.
+
+**Steps**
+1. **Update Database Queries (letters.ts)**: When fetching letters for the dashboard or detail views, join or sub-query the `review_actions` table to find the user who triggered the `approve` or `admin_force_status_transition` action.
+2. **Expand the API Types (types.ts)**: Add an `approvedByRole?: "admin" | "attorney"` property to the frontend letter payloads.
+3. **Update the UI Component (StatusBadge.tsx)**: 
+   - If `status === 'approved'` AND `approvedByRole === 'admin'`, change the label to **"Admin Approved"** (perhaps with a slightly different color like orange or dark green).
+   - If `approvedByRole === 'attorney'`, change the label to **"Attorney Approved"**.
+   - Fall back to just "Approved" for older legacy letters.
+
+Let me know if you would like me to move forward with this plan and write the code for these changes!t("exports forceFreePreviewUnlock as an admin mutation", async () => {
     const mod = await import("./routers/admin/letters");
     expect(mod.adminLettersProcedures).toHaveProperty("forceFreePreviewUnlock");
     expect(typeof (mod.adminLettersProcedures as any).forceFreePreviewUnlock).toBe(

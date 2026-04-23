@@ -82,6 +82,7 @@ export const letterRequests = pgTable(
     jurisdictionCity: varchar("jurisdiction_city", { length: 200 }),
     intakeJson: jsonb("intake_json"),
     status: letterStatusEnum("status").default("submitted").notNull(),
+    approvedByRole: varchar("approved_by_role", { length: 50 }),
     assignedReviewerId: integer("assigned_reviewer_id").references(
       () => users.id,
       { onDelete: "set null" }

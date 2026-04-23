@@ -187,7 +187,7 @@ export default function AdminAllLetters() {
                         {letter.letterType} · {letter.jurisdictionState ?? "N/A"}
                       </p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <StatusBadge status={letter.status} size="sm" />
+                        <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} size="sm" />
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString()}
                         </span>

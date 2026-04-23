@@ -367,7 +367,7 @@ export default function LetterDetail() {
                   {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
                 </p>
                 <div className="flex items-center gap-3 mt-2">
-                  <StatusBadge status={letter.status} />
+                  <StatusBadge status={letter.status} approvedByRole={letter.approvedByRole} />
                   <span className="text-xs text-muted-foreground">
                     Submitted {new Date(letter.createdAt).toLocaleDateString()}
                   </span>

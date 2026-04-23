@@ -132,6 +132,7 @@ export async function getLetterRequestsByUserId(userId: number) {
       jurisdictionState: letterRequests.jurisdictionState,
       pdfStoragePath: letterRequests.pdfStoragePath,
       createdAt: letterRequests.createdAt,
+      approvedByRole: letterRequests.approvedByRole,
     })
     .from(letterRequests)
     .where(
@@ -188,6 +189,7 @@ export async function getLetterRequestSafeForSubscriber(
       freePreviewViewedAt: letterRequests.freePreviewViewedAt,
       createdAt: letterRequests.createdAt,
       updatedAt: letterRequests.updatedAt,
+      approvedByRole: letterRequests.approvedByRole,
     })
     .from(letterRequests)
     .where(and(eq(letterRequests.id, id), eq(letterRequests.userId, userId)))
@@ -248,6 +250,7 @@ export async function updateLetterStatus(
   status: string,
   options?: {
     assignedReviewerId?: number | null;
+    approvedByRole?: string | null;
     force?: boolean;
     reason?: string;
   }
@@ -262,6 +265,8 @@ export async function updateLetterStatus(
   };
   if (options?.assignedReviewerId !== undefined)
     updateData.assignedReviewerId = options.assignedReviewerId;
+  if (options?.approvedByRole !== undefined)
+    updateData.approvedByRole = options.approvedByRole;
 
   if (options?.force) {
     // Fetch current status before update for audit trail
