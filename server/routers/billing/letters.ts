@@ -22,8 +22,6 @@ import {
 import { captureServerException } from "../../sentry";
 import {
   hasActiveRecurringSubscription,
-  createFirstLetterReviewCheckout,
-  createLetterUnlockCheckout,
 } from "../../stripe";
 import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 
@@ -32,7 +30,17 @@ import {
 } from "../../services/canonicalProcedures";
 
 export const billingLettersRouter = router({
-  // ... (freeUnlock unchanged)
+  // DEPRECATED — always rejects. Kept for backward compatibility.
+  freeUnlock: verifiedSubscriberProcedure
+    .input(z.object({ letterId: z.number() }))
+    .mutation(async () => {
+      return {
+        ok: false as const,
+        nextState: "payment_required" as const,
+        message:
+          "The free first letter offer has ended. Please pay $100 for attorney review or subscribe to a plan.",
+      };
+    }),
 
   // Link to Procedural Flow: Step 9
   payFirstLetterReview: verifiedSubscriberProcedure
@@ -51,26 +59,6 @@ export const billingLettersRouter = router({
       return { checkoutUrl: result.checkoutUrl };
     }),
 
-  // Pay $100 for standard letter unlock (Step 9)
-  payToUnlock: verifiedSubscriberProcedure
-    .input(z.object({ letterId: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
-      const origin = getAppUrl(ctx.req);
-
-      const result = await createAttorneyReviewCheckoutProcedure(
-        input.letterId,
-        ctx.user.id,
-        "ONE_TIME_ATTORNEY_REVIEW",
-        origin
-      );
-
-      return { checkoutUrl: result.checkoutUrl };
-    }),
-      });
-      return result;
-    }),
-
   // Subscription Submit: active subscribers bypass paywall entirely
   subscriptionSubmit: verifiedSubscriberProcedure
     .input(z.object({ letterId: z.number() }))
@@ -85,10 +73,12 @@ export const billingLettersRouter = router({
 
       const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
       if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
-      if (letter.status !== "generated_locked") {
+      
+      // Allow from either legacy locked or new procedural state
+      if (letter.status !== "generated_locked" && letter.status !== "attorney_review_upsell_shown") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Letter is not in generated_locked status",
+          message: "Letter is not in a status that allows review submission",
         });
       }
 
@@ -100,7 +90,7 @@ export const billingLettersRouter = router({
         action: "subscription_submit",
         noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
         noteVisibility: "internal",
-        fromStatus: "generated_locked",
+        fromStatus: letter.status as any,
         toStatus: "pending_review",
       });
 
