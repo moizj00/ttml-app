@@ -145,6 +145,11 @@ export const STATUS_CONFIG: Record<
     color: "text-blue-700",
     bgColor: "bg-blue-100",
   },
+  attorney_review_upsell_shown: {
+    label: "Upsell Shown",
+    color: "text-blue-600",
+    bgColor: "bg-blue-100",
+  },
   attorney_review_payment_confirmed: {
     label: "Payment Confirmed",
     color: "text-emerald-700",

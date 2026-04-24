@@ -25,6 +25,7 @@ const mockNotifyAdmins = vi.fn();
 const mockGetLetterVersionsByRequestId = vi.fn();
 const mockGetReviewActions = vi.fn();
 const mockGetWorkflowJobsByLetterId = vi.fn();
+const mockUpdateLetterPdfUrl = vi.fn();
 const mockGetResearchRunsByLetterId = vi.fn();
 const mockGetAttachmentsByLetterId = vi.fn();
 const mockGetAllLetterRequests = vi.fn();
@@ -52,6 +53,7 @@ vi.mock("./db", () => ({
   getReviewActions: (...args: unknown[]) => mockGetReviewActions(...args),
   getWorkflowJobsByLetterId: (...args: unknown[]) =>
     mockGetWorkflowJobsByLetterId(...args),
+  updateLetterPdfUrl: (...args: unknown[]) => mockUpdateLetterPdfUrl(...args),
   getResearchRunsByLetterId: (...args: unknown[]) =>
     mockGetResearchRunsByLetterId(...args),
   getAttachmentsByLetterId: (...args: unknown[]) =>
