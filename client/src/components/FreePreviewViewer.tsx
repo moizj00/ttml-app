@@ -1,3 +1,8 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PRICING } from "../../../shared/pricing";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 /**
  * FreePreviewViewer — first-letter free-preview lead-magnet renderer.
  *

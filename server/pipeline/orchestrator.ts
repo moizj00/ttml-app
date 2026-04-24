@@ -1,3 +1,9 @@
+/**
+ * Global registry for intermediate pipeline results (drafts and vetted letters).
+ * Used for RAG training data capture and near-real-time visibility.
+ */
+export const _intermediateContentRegistry = new Map<number, { content: string; qualityWarnings: string[] }>();
+
 import {
   createWorkflowJob,
   updateWorkflowJob,
@@ -391,7 +397,7 @@ export async function retryPipelineFromStage(
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
     } else {
-      const latestResearch = await getLatestResearchRun(letterId);
+      const latestResearch = await getLatestResearchByLetterId(letterId);
       if (!latestResearch?.resultJson)
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;

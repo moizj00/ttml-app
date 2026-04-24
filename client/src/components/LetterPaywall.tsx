@@ -110,6 +110,18 @@ export function LetterPaywall({
       : paywallStatus.data?.state === "free_review_available";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
+    const payToUnlock = trpc.billing.createLetterUnlockCheckout.useMutation({
+    onSuccess: ({ url }) => {
+      setIsRedirecting(true);
+      window.location.href = url;
+    },
+    onError: err => {
+      toast.error("Could not create checkout session", {
+        description: err.message,
+      });
+    },
+  });
+
   const subscriptionSubmitMutation =
     trpc.billing.subscriptionSubmit.useMutation({
       onSuccess: () => {
