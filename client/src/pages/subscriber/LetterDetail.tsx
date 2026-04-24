@@ -354,6 +354,10 @@ export default function LetterDetail() {
     a => a.noteVisibility === "user_visible" && a.noteText
   );
   const isPolling = POLLING_STATUSES.includes(letter.status);
+  const freePreviewUnlocked =
+    letter.isFreePreview === true &&
+    (aiDraftVersion as any)?.freePreview === true &&
+    Boolean(aiDraftVersion?.content);
   const isGeneratedLocked =
     (letter.status === "generated_locked" ||
       letter.status === "generated_unlocked" ||
@@ -512,56 +516,37 @@ export default function LetterDetail() {
 
         {/*
          * Routing rule (3-way):
-         *   a) Free-preview letter that hasn't unlocked yet (server has NOT
-         *      stamped the draft with `freePreview: true`) → show the
-         *      FreePreviewWaiting card with the 24h countdown. This branch is
-         *      intentionally hoisted OUT of `isGeneratedLocked` so the user
-         *      sees a consistent "preparing your draft" message throughout the
-         *      whole pre-unlock lifecycle (submitted → researching → drafting
-         *      → generated_locked).
-         *   b) `generated_locked` + free-preview unlocked (24h elapsed) →
+         *   a) Free-preview and locked (no server freePreview stamp + empty content)
+         *      → FreePreviewWaiting.
+         *   b) Free-preview and unlocked (server stamped freePreview=true) →
          *      FreePreviewViewer (full draft, non-selectable, DRAFT watermark,
          *      subscribe CTA).
-         *   c) `generated_locked` non-free-preview → standard LetterPaywall
+         *   c) generated_locked non-free-preview → standard LetterPaywall
          *      (truncated preview, payment CTAs).
-         *
-         * The `freePreview` flag is added by server/db/letter-versions.ts only
-         * when letterRequests.isFreePreview === true AND
-         * (freePreviewUnlockAt <= NOW() OR status === 'letter_released_to_subscriber').
-         * The client trusts that flag — it never sees the raw window logic.
          */}
         {letter.isFreePreview === true &&
-        (aiDraftVersion as any)?.freePreview !== true &&
-        ![
-          "letter_released_to_subscriber",
-          "attorney_review_upsell_shown",
-        ].includes(letter.status) ? (
-          <FreePreviewWaiting
-            unlockAt={(letter as any).freePreviewUnlockAt ?? null}
+        !freePreviewUnlocked &&
+        !aiDraftVersion?.content ? (
+          <FreePreviewWaiting subject={letter.subject} />
+        ) : letter.isFreePreview === true && freePreviewUnlocked ? (
+          <FreePreviewViewer
+            letterId={letterId}
             subject={letter.subject}
+            draftContent={aiDraftVersion?.content ?? ""}
+            jurisdictionState={letter.jurisdictionState}
+            letterType={letter.letterType}
           />
-        ) : isGeneratedLocked ? (
-          (aiDraftVersion as any)?.freePreview === true &&
-          aiDraftVersion?.content ? (
-            <FreePreviewViewer
-              letterId={letterId}
-              subject={letter.subject}
-              draftContent={aiDraftVersion.content}
-              jurisdictionState={letter.jurisdictionState}
-              letterType={letter.letterType}
-            />
-          ) : (
-            <LetterPaywall
-              letterId={letterId}
-              letterType={letter.letterType}
-              subject={letter.subject}
-              draftContent={aiDraftVersion?.content ?? undefined}
-              qualityDegraded={letter.qualityDegraded === true}
-              lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
-              draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
-              __isFreePreview={letter.isFreePreview === true}
-            />
-          )
+        ) : letter.status === "generated_locked" && !letter.isFreePreview ? (
+          <LetterPaywall
+            letterId={letterId}
+            letterType={letter.letterType}
+            subject={letter.subject}
+            draftContent={aiDraftVersion?.content ?? undefined}
+            qualityDegraded={letter.qualityDegraded === true}
+            lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
+            draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
+            __isFreePreview={letter.isFreePreview === true}
+          />
         ) : null}
 
         {(letter.status === "client_approval_pending" ||
