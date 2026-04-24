@@ -74,7 +74,7 @@ const POLLING_STATUSES = [
   "submitted",
   "researching",
   "drafting",
-  "ai_generation_completed_hidden",
+  "PROCESSED_HIDDEN",
   "pending_review",
   "under_review",
   "client_approval_pending",
@@ -86,7 +86,7 @@ const POLLING_STATUSES = [
 const STATUS_LABELS: Record<string, string> = {
   researching: "Our team is researching your legal situation...",
   drafting: "Drafting your letter...",
-  ai_generation_completed_hidden: "Finalizing your professional draft...",
+  PROCESSED_HIDDEN: "Finalizing your professional draft...",
   letter_released_to_subscriber: "Your professional draft is ready!",
   generated_locked: "Your professional draft is ready!",
   pending_review: "Sent to attorney review queue.",
