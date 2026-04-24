@@ -1,7 +1,7 @@
 /**
  * Billing Router — Letter Unlock & Submission Procedures
  *
- * Covers: freeUnlock (deprecated), payFirstLetterReview,
+ * Covers: freeUnlock (deprecated),
  *         subscriptionSubmit, payToUnlock
  */
 
@@ -40,23 +40,6 @@ export const billingLettersRouter = router({
         message:
           "The free first letter offer has ended. Please pay $100 for attorney review or subscribe to a plan.",
       };
-    }),
-
-  // Link to Procedural Flow: Step 9
-  payFirstLetterReview: verifiedSubscriberProcedure
-    .input(z.object({ letterId: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
-      const origin = getAppUrl(ctx.req);
-      
-      const result = await createAttorneyReviewCheckoutProcedure(
-        input.letterId,
-        ctx.user.id,
-        "ONE_TIME_ATTORNEY_REVIEW",
-        origin
-      );
-
-      return { checkoutUrl: result.checkoutUrl };
     }),
 
   // Subscription Submit: active subscribers bypass paywall entirely

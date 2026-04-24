@@ -22,7 +22,7 @@ import {
   createCheckoutSession,
   createLetterUnlockCheckout,
 } from "../stripe/checkouts";
-import { FIRST_LETTER_REVIEW_PLAN_ID } from "../stripe-products";
+import { updateLetterStatus } from "../db";
 
 // ─── Constants and Types ───────────────────────────────────────────────────
 
@@ -325,25 +325,12 @@ export async function createAttorneyReviewCheckoutProcedure(
       returnTo: `/letters/${requestId}`,
     });
   } else {
-    // Check if they are eligible for the $50 first letter review
-    const entitlement = await checkLetterSubmissionAllowed(subscriberId);
-    if (entitlement.firstLetterFree) {
-      // Actually they would use createFirstLetterReviewCheckout in the real codebase
-      // but for simplicity we'll use a standard unlock pattern or existing checkout helper
-      checkout = await createLetterUnlockCheckout({
-        userId: subscriberId,
-        email,
-        letterId: requestId,
-        origin,
-      });
-    } else {
-      checkout = await createLetterUnlockCheckout({
-        userId: subscriberId,
-        email,
-        letterId: requestId,
-        origin,
-      });
-    }
+    checkout = await createLetterUnlockCheckout({
+      userId: subscriberId,
+      email,
+      letterId: requestId,
+      origin,
+    });
   }
 
   await updateLetterStatus(requestId, "attorney_review_checkout_started");
