@@ -161,7 +161,7 @@ describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGenerat
 
   it("renders FreePreviewWaiting when free-preview AND not yet unlocked", () => {
     expect(source).toMatch(
-      /letter\.isFreePreview\s*===\s*true\s*&&\s*\(aiDraftVersion as any\)\?\.freePreview\s*!==\s*true[\s\S]*?<FreePreviewWaiting/
+      /letter\.isFreePreview\s*===\s*true\s*&&[\s\S]*?!freePreviewUnlocked\s*&&[\s\S]*?!aiDraftVersion\?\.content[\s\S]*?<FreePreviewWaiting/
     );
   });
 
