@@ -110,20 +110,35 @@ describe("Phase 95 — versions.get mirrors the pre-unlock gate", () => {
   });
 });
 
-// ─── 4. draftPdfRoute — 403 while the cooling window is still open ────────
+// ─── 4. draftPdfRoute — free-preview PDF gate + helper defense ────────────
 
-describe("Phase 95 — draftPdfRoute blocks the PDF stream pre-unlock", () => {
+describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => {
   const source = readServer("draftPdfRoute.ts");
 
-  it("rejects with 403 when isFreePreview && unlockAt > NOW()", () => {
+  it("declares the pre-review free-preview status allow-list", () => {
+    expect(source).toMatch(/const\s+FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new\s+Set\s*\(/);
+    expect(source).toContain('"pending_review"');
+    expect(source).toContain('"under_review"');
+    expect(source).toContain('"approved"');
+  });
+
+  it("blocks free-preview PDFs before attorney-review statuses", () => {
     expect(source).toMatch(
-      /letter\.isFreePreview\s*===\s*true[\s\S]*?freePreviewUnlockAt[\s\S]*?getTime\(\)\s*>\s*Date\.now\(\)[\s\S]*?res\.status\(403\)/
+      /letter\.isFreePreview\s*===\s*true[\s\S]*?!FREE_PREVIEW_PDF_ALLOWED_STATUSES\.has\(letter\.status\)[\s\S]*?res\.status\(403\)/
     );
   });
 
-  it("places the gate AFTER the status allow-list and BEFORE the version fetch (no leak window)", () => {
+  it("uses isFreePreviewUnlocked helper as defense-in-depth", () => {
+    expect(source).toMatch(/import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"\.\.\/shared\/utils\/free-preview"/);
+    expect(source).toMatch(/letter\.isFreePreview\s*===\s*true\s*&&\s*!isFreePreviewUnlocked\(letter\)/);
+    expect(source).toContain("Free preview is not yet available");
+  });
+
+  it("places free-preview gates AFTER status allow-list and BEFORE version fetch", () => {
     const idxStatusGate = source.indexOf("Draft PDF is only available after");
-    const idxFreePreview = source.indexOf("Free preview is not yet available");
+    const idxFreePreview = source.indexOf(
+      "Draft PDF is available after attorney review submission."
+    );
     const idxVersionFetch = source.indexOf("getLetterVersionsByRequestId(letterId)");
     expect(idxStatusGate).toBeGreaterThan(0);
     expect(idxFreePreview).toBeGreaterThan(0);
@@ -150,10 +165,11 @@ describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGenerat
     );
   });
 
-  it("passes letter.freePreviewUnlockAt to FreePreviewWaiting", () => {
+  it("renders FreePreviewWaiting without unlockAt prop", () => {
     expect(source).toMatch(
-      /<FreePreviewWaiting[\s\S]*?unlockAt=\{[\s\S]*?freePreviewUnlockAt[\s\S]*?\}/
+      /<FreePreviewWaiting[\s\S]*?subject=\{letter\.subject\}[\s\S]*?\/>/
     );
+    expect(source).not.toMatch(/unlockAt=/);
   });
 
   it("forwards __isFreePreview to LetterPaywall as a defensive guard", () => {
@@ -201,18 +217,18 @@ describe("Phase 95 — FreePreviewWaiting component", () => {
     expect(source).toMatch(/export function FreePreviewWaiting\s*\(/);
   });
 
-  it("accepts unlockAt + subject props", () => {
-    expect(source).toMatch(/unlockAt:\s*Date\s*\|\s*string\s*\|\s*null/);
+  it("accepts subject prop", () => {
     expect(source).toMatch(/subject:\s*string/);
+    expect(source).not.toMatch(/unlockAt:/);
   });
 
   it("uses data-testid=\"free-preview-waiting\"", () => {
     expect(source).toMatch(/data-testid="free-preview-waiting"/);
   });
 
-  it("computes a relative ~Xh countdown from unlockAt (no absolute timestamp)", () => {
-    expect(source).toMatch(/hoursRemaining/);
-    expect(source).toMatch(/~\{hoursRemaining\}h/);
+  it("does not include countdown logic", () => {
+    expect(source).not.toMatch(/hoursRemaining/);
+    expect(source).not.toMatch(/~\{hoursRemaining\}h/);
   });
 
   it("contains NO payment / CTA buttons (no Button import, no /pricing navigation)", () => {
