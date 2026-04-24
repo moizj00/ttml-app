@@ -166,10 +166,10 @@ describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGenerat
   });
 
   it("renders FreePreviewWaiting without unlockAt prop", () => {
-    expect(source).toMatch(
-      /<FreePreviewWaiting[\s\S]*?subject=\{letter\.subject\}[\s\S]*?\/>/
-    );
-    expect(source).not.toMatch(/unlockAt=/);
+    const waitingCall = source.match(/<FreePreviewWaiting[\s\S]*?\/>/);
+    expect(waitingCall).toBeTruthy();
+    expect(waitingCall![0]).toMatch(/subject=\{letter\.subject\}/);
+    expect(waitingCall![0]).not.toMatch(/unlockAt=/);
   });
 
   it("forwards __isFreePreview to LetterPaywall as a defensive guard", () => {
