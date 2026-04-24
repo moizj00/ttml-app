@@ -580,7 +580,10 @@ export async function forceStatusTransition(
         link: `/attorney/review/${input.letterId}`,
       });
     } catch (err) {
-      logger.error({ err }, "[forceStatusTransition] Admin notification failed");
+      logger.error(
+        { err },
+        "[forceStatusTransition] Admin notification failed"
+      );
     }
 
     return { success: true, bypassed: true };
