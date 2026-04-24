@@ -226,7 +226,7 @@ export function buildTextReport(fileName: string, result: DocumentAnalysisResult
     `Document: ${fileName}`,
     `Generated: ${new Date().toLocaleString()}`,
     "",
-    "DISCLAIMER: This analysis is system-generated and is not legal advice.",
+    "DISCLAIMER: This analysis is for informational purposes and is not legal advice.",
     "Consult a qualified attorney for legal guidance.",
     "",
   ];
