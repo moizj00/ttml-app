@@ -122,31 +122,31 @@ export default function LetterDetail() {
     }
   );
 
-  // Trigger conversion popup for free preview users who stay on the page
+  // Free-preview conversion popup — fires ONLY after the server has unlocked
+  // the preview (aiDraftVersion.freePreview === true) AND content is visible.
+  // No time-based guess; no popup when the user is still looking at
+  // FreePreviewWaiting. Rule: "no visible full preview, no popup".
   useEffect(() => {
     const aiDraftVersion = data?.versions?.find(
       (v: any) => v.versionType === "ai_draft"
     );
-    const isUnlocked = (aiDraftVersion as any)?.freePreview === true;
+    const freePreviewUnlocked =
+      data?.letter?.isFreePreview === true &&
+      (aiDraftVersion as any)?.freePreview === true &&
+      Boolean(aiDraftVersion?.content);
 
-    if (
-      data?.letter?.isFreePreview &&
-      isUnlocked &&
-      aiDraftVersion?.content &&
-      !conversionPopupOpen
-    ) {
-      const now = Date.now();
-      const FIVE_MINUTES = 5 * 60 * 1000;
+    if (!freePreviewUnlocked) return;
+    if (conversionPopupOpen) return;
 
-      // Only show if never shown OR at least 5 minutes have passed since last close
-      if (lastPopupTime === 0 || now - lastPopupTime >= FIVE_MINUTES) {
-        // Delay slightly for better UX (let them look at the draft first for 3 seconds)
-        const timer = setTimeout(() => {
-          setConversionPopupOpen(true);
-        }, 3000);
-        return () => clearTimeout(timer);
-      }
-    }
+    const now = Date.now();
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (lastPopupTime !== 0 && now - lastPopupTime < FIVE_MINUTES) return;
+
+    // Delay slightly so the user sees the draft before the upsell.
+    const timer = setTimeout(() => {
+      setConversionPopupOpen(true);
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [
     data?.letter?.isFreePreview,
     data?.versions,
@@ -351,6 +351,12 @@ export default function LetterDetail() {
     a => a.noteVisibility === "user_visible" && a.noteText
   );
   const isPolling = POLLING_STATUSES.includes(letter.status);
+  // Single frontend source of truth for free-preview visibility: the server
+  // flag on the ai_draft version. No status guessing, no client-side clocks.
+  const freePreviewUnlocked =
+    letter.isFreePreview === true &&
+    (aiDraftVersion as any)?.freePreview === true &&
+    Boolean(aiDraftVersion?.content);
   const isGeneratedLocked =
     (letter.status === "generated_locked" ||
       letter.status === "generated_unlocked" ||
@@ -503,61 +509,40 @@ export default function LetterDetail() {
         <LetterStatusDisplay
           status={letter.status}
           isFreePreview={letter.isFreePreview === true}
-          freePreviewUnlocked={(aiDraftVersion as any)?.freePreview === true}
+          freePreviewUnlocked={freePreviewUnlocked}
         />
 
         {/*
-         * Routing rule (3-way):
-         *   a) Free-preview letter that hasn't unlocked yet (server has NOT
-         *      stamped the draft with `freePreview: true`) → show the
-         *      FreePreviewWaiting card with the 24h countdown. This branch is
-         *      intentionally hoisted OUT of `isGeneratedLocked` so the user
-         *      sees a consistent "preparing your draft" message throughout the
-         *      whole pre-unlock lifecycle (submitted → researching → drafting
-         *      → generated_locked).
-         *   b) `generated_locked` + free-preview unlocked (24h elapsed) →
-         *      FreePreviewViewer (full draft, non-selectable, DRAFT watermark,
-         *      subscribe CTA).
-         *   c) `generated_locked` non-free-preview → standard LetterPaywall
-         *      (truncated preview, payment CTAs).
-         *
-         * The `freePreview` flag is added by server/db/letter-versions.ts only
-         * when letterRequests.isFreePreview === true AND
-         * (freePreviewUnlockAt <= NOW() OR status === 'letter_released_to_subscriber').
-         * The client trusts that flag — it never sees the raw window logic.
+         * Routing rule follows the SERVER'S visibility flag, not statuses:
+         *   a) Free-preview + server unlocked (aiDraftVersion.freePreview === true
+         *      AND content present) → FreePreviewViewer (watermarked, non-selectable).
+         *   b) Free-preview + not yet unlocked → FreePreviewWaiting. The server
+         *      returns empty content with freePreviewWaiting: true during the
+         *      pre-unlock window; the client just trusts that.
+         *   c) Non-free-preview + generated_locked → standard LetterPaywall.
          */}
-        {letter.isFreePreview === true &&
-        (aiDraftVersion as any)?.freePreview !== true &&
-        ![
-          "letter_released_to_subscriber",
-          "attorney_review_upsell_shown",
-        ].includes(letter.status) ? (
-          <FreePreviewWaiting
-            unlockAt={(letter as any).freePreviewUnlockAt ?? null}
-            subject={letter.subject}
-          />
-        ) : isGeneratedLocked ? (
-          (aiDraftVersion as any)?.freePreview === true &&
-          aiDraftVersion?.content ? (
+        {letter.isFreePreview === true ? (
+          freePreviewUnlocked ? (
             <FreePreviewViewer
               letterId={letterId}
               subject={letter.subject}
-              draftContent={aiDraftVersion.content}
+              draftContent={aiDraftVersion!.content}
               jurisdictionState={letter.jurisdictionState}
               letterType={letter.letterType}
             />
           ) : (
-            <LetterPaywall
-              letterId={letterId}
-              letterType={letter.letterType}
-              subject={letter.subject}
-              draftContent={aiDraftVersion?.content ?? undefined}
-              qualityDegraded={letter.qualityDegraded === true}
-              lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
-              draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
-              __isFreePreview={letter.isFreePreview === true}
-            />
+            <FreePreviewWaiting subject={letter.subject} />
           )
+        ) : isGeneratedLocked ? (
+          <LetterPaywall
+            letterId={letterId}
+            letterType={letter.letterType}
+            subject={letter.subject}
+            draftContent={aiDraftVersion?.content ?? undefined}
+            qualityDegraded={letter.qualityDegraded === true}
+            lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
+            draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
+          />
         ) : null}
 
         {(letter.status === "client_approval_pending" ||

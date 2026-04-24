@@ -111,48 +111,28 @@ export async function submitSubscriberIntakeProcedure(
 
 /**
  * PROCEDURE 2: enqueueLetterGenerationProcedure
- * Inputs: requestId, method, pipeline.
+ *
+ * Generation starts IMMEDIATELY. The 24h cooling window controls VISIBILITY,
+ * not generation — see `isFreePreviewUnlocked` in shared/utils/free-preview.ts.
+ * Generate early, reveal late: by the time the 24h window elapses, the draft
+ * is already saved and the subscriber lands on a finished preview.
  */
 export async function enqueueLetterGenerationProcedure(
   requestId: number,
-  method: LetterGenerationMethod,
-  pipeline: LetterGenerationPipeline
+  _method: LetterGenerationMethod,
+  _pipeline: LetterGenerationPipeline
 ) {
-  // Simple pipeline mode: use pg-boss queue for reliable background execution.
-  // We'll map this into a 'runPipeline' job type for the worker to handle,
-  // even though this specific "simple" procedure is a bit different from the 4-stage standard one.
-
-  // Wait, the worker.ts processJob only handles 'runPipeline' and 'retryPipelineFromStage'.
-  // We need to either add a new job type or use the existing ones.
-  // Actually, for "Talk to My Lawyer", the 'executeLetterGenerationProcedure' is the simple 1-step draft.
-  // If the user wants a 24h delay, and the FREE_PREVIEW_DELAY_HOURS is set to 24,
-  // we should enqueue this job with a startAfter of 24h.
-
-  // Let's add a new job type 'simpleDraft' to queue.ts and worker.ts to keep it clean.
-  // Or, we can just call executeLetterGenerationProcedure inside a 'runPipeline' job if we flag it.
-
-  // Re-thinking: The prompt says "make it stop on the research & Draft for 24 hours".
-  // This implies the generation itself should happen LATER.
-
-  // I will add 'executeSimpleDraft' job type to queue.ts.
-
   const request = await getLetterRequestById(requestId);
   if (!request) throw new Error("Request not found");
 
-  await enqueuePipelineJob(
-    {
-      type: "runPipeline",
-      letterId: requestId,
-      intake: request.intakeJson,
-      userId: request.userId ?? undefined,
-      appUrl: process.env.APP_URL ?? "",
-      label: `Simple Draft for #${requestId}`,
-    },
-    {
-      // 24 hour delay
-      startAfter: new Date(Date.now() + LETTER_HOLD_HOURS * 60 * 60 * 1000),
-    }
-  );
+  await enqueuePipelineJob({
+    type: "runPipeline",
+    letterId: requestId,
+    intake: request.intakeJson,
+    userId: request.userId ?? undefined,
+    appUrl: process.env.APP_URL ?? "",
+    label: `Simple Draft for #${requestId}`,
+  });
 
   return { status: "AI_GENERATION_QUEUED" };
 }

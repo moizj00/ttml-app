@@ -22,12 +22,12 @@
  *   no PII redaction) — the only anti-abuse protection is client-side:
  *   non-selectable content + DRAFT watermark + subscribe-to-send CTA.
  *
- *   This cron does NOT gate on letter status: even if the pipeline is slow,
- *   the email will fire once the 24h window elapses. The email itself includes
- *   a "not yet reviewed by an attorney" disclaimer, so a not-yet-polished
- *   draft in the preview is acceptable. If the pipeline actually fails, the
- *   letter status will be `pipeline_failed` and the preview page will show
- *   a failure state — we still send the email so the subscriber is informed.
+ *   The dispatcher requires a saved ai_draft before it sends (`requireDraft:
+ *   true`). If the pipeline is still running when the 24h window elapses,
+ *   the cron skips this tick and retries on the next; the subscriber never
+ *   receives a "your preview is ready" email for a letter with no draft to
+ *   show. A `pipeline_failed` letter therefore does NOT trigger the email
+ *   either — the subscriber sees the failure state on the preview page.
  */
 
 import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
@@ -295,14 +295,14 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
   result.processed = eligibleLetters.length;
 
   // Delegate per-letter dispatch to the shared atomic helper. `requireDraft`
-  // is false here to preserve the documented cron behavior of still emailing
-  // the subscriber at the 24h mark even when the pipeline failed (the preview
-  // page then renders a failure state). Admin-force and pipeline-finalize
-  // paths use `requireDraft: true` so they never leak a "preview ready"
-  // email before an ai_draft actually exists.
+  // is TRUE everywhere now: sending a "your preview is ready" email when no
+  // draft exists lands the subscriber on an empty page and wastes the
+  // conversion moment. If the pipeline is slow the cron retries on the next
+  // tick once the draft is saved. (Letters in `pipeline_failed` therefore do
+  // NOT receive this email — they still see the failure state on the page.)
   for (const letter of eligibleLetters) {
     const dispatchResult = await dispatchFreePreviewIfReady(letter.id, {
-      requireDraft: false,
+      requireDraft: true,
     });
 
     if (dispatchResult.status === "sent") {
