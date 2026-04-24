@@ -11,6 +11,7 @@ import {
   getUserById,
   notifyAdmins,
 } from "../db";
+import { enqueuePipelineJob } from "../queue";
 import { letterRequests } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../logger";
