@@ -9,6 +9,7 @@ import {
   claimFreeTrialSlot,
   getDb,
   getUserById,
+  notifyAdmins,
 } from "../db";
 import { letterRequests } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
@@ -382,7 +383,7 @@ export async function postLetterToReviewCenterProcedure(
     title: "New review request",
     body: `Letter #${requestId} is ready for attorney review.`,
     link: `/admin/letters/${requestId}`,
-  }).catch(err =>
+  }).catch((err: any) =>
     logger.error(
       { err },
       "Admin notification failed after postLetterToReviewCenter"

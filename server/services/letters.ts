@@ -99,13 +99,13 @@ export async function getSubscriberReleasedLetterProcedure(
 ) {
   const result = await canonicalGetReleasedProcedure(letterId, userId);
   const letter = await getLetterRequestById(letterId);
-  
+
   if (!letter) return null;
 
   return {
     ...letter,
     visibilityStatus: result.status,
-    isReleased: result.status === "visible"
+    isReleased: result.status === "visible",
   };
 }
 
@@ -167,12 +167,24 @@ export async function processSubscriberFeedback(
 
   if (retriggerPipeline) {
     const appUrl = getAppUrl(ctx.req);
-    runSimplePipeline(letterId, updatedIntakeJson || ctx.letter.intakeJson!, ctx.userId).catch(err => {
-        logger.error({ err, letterId }, "processSubscriberFeedback simple pipeline re-run failed");
+    runSimplePipeline(
+      letterId,
+      updatedIntakeJson || ctx.letter.intakeJson!,
+      ctx.userId
+    ).catch(err => {
+      logger.error(
+        { err, letterId },
+        "processSubscriberFeedback simple pipeline re-run failed"
+      );
     });
   }
 
-  await extractLessonFromSubscriberFeedback(letterId, additionalContext).catch(err => {
+  await extractLessonFromSubscriberFeedback(
+    letterId,
+    additionalContext,
+    ctx.userId,
+    "subscriber_update"
+  ).catch(err => {
     logger.error({ err, letterId }, "Failed to extract lesson from feedback");
   });
 
@@ -180,40 +192,61 @@ export async function processSubscriberFeedback(
 }
 
 export async function retryFromRejected(
-    input: { letterId: number; additionalContext?: string; updatedIntakeJson?: IntakeJson },
-    ctx: { userId: number; userName: string | null; req: Request }
+  input: {
+    letterId: number;
+    additionalContext?: string;
+    updatedIntakeJson?: IntakeJson;
+  },
+  ctx: { userId: number; userName: string | null; req: Request }
 ) {
-    await updateLetterStatus(input.letterId, "submitted");
-    const appUrl = getAppUrl(ctx.req);
-    runSimplePipeline(input.letterId, input.updatedIntakeJson || ({} as any), ctx.userId).catch(err => {
-        logger.error({ err, letterId: input.letterId }, "retryFromRejected simple pipeline re-run failed");
-    });
-    return { success: true };
+  await updateLetterStatus(input.letterId, "submitted");
+  const appUrl = getAppUrl(ctx.req);
+  runSimplePipeline(
+    input.letterId,
+    input.updatedIntakeJson || ({} as any),
+    ctx.userId
+  ).catch(err => {
+    logger.error(
+      { err, letterId: input.letterId },
+      "retryFromRejected simple pipeline re-run failed"
+    );
+  });
+  return { success: true };
 }
 
 export async function sendLetterToRecipientFlow(
-    input: { letterId: number; recipientEmail: string; subjectOverride?: string; note?: string },
-    ctx: { userId: number; appUrl: string }
+  input: {
+    letterId: number;
+    recipientEmail: string;
+    subjectOverride?: string;
+    note?: string;
+  },
+  ctx: { userId: number; appUrl: string }
 ) {
-    const letter = await getLetterRequestById(input.letterId);
-    if (!letter || letter.userId !== ctx.userId) throw new TRPCError({ code: "NOT_FOUND" });
-    
-    await sendLetterToRecipient({
-        to: input.recipientEmail,
-        subject: input.subjectOverride || `Legal Letter: ${letter.subject}`,
-        letterId: input.letterId,
-        appUrl: ctx.appUrl,
-        note: input.note
-    });
+  const letter = await getLetterRequestById(input.letterId);
+  if (!letter || letter.userId !== ctx.userId)
+    throw new TRPCError({ code: "NOT_FOUND" });
 
-    await updateLetterStatus(input.letterId, "sent");
-    return { success: true };
+  await sendLetterToRecipient({
+    recipientEmail: input.recipientEmail,
+    letterSubject: `Legal Letter: ${letter.subject}`,
+    subjectOverride: input.subjectOverride,
+    pdfUrl: undefined, // Will be fetched by sender if needed or already supplied in versions
+    note: input.note,
+  });
+
+  await updateLetterStatus(input.letterId, "sent");
+  return { success: true };
 }
 
-async function _refundUsage(userId: number, isFreeTrial: boolean, isSubscription: boolean) {
-    if (isFreeTrial) {
-        await refundFreeTrialSlot(userId);
-    } else if (isSubscription) {
-        await decrementLettersUsed(userId);
-    }
+async function _refundUsage(
+  userId: number,
+  isFreeTrial: boolean,
+  isSubscription: boolean
+) {
+  if (isFreeTrial) {
+    await refundFreeTrialSlot(userId);
+  } else if (isSubscription) {
+    await decrementLettersUsed(userId);
+  }
 }

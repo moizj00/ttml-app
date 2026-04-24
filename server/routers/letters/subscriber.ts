@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { checkTrpcRateLimit } from "../../rateLimiter";
 import type { IntakeJson } from "../../../shared/types";
-import { intakeJsonSchema, subscriberProcedure } from "../_shared";
+import { intakeJsonSchema, subscriberProcedure, getAppUrl } from "../_shared";
 import {
   createAttachment,
   getLetterRequestById,
@@ -148,9 +148,7 @@ export const subscriberProcedures = {
     .mutation(async ({ ctx, input }) =>
       sendLetterToRecipientFlow(input, {
         userId: ctx.user.id,
-        userRole: ctx.user.role,
-        userName: ctx.user.name,
-        req: ctx.req,
+        appUrl: getAppUrl(ctx.req),
       })
     ),
 

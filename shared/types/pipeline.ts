@@ -210,6 +210,7 @@ export interface PipelineContext {
   _intermediateDraftContent?: string;
   counterArguments?: CounterArgument[];
   citationRevalidationModelKey?: string;
+  isFreePreview?: boolean;
 }
 
 export interface DraftOutput {
@@ -244,11 +245,15 @@ export const PIPELINE_ERROR_CODES = {
   UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
 
-export type PipelineErrorCode = typeof PIPELINE_ERROR_CODES[keyof typeof PIPELINE_ERROR_CODES];
+export type PipelineErrorCode =
+  (typeof PIPELINE_ERROR_CODES)[keyof typeof PIPELINE_ERROR_CODES];
 
 export type PipelineErrorCategory = "transient" | "permanent";
 
-export const PIPELINE_ERROR_CATEGORY: Record<PipelineErrorCode, PipelineErrorCategory> = {
+export const PIPELINE_ERROR_CATEGORY: Record<
+  PipelineErrorCode,
+  PipelineErrorCategory
+> = {
   JSON_PARSE_FAILED: "transient",
   CITATION_VALIDATION_FAILED: "transient",
   WORD_COUNT_EXCEEDED: "transient",
@@ -304,7 +309,7 @@ export function createPipelineError(
   code: PipelineErrorCode,
   message: string,
   stage: string,
-  details?: string,
+  details?: string
 ): StructuredPipelineError {
   return {
     code,
@@ -321,7 +326,12 @@ export class PipelineError extends Error {
   public readonly details?: string;
   public readonly category: PipelineErrorCategory;
 
-  constructor(code: PipelineErrorCode, message: string, stage: string, details?: string) {
+  constructor(
+    code: PipelineErrorCode,
+    message: string,
+    stage: string,
+    details?: string
+  ) {
     super(message);
     this.name = "PipelineError";
     this.code = code;
@@ -331,7 +341,12 @@ export class PipelineError extends Error {
   }
 
   toStructured(): StructuredPipelineError {
-    return createPipelineError(this.code, this.message, this.stage, this.details);
+    return createPipelineError(
+      this.code,
+      this.message,
+      this.stage,
+      this.details
+    );
   }
 
   toJSON(): string {
@@ -339,17 +354,27 @@ export class PipelineError extends Error {
   }
 }
 
-export function parsePipelineError(errorMessage: string | null | undefined): StructuredPipelineError | null {
+export function parsePipelineError(
+  errorMessage: string | null | undefined
+): StructuredPipelineError | null {
   if (!errorMessage) return null;
   try {
     const parsed = JSON.parse(errorMessage);
-    if (parsed && typeof parsed === "object" && "code" in parsed && "message" in parsed && "stage" in parsed) {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "code" in parsed &&
+      "message" in parsed &&
+      "stage" in parsed
+    ) {
       return {
         code: parsed.code as PipelineErrorCode,
         message: parsed.message as string,
         stage: parsed.stage as string,
         details: parsed.details as string | undefined,
-        category: PIPELINE_ERROR_CATEGORY[parsed.code as PipelineErrorCode] ?? "transient",
+        category:
+          PIPELINE_ERROR_CATEGORY[parsed.code as PipelineErrorCode] ??
+          "transient",
       };
     }
   } catch {
@@ -358,20 +383,34 @@ export function parsePipelineError(errorMessage: string | null | undefined): Str
   return null;
 }
 
-export function getErrorDisplayMessage(errorMessage: string | null | undefined): string {
+export function getErrorDisplayMessage(
+  errorMessage: string | null | undefined
+): string {
   if (!errorMessage) return "";
   const structured = parsePipelineError(errorMessage);
   if (structured) return structured.message;
   return errorMessage;
 }
 
-export function isTransientError(errorMessage: string | null | undefined): boolean {
+export function isTransientError(
+  errorMessage: string | null | undefined
+): boolean {
   if (!errorMessage) return true;
   const structured = parsePipelineError(errorMessage);
   if (structured) return structured.category === "transient";
   const lower = errorMessage.toLowerCase();
-  if (lower.includes("content policy") || lower.includes("content filter")) return false;
-  if (lower.includes("intake validation failed") || lower.includes("intake pre-flight")) return false;
-  if (lower.includes("api key") || lower.includes("api_key") || lower.includes("apikey")) return false;
+  if (lower.includes("content policy") || lower.includes("content filter"))
+    return false;
+  if (
+    lower.includes("intake validation failed") ||
+    lower.includes("intake pre-flight")
+  )
+    return false;
+  if (
+    lower.includes("api key") ||
+    lower.includes("api_key") ||
+    lower.includes("apikey")
+  )
+    return false;
   return true;
 }

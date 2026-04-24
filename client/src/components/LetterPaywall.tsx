@@ -112,9 +112,9 @@ export function LetterPaywall({
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
   const payFirstLetterMutation = trpc.billing.payFirstLetterReview.useMutation({
-    onSuccess: data => {
+    onSuccess: (data: any) => {
       setIsRedirecting(true);
-      window.location.href = data.url;
+      window.location.href = data.url || data.checkoutUrl;
     },
     onError: err => {
       toast.error("Could not initialize checkout", {
@@ -125,11 +125,11 @@ export function LetterPaywall({
   });
 
   const payToUnlock = trpc.billing.payToUnlock.useMutation({
-    onSuccess: data => {
+    onSuccess: (data: any) => {
       // Router always returns a Stripe checkout session URL — no "already unlocked"
       // branch today (createLetterUnlockCheckout cannot short-circuit).
       setIsRedirecting(true);
-      window.location.href = data.url;
+      window.location.href = data.url || data.checkoutUrl;
     },
     onError: err => {
       toast.error("Payment failed", { description: err.message });

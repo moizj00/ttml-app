@@ -1,10 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import {
-  subscriberProcedure,
-  attorneyProcedure,
-  getAppUrl,
-} from "../_shared";
+import { subscriberProcedure, attorneyProcedure, getAppUrl } from "../_shared";
 import {
   createNotification,
   notifyAdmins,
@@ -30,7 +26,6 @@ import { captureServerException } from "../../sentry";
 import { generateAndUploadApprovedPdf } from "../../pdfGenerator";
 import { getOriginUrl } from "../../supabaseAuth";
 import { createRevisionConsultationCheckout } from "../../stripe";
-import { clientDeclineLetter } from "../../services/letters";
 import { logger } from "../../logger";
 
 export const clientApprovalProcedures = {
@@ -39,20 +34,26 @@ export const clientApprovalProcedures = {
     .mutation(async ({ ctx, input }) => {
       const letter = await getLetterRequestById(input.letterId);
       if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
-      if (ctx.user.role !== "admin" && letter.assignedReviewerId !== ctx.user.id) {
+      if (
+        ctx.user.role !== "admin" &&
+        letter.assignedReviewerId !== ctx.user.id
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Only the assigned reviewer or an admin can request client approval",
+          message:
+            "Only the assigned reviewer or an admin can request client approval",
         });
       }
       if (letter.status !== "approved") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Letter must be in approved status to request client approval",
+          message:
+            "Letter must be in approved status to request client approval",
         });
       }
       await updateLetterStatus(input.letterId, "client_approval_pending");
-      const actorType = ctx.user.role === "admin" ? "admin" as const : "attorney" as const;
+      const actorType =
+        ctx.user.role === "admin" ? ("admin" as const) : ("attorney" as const);
       await logReviewAction({
         letterRequestId: input.letterId,
         reviewerId: ctx.user.id,
@@ -86,8 +87,16 @@ export const clientApprovalProcedures = {
           });
         }
       } catch (err) {
-        logger.error({ err: err }, "[requestClientApproval] Notification error:");
-        captureServerException(err, { tags: { component: "letters", error_type: "client_approval_notification_failed" } });
+        logger.error(
+          { err: err },
+          "[requestClientApproval] Notification error:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "letters",
+            error_type: "client_approval_notification_failed",
+          },
+        });
       }
       try {
         await notifyAdmins({
@@ -98,19 +107,29 @@ export const clientApprovalProcedures = {
           link: `/admin/letters/${input.letterId}`,
         });
       } catch (err) {
-        logger.error({ err: err }, "[notifyAdmins] letter_pending_client_approval:");
-        captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_pending_approval" } });
+        logger.error(
+          { err: err },
+          "[notifyAdmins] letter_pending_client_approval:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "letters",
+            error_type: "notify_admins_pending_approval",
+          },
+        });
       }
       return { success: true };
     }),
 
   clientApprove: subscriberProcedure
-    .input(z.object({
-      letterId: z.number(),
-      recipientEmail: z.string().email().optional(),
-      subjectOverride: z.string().max(200).optional(),
-      note: z.string().max(2000).optional(),
-    }))
+    .input(
+      z.object({
+        letterId: z.number(),
+        recipientEmail: z.string().email().optional(),
+        subjectOverride: z.string().max(200).optional(),
+        note: z.string().max(2000).optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const letter = await getLetterRequestById(input.letterId);
       if (!letter || letter.userId !== ctx.user.id) {
@@ -126,7 +145,9 @@ export const clientApprovalProcedures = {
       // Get the final_approved version content for PDF generation
       let finalContent: string | undefined;
       if (letter.currentFinalVersionId) {
-        const finalVersion = await getLetterVersionById(letter.currentFinalVersionId);
+        const finalVersion = await getLetterVersionById(
+          letter.currentFinalVersionId
+        );
         finalContent = finalVersion?.content ?? undefined;
       }
 
@@ -162,10 +183,18 @@ export const clientApprovalProcedures = {
           await updateLetterStoragePath(input.letterId, pdfResult.pdfKey);
           pdfUrl = pdfResult.pdfUrl;
           await updateLetterPdfUrl(input.letterId, pdfUrl);
-          logger.info(`[ClientApprove] PDF generated for letter #${input.letterId}: key=${pdfResult.pdfKey}`);
+          logger.info(
+            `[ClientApprove] PDF generated for letter #${input.letterId}: key=${pdfResult.pdfKey}`
+          );
         } catch (pdfErr) {
-          captureServerException(pdfErr, { tags: { component: "letters", error_type: "pdf_generation_failed" }, extra: { letterId: input.letterId } });
-          logger.error({ err: pdfErr }, `[ClientApprove] PDF generation failed for letter #${input.letterId}:`);
+          captureServerException(pdfErr, {
+            tags: { component: "letters", error_type: "pdf_generation_failed" },
+            extra: { letterId: input.letterId },
+          });
+          logger.error(
+            { err: pdfErr },
+            `[ClientApprove] PDF generation failed for letter #${input.letterId}:`
+          );
           // Non-blocking: approval still succeeds even if PDF fails
         }
       }
@@ -175,8 +204,13 @@ export const clientApprovalProcedures = {
       let recipientSendError: string | undefined;
       if (input.recipientEmail) {
         try {
-          const versions = await getLetterVersionsByRequestId(input.letterId, false);
-          const finalVer = versions.find((v) => v.versionType === "final_approved");
+          const versions = await getLetterVersionsByRequestId(
+            input.letterId,
+            false
+          );
+          const finalVer = versions.find(
+            v => v.versionType === "final_approved"
+          );
           await sendLetterToRecipient({
             recipientEmail: input.recipientEmail,
             letterSubject: letter.subject,
@@ -186,20 +220,35 @@ export const clientApprovalProcedures = {
             htmlContent: finalVer?.content ?? finalContent ?? "",
           });
           recipientSent = true;
-          logger.info(`[ClientApprove] Letter #${input.letterId} sent to ${input.recipientEmail}`);
+          logger.info(
+            `[ClientApprove] Letter #${input.letterId} sent to ${input.recipientEmail}`
+          );
           // Write delivery log + portal token (fire-and-forget)
           createDeliveryLogEntry({
             letterRequestId: input.letterId,
             recipientEmail: input.recipientEmail,
             deliveryMethod: "email",
-          }).catch((e) => logger.error({ err: e }, "[DeliveryLog] Failed:"));
+          }).catch(e => logger.error({ err: e }, "[DeliveryLog] Failed:"));
           createClientPortalToken(input.letterId, {
             recipientEmail: input.recipientEmail,
-          }).catch((e) => logger.error({ err: e }, "[PortalToken] Failed:"));
+          }).catch(e => logger.error({ err: e }, "[PortalToken] Failed:"));
         } catch (sendErr) {
-          recipientSendError = sendErr instanceof Error ? sendErr.message : "Failed to send";
-          captureServerException(sendErr, { tags: { component: "letters", error_type: "client_approve_send_failed" }, extra: { letterId: input.letterId, recipientEmail: input.recipientEmail } });
-          logger.error({ err: sendErr }, `[ClientApprove] Failed to send letter #${input.letterId} to recipient:`);
+          recipientSendError =
+            sendErr instanceof Error ? sendErr.message : "Failed to send";
+          captureServerException(sendErr, {
+            tags: {
+              component: "letters",
+              error_type: "client_approve_send_failed",
+            },
+            extra: {
+              letterId: input.letterId,
+              recipientEmail: input.recipientEmail,
+            },
+          });
+          logger.error(
+            { err: sendErr },
+            `[ClientApprove] Failed to send letter #${input.letterId} to recipient:`
+          );
         }
       }
 
@@ -257,8 +306,16 @@ export const clientApprovalProcedures = {
           link: `/letters/${input.letterId}`,
         });
       } catch (notifyErr) {
-        logger.error({ err: notifyErr }, "[ClientApprove] Subscriber notification failed:");
-        captureServerException(notifyErr, { tags: { component: "letters", error_type: "client_approve_notify_failed" } });
+        logger.error(
+          { err: notifyErr },
+          "[ClientApprove] Subscriber notification failed:"
+        );
+        captureServerException(notifyErr, {
+          tags: {
+            component: "letters",
+            error_type: "client_approve_notify_failed",
+          },
+        });
       }
 
       try {
@@ -278,22 +335,37 @@ export const clientApprovalProcedures = {
         });
       } catch (err) {
         logger.error({ err: err }, "[notifyAdmins] client_approved:");
-        captureServerException(err, { tags: { component: "letters", error_type: "notify_admins_client_approved" } });
+        captureServerException(err, {
+          tags: {
+            component: "letters",
+            error_type: "notify_admins_client_approved",
+          },
+        });
       }
       return { success: true, pdfUrl, recipientSent, recipientSendError };
     }),
 
   clientRequestRevision: subscriberProcedure
-    .input(z.object({
-      letterId: z.number(),
-      revisionNotes: z.string().min(10, "Please provide at least 10 characters of feedback").max(5000),
-    }))
+    .input(
+      z.object({
+        letterId: z.number(),
+        revisionNotes: z
+          .string()
+          .min(10, "Please provide at least 10 characters of feedback")
+          .max(5000),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const letter = await getLetterRequestById(input.letterId);
       if (!letter || letter.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      const allowedStatuses = ["client_approval_pending", "approved", "client_approved", "sent"];
+      const allowedStatuses = [
+        "client_approval_pending",
+        "approved",
+        "client_approved",
+        "sent",
+      ];
       if (!allowedStatuses.includes(letter.status)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -301,30 +373,45 @@ export const clientApprovalProcedures = {
         });
       }
 
-      const isPostApproval = letter.status === "approved" || letter.status === "client_approved" || letter.status === "sent";
+      const isPostApproval =
+        letter.status === "approved" ||
+        letter.status === "client_approved" ||
+        letter.status === "sent";
 
       // Revision limit guardrail
       const allActions = await getReviewActions(input.letterId);
-      const revisionCount = allActions.filter(a => a.action === "client_revision_requested").length;
+      const revisionCount = allActions.filter(
+        a => a.action === "client_revision_requested"
+      ).length;
       if (revisionCount >= 5) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Maximum revision limit reached (5 revisions). Please contact support if you need further changes.",
+          message:
+            "Maximum revision limit reached (5 revisions). Please contact support if you need further changes.",
         });
       }
       // Warn at 3+ but allow
-      const revisionWarning = revisionCount >= 3
-        ? `This is revision ${revisionCount + 1} of 5. You have ${5 - revisionCount - 1} revision(s) remaining.`
-        : undefined;
+      const revisionWarning =
+        revisionCount >= 3
+          ? `This is revision ${revisionCount + 1} of 5. You have ${5 - revisionCount - 1} revision(s) remaining.`
+          : undefined;
 
       // ─── Paid revision gate ─────────────────────────────────────────────
       // Pre-approval: first revision (revisionCount === 0) is free, subsequent cost $20.
       // Post-approval: first post-approval edit is free, second+ cost $20.
       // We count post-approval edits separately for the fee trigger.
       const postApprovalEditCount = isPostApproval
-        ? allActions.filter(a => a.action === "client_revision_requested" && (a.fromStatus === "approved" || a.fromStatus === "client_approved" || a.fromStatus === "sent")).length
+        ? allActions.filter(
+            a =>
+              a.action === "client_revision_requested" &&
+              (a.fromStatus === "approved" ||
+                a.fromStatus === "client_approved" ||
+                a.fromStatus === "sent")
+          ).length
         : 0;
-      const requiresPayment = isPostApproval ? postApprovalEditCount >= 1 : revisionCount >= 1;
+      const requiresPayment = isPostApproval
+        ? postApprovalEditCount >= 1
+        : revisionCount >= 1;
       if (requiresPayment) {
         const origin = getOriginUrl(ctx.req);
         const checkout = await createRevisionConsultationCheckout({
@@ -374,7 +461,9 @@ export const clientApprovalProcedures = {
           await createNotification({
             userId: letter.assignedReviewerId,
             type: "client_revision_requested",
-            title: isPostApproval ? "Client requested post-approval edits" : "Client requested revisions",
+            title: isPostApproval
+              ? "Client requested post-approval edits"
+              : "Client requested revisions",
             body: `A subscriber requested ${isPostApproval ? "post-approval edits" : "revisions"} on "${letter.subject}". Please review their notes and update the letter.`,
             link: `/review/${input.letterId}`,
           });
@@ -387,22 +476,62 @@ export const clientApprovalProcedures = {
           link: `/admin/letters/${input.letterId}`,
         });
       } catch (err) {
-        logger.error({ err: err }, "[clientRequestRevision] Notification error:");
-        captureServerException(err, { tags: { component: "letters", error_type: "client_revision_notification_failed" } });
+        logger.error(
+          { err: err },
+          "[clientRequestRevision] Notification error:"
+        );
+        captureServerException(err, {
+          tags: {
+            component: "letters",
+            error_type: "client_revision_notification_failed",
+          },
+        });
       }
-      return { success: true, revisionCount: revisionCount + 1, revisionWarning };
+      return {
+        success: true,
+        revisionCount: revisionCount + 1,
+        revisionWarning,
+      };
     }),
 
   clientDecline: subscriberProcedure
-    .input(z.object({
-      letterId: z.number(),
-      reason: z.string().max(2000).optional(),
-    }))
-    .mutation(async ({ ctx, input }) =>
-      clientDeclineLetter(input, {
-        userId: ctx.user.id,
-        userName: ctx.user.name,
-        req: ctx.req,
+    .input(
+      z.object({
+        letterId: z.number(),
+        reason: z.string().max(2000).optional(),
       })
-    ),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter || letter.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      await updateLetterStatus(input.letterId, "client_declined");
+
+      await logReviewAction({
+        letterRequestId: input.letterId,
+        reviewerId: ctx.user.id,
+        actorType: "subscriber",
+        action: "client_declined",
+        noteText: input.reason || "Client declined the letter.",
+        noteVisibility: "user_visible",
+        fromStatus: letter.status as any,
+        toStatus: "client_declined",
+      });
+
+      try {
+        await notifyAdmins({
+          category: "letters",
+          type: "client_declined",
+          title: `Client declined letter #${input.letterId}`,
+          body: `${ctx.user.name ?? "A subscriber"} declined letter "${letter.subject}".`,
+          link: `/admin/letters/${input.letterId}`,
+        });
+      } catch (err) {
+        logger.error({ err }, "[clientDecline] notifyAdmins failed");
+      }
+
+      return { success: true };
+    }),
 };
