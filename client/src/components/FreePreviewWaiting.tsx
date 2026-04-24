@@ -6,7 +6,6 @@ interface FreePreviewWaitingProps {
 }
 
 export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
-
   return (
     <Card
       className="border-blue-200 bg-blue-50/40"
@@ -41,7 +40,8 @@ export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
               <div className="font-medium text-blue-900">
                 Quality evaluation
               </div>
-              Final research and citations are being verified for your professional draft.
+              Final research and citations are being verified for your
+              professional draft.
             </div>
           </div>
         </div>
