@@ -9,7 +9,7 @@ import Stripe from "stripe";
 import { SINGLE_LETTER_PRICE_CENTS } from "../../../../shared/pricing";
 import type { ParsedCheckoutMetadata } from "../../_metadata";
 import { getPaymentIntentId } from "../../_metadata";
-import { unlockLetterForReview } from "../../_letterUnlock";
+import { fulfillLetterUnlock } from "../../../../services/billing";
 import { trackCheckoutCommission } from "../../_commission";
 import { stripeLogger } from "../../_helpers";
 
@@ -22,15 +22,13 @@ export async function handleLetterUnlock(
   const paymentIntentId = getPaymentIntentId(session.payment_intent);
 
   try {
-    await unlockLetterForReview({
+    await fulfillLetterUnlock({
       letterId: meta.letterId,
       userId: meta.userId,
       sessionId: session.id,
-      noteText: `Payment received. Letter unlocked and queued for attorney review. Stripe session: ${session.id}`,
+      source: "direct_unlock",
       appUrl: meta.appUrl,
-      adminNotifTitle: `Payment received — letter #${meta.letterId} unlocked`,
-      adminEmailSubject: `Payment Received — Letter #${meta.letterId} Unlocked`,
-      adminEmailBodyHtml: `<p>Hello,</p><p>Payment has been received for letter <strong>#${meta.letterId}</strong>. The letter is now in the attorney review queue.</p>`,
+      noteText: `Payment received. Letter unlocked and queued for attorney review. Stripe session: ${session.id}`,
     });
 
     if (meta.discountCode) {
