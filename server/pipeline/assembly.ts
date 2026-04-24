@@ -55,7 +55,19 @@ export async function runAssemblyStage(
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
     : "";
-  const assemblyUser = buildAssemblyUserPrompt(intake, research, draft) + vettingFeedbackBlock;
+  const normalizedIntake = buildNormalizedPromptInput(
+    {
+      subject: intake.matter?.subject ?? "Legal Matter",
+      issueSummary: intake.matter?.description,
+      jurisdictionCountry: intake.jurisdiction?.country,
+      jurisdictionState: intake.jurisdiction?.state,
+      jurisdictionCity: intake.jurisdiction?.city,
+      letterType: intake.letterType,
+    },
+    intake
+  );
+
+  const assemblyUser = buildAssemblyUserPrompt(normalizedIntake, research, draft) + vettingFeedbackBlock;
 
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
@@ -128,18 +140,6 @@ export async function runAssemblyStage(
     }
     return assemblyResult.text;
   };
-
-  const normalizedIntake = buildNormalizedPromptInput(
-    {
-      subject: intake.matter?.subject ?? "Legal Matter",
-      issueSummary: intake.matter?.description,
-      jurisdictionCountry: intake.jurisdiction?.country,
-      jurisdictionState: intake.jurisdiction?.state,
-      jurisdictionCity: intake.jurisdiction?.city,
-      letterType: intake.letterType,
-    },
-    intake
-  );
 
   const runAllAssemblyValidations = (letter: string) => {
     const allErrors: string[] = [];

@@ -6,7 +6,7 @@ export * from "./citations";
 export * from "./research";
 export * from "./drafting";
 export * from "./assembly";
-export * from "./vetting";
+// export * from "./vetting"; // Vetting exports moved to prompts or handled individually to avoid conflicts
 export * from "./orchestrator";
 export * from "./prompts";
 export * from "./embeddings";
