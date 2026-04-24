@@ -534,7 +534,11 @@ describe("Review & Approval Flow", () => {
           versionType: "final_approved",
         })
       );
-      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(42, "approved");
+      expect(mockUpdateLetterStatus).toHaveBeenCalledWith(
+        42,
+        "approved",
+        expect.objectContaining({ approvedByRole: "attorney" })
+      );
     });
 
     it("should require acknowledgedUnverifiedResearch when research is unverified", async () => {
