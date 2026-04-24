@@ -21,7 +21,7 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
     "We're researching relevant laws and regulations for your matter.",
   drafting: "Your letter is being drafted based on our research.",
   PROCESSED_HIDDEN:
-    "Research and drafting complete. Final quality evaluation is being performed.",
+    "Drafting complete. Final quality evaluation is being performed.",
   letter_released_to_subscriber:
     "Your draft is ready. View details to proceed.",
   generated_locked: "Your draft is ready. Proceed with attorney review.",

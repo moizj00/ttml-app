@@ -145,7 +145,7 @@ export default function PipelineProgressModal({
           <DialogDescription>
             {isComplete
               ? "Your professional letter draft is complete. View details for the next steps."
-              : `Our systems are researching and drafting your letter. This typically takes 1-2 minutes.`}
+              : `A professional draft is being prepared based on thorough research. This typically takes 1-2 minutes.`}
           </DialogDescription>
         </DialogHeader>
 

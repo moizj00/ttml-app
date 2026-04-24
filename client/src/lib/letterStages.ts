@@ -35,13 +35,9 @@ export const LETTER_STAGES: LetterStage[] = [
     key: "research_draft",
     label: "Research & Draft",
     shortLabel: "Research",
-    description: "Our systems are researching and preparing your letter.",
+    description: "Legal research and initial drafting are being conducted.",
     icon: FlaskConical,
-    statuses: [
-      "researching",
-      "drafting",
-      "ai_generation_completed_hidden",
-    ],
+    statuses: ["researching", "drafting", "PROCESSED_HIDDEN"],
   },
   {
     key: "draft_ready",
