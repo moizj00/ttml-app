@@ -21,6 +21,7 @@ import {
   sendLetterToRecipientFlow,
   getSubscriberReleasedLetterProcedure,
 } from "../../services/letters";
+import { isFreePreviewUnlocked } from "../../../shared/utils/free-preview";
 
 export const subscriberProcedures = {
   myLetters: subscriberProcedure.query(async ({ ctx }) => {
@@ -50,9 +51,7 @@ export const subscriberProcedures = {
       // Note: Procedurally we now use 'letter_released_to_subscriber' as the released state.
       const freePreviewUnlocked =
         letter.status === "letter_released_to_subscriber" ||
-        (letter.isFreePreview === true &&
-          letter.freePreviewUnlockAt instanceof Date &&
-          letter.freePreviewUnlockAt.getTime() <= Date.now());
+        isFreePreviewUnlocked(letter);
 
       const versions = await getLetterVersionsByRequestId(
         input.id,

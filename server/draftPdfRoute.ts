@@ -21,6 +21,20 @@ import { getLetterRequestSafeForSubscriber, getLetterVersionsByRequestId } from 
 import { generateDraftPdfBuffer } from "./pdfGenerator";
 import { checkTrpcRateLimit } from "./rateLimiter";
 import { logger } from "./logger";
+import { isFreePreviewUnlocked } from "../shared/utils/free-preview";
+
+// Free-preview PDF downloads are only allowed after the letter enters the
+// paid attorney-review pipeline (or later).
+const FREE_PREVIEW_PDF_ALLOWED_STATUSES = new Set([
+  "pending_review",
+  "under_review",
+  "needs_changes",
+  "client_revision_requested",
+  "client_approval_pending",
+  "approved",
+  "client_approved",
+  "sent",
+]);
 
 export function registerDraftPdfRoute(app: Express) {
   app.get("/api/letters/:letterId/draft-pdf", async (req: Request, res: Response) => {
@@ -76,17 +90,24 @@ export function registerDraftPdfRoute(app: Express) {
         return;
       }
 
-      // ── Free-preview cooling-window gate ──────────────────────────────────
-      // Free-preview letters cannot expose the draft PDF until the 24h
-      // unlock timestamp has elapsed (mirrors the in-app gate in
-      // server/db/letter-versions.ts and server/routers/versions.ts).
-      //
-      // Preferred for upsell integrity: block draft PDF for free-preview
-      // letters entirely until they pay for attorney review.
-      if (letter.isFreePreview === true) {
+      // ── Free-preview gate ─────────────────────────────────────────────────
+      // For free-preview letters, the on-page watermarked viewer is the reveal
+      // path. Do not allow draft PDF until the letter is in the paid
+      // attorney-review pipeline (or beyond).
+      if (
+        letter.isFreePreview === true &&
+        !FREE_PREVIEW_PDF_ALLOWED_STATUSES.has(letter.status)
+      ) {
         res.status(403).json({
-          error: "Draft PDF is not available for free previews. Submit for attorney review to download your letter.",
+          error: "Draft PDF is available after attorney review submission.",
         });
+        return;
+      }
+
+      // Defense-in-depth: even if a free-preview letter reaches an allowed
+      // status with a future unlock timestamp, never stream the draft.
+      if (letter.isFreePreview === true && !isFreePreviewUnlocked(letter)) {
+        res.status(403).json({ error: "Free preview is not yet available" });
         return;
       }
 

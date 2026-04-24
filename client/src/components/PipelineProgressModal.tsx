@@ -53,16 +53,16 @@ function getStageStatus(currentStatus: string, stageKey: string): StageStatus {
     "submitted",
     "researching",
     "drafting",
-    "PROCESSED_HIDDEN",
+    "ai_generation_completed_hidden",
     "letter_released_to_subscriber",
     "generated_locked",
   ];
   const currentIdx = order.indexOf(currentStatus);
 
-  // If status is PROCESSED_HIDDEN or letter_released_to_subscriber,
+  // If status is ai_generation_completed_hidden or letter_released_to_subscriber,
   // we count drafting as completed and generated_locked as the next/active state.
   if (
-    currentStatus === "PROCESSED_HIDDEN" ||
+    currentStatus === "ai_generation_completed_hidden" ||
     currentStatus === "letter_released_to_subscriber"
   ) {
     if (stageKey === "drafting") return "completed";
@@ -108,7 +108,7 @@ export default function PipelineProgressModal({
   const currentStatus = data?.letter?.status ?? "submitted";
   const isComplete = [
     "generated_locked",
-    "PROCESSED_HIDDEN",
+    "ai_generation_completed_hidden",
     "letter_released_to_subscriber",
   ].includes(currentStatus);
   const isPipelineActive = ["submitted", "researching", "drafting"].includes(

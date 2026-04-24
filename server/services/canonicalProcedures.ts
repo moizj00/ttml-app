@@ -118,23 +118,8 @@ export async function enqueueLetterGenerationProcedure(
   method: LetterGenerationMethod,
   pipeline: LetterGenerationPipeline
 ) {
-  // Simple pipeline mode: use pg-boss queue for reliable background execution.
-  // We'll map this into a 'runPipeline' job type for the worker to handle,
-  // even though this specific "simple" procedure is a bit different from the 4-stage standard one.
-
-  // Wait, the worker.ts processJob only handles 'runPipeline' and 'retryPipelineFromStage'.
-  // We need to either add a new job type or use the existing ones.
-  // Actually, for "Talk to My Lawyer", the 'executeLetterGenerationProcedure' is the simple 1-step draft.
-  // If the user wants a 24h delay, and the FREE_PREVIEW_DELAY_HOURS is set to 24,
-  // we should enqueue this job with a startAfter of 24h.
-
-  // Let's add a new job type 'simpleDraft' to queue.ts and worker.ts to keep it clean.
-  // Or, we can just call executeLetterGenerationProcedure inside a 'runPipeline' job if we flag it.
-
-  // Re-thinking: The prompt says "make it stop on the research & Draft for 24 hours".
-  // This implies the generation itself should happen LATER.
-
-  // I will add 'executeSimpleDraft' job type to queue.ts.
+  // Generation should run immediately; the 24h free-preview behavior is a
+  // visibility gate enforced by freePreviewUnlockAt, not a queue delay.
 
   const request = await getLetterRequestById(requestId);
   if (!request) throw new Error("Request not found");
@@ -152,7 +137,7 @@ export async function enqueueLetterGenerationProcedure(
         isFreeTrialSubmission: request.isFreePreview === true,
       },
     },
-    { startAfter: new Date(Date.now() + 60 * 1000) } // Small delay instead of retryLimit which doesn't exist
+    { startAfter: new Date() }
   );
 
   return { status: "AI_GENERATION_QUEUED" };

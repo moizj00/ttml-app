@@ -89,6 +89,7 @@ import {
   getBlogPostSlugById,
   getPipelineAnalytics,
 } from "../db";
+import { isFreePreviewUnlocked } from "../../shared/utils/free-preview";
 import { invalidateBlogPostCache } from "../blogCacheInvalidation";
 import { getCachedBlogPosts, getCachedBlogPost } from "../blogCache";
 import {
@@ -281,10 +282,16 @@ export const versionsRouter = router({
         if (version.versionType === "final_approved") return version;
         if (version.versionType === "ai_draft") {
           const letter = await getLetterRequestById(version.letterRequestId);
+          const LOCKED_PREVIEW_STATUSES = new Set([
+            "generated_locked",
+            "ai_generation_completed_hidden",
+            "letter_released_to_subscriber",
+            "attorney_review_upsell_shown",
+          ]);
           if (
             letter &&
             letter.userId === ctx.user.id &&
-            letter.status === "generated_locked"
+            LOCKED_PREVIEW_STATUSES.has(letter.status)
           ) {
             // ── Free-preview lead-magnet override (migration 0048) ──
             // First-letter free-preview path: once the 24-hour cooling window
@@ -292,12 +299,7 @@ export const versionsRouter = router({
             // redaction. The UI is responsible for rendering it non-selectable
             // with a DRAFT watermark. The only CTA the subscriber sees in this
             // mode is "Submit For Attorney Review" → subscribe flow.
-            const now = Date.now();
-            const freePreviewUnlocked =
-              letter.isFreePreview &&
-              letter.freePreviewUnlockAt instanceof Date &&
-              letter.freePreviewUnlockAt.getTime() <= now;
-            if (freePreviewUnlocked) {
+            if (isFreePreviewUnlocked(letter)) {
               // Remove PII redaction for unlocked free previews as requested.
               // The UI (FreePreviewViewer) handles the "DRAFT" watermark and copy-resistance.
               return {

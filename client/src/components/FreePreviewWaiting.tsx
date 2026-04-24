@@ -1,26 +1,11 @@
-import { useMemo } from "react";
 import { Clock, Mail, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface FreePreviewWaitingProps {
-  unlockAt: Date | string | null;
   subject: string;
 }
 
-const FREE_PREVIEW_HOURS = 24;
-
-export function FreePreviewWaiting({
-  unlockAt,
-  subject,
-}: FreePreviewWaitingProps) {
-  const hoursRemaining = useMemo(() => {
-    if (!unlockAt) return FREE_PREVIEW_HOURS;
-    const unlockMs = new Date(unlockAt).getTime();
-    if (Number.isNaN(unlockMs)) return FREE_PREVIEW_HOURS;
-    const remainingMs = unlockMs - Date.now();
-    if (remainingMs <= 0) return 0;
-    return Math.max(1, Math.ceil(remainingMs / (1000 * 60 * 60)));
-  }, [unlockAt]);
+export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
 
   return (
     <Card
@@ -36,10 +21,8 @@ export function FreePreviewWaiting({
       <CardContent className="space-y-4">
         <p className="text-sm text-blue-900/90">
           We&apos;re working on <span className="font-medium">{subject}</span>.
-          You&apos;ll receive an email within{" "}
-          <span className="font-semibold">~{hoursRemaining}h</span> as soon as
-          your free preview is ready — please check your inbox (and spam
-          folder).
+          You&apos;ll receive an email as soon as your free preview is ready.
+          Please check your inbox (and spam folder).
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
