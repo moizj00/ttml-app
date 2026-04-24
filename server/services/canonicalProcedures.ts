@@ -99,7 +99,7 @@ export async function submitSubscriberIntakeProcedure(
     toStatus: "submitted",
   });
 
-  // Start generation
+  // Start generation immediately (24h delay is now only a visibility gate)
   enqueueLetterGenerationProcedure(
     requestId,
     "INTAKE_AUTO_GENERATION",

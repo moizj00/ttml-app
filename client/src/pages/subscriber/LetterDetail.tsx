@@ -124,10 +124,15 @@ export default function LetterDetail() {
 
   // Trigger conversion popup for free preview users who stay on the page
   useEffect(() => {
+    const aiDraftVersion = data?.versions?.find(
+      (v: any) => v.versionType === "ai_draft"
+    );
+    const isUnlocked = (aiDraftVersion as any)?.freePreview === true;
+
     if (
       data?.letter?.isFreePreview &&
-      (data?.letter?.status === "generated_locked" ||
-        data?.letter?.status === "letter_released_to_subscriber") &&
+      isUnlocked &&
+      aiDraftVersion?.content &&
       !conversionPopupOpen
     ) {
       const now = Date.now();
@@ -144,7 +149,7 @@ export default function LetterDetail() {
     }
   }, [
     data?.letter?.isFreePreview,
-    data?.letter?.status,
+    data?.versions,
     conversionPopupOpen,
     lastPopupTime,
   ]);
@@ -523,7 +528,10 @@ export default function LetterDetail() {
          */}
         {letter.isFreePreview === true &&
         (aiDraftVersion as any)?.freePreview !== true &&
-        letter.status !== "letter_released_to_subscriber" ? (
+        ![
+          "letter_released_to_subscriber",
+          "attorney_review_upsell_shown",
+        ].includes(letter.status) ? (
           <FreePreviewWaiting
             unlockAt={(letter as any).freePreviewUnlockAt ?? null}
             subject={letter.subject}

@@ -99,7 +99,8 @@ export async function getLetterVersionsByRequestId(
   const isLockedState =
     letterStatus === "generated_locked" ||
     letterStatus === "ai_generation_completed_hidden" ||
-    letterStatus === "letter_released_to_subscriber";
+    letterStatus === "letter_released_to_subscriber" ||
+    letterStatus === "attorney_review_upsell_shown";
 
   if (isLockedState) {
     return rows.map(v => {
