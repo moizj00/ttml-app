@@ -8,32 +8,7 @@ description: >
   Use this agent to manage the database, trigger the letter pipeline via n8n,
   debug errors in Sentry, and operate across the entire TTML stack.
 tools:
-  - execute
-  - read
-  - agent
-  - browser
-  - playwright/*
-  - supabase-2/*
-  - edit
-  - search
-  - web
-  - todo
-  - github.vscode-pull-request-github/issue_fetch
-  - github.vscode-pull-request-github/labels_fetch
-  - github.vscode-pull-request-github/notification_fetch
-  - github.vscode-pull-request-github/doSearch
-  - github.vscode-pull-request-github/activePullRequest
-  - github.vscode-pull-request-github/pullRequestStatusChecks
-  - github.vscode-pull-request-github/openPullRequest
-  - github.vscode-pull-request-github/create_pull_request
-  - github.vscode-pull-request-github/resolveReviewThread
-  - ms-toolsai.jupyter/configureNotebook
-  - ms-toolsai.jupyter/listNotebookPackages
-  - ms-toolsai.jupyter/installNotebookPackages
-  - ms-python.python/getPythonEnvironmentInfo
-  - ms-python.python/getPythonExecutableCommand
-  - ms-python.python/installPythonPackage
-  - ms-python.python/configurePythonEnvironment
+[execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runTask, execute/createAndRunTask, execute/runTests, execute/runNotebookCell, execute/executionSubagent, execute/runInTerminal, read/terminalSelection, read/terminalLastCommand, read/getTaskOutput, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, agent/runSubagent, browser/openBrowserPage, browser/readPage, browser/screenshotPage, browser/navigatePage, browser/clickElement, browser/dragElement, browser/hoverElement, browser/typeInPage, browser/runPlaywrightCode, browser/handleDialog, playwright/browser_click, playwright/browser_close, playwright/browser_console_messages, playwright/browser_drag, playwright/browser_evaluate, playwright/browser_file_upload, playwright/browser_fill_form, playwright/browser_handle_dialog, playwright/browser_hover, playwright/browser_navigate, playwright/browser_navigate_back, playwright/browser_network_requests, playwright/browser_press_key, playwright/browser_resize, playwright/browser_run_code, playwright/browser_select_option, playwright/browser_snapshot, playwright/browser_tabs, playwright/browser_take_screenshot, playwright/browser_type, playwright/browser_wait_for, supabase-2/apply_migration, supabase-2/create_branch, supabase-2/delete_branch, supabase-2/deploy_edge_function, supabase-2/execute_sql, supabase-2/generate_typescript_types, supabase-2/get_advisors, supabase-2/get_edge_function, supabase-2/get_logs, supabase-2/get_project_url, supabase-2/get_publishable_keys, supabase-2/get_storage_config, supabase-2/list_branches, supabase-2/list_edge_functions, supabase-2/list_extensions, supabase-2/list_migrations, supabase-2/list_storage_buckets, supabase-2/list_tables, supabase-2/merge_branch, supabase-2/rebase_branch, supabase-2/reset_branch, supabase-2/search_docs, supabase-2/update_storage_config, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, todo, github.vscode-pull-request-github/issue_fetch, github.vscode-pull-request-github/labels_fetch, github.vscode-pull-request-github/notification_fetch, github.vscode-pull-request-github/doSearch, github.vscode-pull-request-github/activePullRequest, github.vscode-pull-request-github/pullRequestStatusChecks, github.vscode-pull-request-github/openPullRequest, github.vscode-pull-request-github/create_pull_request, github.vscode-pull-request-github/resolveReviewThread, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, ms-toolsai.jupyter/configureNotebook, ms-toolsai.jupyter/listNotebookPackages, ms-toolsai.jupyter/installNotebookPackages]
 mcp-servers:
   supabase:
     type: local
