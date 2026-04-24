@@ -14,6 +14,14 @@ import type {
     FormData,
     ExhibitRow,
     PendingFile
+} from "./intake-steps/types";
+
+const INITIAL: FormData = {
+    letterType: "",
+    subject: "",
+    jurisdictionState: "",
+    jurisdictionCity: "",
+    tonePreference: "firm",
     senderName: "",
     senderAddress: "",
     senderEmail: "",
@@ -89,7 +97,6 @@ export function useSubmitLetterForm() {
     const [form, setForm] = useState<FormData>(() => {
         const { prefill, found } = readAndClearPrefill();
         if (found && prefill) {
-            // Note: prefillApplied and prefillFromAnalyzer logic handled in useEffect
             return buildInitialFormFromPrefill(prefill);
         }
         const params = new URLSearchParams(search);
@@ -117,7 +124,6 @@ export function useSubmitLetterForm() {
     const templatePrefillApplied = useRef(false);
     const analyzerEvidenceSummary = useRef<string | null>(null);
 
-    // Initialize refs based on form state
     useEffect(() => {
         const { found, prefill } = readAndClearPrefill();
         if (found && prefill) {
@@ -132,9 +138,8 @@ export function useSubmitLetterForm() {
         if (params.get("type")) {
             prefillApplied.current = true;
         }
-    }, []);
+    }, [search]);
 
-    // Template handling
     const templateIdParam = useMemo(() => {
         const params = new URLSearchParams(search);
         const tid = params.get("templateId");
@@ -197,7 +202,6 @@ export function useSubmitLetterForm() {
         }
     }, [resolvedPrefill]);
 
-    // Draft management
     useEffect(() => {
         if (prefillApplied.current) return;
         try {
@@ -251,7 +255,6 @@ export function useSubmitLetterForm() {
         toast.info("Draft discarded");
     };
 
-    // Intake Templates
     const { data: intakeFormTemplatesList } = trpc.intakeFormTemplates.list.useQuery();
 
     const intakeFormTemplatesForType = useMemo((): IntakeFormTemplateRecord[] => {
@@ -289,7 +292,6 @@ export function useSubmitLetterForm() {
         return null;
     }, [activeIntakeFormTemplate, resolvedPrefill]);
 
-    // Actions
     const submitMutation = trpc.letters.submit.useMutation();
     const uploadAttachment = trpc.letters.uploadAttachment.useMutation();
 
@@ -333,14 +335,11 @@ export function useSubmitLetterForm() {
     };
 
     const handleSubmit = async () => {
-        if (!validateStep(1) || !validateStep(2) || !validateStep(3) || !validateStep(4) || !validateStep(5)) {
-            // Find first step with error
-            for (let i = 1; i <= 5; i++) {
-                if (!validateStep(i)) {
-                    setStep(i);
-                    toast.error("Form incomplete", { description: "Please review the errors." });
-                    return;
-                }
+        for (let i = 1; i <= 5; i++) {
+            if (!validateStep(i)) {
+                setStep(i);
+                toast.error("Form incomplete", { description: "Please review the errors." });
+                return;
             }
         }
 
