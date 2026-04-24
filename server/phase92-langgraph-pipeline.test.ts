@@ -240,7 +240,7 @@ vi.mock("@langchain/anthropic", () => {
         };
       }
 
-      if (this.model.startsWith("claude-3-5-sonnet")) {
+      if (this.model.startsWith("claude-3-5-sonnet") || this.model.startsWith("claude-sonnet-4")) {
         // Could be assembly or vetting — disambiguate by prompt content.
         const firstMsg = _messages[0];
         const sys = typeof firstMsg?.content === "string" ? firstMsg.content : "";
