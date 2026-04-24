@@ -31,6 +31,9 @@ export async function getLetterRequestsByUserId(userId: number) {
             jurisdictionState: letterRequests.jurisdictionState,
             pdfStoragePath: letterRequests.pdfStoragePath,
             createdAt: letterRequests.createdAt,
+            approvedByRole: letterRequests.approvedByRole,
+            isFreePreview: letterRequests.isFreePreview,
+            freePreviewUnlockAt: letterRequests.freePreviewUnlockAt,
         })
         .from(letterRequests)
         .where(

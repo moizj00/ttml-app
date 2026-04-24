@@ -81,6 +81,7 @@ export async function updateLetterStatus(
     status: string,
     options?: {
         assignedReviewerId?: number | null;
+        approvedByRole?: string | null;
         force?: boolean;
         reason?: string;
     }
@@ -95,6 +96,8 @@ export async function updateLetterStatus(
     };
     if (options?.assignedReviewerId !== undefined)
         updateData.assignedReviewerId = options.assignedReviewerId;
+    if (options?.approvedByRole !== undefined)
+        updateData.approvedByRole = options.approvedByRole;
 
     if (options?.force) {
         // Fetch current status before update for audit trail
