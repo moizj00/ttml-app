@@ -552,8 +552,9 @@ export async function forceStatusTransition(
 
     // 4. Fire status update email to subscriber (non-fatal)
     try {
-      if (letter.userId) {
-        const subscriber = await getUserById(letter.userId);
+      const userId = letter.userId ? Number(letter.userId) : null;
+      if (userId) {
+        const subscriber = await getUserById(userId);
         if (subscriber?.email) {
           await sendStatusUpdateEmail({
             to: subscriber.email,
