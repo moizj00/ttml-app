@@ -294,15 +294,12 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
   );
   result.processed = eligibleLetters.length;
 
-  // Delegate per-letter dispatch to the shared atomic helper. `requireDraft`
-  // is false here to preserve the documented cron behavior of still emailing
-  // the subscriber at the 24h mark even when the pipeline failed (the preview
-  // page then renders a failure state). Admin-force and pipeline-finalize
-  // paths use `requireDraft: true` so they never leak a "preview ready"
-  // email before an ai_draft actually exists.
+  // Delegate per-letter dispatch to the shared atomic helper.
+  // Changed: requireDraft now defaults to true to ensure subscribers don't see
+  // an empty preview even if the 24h window has passed.
   for (const letter of eligibleLetters) {
     const dispatchResult = await dispatchFreePreviewIfReady(letter.id, {
-      requireDraft: false,
+      requireDraft: true,
     });
 
     if (dispatchResult.status === "sent") {

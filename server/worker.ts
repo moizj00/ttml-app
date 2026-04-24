@@ -198,7 +198,13 @@ export async function processRunPipeline(
           }
         }
 
-        await runFullPipeline(letterId, intake as any, undefined, userId);
+        await runFullPipeline(
+          letterId,
+          intake as any,
+          undefined,
+          userId,
+          usageContext?.isFreeTrialSubmission ?? false
+        );
         return;
       } catch (err) {
         lastErr = err;

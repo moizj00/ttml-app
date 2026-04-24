@@ -689,7 +689,7 @@ export async function finalizeLetterAfterVetting(
   }
 
   const finalStatus = pipelineCtx?.isFreePreview
-    ? "AI_GENERATION_COMPLETED_HIDDEN"
+    ? "ai_generation_completed_hidden"
     : "generated_locked";
   const noteText = isDegraded
     ? `Draft ready with quality warnings. Our professional drafting models completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`

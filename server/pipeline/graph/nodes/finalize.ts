@@ -101,10 +101,10 @@ export async function finalizeNode(
   }
 
   // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
-  // If this is a free preview, set status to AI_GENERATION_COMPLETED_HIDDEN (Procedure 4)
+  // If this is a free preview, set status to ai_generation_completed_hidden (Procedure 4)
   const isFreePreview = state.isFreePreview ?? false;
   const finalStatus = isFreePreview
-    ? "AI_GENERATION_COMPLETED_HIDDEN"
+    ? "ai_generation_completed_hidden"
     : "generated_locked";
   await updateLetterStatus(letterId, finalStatus);
 

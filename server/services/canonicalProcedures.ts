@@ -147,11 +147,12 @@ export async function enqueueLetterGenerationProcedure(
       userId: request.userId ?? undefined,
       appUrl: process.env.APP_URL ?? "",
       label: `Simple Draft for #${requestId}`,
+      usageContext: {
+        shouldRefundOnFailure: true,
+        isFreeTrialSubmission: request.isFreePreview === true,
+      },
     },
-    {
-      // 24 hour delay
-      startAfter: new Date(Date.now() + LETTER_HOLD_HOURS * 60 * 60 * 1000),
-    }
+    { retryLimit: 2 }
   );
 
   return { status: "AI_GENERATION_QUEUED" };
