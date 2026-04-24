@@ -41,7 +41,6 @@ export const LETTER_STAGES: LetterStage[] = [
       "researching",
       "drafting",
       "ai_generation_completed_hidden",
-      "ai_generation_completed_hidden",
     ],
   },
   {
