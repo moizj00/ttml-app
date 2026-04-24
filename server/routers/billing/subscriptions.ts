@@ -48,7 +48,7 @@ export const billingSubscriptionsRouter = router({
         name: ctx.user.name,
         planId: input.planId,
         origin: (ctx.req.headers.origin &&
-        !String(ctx.req.headers.origin).includes("localhost")
+          !String(ctx.req.headers.origin).includes("localhost")
           ? ctx.req.headers.origin
           : ctx.req.headers["x-forwarded-host"]
             ? `https://${ctx.req.headers["x-forwarded-host"]}`
@@ -64,7 +64,7 @@ export const billingSubscriptionsRouter = router({
       userId: ctx.user.id,
       email: ctx.user.email ?? "",
       origin: (ctx.req.headers.origin &&
-      !String(ctx.req.headers.origin).includes("localhost")
+        !String(ctx.req.headers.origin).includes("localhost")
         ? ctx.req.headers.origin
         : ctx.req.headers["x-forwarded-host"]
           ? `https://${ctx.req.headers["x-forwarded-host"]}`
@@ -82,11 +82,20 @@ export const billingSubscriptionsRouter = router({
    */
   checkPaywallStatus: subscriberProcedure.query(async ({ ctx }) => {
     const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
-    if (isSubscribed) return { state: "subscribed" as const, eligible: false };
+    if (isSubscribed)
+      return {
+        state: "subscribed" as const,
+        eligible: false,
+        hasActiveRecurringSubscription: true,
+      };
 
     const db = await (await import("../../db")).getDb();
     if (!db)
-      return { state: "subscription_required" as const, eligible: false };
+      return {
+        state: "subscription_required" as const,
+        eligible: false,
+        hasActiveRecurringSubscription: false,
+      };
     const { letterRequests } = await import("../../../drizzle/schema");
     const { eq, and, notInArray } = await import("drizzle-orm");
     const unlockedLetters = await db
@@ -105,8 +114,16 @@ export const billingSubscriptionsRouter = router({
         )
       );
     if (unlockedLetters.length === 0)
-      return { state: "free_review_available" as const, eligible: true };
-    return { state: "free_trial_used" as const, eligible: false };
+      return {
+        state: "free_review_available" as const,
+        eligible: true,
+        hasActiveRecurringSubscription: false,
+      };
+    return {
+      state: "free_trial_used" as const,
+      eligible: false,
+      hasActiveRecurringSubscription: false,
+    };
   }),
 
   // Legacy alias: kept for backward compat (LetterPaywall still calls this)
