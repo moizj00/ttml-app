@@ -25,8 +25,8 @@ import {
 } from "../../stripe";
 import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 
-import { 
-  createAttorneyReviewCheckoutProcedure 
+import {
+  createAttorneyReviewCheckoutProcedure
 } from "../../services/canonicalProcedures";
 
 export const billingLettersRouter = router({
@@ -56,7 +56,7 @@ export const billingLettersRouter = router({
 
       const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
       if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
-      
+
       // Allow from either legacy locked or new procedural state
       if (letter.status !== "generated_locked" && letter.status !== "attorney_review_upsell_shown") {
         throw new TRPCError({

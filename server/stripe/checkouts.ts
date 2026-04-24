@@ -50,9 +50,9 @@ export async function createCheckoutSession(params: {
       ...(discountCode ? { discount_code: discountCode } : {}),
       ...(resolved
         ? {
-            discount_code_id: resolved.discountCodeId.toString(),
-            employee_id: resolved.employeeId.toString(),
-          }
+          discount_code_id: resolved.discountCodeId.toString(),
+          employee_id: resolved.employeeId.toString(),
+        }
         : {}),
     },
     success_url: returnTo ? `${origin}${returnTo}?success=true&plan=${planId}` : `${origin}/subscriber/billing?success=true&plan=${planId}`,
@@ -109,9 +109,9 @@ export async function createCheckoutSession(params: {
         ...(discountCode ? { discount_code: discountCode } : {}),
         ...(resolved
           ? {
-              employee_id: resolved.employeeId.toString(),
-              discount_code_id: resolved.discountCodeId.toString(),
-            }
+            employee_id: resolved.employeeId.toString(),
+            discount_code_id: resolved.discountCodeId.toString(),
+          }
           : {}),
       },
     };
@@ -165,9 +165,9 @@ export async function createLetterUnlockCheckout(params: {
       ...(discountCode ? { discount_code: discountCode } : {}),
       ...(resolved
         ? {
-            discount_code_id: resolved.discountCodeId.toString(),
-            employee_id: resolved.employeeId.toString(),
-          }
+          discount_code_id: resolved.discountCodeId.toString(),
+          employee_id: resolved.employeeId.toString(),
+        }
         : {}),
     },
     line_items: [
