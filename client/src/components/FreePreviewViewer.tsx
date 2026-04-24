@@ -1,3 +1,8 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PRICING } from "../../../shared/pricing";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 /**
  * FreePreviewViewer — first-letter free-preview lead-magnet renderer.
  *
@@ -24,7 +29,7 @@
  * The client-side copy protection is UX, not security.
  */
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowRight,
@@ -35,11 +40,13 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { PRICING } from "@shared/pricing";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface FreePreviewViewerProps {
   letterId: number;
@@ -87,6 +94,7 @@ export function FreePreviewViewer({
   letterType,
 }: FreePreviewViewerProps) {
   const [, navigate] = useLocation();
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   useCopyProtection(true);
 
   const utils = trpc.useUtils();
@@ -113,9 +121,8 @@ export function FreePreviewViewer({
     if (isSubscribed) {
       subscriptionSubmitMutation.mutate({ letterId });
     } else {
-      // For subscribers without an active recurring sub (or public users),
-      // navigate to pricing to subscribe.
-      navigate("/pricing");
+      // For free preview users, show the subscription-required message
+      setShowSubscriptionModal(true);
     }
   };
 
@@ -302,6 +309,42 @@ export function FreePreviewViewer({
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={showSubscriptionModal}
+        onOpenChange={setShowSubscriptionModal}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              <Shield className="w-5 h-5" />
+              Subscription Required
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 pt-2">
+              Attorney review is included with all subscription plans. Please
+              subscribe to a plan to have this letter professionally reviewed,
+              edited, and delivered by a licensed attorney.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-4">
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              size="lg"
+              onClick={() => navigate("/pricing")}
+            >
+              Choose a Plan
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full text-slate-500 hover:text-slate-700"
+              onClick={() => setShowSubscriptionModal(false)}
+            >
+              Back to Preview
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -100,11 +100,8 @@ export async function finalizeNode(
     });
   }
 
-  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS.
-  // Free-preview letters land in `ai_generation_completed_hidden` (the draft
-  // exists in DB but the visibility gate keeps it hidden until
-  // freePreviewUnlockAt). Non-free-preview letters go straight to
-  // `generated_locked` which drives the paid paywall.
+  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
+  // If this is a free preview, set status to ai_generation_completed_hidden (Procedure 4)
   const isFreePreview = state.isFreePreview ?? false;
   const finalStatus = isFreePreview
     ? "ai_generation_completed_hidden"

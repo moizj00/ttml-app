@@ -33,7 +33,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { FIRST_LETTER_REVIEW_PRICE } from "@shared/pricing";
 import { LockedLetterDocument } from "@/components/shared/LockedLetterDocument";
 
 interface LetterPaywallProps {
@@ -111,29 +110,15 @@ export function LetterPaywall({
       : paywallStatus.data?.state === "free_review_available";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
-  const payFirstLetterMutation = trpc.billing.payFirstLetterReview.useMutation({
-    onSuccess: (data: any) => {
+    const payToUnlock = trpc.billing.createLetterUnlockCheckout.useMutation({
+    onSuccess: ({ url }) => {
       setIsRedirecting(true);
-      window.location.href = data.url || data.checkoutUrl;
+      window.location.href = url;
     },
     onError: err => {
-      toast.error("Could not initialize checkout", {
+      toast.error("Could not create checkout session", {
         description: err.message,
       });
-      setIsRedirecting(false);
-    },
-  });
-
-  const payToUnlock = trpc.billing.payToUnlock.useMutation({
-    onSuccess: (data: any) => {
-      // Router always returns a Stripe checkout session URL — no "already unlocked"
-      // branch today (createLetterUnlockCheckout cannot short-circuit).
-      setIsRedirecting(true);
-      window.location.href = data.url || data.checkoutUrl;
-    },
-    onError: err => {
-      toast.error("Payment failed", { description: err.message });
-      setIsRedirecting(false);
     },
   });
 
@@ -154,7 +139,6 @@ export function LetterPaywall({
 
   const isPending =
     payToUnlock.isPending ||
-    payFirstLetterMutation.isPending ||
     isRedirecting ||
     subscriptionSubmitMutation.isPending;
 
@@ -293,14 +277,7 @@ export function LetterPaywall({
         </div>
 
         <div className="pt-2">
-          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
-            Other payment options
-          </h3>
-
-          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
-            Other payment options
-          </h3>
-
+          {/* Pay-as-you-go option for non-subscribers */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="flex-1">

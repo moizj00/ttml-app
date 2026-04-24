@@ -22,13 +22,11 @@ import {
   SINGLE_LETTER_PRICE_CENTS,
   MONTHLY_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
-  FIRST_LETTER_REVIEW_PRICE_CENTS,
 } from "../shared/pricing";
 
 export {
   MONTHLY_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
-  FIRST_LETTER_REVIEW_PRICE_CENTS,
 };
 
 export interface PlanConfig {
@@ -44,13 +42,6 @@ export interface PlanConfig {
 
 /** Price in cents for a single letter unlock ($299) — aliased from shared/pricing.ts */
 export const LETTER_UNLOCK_PRICE_CENTS = SINGLE_LETTER_PRICE_CENTS;
-
-/**
- * Stripe product/price IDs for the $50 first-letter attorney review fee.
- * Created inline via price_data in checkout sessions (no pre-registered price ID required).
- * This constant documents the plan_id used in Stripe session metadata for this payment type.
- */
-export const FIRST_LETTER_REVIEW_PLAN_ID = "first_letter_review";
 
 /** Price in cents for Monthly ($299/month) — from shared/pricing.ts */
 // MONTHLY_PRICE_CENTS re-exported above from shared/pricing.ts

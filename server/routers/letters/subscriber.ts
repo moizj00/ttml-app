@@ -21,6 +21,7 @@ import {
   sendLetterToRecipientFlow,
   getSubscriberReleasedLetterProcedure,
 } from "../../services/letters";
+import { isFreePreviewUnlocked } from "../../../shared/utils/free-preview";
 
 export const subscriberProcedures = {
   myLetters: subscriberProcedure.query(async ({ ctx }) => {
@@ -44,9 +45,14 @@ export const subscriberProcedures = {
         });
       const actions = await getReviewActions(input.id, false);
 
-      // getLetterVersionsByRequestId owns the free-preview visibility decision —
-      // it reads letter.isFreePreview + letter.freePreviewUnlockAt via the
-      // shared isFreePreviewUnlocked helper. No timestamp math here.
+      // Free-preview lead-magnet path: if this letter is on the first-letter
+      // free-trial path AND the 24-hour cooling window has elapsed, tell the
+      // versions query to skip ai_draft truncation.
+      // Note: Procedurally we now use 'letter_released_to_subscriber' as the released state.
+      const freePreviewUnlocked =
+        letter.status === "letter_released_to_subscriber" ||
+        isFreePreviewUnlocked(letter);
+
       const versions = await getLetterVersionsByRequestId(
         input.id,
         false,

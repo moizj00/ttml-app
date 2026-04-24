@@ -128,9 +128,9 @@ export interface DispatchFreePreviewResult {
  *   - `current_ai_draft_version_id IS NOT NULL`           (draft exists)  — ONLY if requireDraft
  *
  * `requireDraft` default is TRUE so the pipeline-finalize and admin-force
- * paths never fire a "preview ready" email before the draft is saved. The
- * polling cron passes `requireDraft: false` to preserve the documented
- * "still email if pipeline failed so subscriber is informed" behavior.
+ * paths never fire a "preview ready" email before the draft is saved.
+ * Polling cron now also passes requireDraft: true to ensure
+ * subscribers don't see a "preparing" screen after being told it is ready.
  */
 export async function dispatchFreePreviewIfReady(
   letterId: number,
@@ -298,13 +298,9 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
   );
   result.processed = eligibleLetters.length;
 
-  // Delegate per-letter dispatch to the shared atomic helper. `requireDraft`
-  // is TRUE everywhere now: sending a "your preview is ready" email when no
-  // draft exists lands the subscriber on an empty page and wastes the
-  // conversion moment. If the pipeline is slow the cron retries on the next
-  // tick once the draft is saved. `pipeline_failed` letters are skipped
-  // when no draft was saved, but can still fire the email if a usable draft
-  // was persisted before the failure (see FREE_PREVIEW_ELIGIBLE_STATUSES).
+  // Delegate per-letter dispatch to the shared atomic helper.
+  // Changed: requireDraft now defaults to true to ensure subscribers don't see
+  // an empty preview even if the 24h window has passed.
   for (const letter of eligibleLetters) {
     const dispatchResult = await dispatchFreePreviewIfReady(letter.id, {
       requireDraft: true,

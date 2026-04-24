@@ -75,6 +75,7 @@ const POLLING_STATUSES = [
   "researching",
   "drafting",
   "PROCESSED_HIDDEN",
+  "ai_generation_completed_hidden",
   "pending_review",
   "under_review",
   "client_approval_pending",
@@ -87,8 +88,10 @@ const STATUS_LABELS: Record<string, string> = {
   researching: "Our team is researching your legal situation...",
   drafting: "Drafting your letter...",
   PROCESSED_HIDDEN: "Finalizing your professional draft...",
+  ai_generation_completed_hidden: "Finalizing your professional draft...",
   letter_released_to_subscriber: "Your professional draft is ready!",
   generated_locked: "Your professional draft is ready!",
+  attorney_review_upsell_shown: "Your professional draft is ready!",
   pending_review: "Sent to attorney review queue.",
   under_review: "An attorney is reviewing your letter.",
   approved: "Your letter has been approved by an attorney! Your PDF is ready.",
@@ -351,8 +354,6 @@ export default function LetterDetail() {
     a => a.noteVisibility === "user_visible" && a.noteText
   );
   const isPolling = POLLING_STATUSES.includes(letter.status);
-  // Single frontend source of truth for free-preview visibility: the server
-  // flag on the ai_draft version. No status guessing, no client-side clocks.
   const freePreviewUnlocked =
     letter.isFreePreview === true &&
     (aiDraftVersion as any)?.freePreview === true &&
@@ -360,7 +361,8 @@ export default function LetterDetail() {
   const isGeneratedLocked =
     (letter.status === "generated_locked" ||
       letter.status === "generated_unlocked" ||
-      letter.status === "letter_released_to_subscriber") &&
+      letter.status === "letter_released_to_subscriber" ||
+      letter.status === "attorney_review_upsell_shown") &&
     !(letter as any).submittedByAdmin;
   const isApproved =
     letter.status === "approved" ||
@@ -513,27 +515,28 @@ export default function LetterDetail() {
         />
 
         {/*
-         * Routing rule follows the SERVER'S visibility flag, not statuses:
-         *   a) Free-preview + server unlocked (aiDraftVersion.freePreview === true
-         *      AND content present) → FreePreviewViewer (watermarked, non-selectable).
-         *   b) Free-preview + not yet unlocked → FreePreviewWaiting. The server
-         *      returns empty content with freePreviewWaiting: true during the
-         *      pre-unlock window; the client just trusts that.
-         *   c) Non-free-preview + generated_locked → standard LetterPaywall.
+         * Routing rule (3-way):
+         *   a) Free-preview and locked (no server freePreview stamp + empty content)
+         *      → FreePreviewWaiting.
+         *   b) Free-preview and unlocked (server stamped freePreview=true) →
+         *      FreePreviewViewer (full draft, non-selectable, DRAFT watermark,
+         *      subscribe CTA).
+         *   c) generated_locked non-free-preview → standard LetterPaywall
+         *      (truncated preview, payment CTAs).
          */}
-        {letter.isFreePreview === true ? (
-          freePreviewUnlocked ? (
-            <FreePreviewViewer
-              letterId={letterId}
-              subject={letter.subject}
-              draftContent={aiDraftVersion!.content}
-              jurisdictionState={letter.jurisdictionState}
-              letterType={letter.letterType}
-            />
-          ) : (
-            <FreePreviewWaiting subject={letter.subject} />
-          )
-        ) : isGeneratedLocked ? (
+        {letter.isFreePreview === true &&
+        !freePreviewUnlocked &&
+        !aiDraftVersion?.content ? (
+          <FreePreviewWaiting subject={letter.subject} />
+        ) : letter.isFreePreview === true && freePreviewUnlocked ? (
+          <FreePreviewViewer
+            letterId={letterId}
+            subject={letter.subject}
+            draftContent={aiDraftVersion?.content ?? ""}
+            jurisdictionState={letter.jurisdictionState}
+            letterType={letter.letterType}
+          />
+        ) : letter.status === "generated_locked" && !letter.isFreePreview ? (
           <LetterPaywall
             letterId={letterId}
             letterType={letter.letterType}
@@ -542,6 +545,7 @@ export default function LetterDetail() {
             qualityDegraded={letter.qualityDegraded === true}
             lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
             draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
+            __isFreePreview={!!letter.isFreePreview}
           />
         ) : null}
 

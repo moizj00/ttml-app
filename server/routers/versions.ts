@@ -93,6 +93,7 @@ import {
   getBlogPostSlugById,
   getPipelineAnalytics,
 } from "../db";
+import { isFreePreviewUnlocked } from "../../shared/utils/free-preview";
 import { invalidateBlogPostCache } from "../blogCacheInvalidation";
 import { getCachedBlogPosts, getCachedBlogPost } from "../blogCache";
 import {
@@ -285,26 +286,58 @@ export const versionsRouter = router({
         if (version.versionType === "final_approved") return version;
         if (version.versionType === "ai_draft") {
           const letter = await getLetterRequestById(version.letterRequestId);
-          // A subscriber can view their own ai_draft when either:
-          //   - the letter is in the free-preview path (gate runs regardless
-          //     of status; draft stays server-gated until unlockAt elapses), or
-          //   - the letter is in a paid-paywall locked state.
-          // applyFreePreviewGate is the single source of truth for how the
-          // draft is shaped in both cases (mirrors getLetterVersionsByRequestId).
-          const isFreePreview = letter?.isFreePreview === true;
-          const isLocked =
-            !!letter && LOCKED_PREVIEW_STATUSES.has(letter.status);
+          const LOCKED_PREVIEW_STATUSES = new Set([
+            "generated_locked",
+            "ai_generation_completed_hidden",
+            "letter_released_to_subscriber",
+            "attorney_review_upsell_shown",
+          ]);
           if (
             letter &&
             letter.userId === ctx.user.id &&
-            (isFreePreview || isLocked)
+            LOCKED_PREVIEW_STATUSES.has(letter.status)
           ) {
-            const [gated] = applyFreePreviewGate(
-              [version as any],
-              letter.status,
-              letter
-            );
-            if (gated) return gated;
+            // ── Free-preview lead-magnet override (migration 0048) ──
+            // First-letter free-preview path: once the 24-hour cooling window
+            // has elapsed, return the FULL ai_draft with no truncation and no
+            // redaction. The UI is responsible for rendering it non-selectable
+            // with a DRAFT watermark. The only CTA the subscriber sees in this
+            // mode is "Submit For Attorney Review" → subscribe flow.
+            if (isFreePreviewUnlocked(letter)) {
+              // Remove PII redaction for unlocked free previews as requested.
+              // The UI (FreePreviewViewer) handles the "DRAFT" watermark and copy-resistance.
+              return {
+                ...version,
+                truncated: false,
+                freePreview: true as const,
+                isRedacted: false,
+              };
+            }
+
+            // Pre-unlock free-preview: return empty content with the
+            // freePreviewWaiting flag so the client renders the waiting
+            // screen instead of the paywall. Mirrors the gate in
+            // server/db/letter-versions.ts.
+            if (letter.isFreePreview === true) {
+              return {
+                ...version,
+                content: "",
+                truncated: true,
+                freePreviewWaiting: true as const,
+              };
+            }
+
+            // Standard paid-paywall preview: truncated to 20% of lines.
+            if (version.content) {
+              const lines = version.content.split("\n");
+              const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
+              return {
+                ...version,
+                content: lines.slice(0, visibleCount).join("\n"),
+                truncated: true,
+              };
+            }
+            return { ...version, truncated: true };
           }
         }
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });

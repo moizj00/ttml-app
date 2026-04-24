@@ -100,7 +100,3 @@ export const MONTHLY_PRICE_CENTS = PRICING.monthly.price * 100;
 
 /** Yearly price in cents (for Stripe) */
 export const YEARLY_PRICE_CENTS = PRICING.yearly.price * 100;
-
-/** First letter attorney review fee — $50 one-time (payment-gates the first letter instead of free) */
-export const FIRST_LETTER_REVIEW_PRICE = 50;
-export const FIRST_LETTER_REVIEW_PRICE_CENTS = 5000;

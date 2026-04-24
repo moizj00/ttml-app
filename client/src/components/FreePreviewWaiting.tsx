@@ -20,8 +20,8 @@ export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
       <CardContent className="space-y-4">
         <p className="text-sm text-blue-900/90">
           We&apos;re working on <span className="font-medium">{subject}</span>.
-          You&apos;ll receive an email as soon as your free preview is ready —
-          please check your inbox (and spam folder).
+          You&apos;ll receive an email as soon as your free preview is ready.
+          Please check your inbox (and spam folder).
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -40,7 +40,8 @@ export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
               <div className="font-medium text-blue-900">
                 Quality evaluation
               </div>
-              Final research and citations are being verified for your professional draft.
+              Final research and citations are being verified for your
+              professional draft.
             </div>
           </div>
         </div>

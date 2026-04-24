@@ -82,13 +82,12 @@ export async function submitLetter(
     input.letterType
   );
 
-  // The canonical submission procedure already knows the entitlement at
-  // the time it creates the row and propagates that as `isFreePreview`, so
-  // we don't need an extra DB round-trip to read the column back.
+  const letter = await getLetterRequestById(result.requestId);
+
   return {
     letterId: result.requestId,
     status: result.status,
-    isFreePreview: result.isFreePreview === true,
+    isFreePreview: letter?.isFreePreview === true,
   };
 }
 

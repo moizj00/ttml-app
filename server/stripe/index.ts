@@ -22,7 +22,6 @@ export {
 export {
   createCheckoutSession,
   createLetterUnlockCheckout,
-  createFirstLetterReviewCheckout,
   createRevisionConsultationCheckout,
   createTrialReviewCheckout,
 } from "./checkouts";
