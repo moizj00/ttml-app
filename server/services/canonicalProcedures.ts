@@ -26,7 +26,7 @@ import { FIRST_LETTER_REVIEW_PLAN_ID } from "../stripe-products";
 
 // ─── Constants and Types ───────────────────────────────────────────────────
 
-const FREE_PREVIEW_DELAY_HOURS = 24;
+const LETTER_HOLD_HOURS = 24;
 const DEFAULT_MODEL = "claude-3-5-sonnet-20240620"; // Swappable to any Claude variant
 
 export type LetterGenerationMethod =
@@ -77,7 +77,7 @@ export async function submitSubscriberIntakeProcedure(
 
   const submittedAt = new Date();
   const subscriberVisibleAt = new Date(
-    submittedAt.getTime() + FREE_PREVIEW_DELAY_HOURS * 60 * 60 * 1000
+    submittedAt.getTime() + LETTER_HOLD_HOURS * 60 * 60 * 1000
   );
 
   const result = await createLetterRequest({
@@ -144,13 +144,13 @@ export async function enqueueLetterGenerationProcedure(
       type: "runPipeline",
       letterId: requestId,
       intake: request.intakeJson,
-      userId: request.userId,
+      userId: request.userId ?? undefined,
       appUrl: process.env.APP_URL ?? "",
       label: `Simple Draft for #${requestId}`,
     },
     {
       // 24 hour delay
-      startAfter: new Date(Date.now() + FREE_PREVIEW_DELAY_HOURS * 60 * 60 * 1000),
+      startAfter: new Date(Date.now() + LETTER_HOLD_HOURS * 60 * 60 * 1000),
     }
   );
 
@@ -249,6 +249,13 @@ export async function resolveLetterVisibilityProcedure(
 
   if (request.status === "pipeline_failed")
     return { status: "locked_generation_failed" };
+  
+  // If the letter's status is no longer ai_generation_completed_hidden (meaning admin already bypassed it), 
+  // return visible immediately without checking the clock.
+  if (request.status !== "ai_generation_completed_hidden") {
+    return { status: "visible_after_24_hours" };
+  }
+
   if (!request.currentAiDraftVersionId)
     return { status: "locked_generation_pending" };
 

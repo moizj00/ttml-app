@@ -26,11 +26,15 @@ import {
   logReviewAction,
   getLetterVersionsByRequestId,
   getWorkflowJobsByLetterId,
+  getDb,
 } from "../db";
 import {
   sendAttorneyInvitationEmail,
   sendNewReviewNeededEmail,
+  sendStatusUpdateEmail,
 } from "../email";
+import { letterRequests } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 import { captureServerException } from "../sentry";
 import { invalidateUserCache, getOriginUrl } from "../supabaseAuth";
 import { hasEverSubscribed } from "../stripe";
@@ -506,7 +510,86 @@ export async function forceStatusTransition(
   const letter = await getLetterRequestById(input.letterId);
   if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
 
-  if (input.newStatus === "pending_review" || input.newStatus === "approved") {
+  // EXECUTE ADMIN BYPASS PATH
+  if (
+    input.newStatus === "under_review" &&
+    [
+      "ai_generation_completed_hidden",
+      "letter_released_to_subscriber",
+      "attorney_review_upsell_shown",
+      "attorney_review_checkout_started",
+      "attorney_review_payment_confirmed",
+      "generated_locked",
+      "generated_unlocked",
+    ].includes(letter.status)
+  ) {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // 1. Collapse the hold window
+    await db
+      .update(letterRequests)
+      .set({ freePreviewUnlockAt: new Date() })
+      .where(eq(letterRequests.id, input.letterId));
+
+    // 2. Force transition to under_review
+    await updateLetterStatus(input.letterId, "under_review", {
+      force: true,
+      assignedReviewerId: ctx.userId,
+    });
+
+    // 3. Log an audited review_action
+    await logReviewAction({
+      letterRequestId: input.letterId,
+      reviewerId: ctx.userId,
+      actorType: "admin",
+      action: "admin_force_status_transition",
+      noteText: `Admin EXPLICIT BYPASS: Forced status from ${letter.status} to under_review. Reason: ${input.reason}`,
+      noteVisibility: "internal",
+      fromStatus: letter.status,
+      toStatus: "under_review",
+    });
+
+    // 4. Fire status update email to subscriber (non-fatal)
+    try {
+      if (letter.userId) {
+        const subscriber = await getUserById(letter.userId);
+        if (subscriber?.email) {
+          await sendStatusUpdateEmail({
+            to: subscriber.email,
+            name: subscriber.name ?? "Subscriber",
+            subject: letter.subject,
+            letterId: input.letterId,
+            newStatus: "under_review",
+            appUrl: ctx.appUrl,
+          });
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "[forceStatusTransition] Subscriber email failed");
+    }
+
+    // 5. Notify admins/attorneys (non-fatal)
+    try {
+      await notifyAdmins({
+        category: "letters",
+        type: "new_review_needed",
+        title: "Admin Bypassed Letter for Review",
+        body: `Letter #${input.letterId} ("${letter.subject}") was manually moved to review.`,
+        link: `/attorney/review/${input.letterId}`,
+      });
+    } catch (err) {
+      logger.error({ err }, "[forceStatusTransition] Admin notification failed");
+    }
+
+    return { success: true, bypassed: true };
+  }
+
+  if (
+    input.newStatus === "pending_review" ||
+    input.newStatus === "approved" ||
+    input.newStatus === "under_review"
+  ) {
     const versions = await getLetterVersionsByRequestId(input.letterId, true);
     if (versions.length === 0) {
       throw new TRPCError({

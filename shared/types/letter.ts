@@ -11,6 +11,7 @@ export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ],
   ai_generation_completed_hidden: [
     "letter_released_to_subscriber",
+    "under_review", // admin bypass only — skips paywall
     "pipeline_failed",
   ],
   letter_released_to_subscriber: [
@@ -143,11 +144,6 @@ export const STATUS_CONFIG: Record<
   attorney_review_checkout_started: {
     label: "Checkout Started",
     color: "text-blue-700",
-    bgColor: "bg-blue-100",
-  },
-  attorney_review_upsell_shown: {
-    label: "Upsell Shown",
-    color: "text-blue-600",
     bgColor: "bg-blue-100",
   },
   attorney_review_payment_confirmed: {
