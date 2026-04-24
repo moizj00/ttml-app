@@ -140,6 +140,16 @@ export const STATUS_CONFIG: Record<
     bgColor: "bg-sky-100",
   },
   rejected: { label: "Rejected", color: "text-red-700", bgColor: "bg-red-200" },
+  attorney_review_checkout_started: {
+    label: "Checkout Started",
+    color: "text-blue-700",
+    bgColor: "bg-blue-100",
+  },
+  attorney_review_payment_confirmed: {
+    label: "Payment Confirmed",
+    color: "text-emerald-700",
+    bgColor: "bg-emerald-100",
+  },
   pipeline_failed: {
     label: "Pipeline Failed",
     color: "text-red-600",

@@ -37,7 +37,12 @@ export const LETTER_STAGES: LetterStage[] = [
     shortLabel: "Research",
     description: "Our systems are researching and preparing your letter.",
     icon: FlaskConical,
-    statuses: ["researching", "drafting", "AI_GENERATION_COMPLETED_HIDDEN"],
+    statuses: [
+      "researching",
+      "drafting",
+      "ai_generation_completed_hidden",
+      "AI_GENERATION_COMPLETED_HIDDEN",
+    ],
   },
   {
     key: "draft_ready",
@@ -49,6 +54,9 @@ export const LETTER_STAGES: LetterStage[] = [
       "letter_released_to_subscriber",
       "generated_locked",
       "generated_unlocked",
+      "attorney_review_upsell_shown",
+      "attorney_review_checkout_started",
+      "attorney_review_payment_confirmed",
     ],
   },
   {
