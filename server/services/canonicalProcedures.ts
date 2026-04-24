@@ -106,17 +106,26 @@ export async function submitSubscriberIntakeProcedure(
     "STANDARD_INTAKE_PIPELINE"
   );
 
-  return { requestId, status: "submitted", subscriberVisibleAt };
+  return {
+    requestId,
+    status: "submitted",
+    subscriberVisibleAt,
+    isFreePreview: entitlement.firstLetterFree,
+  };
 }
 
 /**
  * PROCEDURE 2: enqueueLetterGenerationProcedure
- * Inputs: requestId, method, pipeline.
+ *
+ * Generation starts IMMEDIATELY. The 24h cooling window controls VISIBILITY,
+ * not generation — see `isFreePreviewUnlocked` in shared/utils/free-preview.ts.
+ * Generate early, reveal late: by the time the 24h window elapses, the draft
+ * is already saved and the subscriber lands on a finished preview.
  */
 export async function enqueueLetterGenerationProcedure(
   requestId: number,
-  method: LetterGenerationMethod,
-  pipeline: LetterGenerationPipeline
+  _method: LetterGenerationMethod,
+  _pipeline: LetterGenerationPipeline
 ) {
   // Generation should run immediately; the 24h free-preview behavior is a
   // visibility gate enforced by freePreviewUnlockAt, not a queue delay.

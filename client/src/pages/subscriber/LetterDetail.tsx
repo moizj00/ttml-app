@@ -125,31 +125,31 @@ export default function LetterDetail() {
     }
   );
 
-  // Trigger conversion popup for free preview users who stay on the page
+  // Free-preview conversion popup — fires ONLY after the server has unlocked
+  // the preview (aiDraftVersion.freePreview === true) AND content is visible.
+  // No time-based guess; no popup when the user is still looking at
+  // FreePreviewWaiting. Rule: "no visible full preview, no popup".
   useEffect(() => {
     const aiDraftVersion = data?.versions?.find(
       (v: any) => v.versionType === "ai_draft"
     );
-    const isUnlocked = (aiDraftVersion as any)?.freePreview === true;
+    const freePreviewUnlocked =
+      data?.letter?.isFreePreview === true &&
+      (aiDraftVersion as any)?.freePreview === true &&
+      Boolean(aiDraftVersion?.content);
 
-    if (
-      data?.letter?.isFreePreview &&
-      isUnlocked &&
-      aiDraftVersion?.content &&
-      !conversionPopupOpen
-    ) {
-      const now = Date.now();
-      const FIVE_MINUTES = 5 * 60 * 1000;
+    if (!freePreviewUnlocked) return;
+    if (conversionPopupOpen) return;
 
-      // Only show if never shown OR at least 5 minutes have passed since last close
-      if (lastPopupTime === 0 || now - lastPopupTime >= FIVE_MINUTES) {
-        // Delay slightly for better UX (let them look at the draft first for 3 seconds)
-        const timer = setTimeout(() => {
-          setConversionPopupOpen(true);
-        }, 3000);
-        return () => clearTimeout(timer);
-      }
-    }
+    const now = Date.now();
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (lastPopupTime !== 0 && now - lastPopupTime < FIVE_MINUTES) return;
+
+    // Delay slightly so the user sees the draft before the upsell.
+    const timer = setTimeout(() => {
+      setConversionPopupOpen(true);
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [
     data?.letter?.isFreePreview,
     data?.versions,
@@ -511,7 +511,7 @@ export default function LetterDetail() {
         <LetterStatusDisplay
           status={letter.status}
           isFreePreview={letter.isFreePreview === true}
-          freePreviewUnlocked={(aiDraftVersion as any)?.freePreview === true}
+          freePreviewUnlocked={freePreviewUnlocked}
         />
 
         {/*

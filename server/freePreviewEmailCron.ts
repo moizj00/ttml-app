@@ -22,12 +22,15 @@
  *   no PII redaction) — the only anti-abuse protection is client-side:
  *   non-selectable content + DRAFT watermark + subscribe-to-send CTA.
  *
- *   This cron does NOT gate on letter status: even if the pipeline is slow,
- *   the email will fire once the 24h window elapses. The email itself includes
- *   a "not yet reviewed by an attorney" disclaimer, so a not-yet-polished
- *   draft in the preview is acceptable. If the pipeline actually fails, the
- *   letter status will be `pipeline_failed` and the preview page will show
- *   a failure state — we still send the email so the subscriber is informed.
+ *   The dispatcher requires a saved ai_draft before it sends (`requireDraft:
+ *   true`). If the pipeline is still running when the 24h window elapses,
+ *   the cron skips this tick and retries on the next; the subscriber never
+ *   receives a "your preview is ready" email for a letter with no draft to
+ *   show. A `pipeline_failed` letter is likewise skipped when no draft was
+ *   saved, but it can still trigger the email when a draft exists because
+ *   `pipeline_failed` remains in `FREE_PREVIEW_ELIGIBLE_STATUSES` — a
+ *   partially-completed pipeline run that produced a usable draft should
+ *   still surface it to the subscriber.
  */
 
 import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
@@ -48,9 +51,10 @@ const freePreviewLogger = createLogger({ module: "FreePreviewEmails" });
  * already seeing the attorney-review flow and a stale "preview ready" email
  * would collide with it.
  *
- * `pipeline_failed` is intentionally included: the cron docstring commits to
- * still emailing the subscriber even when generation bombed, so they aren't
- * left wondering. The preview page then renders a failure state.
+ * `pipeline_failed` is intentionally included: a partially-completed pipeline
+ * run that still saved an ai_draft should surface to the subscriber. With
+ * `requireDraft: true` the atomic claim will skip the email when no draft
+ * exists; if one does, the subscriber sees the draft with a failure banner.
  *
  * Exported so server/routers/admin/letters.ts can use the same allow-list for
  * its `forceFreePreviewUnlock` status guard — single source of truth.
