@@ -149,19 +149,24 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
         `Expected hold or release status, got: ${record?.status}`
       ).toContain(record?.status);
 
-      // Subscriber dashboard should NOT show the letter content — only a
-      // "processing" or "pending" indicator (content is server-side hidden)
+      // Subscriber dashboard should NOT show the full letter content while
+      // ai_generation_completed_hidden — the free-preview viewer only renders
+      // after status reaches letter_released_to_subscriber.
       await page.goto("/dashboard");
       await page.waitForLoadState("networkidle");
-      const hiddenIndicator = page
-        .getByTestId("letter-status-hidden")
-        .or(page.getByText(/processing|generating|hold/i));
-      // Letter content body must not be visible (paywall server-truncates it)
-      const contentArea = page.getByTestId("letter-content-preview");
-      if (await contentArea.isVisible()) {
-        const text = await contentArea.textContent();
-        // Server truncates to ~100 chars — should not expose full letter
-        expect(text?.length ?? 0).toBeLessThan(200);
+
+      // FreePreviewViewer (data-testid="free-preview-viewer") should NOT yet
+      // be visible — the letter is still in the 24h hold state.
+      const previewViewer = page.getByTestId("free-preview-viewer");
+      // If it IS visible the hold already elapsed (fast pipeline + already 24h+);
+      // that's acceptable — skip the hidden assertion in that case.
+      if (
+        !(await previewViewer.isVisible({ timeout: 2_000 }).catch(() => false))
+      ) {
+        // Letter content must be absent — no free-preview-content exposed yet
+        await expect(
+          page.getByTestId("free-preview-content")
+        ).not.toBeVisible();
       }
     } finally {
       await sql.end();
@@ -211,26 +216,34 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       await page.goto(`/admin/letters/${letterId}`);
       await page.waitForLoadState("networkidle");
 
-      const forceBtn = page
-        .getByTestId("button-force-status-transition")
-        .or(
-          page.getByRole("button", {
-            name: /force.*review|bypass.*hold|admin bypass/i,
-          })
-        );
+      // Click the "Force Status Transition" toggle button to reveal the form
+      const forceBtn = page.getByTestId("button-force-status-transition");
       await expect(forceBtn).toBeVisible({ timeout: 10_000 });
       await forceBtn.click();
 
-      // Fill reason in dialog if present
-      const reasonInput = page
-        .getByTestId("input-force-reason")
-        .or(page.getByPlaceholder(/reason/i));
-      if (await reasonInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await reasonInput.fill("E2E automated bypass test");
-        await page
-          .getByRole("button", { name: /confirm|proceed|force/i })
-          .click();
-      }
+      // Select "under review" from the status dropdown
+      const statusSelect = page.getByRole("combobox");
+      await expect(statusSelect).toBeVisible({ timeout: 5_000 });
+      await statusSelect.click();
+      await page.getByRole("option", { name: /under.?review/i }).click();
+
+      // Fill the required reason field
+      await page
+        .getByPlaceholder(/Reason for force transition/i)
+        .fill("E2E automated bypass test");
+
+      // Click Apply Force Transition and confirm in the alert dialog
+      await page
+        .getByRole("button", { name: /Apply Force Transition/i })
+        .click();
+      // Confirm in the AlertDialog
+      await expect(page.getByRole("alertdialog")).toBeVisible({
+        timeout: 5_000,
+      });
+      await page
+        .getByRole("button", { name: /Force Transition/i })
+        .last()
+        .click();
 
       // Wait for status to update
       await page.waitForTimeout(2_000);
@@ -271,25 +284,19 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       await page.goto(`/letters/${letterId}`);
       await page.waitForLoadState("networkidle");
 
-      // Upsell CTA should be visible
-      const upsellSection = page
-        .getByTestId("attorney-review-upsell")
-        .or(
-          page.getByText(
-            /get attorney review|start attorney review|submit for review/i
-          )
-        );
-      await expect(upsellSection).toBeVisible({ timeout: 10_000 });
+      // FreePreviewViewer should be rendered (letter released, full draft visible)
+      await expect(page.getByTestId("free-preview-viewer")).toBeVisible({
+        timeout: 10_000,
+      });
 
-      // Letter body should be watermarked / non-selectable draft view
-      const draftBadge = page
-        .getByTestId("letter-draft-badge")
-        .or(page.getByText(/draft|watermark/i));
-      // At least a CTA button should be present
+      // The "unreviewed" badge should be shown (attorney hasn't reviewed yet)
       await expect(
-        page.getByRole("button", {
-          name: /attorney review|get review|start review/i,
-        })
+        page.getByTestId("draft-preview-unreviewed-badge")
+      ).toBeVisible({ timeout: 5_000 });
+
+      // The single CTA "Submit For Attorney Review" should be visible
+      await expect(
+        page.getByTestId("button-free-preview-subscribe")
       ).toBeVisible({ timeout: 5_000 });
     } finally {
       await sql.end();

@@ -1,7 +1,15 @@
 import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { updateLetterStatus, createLetterVersion, updateLetterVersionPointers, createWorkflowJob, updateWorkflowJob, getAllUsers } from "../db";
+import {
+  updateLetterStatus,
+  createLetterVersion,
+  updateLetterVersionPointers,
+  createWorkflowJob,
+  updateWorkflowJob,
+  getAllUsers,
+  getLetterRequestById,
+} from "../db";
 import { sendAdminAlertEmail } from "../email";
 import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
 
@@ -9,10 +17,10 @@ const logger = createLogger({ module: "simple-pipeline" });
 
 /**
  * Ultra-simple letter generation pipeline
- * 
+ *
  * Single stage: Take user intake → Claude generates letter → Save to DB
  * No research, no vetting, no orchestration complexity.
- * 
+ *
  * Enable via PIPELINE_MODE=simple
  */
 
@@ -84,7 +92,10 @@ export async function runSimplePipeline(
       requestPayloadJson: { mode: "simple", letterType: intake.letterType },
     });
     jobId = job?.insertId ?? 0;
-    await updateWorkflowJob(jobId, { status: "running", startedAt: new Date() });
+    await updateWorkflowJob(jobId, {
+      status: "running",
+      startedAt: new Date(),
+    });
 
     // Transition: submitted → researching → drafting (status machine requires this path)
     await updateLetterStatus(letterId, "researching");
@@ -145,15 +156,23 @@ export async function runSimplePipeline(
       currentAiDraftVersionId: version.insertId,
     });
 
-    // Mark as complete - this triggers the paywall state
-    await updateLetterStatus(letterId, "generated_locked");
+    // Check if lead-magnet free preview — if so, we transition to hidden state
+    // so the subscriber can't see it until the 24h cron/dispatcher fires.
+    // Otherwise, transition to paywall (generated_locked).
+    const request = await getLetterRequestById(letterId);
+    const toStatus = request?.isFreePreview
+      ? "ai_generation_completed_hidden"
+      : "generated_locked";
+
+    // Mark as complete
+    await updateLetterStatus(letterId, toStatus);
 
     // Free-preview hook: if this letter is on the lead-magnet path and admin
     // has force-unlocked it, fire the "your preview is ready" email now that
     // the draft exists. Normal free-preview letters still wait 24h (the cron
     // polls them); non-free-preview letters are no-op'd by the dispatcher.
     // Fire-and-forget — must never abort the pipeline.
-    dispatchFreePreviewIfReady(letterId).catch((err) =>
+    dispatchFreePreviewIfReady(letterId).catch(err =>
       logger.warn(
         { letterId, err: err instanceof Error ? err.message : String(err) },
         "[Simple] dispatchFreePreviewIfReady threw (non-fatal)"
@@ -183,24 +202,35 @@ export async function runSimplePipeline(
       status: "failed",
       errorMessage: error,
       completedAt: new Date(),
-    }).catch(e => logger.error({ e }, "[Simple] Failed to update workflow job on error"));
+    }).catch(e =>
+      logger.error({ e }, "[Simple] Failed to update workflow job on error")
+    );
 
     // Alert admins — mirrors the pattern in fallback.ts / vetting.ts
-    getAllUsers("admin").then(admins => {
-      const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-      return Promise.allSettled(admins.map(admin => {
-        if (!admin.email) return Promise.resolve();
-        return sendAdminAlertEmail({
-          to: admin.email,
-          name: admin.name ?? "Admin",
-          subject: `Simple pipeline failed for letter #${letterId}`,
-          preheader: `PIPELINE_MODE=simple letter failed — subscriber usage refunded`,
-          bodyHtml: `<p>Letter <strong>#${letterId}</strong> failed during simple pipeline execution.</p><p>Error: <strong>${error}</strong></p><p>The subscriber's usage has been refunded and the letter status reverted to <em>submitted</em> for retry.</p>`,
-          ctaText: "View Letter",
-          ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
-        }).catch(e => logger.error({ e }, "[Simple] Failed to send admin alert email"));
-      }));
-    }).catch(e => logger.error({ e }, "[Simple] Failed to fetch admins for alert"));
+    getAllUsers("admin")
+      .then(admins => {
+        const appBaseUrl =
+          process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+        return Promise.allSettled(
+          admins.map(admin => {
+            if (!admin.email) return Promise.resolve();
+            return sendAdminAlertEmail({
+              to: admin.email,
+              name: admin.name ?? "Admin",
+              subject: `Simple pipeline failed for letter #${letterId}`,
+              preheader: `PIPELINE_MODE=simple letter failed — subscriber usage refunded`,
+              bodyHtml: `<p>Letter <strong>#${letterId}</strong> failed during simple pipeline execution.</p><p>Error: <strong>${error}</strong></p><p>The subscriber's usage has been refunded and the letter status reverted to <em>submitted</em> for retry.</p>`,
+              ctaText: "View Letter",
+              ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
+            }).catch(e =>
+              logger.error({ e }, "[Simple] Failed to send admin alert email")
+            );
+          })
+        );
+      })
+      .catch(e =>
+        logger.error({ e }, "[Simple] Failed to fetch admins for alert")
+      );
 
     // Revert to submitted state to allow retry
     try {

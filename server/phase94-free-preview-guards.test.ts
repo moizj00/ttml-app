@@ -42,18 +42,26 @@ describe("Phase 94 — freePreviewEmailCron: status allow-list", () => {
     );
   });
 
-  it("lists exactly the 5 pre-review statuses", () => {
+  it("includes all pre-review statuses: pipeline, 24h hold, upsell funnel, legacy, and failure", () => {
     const match = source.match(
       /FREE_PREVIEW_ELIGIBLE_STATUSES\s*=\s*\[([\s\S]*?)\]\s*as\s*const/
     );
     expect(match).toBeTruthy();
     const list = match![1];
+    // Pipeline-running statuses
     expect(list).toContain('"submitted"');
     expect(list).toContain('"researching"');
     expect(list).toContain('"drafting"');
+    // 24h hold — the primary state when cron fires after generation completes
+    expect(list).toContain('"ai_generation_completed_hidden"');
+    // Upsell funnel — subscriber can see draft but hasn't paid yet
+    expect(list).toContain('"letter_released_to_subscriber"');
+    expect(list).toContain('"attorney_review_upsell_shown"');
+    expect(list).toContain('"attorney_review_checkout_started"');
+    // Legacy (pre-redesign) and failure states
     expect(list).toContain('"generated_locked"');
     expect(list).toContain('"pipeline_failed"');
-    // must NOT include post-review statuses
+    // must NOT include post-payment / post-review statuses
     expect(list).not.toContain('"pending_review"');
     expect(list).not.toContain('"under_review"');
     expect(list).not.toContain('"approved"');
@@ -63,7 +71,9 @@ describe("Phase 94 — freePreviewEmailCron: status allow-list", () => {
   });
 
   it("imports inArray from drizzle-orm", () => {
-    expect(source).toMatch(/import\s*{[^}]*\binArray\b[^}]*}\s*from\s*"drizzle-orm"/);
+    expect(source).toMatch(
+      /import\s*{[^}]*\binArray\b[^}]*}\s*from\s*"drizzle-orm"/
+    );
   });
 });
 
@@ -188,6 +198,8 @@ describe("Phase 94 — test-suite sanity", () => {
     expect(existsSync(join(SERVER, "paywallEmailCron.ts"))).toBe(true);
     expect(existsSync(join(SERVER, "pipeline", "vetting.ts"))).toBe(true);
     expect(existsSync(join(SERVER, "pipeline", "fallback.ts"))).toBe(true);
-    expect(existsSync(join(SERVER, "routers", "admin", "letters.ts"))).toBe(true);
+    expect(existsSync(join(SERVER, "routers", "admin", "letters.ts"))).toBe(
+      true
+    );
   });
 });

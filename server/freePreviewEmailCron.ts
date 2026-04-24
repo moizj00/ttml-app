@@ -56,10 +56,19 @@ const freePreviewLogger = createLogger({ module: "FreePreviewEmails" });
  * its `forceFreePreviewUnlock` status guard — single source of truth.
  */
 export const FREE_PREVIEW_ELIGIBLE_STATUSES = [
+  // Pipeline still running
   "submitted",
   "researching",
   "drafting",
+  // NEW: pipeline done, 24h hold active — the most common state when cron fires
+  "ai_generation_completed_hidden",
+  // 24h window elapsed — subscriber can view but hasn't paid yet
+  "letter_released_to_subscriber",
+  "attorney_review_upsell_shown",
+  "attorney_review_checkout_started",
+  // Legacy statuses (pre-redesign) — kept for backward compat
   "generated_locked",
+  // Pipeline failed — still email subscriber so they aren't left wondering
   "pipeline_failed",
 ] as const;
 

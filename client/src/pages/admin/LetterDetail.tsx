@@ -324,6 +324,7 @@ export default function AdminLetterDetail() {
           <CardContent className="space-y-4">
             <div className="flex gap-3 flex-wrap">
               <Button
+                data-testid="button-force-status-transition"
                 variant="outline"
                 size="sm"
                 className="border-amber-400 text-amber-700"
