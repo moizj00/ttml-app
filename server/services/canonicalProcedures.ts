@@ -152,7 +152,7 @@ export async function enqueueLetterGenerationProcedure(
         isFreeTrialSubmission: request.isFreePreview === true,
       },
     },
-    { retryLimit: 2 }
+    { startAfter: new Date(Date.now() + 60 * 1000) } // Small delay instead of retryLimit which doesn't exist
   );
 
   return { status: "AI_GENERATION_QUEUED" };
