@@ -545,7 +545,7 @@ export default function LetterDetail() {
             qualityDegraded={letter.qualityDegraded === true}
             lastStatusChangedAt={(letter as any).lastStatusChangedAt ?? null}
             draftReadyEmailSent={(letter as any).draftReadyEmailSent === true}
-            __isFreePreview={letter.isFreePreview === true}
+            __isFreePreview={!!letter.isFreePreview}
           />
         ) : null}
 
