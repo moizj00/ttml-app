@@ -26,8 +26,11 @@
  *   true`). If the pipeline is still running when the 24h window elapses,
  *   the cron skips this tick and retries on the next; the subscriber never
  *   receives a "your preview is ready" email for a letter with no draft to
- *   show. A `pipeline_failed` letter therefore does NOT trigger the email
- *   either — the subscriber sees the failure state on the preview page.
+ *   show. A `pipeline_failed` letter is likewise skipped when no draft was
+ *   saved, but it can still trigger the email when a draft exists because
+ *   `pipeline_failed` remains in `FREE_PREVIEW_ELIGIBLE_STATUSES` — a
+ *   partially-completed pipeline run that produced a usable draft should
+ *   still surface it to the subscriber.
  */
 
 import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
@@ -48,9 +51,10 @@ const freePreviewLogger = createLogger({ module: "FreePreviewEmails" });
  * already seeing the attorney-review flow and a stale "preview ready" email
  * would collide with it.
  *
- * `pipeline_failed` is intentionally included: the cron docstring commits to
- * still emailing the subscriber even when generation bombed, so they aren't
- * left wondering. The preview page then renders a failure state.
+ * `pipeline_failed` is intentionally included: a partially-completed pipeline
+ * run that still saved an ai_draft should surface to the subscriber. With
+ * `requireDraft: true` the atomic claim will skip the email when no draft
+ * exists; if one does, the subscriber sees the draft with a failure banner.
  *
  * Exported so server/routers/admin/letters.ts can use the same allow-list for
  * its `forceFreePreviewUnlock` status guard — single source of truth.
@@ -298,8 +302,9 @@ export async function processFreePreviewEmails(): Promise<FreePreviewEmailResult
   // is TRUE everywhere now: sending a "your preview is ready" email when no
   // draft exists lands the subscriber on an empty page and wastes the
   // conversion moment. If the pipeline is slow the cron retries on the next
-  // tick once the draft is saved. (Letters in `pipeline_failed` therefore do
-  // NOT receive this email — they still see the failure state on the page.)
+  // tick once the draft is saved. `pipeline_failed` letters are skipped
+  // when no draft was saved, but can still fire the email if a usable draft
+  // was persisted before the failure (see FREE_PREVIEW_ELIGIBLE_STATUSES).
   for (const letter of eligibleLetters) {
     const dispatchResult = await dispatchFreePreviewIfReady(letter.id, {
       requireDraft: true,

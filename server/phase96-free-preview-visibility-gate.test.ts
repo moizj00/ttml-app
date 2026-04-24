@@ -98,6 +98,35 @@ describe("Phase 96 — applyFreePreviewGate", () => {
   const FUTURE = new Date(Date.now() + 60 * 60 * 1000);
   const PAST = new Date(Date.now() - 60 * 1000);
 
+  it("Case 1 (drafting) — pre-unlock free-preview gates even in pre-locked status (generate-early/reveal-late)", () => {
+    // Regression pin against the Copilot review finding: generation now
+    // starts immediately, so an ai_draft can exist while status is still
+    // `drafting`. The gate must run regardless of status.
+    const out = applyFreePreviewGate(
+      [{ id: 10, versionType: "ai_draft", content: "DRAFTING DRAFT — must not leak" }],
+      "drafting",
+      { isFreePreview: true, freePreviewUnlockAt: FUTURE }
+    );
+    expect(out[0].content).toBe("");
+    expect(out[0].freePreviewWaiting).toBe(true);
+    expect(out[0].freePreview).toBeUndefined();
+  });
+
+  it("post-unlock free-preview stays visible after payment (pending_review)", () => {
+    // Regression pin: once the letter advances past the locked band
+    // (subscriber paid), the client still relies on the server stamping
+    // `freePreview: true`. Skipping the gate would pin the UI on
+    // <FreePreviewWaiting/> indefinitely.
+    const out = applyFreePreviewGate(
+      [{ id: 11, versionType: "ai_draft", content: "UNLOCKED DRAFT AT PENDING_REVIEW" }],
+      "pending_review",
+      { isFreePreview: true, freePreviewUnlockAt: PAST }
+    );
+    expect(out[0].content).toBe("UNLOCKED DRAFT AT PENDING_REVIEW");
+    expect(out[0].freePreview).toBe(true);
+    expect(out[0].isRedacted).toBe(false);
+  });
+
   it("Case 1 — pre-unlock free-preview: empty content + freePreviewWaiting:true, no freePreview flag", () => {
     const out = applyFreePreviewGate(
       [{ id: 1, versionType: "ai_draft", content: "SECRET DRAFT\nLine 2\nLine 3" }],
@@ -162,14 +191,27 @@ describe("Phase 96 — applyFreePreviewGate", () => {
     expect(out[0].freePreview).toBe(true);
   });
 
-  it("non-locked status returns raw rows without gating", () => {
+  it("non-free-preview, non-locked status returns raw rows without gating", () => {
     const out = applyFreePreviewGate(
       [{ id: 6, versionType: "final_approved", content: "FINAL" }],
       "sent",
-      { isFreePreview: true, freePreviewUnlockAt: FUTURE }
+      { isFreePreview: false, freePreviewUnlockAt: null }
     );
     expect(out[0].content).toBe("FINAL");
     expect(out[0].truncated).toBe(false);
+  });
+
+  it("final_approved rows are never gated, even for free-preview letters", () => {
+    // The gate only ever touches ai_draft content — final_approved is the
+    // attorney-reviewed output and always surfaces raw.
+    const out = applyFreePreviewGate(
+      [{ id: 12, versionType: "final_approved", content: "FINAL REVIEWED" }],
+      "approved",
+      { isFreePreview: true, freePreviewUnlockAt: PAST }
+    );
+    expect(out[0].content).toBe("FINAL REVIEWED");
+    expect(out[0].freePreview).toBeUndefined();
+    expect(out[0].freePreviewWaiting).toBeUndefined();
   });
 
   it("pre-unlock free-preview leaks NOTHING even if the pipeline saves the draft early", () => {
@@ -247,7 +289,7 @@ describe("Phase 96 — LetterDetail popup requires server unlock + content", () 
 describe("Phase 96 — draftPdfRoute blocks free-preview PDFs before review", () => {
   const source = readServer("draftPdfRoute.ts");
 
-  it("defines FREE_PREVIEW_PDF_ALLOWED_STATUSES (post-payment set)", () => {
+  it("defines FREE_PREVIEW_PDF_ALLOWED_STATUSES mirroring the route's full review-pipeline allowlist", () => {
     expect(source).toMatch(/FREE_PREVIEW_PDF_ALLOWED_STATUSES/);
     const match = source.match(
       /FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new Set\(\[([\s\S]*?)\]\)/
@@ -256,6 +298,11 @@ describe("Phase 96 — draftPdfRoute blocks free-preview PDFs before review", ()
     const list = match![1];
     expect(list).toContain('"pending_review"');
     expect(list).toContain('"under_review"');
+    // Copilot-review fix: `needs_changes` and `client_revision_requested`
+    // must be allowed or a free-preview letter mid-review gets 403'd on the
+    // PDF endpoint even though it's already in the attorney pipeline.
+    expect(list).toContain('"needs_changes"');
+    expect(list).toContain('"client_revision_requested"');
     expect(list).toContain('"approved"');
     expect(list).toContain('"client_approval_pending"');
     expect(list).toContain('"client_approved"');
@@ -338,14 +385,29 @@ describe("Phase 96 — pipeline job is NOT delayed; generation starts immediatel
 
 // ─── Additional — submitLetter returns the real isFreePreview flag ────────
 
-describe("Phase 96 — submitLetter returns the real is_free_preview column", () => {
-  const source = readServer("services", "letters.ts");
+describe("Phase 96 — submitLetter propagates the real isFreePreview flag", () => {
+  const letters = readServer("services", "letters.ts");
+  const canonical = readServer("services", "canonicalProcedures.ts");
 
-  it("reads the letter row instead of inferring from status", () => {
-    // The buggy shape was `isFreePreview: result.status === "submitted"`
-    expect(source).not.toMatch(/isFreePreview:\s*result\.status\s*===\s*"submitted"/);
-    expect(source).toMatch(
-      /const\s+letter\s*=\s*await\s+getLetterRequestById\(result\.requestId\)[\s\S]*?isFreePreview:\s*letter\?\.isFreePreview\s*===\s*true/
+  it("does not infer isFreePreview from status", () => {
+    expect(letters).not.toMatch(/isFreePreview:\s*result\.status\s*===\s*"submitted"/);
+  });
+
+  it("submitSubscriberIntakeProcedure returns isFreePreview from entitlement", () => {
+    // The canonical procedure knows the entitlement at the time it creates
+    // the row — avoids a second DB read in submitLetter.
+    expect(canonical).toMatch(
+      /return\s*\{[\s\S]*?isFreePreview:\s*entitlement\.firstLetterFree[\s\S]*?\}/
+    );
+  });
+
+  it("submitLetter uses result.isFreePreview directly (no extra DB round-trip)", () => {
+    expect(letters).toMatch(
+      /isFreePreview:\s*result\.isFreePreview\s*===\s*true/
+    );
+    // Must NOT re-read the row just for this value.
+    expect(letters).not.toMatch(
+      /const\s+letter\s*=\s*await\s+getLetterRequestById\(result\.requestId\)/
     );
   });
 });

@@ -6,16 +6,12 @@
  * 24h window elapses). Subscriber-facing APIs must not return the full
  * content until `free_preview_unlock_at <= NOW()`.
  *
- * Everywhere that decides "is the free preview unlocked?" must call this
- * helper. Do not inline the timestamp math anywhere else — one invariant,
- * one function.
- *
- * Called from:
- *   - server/db/letter-versions.ts (getLetterVersionsByRequestId)
- *   - server/routers/letters/subscriber.ts (detail query)
- *   - server/routers/versions.ts (single-version get)
- *   - server/draftPdfRoute.ts (PDF streaming gate)
- *   - server/freePreviewEmailCron.ts implicitly via the SQL filter
+ * Everywhere that decides "is the free preview unlocked?" must use this
+ * helper directly or flow through a DAL method that applies the same rule
+ * (e.g. `applyFreePreviewGate` in `server/db/letter-versions.ts`). Do not
+ * inline the timestamp math anywhere else — one invariant, one function.
+ * SQL-based paths must preserve the same `free_preview_unlock_at <= NOW()`
+ * visibility check.
  */
 export function isFreePreviewUnlocked(letter: {
   isFreePreview?: boolean | null;

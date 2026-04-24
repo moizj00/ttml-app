@@ -82,15 +82,13 @@ export async function submitLetter(
     input.letterType
   );
 
-  // Read the actual is_free_preview column instead of guessing from status
-  // (every successful submission has status='submitted'). This is what the
-  // client uses to route into the free-preview flow.
-  const letter = await getLetterRequestById(result.requestId);
-
+  // The canonical submission procedure already knows the entitlement at
+  // the time it creates the row and propagates that as `isFreePreview`, so
+  // we don't need an extra DB round-trip to read the column back.
   return {
     letterId: result.requestId,
     status: result.status,
-    isFreePreview: letter?.isFreePreview === true,
+    isFreePreview: result.isFreePreview === true,
   };
 }
 

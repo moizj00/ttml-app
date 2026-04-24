@@ -27,11 +27,16 @@ import { isFreePreviewUnlocked } from "../shared/utils/free-preview";
 // review and the letter is in the review pipeline, the draft PDF is allowed
 // even on the free-preview path. Before that point, free-preview letters
 // cannot download the PDF (the on-page watermarked viewer is the only reveal).
+// Mirrors the downstream statuses in the route's main `allowedStatuses`
+// list below so free-preview letters already in attorney review are not
+// 403'd on a PDF download.
 const FREE_PREVIEW_PDF_ALLOWED_STATUSES = new Set([
   "pending_review",
   "under_review",
-  "approved",
+  "needs_changes",
+  "client_revision_requested",
   "client_approval_pending",
+  "approved",
   "client_approved",
   "sent",
 ]);

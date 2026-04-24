@@ -106,7 +106,12 @@ export async function submitSubscriberIntakeProcedure(
     "SIMPLE_CLAUDE_PIPELINE"
   );
 
-  return { requestId, status: "submitted", subscriberVisibleAt };
+  return {
+    requestId,
+    status: "submitted",
+    subscriberVisibleAt,
+    isFreePreview: entitlement.firstLetterFree,
+  };
 }
 
 /**

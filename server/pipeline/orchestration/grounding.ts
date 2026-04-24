@@ -1,18 +1,18 @@
 /**
  * Shared logic for research grounding and citation revalidation.
  */
-import { setLetterResearchUnverified } from "../db";
-import { createLogger } from "../logger";
-import { createTokenAccumulator } from "./providers";
+import { setLetterResearchUnverified } from "../../db";
+import { createLogger } from "../../logger";
+import { createTokenAccumulator } from "../providers";
 import {
   buildCitationRegistry,
   revalidateCitationsWithOpenAI,
-} from "./citations";
+} from "../citations";
 import type {
   IntakeJson,
   ResearchPacket,
   PipelineContext,
-} from "../../shared/types";
+} from "../../../shared/types";
 
 const logger = createLogger({ module: "GroundingService" });
 

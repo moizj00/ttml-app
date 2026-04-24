@@ -101,38 +101,63 @@ describe("Phase 95 — subscriber.detail passes the letter object to the DAL", (
   });
 });
 
-// ─── 3. versions.get — duplicate truncation path mirrors the gate ─────────
+// ─── 3. versions.get — delegates to the shared DAL helper ─────────────────
 
-describe("Phase 95 — versions.get mirrors the pre-unlock gate via helper", () => {
+describe("Phase 95 — versions.get delegates to applyFreePreviewGate", () => {
   const source = readServer("routers", "versions.ts");
 
-  it("imports the shared isFreePreviewUnlocked helper", () => {
+  it("imports applyFreePreviewGate and LOCKED_PREVIEW_STATUSES from the DAL", () => {
     expect(source).toMatch(
-      /import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"[^"]*shared\/utils\/free-preview"/
+      /import\s*\{[\s\S]*?applyFreePreviewGate[\s\S]*?LOCKED_PREVIEW_STATUSES[\s\S]*?\}\s*from\s*"\.\.\/db\/letter-versions"/
     );
   });
 
-  it("calls the helper to decide freePreviewUnlocked", () => {
-    expect(source).toMatch(/isFreePreviewUnlocked\(letter\)/);
-  });
-
-  it("returns empty content + freePreviewWaiting:true for pre-unlock free-preview", () => {
+  it("calls applyFreePreviewGate on a single-version array", () => {
     expect(source).toMatch(
-      /content:\s*""[\s\S]*?freePreviewWaiting:\s*true\s*as\s*const/
+      /applyFreePreviewGate\(\s*\[\s*version as any\s*\],\s*letter\.status,\s*letter\s*\)/
     );
   });
 
-  it("orders the gate BEFORE the inline 20% truncation slice", () => {
-    const idxFreePreview = source.indexOf("freePreviewWaiting: true as const");
-    const idxSlice = source.indexOf("Math.floor(lines.length * 0.2)");
-    expect(idxFreePreview).toBeGreaterThan(0);
-    expect(idxSlice).toBeGreaterThan(0);
-    expect(idxFreePreview).toBeLessThan(idxSlice);
+  it("admits subscriber ai_draft access when free-preview OR locked (ownership first)", () => {
+    // Access guard: ownership + (isFreePreview || isLocked). Without the
+    // isFreePreview branch, a post-payment free-preview letter would get
+    // FORBIDDEN for its own ai_draft.
+    expect(source).toMatch(/letter\?\.isFreePreview\s*===\s*true/);
+    expect(source).toMatch(
+      /LOCKED_PREVIEW_STATUSES\.has\(letter\.status\)/
+    );
+    expect(source).toMatch(
+      /letter\.userId\s*===\s*ctx\.user\.id\s*&&\s*\(isFreePreview\s*\|\|\s*isLocked\)/
+    );
   });
 
-  it("recognizes every locked-preview status, not just generated_locked", () => {
-    expect(source).toMatch(/LOCKED_PREVIEW_STATUSES[\s\S]*?ai_generation_completed_hidden/);
-    expect(source).toMatch(/LOCKED_PREVIEW_STATUSES[\s\S]*?letter_released_to_subscriber/);
+  it("does NOT inline timestamp math or truncation logic (consolidated into DAL)", () => {
+    expect(source).not.toMatch(/freePreviewUnlockAt\.getTime\(\)/);
+    expect(source).not.toMatch(/Math\.floor\(lines\.length\s*\*\s*0\.2\)/);
+  });
+});
+
+// ─── 3b. DAL exports the status set used by callers ───────────────────────
+
+describe("Phase 95 — DAL exports LOCKED_PREVIEW_STATUSES as a module const", () => {
+  const source = readServer("db", "letter-versions.ts");
+
+  it("LOCKED_PREVIEW_STATUSES is a module-scope export", () => {
+    expect(source).toMatch(
+      /export const LOCKED_PREVIEW_STATUSES\s*=\s*new Set\(\[/
+    );
+  });
+
+  it("covers all four pre-review locked statuses", () => {
+    const match = source.match(
+      /LOCKED_PREVIEW_STATUSES\s*=\s*new Set\(\[([\s\S]*?)\]\)/
+    );
+    expect(match).toBeTruthy();
+    const list = match![1];
+    expect(list).toContain('"generated_locked"');
+    expect(list).toContain('"ai_generation_completed_hidden"');
+    expect(list).toContain('"letter_released_to_subscriber"');
+    expect(list).toContain('"attorney_review_upsell_shown"');
   });
 });
 

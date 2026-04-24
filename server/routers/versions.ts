@@ -5,7 +5,10 @@ import {
   documentAnalysisResultLenientSchema,
   type DocumentAnalysisResult,
 } from "../../shared/types";
-import { isFreePreviewUnlocked } from "../../shared/utils/free-preview";
+import {
+  applyFreePreviewGate,
+  LOCKED_PREVIEW_STATUSES,
+} from "../db/letter-versions";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {
@@ -282,47 +285,26 @@ export const versionsRouter = router({
         if (version.versionType === "final_approved") return version;
         if (version.versionType === "ai_draft") {
           const letter = await getLetterRequestById(version.letterRequestId);
-          const LOCKED_PREVIEW_STATUSES = new Set([
-            "generated_locked",
-            "ai_generation_completed_hidden",
-            "letter_released_to_subscriber",
-            "attorney_review_upsell_shown",
-          ]);
+          // A subscriber can view their own ai_draft when either:
+          //   - the letter is in the free-preview path (gate runs regardless
+          //     of status; draft stays server-gated until unlockAt elapses), or
+          //   - the letter is in a paid-paywall locked state.
+          // applyFreePreviewGate is the single source of truth for how the
+          // draft is shaped in both cases (mirrors getLetterVersionsByRequestId).
+          const isFreePreview = letter?.isFreePreview === true;
+          const isLocked =
+            !!letter && LOCKED_PREVIEW_STATUSES.has(letter.status);
           if (
             letter &&
             letter.userId === ctx.user.id &&
-            LOCKED_PREVIEW_STATUSES.has(letter.status)
+            (isFreePreview || isLocked)
           ) {
-            // Free-preview path uses the shared visibility helper — same
-            // decision used by getLetterVersionsByRequestId and draftPdfRoute.
-            if (letter.isFreePreview === true) {
-              if (isFreePreviewUnlocked(letter)) {
-                return {
-                  ...version,
-                  truncated: false,
-                  freePreview: true as const,
-                  isRedacted: false,
-                };
-              }
-              return {
-                ...version,
-                content: "",
-                truncated: true,
-                freePreviewWaiting: true as const,
-              };
-            }
-
-            // Standard paid-paywall preview: truncated to 20% of lines.
-            if (version.content) {
-              const lines = version.content.split("\n");
-              const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
-              return {
-                ...version,
-                content: lines.slice(0, visibleCount).join("\n"),
-                truncated: true,
-              };
-            }
-            return { ...version, truncated: true };
+            const [gated] = applyFreePreviewGate(
+              [version as any],
+              letter.status,
+              letter
+            );
+            if (gated) return gated;
           }
         }
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
