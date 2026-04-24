@@ -58,8 +58,7 @@ export function FreePreviewWaiting({
               <div className="font-medium text-blue-900">
                 Quality evaluation
               </div>
-              Our systems are finalizing detailed research and citations before
-              the draft is prepared.
+              Final research and citations are being verified for your professional draft.
             </div>
           </div>
         </div>
