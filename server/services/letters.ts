@@ -160,10 +160,10 @@ export async function processSubscriberFeedback(
     noteText: additionalContext,
     noteVisibility: "user_visible",
     fromStatus: ctx.letter.status as any,
-    toStatus,
+    toStatus: toStatus as any,
   });
 
-  await updateLetterStatus(letterId, toStatus);
+  await updateLetterStatus(letterId, toStatus as any);
 
   if (retriggerPipeline) {
     const appUrl = getAppUrl(ctx.req);
@@ -185,7 +185,7 @@ export async function retryFromRejected(
 ) {
     await updateLetterStatus(input.letterId, "submitted");
     const appUrl = getAppUrl(ctx.req);
-    runSimplePipeline(input.letterId, input.updatedIntakeJson!, ctx.userId).catch(err => {
+    runSimplePipeline(input.letterId, input.updatedIntakeJson || ({} as any), ctx.userId).catch(err => {
         logger.error({ err, letterId: input.letterId }, "retryFromRejected simple pipeline re-run failed");
     });
     return { success: true };
