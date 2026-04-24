@@ -26,10 +26,20 @@
 
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, FileText, Gavel, Shield, CheckCircle, AlertTriangle } from "lucide-react";
+import {
+  ArrowRight,
+  FileText,
+  Gavel,
+  Shield,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PRICING } from "@shared/pricing";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 interface FreePreviewViewerProps {
   letterId: number;
@@ -57,17 +67,15 @@ function useCopyProtection(enabled: boolean) {
       if (!target?.closest?.("[data-free-preview-region='true']")) return;
 
       const mod = e.ctrlKey || e.metaKey;
-      if (
-        mod &&
-        ["c", "x", "a", "p", "s"].includes(e.key.toLowerCase())
-      ) {
+      if (mod && ["c", "x", "a", "p", "s"].includes(e.key.toLowerCase())) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
 
     document.addEventListener("keydown", handler, { capture: true });
-    return () => document.removeEventListener("keydown", handler, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", handler, { capture: true });
   }, [enabled]);
 }
 
@@ -81,6 +89,36 @@ export function FreePreviewViewer({
   const [, navigate] = useLocation();
   useCopyProtection(true);
 
+  const utils = trpc.useUtils();
+  const paywallStatus = trpc.billing.checkPaywallStatus.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+
+  const subscriptionSubmitMutation =
+    trpc.billing.subscriptionSubmit.useMutation({
+      onSuccess: () => {
+        toast.success("Submitted for attorney review!");
+        utils.letters.detail.invalidate({ id: letterId });
+      },
+      onError: err => {
+        toast.error(err.message || "Failed to submit for review");
+      },
+    });
+
+  const isSubscribed =
+    paywallStatus.data?.hasActiveRecurringSubscription === true;
+  const isPending = subscriptionSubmitMutation.isPending;
+
+  const handleSubmitReview = () => {
+    if (isSubscribed) {
+      subscriptionSubmitMutation.mutate({ letterId });
+    } else {
+      // For subscribers without an active recurring sub (or public users),
+      // navigate to pricing to subscribe.
+      navigate("/pricing");
+    }
+  };
+
   const noCopyHandler = (
     e: React.ClipboardEvent | React.MouseEvent | React.DragEvent
   ) => {
@@ -89,7 +127,7 @@ export function FreePreviewViewer({
   };
 
   const letterTypeLabel = letterType
-    ? letterType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    ? letterType.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     : undefined;
 
   return (
@@ -115,12 +153,14 @@ export function FreePreviewViewer({
                 </span>
                 {letterTypeLabel && (
                   <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                    <span className="font-semibold">Type:</span> {letterTypeLabel}
+                    <span className="font-semibold">Type:</span>{" "}
+                    {letterTypeLabel}
                   </span>
                 )}
                 {jurisdictionState && (
                   <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                    <span className="font-semibold">Jurisdiction:</span> {jurisdictionState}
+                    <span className="font-semibold">Jurisdiction:</span>{" "}
+                    {jurisdictionState}
                   </span>
                 )}
                 <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
@@ -137,7 +177,9 @@ export function FreePreviewViewer({
         <div className="bg-amber-50 border-b border-amber-200 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-800">Full Draft Preview</span>
+            <span className="text-sm font-semibold text-amber-800">
+              Full Draft Preview
+            </span>
           </div>
           <span
             className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-2 py-0.5 tracking-wider"
@@ -184,7 +226,6 @@ export function FreePreviewViewer({
                 DRAFT
               </span>
             </div>
-
           </div>
         </CardContent>
       </Card>
@@ -213,7 +254,10 @@ export function FreePreviewViewer({
             { icon: CheckCircle, text: "Edits & approval included" },
             { icon: FileText, text: "Professional PDF delivered" },
           ].map(({ icon: Icon, text }) => (
-            <div key={text} className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2">
+            <div
+              key={text}
+              className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2"
+            >
               <Icon className="w-4 h-4 text-white/80 flex-shrink-0" />
               <span className="text-xs text-white/90">{text}</span>
             </div>
@@ -223,24 +267,38 @@ export function FreePreviewViewer({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <span className="text-3xl font-extrabold text-white">
-              From {PRICING.monthly.priceDisplay}
-              <span className="text-base font-normal text-white/60">/mo</span>
+              {isSubscribed ? "$0" : `From ${PRICING.monthly.priceDisplay}`}
+              {!isSubscribed && (
+                <span className="text-base font-normal text-white/60">/mo</span>
+              )}
             </span>
             <p className="text-xs text-white/60 mt-0.5">
-              {PRICING.monthly.lettersIncluded} letters/month · cancel anytime
+              {isSubscribed
+                ? "Included in your active subscription"
+                : `${PRICING.monthly.lettersIncluded} letters/month · cancel anytime`}
             </p>
           </div>
           <Button
-            onClick={() => navigate("/pricing")}
+            onClick={handleSubmitReview}
+            disabled={isPending}
             size="lg"
             className="bg-white text-blue-800 hover:bg-white/90 font-bold shadow-md w-full sm:w-auto"
             data-testid="button-free-preview-subscribe"
           >
-            <span className="flex items-center gap-2">
-              <Gavel className="w-4 h-4" />
-              Submit For Attorney Review
-              <ArrowRight className="w-4 h-4" />
-            </span>
+            {isPending ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Submitting...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Gavel className="w-4 h-4" />
+                {isSubscribed
+                  ? "Submit For Attorney Review"
+                  : "Subscribe to Submit"}
+                <ArrowRight className="w-4 h-4" />
+              </span>
+            )}
           </Button>
         </div>
       </div>

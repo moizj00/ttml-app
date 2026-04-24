@@ -294,106 +294,73 @@ export function LetterPaywall({
 
         <div className="pt-2">
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
-            Prefer a one-time option?
+            Other payment options
           </h3>
 
-          {isFreeReviewAvailable ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-lg font-bold text-slate-800 mb-1">
-                    First Letter Review
-                  </h4>
-                  <p className="text-sm text-slate-500 mb-3 max-w-md">
-                    Pay a nominal fee to verify identity and cover processing
-                    costs for one-time attorney review.
-                  </p>
-                  <div className="flex items-end gap-2">
-                    <span className="text-2xl font-extrabold text-slate-900">
-                      ${FIRST_LETTER_REVIEW_PRICE}
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  onClick={() => payFirstLetterMutation.mutate({ letterId })}
-                  disabled={isPending}
-                  className="w-full sm:w-auto mt-2 sm:mt-0 shadow-sm"
-                >
-                  {isPending && payFirstLetterMutation.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Preparing...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      Pay ${FIRST_LETTER_REVIEW_PRICE}
-                    </span>
-                  )}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="flex-1">
-                  <h4 className="text-lg font-bold text-slate-800 mb-1">
-                    Single Letter Review
-                  </h4>
-                  <p className="text-sm text-slate-500 mb-4 max-w-md">
-                    One-time attorney review, signature, and PDF delivery
-                    without a subscription.
-                  </p>
-                  <DiscountCodeInput
-                    className="mb-4 max-w-sm"
-                    initialCode={urlCouponCode}
-                    onCodeChange={result => setAppliedDiscount(result)}
-                  />
-                  <div className="flex items-end gap-2">
-                    {discountedPrice !== null ? (
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-extrabold text-slate-900">
-                          ${discountedPrice}
-                        </span>
-                        <span className="text-sm text-slate-400 line-through">
-                          ${basePrice}
-                        </span>
-                        <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
-                          ${appliedDiscount!.discountPercent}% off
-                        </span>
-                      </div>
-                    ) : (
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
+            Other payment options
+          </h3>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-slate-800 mb-1">
+                  Single Letter Review
+                </h4>
+                <p className="text-sm text-slate-500 mb-4 max-w-md">
+                  One-time attorney review, signature, and PDF delivery without
+                  a subscription.
+                </p>
+                <DiscountCodeInput
+                  className="mb-4 max-w-sm"
+                  initialCode={urlCouponCode}
+                  onCodeChange={result => setAppliedDiscount(result)}
+                />
+                <div className="flex items-end gap-2">
+                  {discountedPrice !== null ? (
+                    <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-extrabold text-slate-900">
+                        ${discountedPrice}
+                      </span>
+                      <span className="text-sm text-slate-400 line-through">
                         ${basePrice}
                       </span>
-                    )}
-                  </div>
-                </div>
-                <Button
-                  onClick={() =>
-                    payToUnlock.mutate({
-                      letterId,
-                      discountCode: appliedDiscount?.code ?? undefined,
-                    })
-                  }
-                  disabled={isPending}
-                  size="lg"
-                  className="w-full md:w-auto flex-shrink-0 shadow-sm"
-                >
-                  {isPending && payToUnlock.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Preparing checkout...
-                    </span>
+                      <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                        {appliedDiscount!.discountPercent}% off
+                      </span>
+                    </div>
                   ) : (
-                    <span className="flex items-center gap-2">
-                      Pay & Submit
-                      <ArrowRight className="w-4 h-4" />
+                    <span className="text-2xl font-extrabold text-slate-900">
+                      ${basePrice}
                     </span>
                   )}
-                </Button>
+                </div>
               </div>
+              <Button
+                onClick={() =>
+                  payToUnlock.mutate({
+                    letterId,
+                    discountCode: appliedDiscount?.code ?? undefined,
+                  })
+                }
+                disabled={isPending}
+                size="lg"
+                className="w-full md:w-auto flex-shrink-0 shadow-sm"
+              >
+                {isPending && payToUnlock.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Preparing checkout...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    Pay & Submit
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                )}
+              </Button>
             </div>
-          )}
+          </div>
         </div>
       </div>
     );

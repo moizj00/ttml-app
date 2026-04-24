@@ -42,7 +42,7 @@ const PLANS = [
     priceDisplay: PRICING.monthly.priceDisplay,
     priceNumeric: PRICING.monthly.price,
     period: PRICING.monthly.period,
-    priceSub: "$50 per letter" as string | null,
+    priceSub: null as string | null,
     description: PRICING.monthly.description,
     badge: "Most Popular" as string | null,
     features: PRICING.monthly.features as readonly string[],
@@ -99,7 +99,9 @@ export default function Pricing() {
       if (planId === "single_letter") {
         navigate(`/signup?next=${encodeURIComponent("/submit")}`);
       } else {
-        navigate(`/signup${returnTo ? '?next=' + encodeURIComponent(`/pricing?returnTo=${returnTo}`) : ''}`);
+        navigate(
+          `/signup${returnTo ? "?next=" + encodeURIComponent(`/pricing?returnTo=${returnTo}`) : ""}`
+        );
       }
       return;
     }
@@ -107,7 +109,11 @@ export default function Pricing() {
       navigate("/submit");
       return;
     }
-    checkoutMutation.mutate({ planId, discountCode: appliedDiscount?.code, returnTo: returnTo || undefined });
+    checkoutMutation.mutate({
+      planId,
+      discountCode: appliedDiscount?.code,
+      returnTo: returnTo || undefined,
+    });
   };
 
   // Calculate discounted prices for display
@@ -128,7 +134,8 @@ export default function Pricing() {
       name: "Talk to My Lawyer",
       url: "https://www.talk-to-my-lawyer.com",
     },
-    description: "Professional attorney-reviewed legal letters. Choose from single letter ($299), monthly subscription ($299/month for 4 letters), or yearly plan ($2,400/year for 8 letters).",
+    description:
+      "Professional attorney-reviewed legal letters. Choose from single letter ($299), monthly subscription ($299/month for 4 letters), or yearly plan ($2,400/year for 8 letters).",
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
@@ -138,7 +145,8 @@ export default function Pricing() {
           name: "Single Letter",
           price: "299",
           priceCurrency: "USD",
-          description: "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
+          description:
+            "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
           eligibleQuantity: { "@type": "QuantitativeValue", value: 1 },
         },
         {
@@ -146,15 +154,22 @@ export default function Pricing() {
           name: "Monthly Plan",
           price: "299",
           priceCurrency: "USD",
-          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1M" },
-          description: "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            billingDuration: "P1M",
+          },
+          description:
+            "4 attorney-reviewed letters per month. Best for individuals with regular legal needs.",
         },
         {
           "@type": "Offer",
           name: "Yearly Plan",
           price: "2400",
           priceCurrency: "USD",
-          priceSpecification: { "@type": "UnitPriceSpecification", billingDuration: "P1Y" },
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            billingDuration: "P1Y",
+          },
           description: "8 attorney-reviewed letters per year, billed annually.",
         },
       ],
@@ -166,19 +181,51 @@ export default function Pricing() {
       <PublicNav activeLink="/pricing" />
       <PublicBreadcrumb items={[{ label: "Pricing" }]} />
       <Helmet>
-        <title>Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My Lawyer</title>
-        <meta name="description" content="Transparent pricing for attorney-reviewed legal letters. Single letter $299, monthly $299/month (4 letters), or yearly $2,400 (8 letters). All plans include attorney review and PDF delivery." />
-        <link rel="canonical" href="https://www.talk-to-my-lawyer.com/pricing" />
-        <meta property="og:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
-        <meta property="og:description" content="Choose the right plan for your legal needs. Single letter $299, monthly $299/month, or yearly $2,400. Attorney review included in every plan." />
+        <title>
+          Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My
+          Lawyer
+        </title>
+        <meta
+          name="description"
+          content="Transparent pricing for attorney-reviewed legal letters. Single letter $299, monthly $299/month (4 letters), or yearly $2,400 (8 letters). All plans include attorney review and PDF delivery."
+        />
+        <link
+          rel="canonical"
+          href="https://www.talk-to-my-lawyer.com/pricing"
+        />
+        <meta
+          property="og:title"
+          content="Legal Letter Pricing Plans | Talk to My Lawyer"
+        />
+        <meta
+          property="og:description"
+          content="Choose the right plan for your legal needs. Single letter $299, monthly $299/month, or yearly $2,400. Attorney review included in every plan."
+        />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://www.talk-to-my-lawyer.com/pricing" />
-        <meta property="og:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
+        <meta
+          property="og:url"
+          content="https://www.talk-to-my-lawyer.com/pricing"
+        />
+        <meta
+          property="og:image"
+          content="https://www.talk-to-my-lawyer.com/logo-main.png"
+        />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Legal Letter Pricing Plans | Talk to My Lawyer" />
-        <meta name="twitter:description" content="Transparent pricing for attorney-reviewed legal letters. Single, monthly, and yearly plans available." />
-        <meta name="twitter:image" content="https://www.talk-to-my-lawyer.com/logo-main.png" />
-        <script type="application/ld+json">{JSON.stringify(pricingJsonLd)}</script>
+        <meta
+          name="twitter:title"
+          content="Legal Letter Pricing Plans | Talk to My Lawyer"
+        />
+        <meta
+          name="twitter:description"
+          content="Transparent pricing for attorney-reviewed legal letters. Single, monthly, and yearly plans available."
+        />
+        <meta
+          name="twitter:image"
+          content="https://www.talk-to-my-lawyer.com/logo-main.png"
+        />
+        <script type="application/ld+json">
+          {JSON.stringify(pricingJsonLd)}
+        </script>
       </Helmet>
 
       {/* Header */}
@@ -191,7 +238,9 @@ export default function Pricing() {
             Structured Drafting + Attorney Review — Starting at $299
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            The only service that combines structured drafting with live attorney review and web-grounded legal research — delivered in hours, not weeks.
+            The only service that combines structured drafting with live
+            attorney review and web-grounded legal research — delivered in
+            hours, not weeks.
           </p>
         </div>
       </header>
@@ -299,7 +348,8 @@ export default function Pricing() {
           />
           {appliedDiscount && (
             <p className="text-center text-sm text-emerald-600 font-medium mt-2">
-              {appliedDiscount.discountPercent}% discount will be applied to all plans.
+              {appliedDiscount.discountPercent}% discount will be applied to all
+              plans.
             </p>
           )}
         </div>
@@ -310,10 +360,10 @@ export default function Pricing() {
           <p className="text-sm text-muted-foreground">
             Choose a plan and complete checkout to get started. Pay{" "}
             <strong>${PRICING.singleLetter.price}</strong> for a single draft,
-            or subscribe for{" "}
-            <strong>${PRICING.monthly.price}/month</strong> (4 drafts) or{" "}
-            <strong>${PRICING.yearly.price}/year</strong> (8 drafts total). All
-            plans include California-focused drafting and PDF delivery.
+            or subscribe for <strong>${PRICING.monthly.price}/month</strong> (4
+            drafts) or <strong>${PRICING.yearly.price}/year</strong> (8 drafts
+            total). All plans include California-focused drafting and PDF
+            delivery.
           </p>
         </div>
 
