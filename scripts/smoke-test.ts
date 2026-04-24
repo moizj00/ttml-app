@@ -56,7 +56,7 @@ import type { IntakeJson } from "../shared/types";
 // ─── CLI args ─────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
-const userIdArg = args.find((a) => a.startsWith("--user-id="))?.split("=")[1];
+const userIdArg = args.find(a => a.startsWith("--user-id="))?.split("=")[1];
 const skipPipeline = args.includes("--skip-pipeline");
 const doCleanup = args.includes("--cleanup");
 
@@ -96,7 +96,8 @@ const TEST_INTAKE: IntakeJson = {
     incidentDate: "2026-01-10",
   },
   financials: { amountOwed: 5000, currency: "USD" },
-  desiredOutcome: "Full payment of $5,000 within 14 days of receipt of this letter.",
+  desiredOutcome:
+    "Full payment of $5,000 within 14 days of receipt of this letter.",
   deadlineDate: "2026-05-01",
   tonePreference: "firm",
 };
@@ -119,17 +120,27 @@ function check(label: string, condition: boolean, detail?: string): void {
 // ─── Cleanup helper ───────────────────────────────────────────────────────────
 
 async function cleanup(letterId: number): Promise<void> {
-  console.log(`\n[Cleanup] Deleting test letter #${letterId} and related rows...`);
+  console.log(
+    `\n[Cleanup] Deleting test letter #${letterId} and related rows...`
+  );
   const db = await getDb();
   if (!db) {
     console.error("[Cleanup] DB not available — skipping");
     return;
   }
   // Delete child rows first (FK constraints), then the parent
-  await db.delete(reviewActions).where(eq(reviewActions.letterRequestId, letterId));
-  await db.delete(letterVersions).where(eq(letterVersions.letterRequestId, letterId));
-  await db.delete(researchRuns).where(eq(researchRuns.letterRequestId, letterId));
-  await db.delete(workflowJobs).where(eq(workflowJobs.letterRequestId, letterId));
+  await db
+    .delete(reviewActions)
+    .where(eq(reviewActions.letterRequestId, letterId));
+  await db
+    .delete(letterVersions)
+    .where(eq(letterVersions.letterRequestId, letterId));
+  await db
+    .delete(researchRuns)
+    .where(eq(researchRuns.letterRequestId, letterId));
+  await db
+    .delete(workflowJobs)
+    .where(eq(workflowJobs.letterRequestId, letterId));
   await db.delete(letterRequests).where(eq(letterRequests.id, letterId));
   console.log("[Cleanup] Done.");
 }
@@ -139,7 +150,9 @@ async function cleanup(letterId: number): Promise<void> {
 async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════════");
   console.log("  TTML End-to-End Smoke Test");
-  console.log(`  user_id=${USER_ID}  skip-pipeline=${skipPipeline}  cleanup=${doCleanup}`);
+  console.log(
+    `  user_id=${USER_ID}  skip-pipeline=${skipPipeline}  cleanup=${doCleanup}`
+  );
   console.log("═══════════════════════════════════════════════════════════\n");
 
   // ── Step 1: Create test letter ─────────────────────────────────────────────
@@ -168,14 +181,23 @@ async function main(): Promise<void> {
 
   const initialLetter = await getLetterRequestById(letterId);
   check("Step 1: letter_requests row exists", !!initialLetter);
-  check("Step 1: status is 'submitted'", initialLetter?.status === "submitted", `got: ${initialLetter?.status}`);
+  check(
+    "Step 1: status is 'submitted'",
+    initialLetter?.status === "submitted",
+    `got: ${initialLetter?.status}`
+  );
   check("Step 1: intakeJson stored", !!initialLetter?.intakeJson);
   check("Step 1: isFreePreview is true", initialLetter?.isFreePreview === true);
-  check("Step 1: freePreviewUnlockAt is set", !!initialLetter?.freePreviewUnlockAt);
+  check(
+    "Step 1: freePreviewUnlockAt is set",
+    !!initialLetter?.freePreviewUnlockAt
+  );
 
   // ── Step 2: Run pipeline (or inject a fake draft for --skip-pipeline) ───────
   if (skipPipeline) {
-    console.log("\n[Step 2] --skip-pipeline: injecting synthetic draft directly...");
+    console.log(
+      "\n[Step 2] --skip-pipeline: injecting synthetic draft directly..."
+    );
     await updateLetterStatus(letterId, "researching");
 
     // Synthetic research run
@@ -232,12 +254,18 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     });
     const versionId = (versionResult as any)?.insertId ?? 0;
     if (versionId) {
-      await updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId });
+      await updateLetterVersionPointers(letterId, {
+        currentAiDraftVersionId: versionId,
+      });
     }
     await updateLetterStatus(letterId, "ai_generation_completed_hidden");
-    console.log("[Step 2] Synthetic draft injected. Status → ai_generation_completed_hidden");
+    console.log(
+      "[Step 2] Synthetic draft injected. Status → ai_generation_completed_hidden"
+    );
   } else {
-    console.log("\n[Step 2] Running full 4-stage AI pipeline (this takes ~3–5 min)...");
+    console.log(
+      "\n[Step 2] Running full 4-stage AI pipeline (this takes ~3–5 min)..."
+    );
     console.log("         Watch Railway logs for [Pipeline] entries.\n");
     try {
       await runFullPipeline(letterId, TEST_INTAKE, {
@@ -265,8 +293,12 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   // ── Step 3: Verify research_runs saved ────────────────────────────────────
   console.log("\n[Step 3] Verifying research_runs...");
   const runs = await getResearchRunsByLetterId(letterId);
-  check("Step 3: research_runs row exists", runs.length > 0, `got ${runs.length} rows`);
-  const completedRun = runs.find((r) => r.status === "completed");
+  check(
+    "Step 3: research_runs row exists",
+    runs.length > 0,
+    `got ${runs.length} rows`
+  );
+  const completedRun = runs.find(r => r.status === "completed");
   check("Step 3: status=completed run found", !!completedRun);
   check(
     "Step 3: resultJson populated",
@@ -277,7 +309,7 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   // ── Step 4: Verify letter_versions saved ─────────────────────────────────
   console.log("\n[Step 4] Verifying letter_versions...");
   const versions = await getLetterVersionsByRequestId(letterId, true); // internal = see full content
-  const aiDraft = versions.find((v) => v.versionType === "ai_draft");
+  const aiDraft = versions.find(v => v.versionType === "ai_draft");
   check("Step 4: ai_draft version exists", !!aiDraft);
   check(
     "Step 4: content length > 500 chars",
@@ -302,10 +334,18 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     false,
     true
   );
-  const truncatedDraft = subscriberVersions.find((v) => v.versionType === "ai_draft");
+  const truncatedDraft = subscriberVersions.find(
+    v => v.versionType === "ai_draft"
+  );
   check("Step 5: subscriber sees ai_draft version", !!truncatedDraft);
-  check("Step 5: version is marked truncated/waiting", !!(truncatedDraft as any)?.truncated);
-  check("Step 5: version is marked freePreviewWaiting", !!(truncatedDraft as any)?.freePreviewWaiting);
+  check(
+    "Step 5: version is marked truncated/waiting",
+    !!(truncatedDraft as any)?.truncated
+  );
+  check(
+    "Step 5: version is marked freePreviewWaiting",
+    !!(truncatedDraft as any)?.freePreviewWaiting
+  );
   const fullLength = aiDraft?.content?.length ?? 0;
   const truncatedLength = truncatedDraft?.content?.length ?? 0;
   check(
@@ -335,7 +375,9 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
 
   console.log("\n[Step 6] Manually triggering free preview email cron...");
   const cronResult = await processFreePreviewEmails();
-  const thisLetterCronDetail = cronResult.details.find((d) => d.letterId === letterId);
+  const thisLetterCronDetail = cronResult.details.find(
+    d => d.letterId === letterId
+  );
   check(
     "Step 6: free preview email sent for smoke letter",
     thisLetterCronDetail?.status === "sent",
@@ -343,7 +385,10 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   );
 
   const letterAfterEmail = await getLetterRequestById(letterId);
-  check("Step 6: freePreviewEmailSentAt is set", !!letterAfterEmail?.freePreviewEmailSentAt);
+  check(
+    "Step 6: freePreviewEmailSentAt is set",
+    !!letterAfterEmail?.freePreviewEmailSentAt
+  );
 
   // Simulate the subscriber opening the preview, which releases the letter and
   // records that the attorney-review upsell has been shown.
@@ -356,7 +401,9 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     `got: ${letterAfterPreview?.status}`
   );
 
-  console.log("\n[Step 6] Verifying full draft visibility for released subscriber...");
+  console.log(
+    "\n[Step 6] Verifying full draft visibility for released subscriber..."
+  );
   const unlockedSubscriberVersions = await getLetterVersionsByRequestId(
     letterId,
     false,
@@ -364,9 +411,14 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     true,
     true
   );
-  const unlockedDraft = unlockedSubscriberVersions.find((v) => v.versionType === "ai_draft");
+  const unlockedDraft = unlockedSubscriberVersions.find(
+    v => v.versionType === "ai_draft"
+  );
   check("Step 6: subscriber sees ai_draft version", !!unlockedDraft);
-  check("Step 6: version is NOT marked truncated", !(unlockedDraft as any)?.truncated);
+  check(
+    "Step 6: version is NOT marked truncated",
+    !(unlockedDraft as any)?.truncated
+  );
   check(
     "Step 6: unlocked content is full length",
     (unlockedDraft?.content?.length ?? 0) === fullLength,
@@ -374,7 +426,9 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   );
 
   // ── Step 7: Simulate payment ──────────────────────────────────────────────
-  console.log("\n[Step 7] Simulating payment (attorney_review_upsell_shown → pending_review)...");
+  console.log(
+    "\n[Step 7] Simulating payment (attorney_review_upsell_shown → pending_review)..."
+  );
   await updateLetterStatus(letterId, "pending_review");
   await logReviewAction({
     letterRequestId: letterId,
@@ -389,13 +443,22 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   console.log("[Step 7] Status updated → pending_review");
 
   // ── Step 8: Verify attorney review queue ─────────────────────────────────
-  console.log("\n[Step 8] Verifying letter appears in attorney review queue...");
+  console.log(
+    "\n[Step 8] Verifying letter appears in attorney review queue..."
+  );
   const reviewLetter = await getLetterRequestById(letterId);
-  check("Step 8: status is 'pending_review'", reviewLetter?.status === "pending_review", `got: ${reviewLetter?.status}`);
-  check("Step 8: not yet claimed (assignedReviewerId is null)", reviewLetter?.assignedReviewerId == null);
+  check(
+    "Step 8: status is 'pending_review'",
+    reviewLetter?.status === "pending_review",
+    `got: ${reviewLetter?.status}`
+  );
+  check(
+    "Step 8: not yet claimed (assignedReviewerId is null)",
+    reviewLetter?.assignedReviewerId == null
+  );
 
   const queue = await getAllLetterRequests({ status: "pending_review" });
-  const inQueue = queue.some((l) => l.id === letterId);
+  const inQueue = queue.some(l => l.id === letterId);
   check("Step 8: letter appears in pending_review queue", inQueue);
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -408,7 +471,9 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   }
   console.log(`  Test letter ID: #${letterId} (subject: "[SMOKE TEST]...")`);
   if (!doCleanup) {
-    console.log("  Tip: re-run with --cleanup to remove the test letter from the DB.");
+    console.log(
+      "  Tip: re-run with --cleanup to remove the test letter from the DB."
+    );
   }
   console.log("═══════════════════════════════════════════════════════════");
 
@@ -419,7 +484,7 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
   process.exit(failCount > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error("\n[FATAL]", err);
   process.exit(1);
 });
