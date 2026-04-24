@@ -332,14 +332,16 @@ export async function cancelPipelineJobForLetter(
     const boss = await getBoss();
     const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
     const pending = jobs.filter(
-      (j) =>
-        (j.state === "created" || j.state === "retry" || j.state === "active") &&
+      j =>
+        (j.state === "created" ||
+          j.state === "retry" ||
+          j.state === "active") &&
         (j.data as { letterId?: number })?.letterId === letterId
     );
     if (pending.length === 0) return;
     await boss.cancel(
       QUEUE_NAME,
-      pending.map((j) => j.id)
+      pending.map(j => j.id)
     );
     logger.info(
       { letterId, count: pending.length },

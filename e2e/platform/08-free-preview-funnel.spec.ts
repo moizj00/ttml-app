@@ -13,13 +13,22 @@
  */
 
 import { expect } from "@playwright/test";
-import { test, isSubscriberConfigured, isAdminConfigured } from "../fixtures/auth";
+import {
+  test,
+  isSubscriberConfigured,
+  isAdminConfigured,
+} from "../fixtures/auth";
 import postgres from "postgres";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-async function getLatestLetterBySubject(sql: ReturnType<typeof postgres>, subject: string) {
-  const rows = await sql<{ id: number; status: string; free_preview_unlock_at: Date | null }[]>`
+async function getLatestLetterBySubject(
+  sql: ReturnType<typeof postgres>,
+  subject: string
+) {
+  const rows = await sql<
+    { id: number; status: string; free_preview_unlock_at: Date | null }[]
+  >`
     SELECT id, status, free_preview_unlock_at
     FROM letter_requests
     WHERE subject = ${subject}
@@ -29,7 +38,10 @@ async function getLatestLetterBySubject(sql: ReturnType<typeof postgres>, subjec
   return rows[0] ?? null;
 }
 
-async function submitTestLetter(page: import("@playwright/test").Page, subject: string) {
+async function submitTestLetter(
+  page: import("@playwright/test").Page,
+  subject: string
+) {
   await page.goto("/submit");
   await page.waitForLoadState("networkidle");
 
@@ -41,7 +53,9 @@ async function submitTestLetter(page: import("@playwright/test").Page, subject: 
   await page.getByRole("button", { name: /next/i }).click();
 
   // Jurisdiction
-  await expect(page.getByText(/State \/ Jurisdiction/i)).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(/State \/ Jurisdiction/i)).toBeVisible({
+    timeout: 5_000,
+  });
   const jurisdictionTrigger = page.getByRole("combobox").first();
   await jurisdictionTrigger.click();
   await page.getByRole("option", { name: /California/i }).click();
@@ -50,15 +64,21 @@ async function submitTestLetter(page: import("@playwright/test").Page, subject: 
   // Parties
   await expect(page.locator("#senderName")).toBeVisible({ timeout: 5_000 });
   await page.locator("#senderName").fill("E2E Sender");
-  await page.getByTestId("input-senderAddress").fill("123 Test Ave, Los Angeles, CA 90001");
+  await page
+    .getByTestId("input-senderAddress")
+    .fill("123 Test Ave, Los Angeles, CA 90001");
   await page.locator("#recipientName").fill("E2E Recipient");
-  await page.getByTestId("input-recipientAddress").fill("456 Target Blvd, SF, CA 94102");
+  await page
+    .getByTestId("input-recipientAddress")
+    .fill("456 Target Blvd, SF, CA 94102");
   await page.getByRole("button", { name: /next/i }).click();
 
   // Details
   const desc = page.getByTestId("input-description");
   await expect(desc).toBeVisible({ timeout: 5_000 });
-  await desc.fill("E2E free-preview funnel test — letter submitted for hold/upsell verification.");
+  await desc.fill(
+    "E2E free-preview funnel test — letter submitted for hold/upsell verification."
+  );
   await page.getByRole("button", { name: /next/i }).click();
 
   // Outcome
@@ -74,7 +94,8 @@ async function submitTestLetter(page: import("@playwright/test").Page, subject: 
   await submitBtn.click();
 
   await page.waitForURL(
-    (url) => url.pathname.includes("/dashboard") || url.pathname.includes("/letters/"),
+    url =>
+      url.pathname.includes("/dashboard") || url.pathname.includes("/letters/"),
     { timeout: 30_000 }
   );
 }
@@ -132,9 +153,9 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       // "processing" or "pending" indicator (content is server-side hidden)
       await page.goto("/dashboard");
       await page.waitForLoadState("networkidle");
-      const hiddenIndicator = page.getByTestId("letter-status-hidden").or(
-        page.getByText(/processing|generating|hold/i)
-      );
+      const hiddenIndicator = page
+        .getByTestId("letter-status-hidden")
+        .or(page.getByText(/processing|generating|hold/i));
       // Letter content body must not be visible (paywall server-truncates it)
       const contentArea = page.getByTestId("letter-content-preview");
       if (await contentArea.isVisible()) {
@@ -190,19 +211,25 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       await page.goto(`/admin/letters/${letterId}`);
       await page.waitForLoadState("networkidle");
 
-      const forceBtn = page.getByTestId("button-force-status-transition").or(
-        page.getByRole("button", { name: /force.*review|bypass.*hold|admin bypass/i })
-      );
+      const forceBtn = page
+        .getByTestId("button-force-status-transition")
+        .or(
+          page.getByRole("button", {
+            name: /force.*review|bypass.*hold|admin bypass/i,
+          })
+        );
       await expect(forceBtn).toBeVisible({ timeout: 10_000 });
       await forceBtn.click();
 
       // Fill reason in dialog if present
-      const reasonInput = page.getByTestId("input-force-reason").or(
-        page.getByPlaceholder(/reason/i)
-      );
+      const reasonInput = page
+        .getByTestId("input-force-reason")
+        .or(page.getByPlaceholder(/reason/i));
       if (await reasonInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
         await reasonInput.fill("E2E automated bypass test");
-        await page.getByRole("button", { name: /confirm|proceed|force/i }).click();
+        await page
+          .getByRole("button", { name: /confirm|proceed|force/i })
+          .click();
       }
 
       // Wait for status to update
@@ -247,7 +274,11 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       // Upsell CTA should be visible
       const upsellSection = page
         .getByTestId("attorney-review-upsell")
-        .or(page.getByText(/get attorney review|start attorney review|submit for review/i));
+        .or(
+          page.getByText(
+            /get attorney review|start attorney review|submit for review/i
+          )
+        );
       await expect(upsellSection).toBeVisible({ timeout: 10_000 });
 
       // Letter body should be watermarked / non-selectable draft view
@@ -256,7 +287,9 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
         .or(page.getByText(/draft|watermark/i));
       // At least a CTA button should be present
       await expect(
-        page.getByRole("button", { name: /attorney review|get review|start review/i })
+        page.getByRole("button", {
+          name: /attorney review|get review|start review/i,
+        })
       ).toBeVisible({ timeout: 5_000 });
     } finally {
       await sql.end();
@@ -308,7 +341,9 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
       await checkoutBtn.click();
 
       // Stripe Checkout opens (test mode — card 4242 4242 4242 4242)
-      await page.waitForURL(/stripe\.com\/pay|checkout\.stripe\.com/, { timeout: 15_000 });
+      await page.waitForURL(/stripe\.com\/pay|checkout\.stripe\.com/, {
+        timeout: 15_000,
+      });
       await page.getByPlaceholder(/card number/i).fill("4242424242424242");
       await page.getByPlaceholder(/MM \/ YY/i).fill("12/30");
       await page.getByPlaceholder(/CVC/i).fill("123");
@@ -317,8 +352,9 @@ test.describe("Free-Preview Funnel — 24h Hold & Upsell Flow", () => {
 
       // Wait for redirect back
       await page.waitForURL(
-        (url) =>
-          url.hostname !== "checkout.stripe.com" && url.hostname !== "stripe.com",
+        url =>
+          url.hostname !== "checkout.stripe.com" &&
+          url.hostname !== "stripe.com",
         { timeout: 30_000 }
       );
 

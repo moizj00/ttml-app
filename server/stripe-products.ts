@@ -25,7 +25,11 @@ import {
   FIRST_LETTER_REVIEW_PRICE_CENTS,
 } from "../shared/pricing";
 
-export { MONTHLY_PRICE_CENTS, YEARLY_PRICE_CENTS, FIRST_LETTER_REVIEW_PRICE_CENTS };
+export {
+  MONTHLY_PRICE_CENTS,
+  YEARLY_PRICE_CENTS,
+  FIRST_LETTER_REVIEW_PRICE_CENTS,
+};
 
 export interface PlanConfig {
   id: "single_letter" | "monthly" | "yearly";
@@ -58,7 +62,8 @@ export const PLANS: Record<string, PlanConfig> = {
   single_letter: {
     id: "single_letter",
     name: "Single Letter",
-    description: "One professional legal letter with full attorney review, no commitment",
+    description:
+      "One professional legal letter with full attorney review, no commitment",
     price: LETTER_UNLOCK_PRICE_CENTS, // $299
     interval: "one_time",
     lettersAllowed: 1,
@@ -116,14 +121,14 @@ export const PLANS: Record<string, PlanConfig> = {
  * Used for backward compatibility with existing subscriptions.
  */
 export const LEGACY_PLAN_ALIASES: Record<string, string> = {
-  per_letter: "single_letter",       // old per-letter → single_letter
-  monthly_basic: "monthly",          // old monthly_basic → monthly
-  monthly_pro: "monthly",            // old monthly_pro → monthly
-  starter: "monthly",                // old starter → monthly
-  professional: "monthly",           // old professional → monthly
-  free_trial: "single_letter",       // old free trial → single_letter
+  per_letter: "single_letter", // old per-letter → single_letter
+  monthly_basic: "monthly", // old monthly_basic → monthly
+  monthly_pro: "monthly", // old monthly_pro → monthly
+  starter: "monthly", // old starter → monthly
+  professional: "monthly", // old professional → monthly
+  free_trial: "single_letter", // old free trial → single_letter
   free_trial_review: "single_letter", // old free trial review → single_letter
-  annual: "yearly",                  // old annual → yearly
+  annual: "yearly", // old annual → yearly
 };
 
 export const PLAN_LIST = Object.values(PLANS);
@@ -144,10 +149,16 @@ export function canSubmitLetter(
   status: string
 ): { allowed: boolean; reason?: string } {
   if (status !== "active") {
-    return { allowed: false, reason: "No active subscription. Please subscribe to submit a letter." };
+    return {
+      allowed: false,
+      reason: "No active subscription. Please subscribe to submit a letter.",
+    };
   }
   if (lettersAllowed < 0) {
-    return { allowed: false, reason: "Invalid plan configuration. Please contact support." };
+    return {
+      allowed: false,
+      reason: "Invalid plan configuration. Please contact support.",
+    };
   }
   if (lettersUsed >= lettersAllowed) {
     return {

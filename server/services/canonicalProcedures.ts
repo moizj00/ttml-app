@@ -249,8 +249,8 @@ export async function resolveLetterVisibilityProcedure(
 
   if (request.status === "pipeline_failed")
     return { status: "locked_generation_failed" };
-  
-  // If the letter's status is no longer ai_generation_completed_hidden (meaning admin already bypassed it), 
+
+  // If the letter's status is no longer ai_generation_completed_hidden (meaning admin already bypassed it),
   // return visible immediately without checking the clock.
   if (request.status !== "ai_generation_completed_hidden") {
     return { status: "visible_after_24_hours" };
