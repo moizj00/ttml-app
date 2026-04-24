@@ -277,7 +277,8 @@ export async function getBoss(): Promise<PgBossClient> {
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(
-  data: RunPipelineJobData
+  data: RunPipelineJobData,
+  options?: { startAfter?: number | string | Date }
 ): Promise<string> {
   let boss: PgBossClient;
   try {
@@ -302,6 +303,7 @@ export async function enqueuePipelineJob(
     // No retries at queue level — worker handles its own retry logic with backoff
     retryLimit: 0,
     expireInSeconds: 30 * 60,
+    ...options,
   });
   if (id === null) {
     // Duplicate suppressed — a job for this letter is already active or queued.
