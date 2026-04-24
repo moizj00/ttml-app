@@ -103,7 +103,7 @@ export async function submitSubscriberIntakeProcedure(
   enqueueLetterGenerationProcedure(
     requestId,
     "INTAKE_AUTO_GENERATION",
-    "SIMPLE_CLAUDE_PIPELINE"
+    "STANDARD_INTAKE_PIPELINE"
   );
 
   return { requestId, status: "submitted", subscriberVisibleAt };

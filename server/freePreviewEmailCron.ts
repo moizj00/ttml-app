@@ -124,9 +124,9 @@ export interface DispatchFreePreviewResult {
  *   - `current_ai_draft_version_id IS NOT NULL`           (draft exists)  — ONLY if requireDraft
  *
  * `requireDraft` default is TRUE so the pipeline-finalize and admin-force
- * paths never fire a "preview ready" email before the draft is saved. The
- * polling cron passes `requireDraft: false` to preserve the documented
- * "still email if pipeline failed so subscriber is informed" behavior.
+ * paths never fire a "preview ready" email before the draft is saved.
+ * Polling cron now also passes requireDraft: true to ensure
+ * subscribers don't see a "preparing" screen after being told it is ready.
  */
 export async function dispatchFreePreviewIfReady(
   letterId: number,

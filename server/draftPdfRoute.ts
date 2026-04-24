@@ -80,12 +80,13 @@ export function registerDraftPdfRoute(app: Express) {
       // Free-preview letters cannot expose the draft PDF until the 24h
       // unlock timestamp has elapsed (mirrors the in-app gate in
       // server/db/letter-versions.ts and server/routers/versions.ts).
-      if (
-        letter.isFreePreview === true &&
-        (!(letter.freePreviewUnlockAt instanceof Date) ||
-          letter.freePreviewUnlockAt.getTime() > Date.now())
-      ) {
-        res.status(403).json({ error: "Free preview is not yet available" });
+      //
+      // Preferred for upsell integrity: block draft PDF for free-preview
+      // letters entirely until they pay for attorney review.
+      if (letter.isFreePreview === true) {
+        res.status(403).json({
+          error: "Draft PDF is not available for free previews. Submit for attorney review to download your letter.",
+        });
         return;
       }
 

@@ -75,6 +75,7 @@ const POLLING_STATUSES = [
   "researching",
   "drafting",
   "PROCESSED_HIDDEN",
+  "ai_generation_completed_hidden",
   "pending_review",
   "under_review",
   "client_approval_pending",
@@ -87,8 +88,10 @@ const STATUS_LABELS: Record<string, string> = {
   researching: "Our team is researching your legal situation...",
   drafting: "Drafting your letter...",
   PROCESSED_HIDDEN: "Finalizing your professional draft...",
+  ai_generation_completed_hidden: "Finalizing your professional draft...",
   letter_released_to_subscriber: "Your professional draft is ready!",
   generated_locked: "Your professional draft is ready!",
+  attorney_review_upsell_shown: "Your professional draft is ready!",
   pending_review: "Sent to attorney review queue.",
   under_review: "An attorney is reviewing your letter.",
   approved: "Your letter has been approved by an attorney! Your PDF is ready.",
@@ -354,7 +357,8 @@ export default function LetterDetail() {
   const isGeneratedLocked =
     (letter.status === "generated_locked" ||
       letter.status === "generated_unlocked" ||
-      letter.status === "letter_released_to_subscriber") &&
+      letter.status === "letter_released_to_subscriber" ||
+      letter.status === "attorney_review_upsell_shown") &&
     !(letter as any).submittedByAdmin;
   const isApproved =
     letter.status === "approved" ||

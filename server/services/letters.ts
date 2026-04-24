@@ -82,10 +82,12 @@ export async function submitLetter(
     input.letterType
   );
 
+  const letter = await getLetterRequestById(result.requestId);
+
   return {
     letterId: result.requestId,
     status: result.status,
-    isFreePreview: result.status === "submitted",
+    isFreePreview: letter?.isFreePreview === true,
   };
 }
 
