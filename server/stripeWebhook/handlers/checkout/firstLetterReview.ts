@@ -8,7 +8,7 @@
 import Stripe from "stripe";
 import type { ParsedCheckoutMetadata } from "../../_metadata";
 import { setFreeReviewUsed } from "../../../db";
-import { fulfillLetterUnlock } from "../../../../services/billing";
+import { fulfillLetterUnlock } from "../../../services/billing";
 import { stripeLogger } from "../../_helpers";
 
 export async function handleFirstLetterReview(

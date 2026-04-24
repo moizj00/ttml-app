@@ -93,8 +93,10 @@ export async function fulfillLetterUnlock(params: FulfillmentUnlockParams) {
     }).catch(err => logger.error({ err }, "[BillingService] notifyAdmins failed"));
 
     await notifyAllAttorneys({
-        title: "New letter needs review",
-        body: `Letter #${letterId} ("${letter.subject}") is ready for review.`,
-        link: `/attorney/review/${letterId}`,
+        letterId,
+        letterSubject: letter.subject,
+        letterType: letter.letterType,
+        jurisdiction: letter.jurisdictionState ?? "Unknown",
+        appUrl,
     }).catch(err => logger.error({ err }, "[BillingService] notifyAllAttorneys failed"));
 }

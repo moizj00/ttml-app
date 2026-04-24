@@ -9,7 +9,7 @@ import Stripe from "stripe";
 import { SINGLE_LETTER_PRICE_CENTS } from "../../../../shared/pricing";
 import type { ParsedCheckoutMetadata } from "../../_metadata";
 import { getPaymentIntentId } from "../../_metadata";
-import { fulfillLetterUnlock } from "../../../../services/billing";
+import { fulfillLetterUnlock } from "../../../services/billing";
 import { trackCheckoutCommission } from "../../_commission";
 import { stripeLogger } from "../../_helpers";
 
