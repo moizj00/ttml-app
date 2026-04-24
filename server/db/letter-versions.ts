@@ -107,7 +107,7 @@ export async function getLetterVersionsByRequestId(
         // Free-preview lead-magnet override: return the full draft, stamped
         // with `freePreview: true` so the frontend can route to the
         // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
-        if (freePreviewUnlocked || letterStatus === "letter_released_to_subscriber") {
+        if (freePreviewUnlocked) {
           // Remove PII redaction for unlocked free previews.
           return {
             ...v,
@@ -118,7 +118,7 @@ export async function getLetterVersionsByRequestId(
         }
         // Pre-unlock free-preview: do NOT leak even the 20% slice. The UI
         // shows <FreePreviewWaiting/> based on the `freePreviewWaiting` flag.
-        if (isFreePreview || letterStatus === "AI_GENERATION_COMPLETED_HIDDEN") {
+        if (isFreePreview) {
           return {
             ...v,
             content: "",
