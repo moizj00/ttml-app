@@ -36,9 +36,82 @@ import {
   archiveIneffectiveLessons,
 } from "./learning";
 import { logger } from "./logger";
+import { getBoss, QUEUE_NAME } from "./queue";
+import type { PipelineJobData } from "./queue";
+import { getLetterRequestById } from "./db";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
+
+/**
+ * Pipeline statuses that legitimately have a queued/deferred job.
+ * Jobs for letters in any other status are stale and should be cancelled.
+ */
+const PIPELINE_ACTIVE_STATUSES = new Set([
+  "submitted",
+  "researching",
+  "drafting",
+  "ai_generation_completed_hidden",
+]);
+
+/**
+ * Cancel any pg-boss pipeline jobs whose associated letter is no longer
+ * in an "actively generating" status.  This handles the race where an admin
+ * force-transitions a letter but the deferred job wasn't cancelled (or the
+ * cancel call failed for a transient reason).
+ *
+ * Runs at startup and nightly at 04:00.
+ */
+export async function cleanupStalePipelineJobs(): Promise<{
+  cancelled: number;
+  errors: number;
+}> {
+  let cancelled = 0;
+  let errors = 0;
+  try {
+    const boss = await getBoss();
+    const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+    const pendingJobs = jobs.filter(
+      j => j.state === "created" || j.state === "retry"
+    );
+
+    if (pendingJobs.length === 0) return { cancelled: 0, errors: 0 };
+
+    const staleIds: string[] = [];
+    for (const job of pendingJobs) {
+      const letterId = (job.data as { letterId?: number })?.letterId;
+      if (!letterId) continue;
+      try {
+        const letter = await getLetterRequestById(letterId);
+        if (!letter || !PIPELINE_ACTIVE_STATUSES.has(letter.status)) {
+          staleIds.push(job.id);
+        }
+      } catch (err) {
+        logger.warn(
+          { err, jobId: job.id, letterId },
+          "[Cron] cleanupStalePipelineJobs: error checking letter status (skipping job)"
+        );
+        errors++;
+      }
+    }
+
+    if (staleIds.length > 0) {
+      await boss.cancel(QUEUE_NAME, staleIds);
+      cancelled = staleIds.length;
+      logger.info(
+        { cancelled },
+        "[Cron] cleanupStalePipelineJobs: cancelled stale deferred job(s)"
+      );
+    }
+  } catch (err) {
+    logger.error(
+      { err },
+      "[Cron] cleanupStalePipelineJobs: unexpected error"
+    );
+    errors++;
+  }
+  return { cancelled, errors };
+}
 
 /**
  * Start all scheduled cron jobs.
@@ -57,6 +130,18 @@ export function startCronScheduler(): void {
 
   started = true;
   logger.info("[Cron] Starting scheduler...");
+
+  // Run stale job cleanup once at startup (non-blocking)
+  setImmediate(async () => {
+    try {
+      const result = await cleanupStalePipelineJobs();
+      logger.info(
+        `[Cron] Startup stale-job cleanup done — cancelled: ${result.cancelled}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      logger.warn({ err }, "[Cron] Startup stale-job cleanup failed (non-fatal)");
+    }
+  });
 
   cron.schedule("0 * * * *", async () => {
     const startTime = Date.now();
@@ -233,8 +318,31 @@ export function startCronScheduler(): void {
     }
   });
 
+  // Stale pipeline job cleanup: runs nightly at 04:00
+  // Cancels any queued/deferred pg-boss jobs for letters that are no longer
+  // in an actively-generating status (guards against missed cancellations).
+  cron.schedule("0 4 * * *", async () => {
+    const startTime = Date.now();
+    logger.info(
+      `[Cron] [${new Date().toISOString()}] Running stale pipeline job cleanup...`
+    );
+    try {
+      const result = await cleanupStalePipelineJobs();
+      const elapsed = Date.now() - startTime;
+      logger.info(
+        `[Cron] Stale pipeline job cleanup done in ${elapsed}ms — cancelled: ${result.cancelled}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Cron] Stale pipeline job cleanup failed: ${msg}`);
+      captureServerException(err, {
+        tags: { component: "cron", job: "stale_pipeline_job_cleanup" },
+      });
+    }
+  });
+
   logger.info(
-    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30)"
+    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-job-cleanup (daily 04:00 + startup)"
   );
 }
 
