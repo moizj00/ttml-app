@@ -73,6 +73,7 @@ interface PgBossClient {
   ): Promise<void>;
   getQueueStats(queueName: string): Promise<PgBossQueueStats | undefined>;
   findJobs<T = unknown>(queueName: string): Promise<Array<PgBossFoundJob<T>>>;
+  cancel(queueName: string, id: string | string[]): Promise<void>;
   work<T>(
     queueName: string,
     options: { localConcurrency?: number },
@@ -316,6 +317,40 @@ export async function enqueuePipelineJob(
     `[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`
   );
   return id!;
+}
+
+/**
+ * Cancel any pending/deferred pipeline job for a given letter.
+ * Used by admin force-transition to prevent a deferred job from
+ * executing after the letter has been manually advanced.
+ * Non-throwing: logs a warning on failure so the caller can continue.
+ */
+export async function cancelPipelineJobForLetter(
+  letterId: number
+): Promise<void> {
+  try {
+    const boss = await getBoss();
+    const jobs = await boss.findJobs<PipelineJobData>(QUEUE_NAME);
+    const pending = jobs.filter(
+      (j) =>
+        (j.state === "created" || j.state === "retry" || j.state === "active") &&
+        (j.data as { letterId?: number })?.letterId === letterId
+    );
+    if (pending.length === 0) return;
+    await boss.cancel(
+      QUEUE_NAME,
+      pending.map((j) => j.id)
+    );
+    logger.info(
+      { letterId, count: pending.length },
+      "[Queue] Cancelled deferred pipeline job(s) for letter"
+    );
+  } catch (err) {
+    logger.warn(
+      { err, letterId },
+      "[Queue] cancelPipelineJobForLetter failed (non-fatal)"
+    );
+  }
 }
 
 export async function enqueueRetryFromStageJob(

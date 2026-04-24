@@ -54,14 +54,22 @@
 Defined in `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`. This is the **single source of truth** for all status transitions.
 
 ```
-submitted → researching → drafting → generated_locked
+submitted → researching → drafting → ai_generation_completed_hidden  (24h hold)
                                           │
-                                    [Stripe $200 or subscription]
-                                          │
-                                          ▼
-                                    pending_review → under_review → approved (transient)
-                                                                  → rejected → submitted
-                                                                  → needs_changes → submitted
+                          ┌───────────────┴─────────────────────────┐
+                          │                                          │
+                    [after 24h, auto-release]              [admin force-transition]
+                          │                                          │
+                          ▼                                          ▼
+             letter_released_to_subscriber                    under_review
+             attorney_review_upsell_shown
+             attorney_review_checkout_started
+             attorney_review_payment_confirmed
+                          │
+                          ▼
+                    pending_review → under_review → approved (transient)
+                                                  → rejected → submitted
+                                                  → needs_changes → submitted
 
 approved → client_approval_pending → client_approved → sent
                                    → client_revision_requested → pending_review
@@ -71,10 +79,13 @@ pipeline_failed → submitted (admin retry)
 
 **Key rules:**
 
-- `generated_locked` is the **PAYWALL** status — letters process immediately, but subscriber waits 24h, receives an email, then views a read-only watermarked draft modal. Must subscribe/pay to proceed to attorney review.
+- `ai_generation_completed_hidden` is the **24-HOUR HOLD** status — all generated letters (free-preview and subscription) are hidden from the subscriber for 24 hours. After the hold expires the letter auto-releases to `letter_released_to_subscriber`.
+- **Free-preview funnel**: `letter_released_to_subscriber` → `attorney_review_upsell_shown` → checkout → `attorney_review_payment_confirmed` → `pending_review` for attorney assignment.
+- **Admin bypass**: Admins can collapse the 24h window via `forceStatusTransition`, moving a letter directly from any hold/upsell status to `under_review`, skipping the paywall entirely. Deferred pipeline jobs are cancelled atomically to prevent re-execution.
 - `approved` is transient — auto-forwards to `client_approval_pending`
 - Admin can force ANY transition (bypasses map with `force=true`)
 - Any pipeline stage can reach `pipeline_failed` (except post-review stages)
+- The `ai_draft` version is immutable — attorney edits always create a new `attorney_edit` version
 
 ---
 

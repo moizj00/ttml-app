@@ -2,7 +2,7 @@
  * Stripe Products & Pricing Configuration
  * Talk-to-My-Lawyer — Legal Letter Generation Platform
  *
- * Pricing model (source of truth — see also shared/pricing.ts):
+ * Pricing model (source of truth: shared/pricing.ts):
  *  single_letter — $299 one-time: pay-as-you-go, 1 letter
  *  monthly       — $299/month: 4 letters/month, attorney review included
  *  yearly        — $2,400/year: 8 letters total, attorney review included
@@ -18,6 +18,15 @@
  *  annual       → treated as yearly ($2,400/year, 8 letters)
  */
 
+import {
+  SINGLE_LETTER_PRICE_CENTS,
+  MONTHLY_PRICE_CENTS,
+  YEARLY_PRICE_CENTS,
+  FIRST_LETTER_REVIEW_PRICE_CENTS,
+} from "../shared/pricing";
+
+export { MONTHLY_PRICE_CENTS, YEARLY_PRICE_CENTS, FIRST_LETTER_REVIEW_PRICE_CENTS };
+
 export interface PlanConfig {
   id: "single_letter" | "monthly" | "yearly";
   name: string;
@@ -29,11 +38,8 @@ export interface PlanConfig {
   features: string[];
 }
 
-/** Price in cents for a single letter unlock ($299) */
-export const LETTER_UNLOCK_PRICE_CENTS = 29900; // $299
-
-/** Price in cents for the first-letter attorney review fee ($50) */
-export const FIRST_LETTER_REVIEW_PRICE_CENTS = 5000; // $50
+/** Price in cents for a single letter unlock ($299) — aliased from shared/pricing.ts */
+export const LETTER_UNLOCK_PRICE_CENTS = SINGLE_LETTER_PRICE_CENTS;
 
 /**
  * Stripe product/price IDs for the $50 first-letter attorney review fee.
@@ -42,11 +48,11 @@ export const FIRST_LETTER_REVIEW_PRICE_CENTS = 5000; // $50
  */
 export const FIRST_LETTER_REVIEW_PLAN_ID = "first_letter_review";
 
-/** Price in cents for Monthly ($299/month) */
-export const MONTHLY_PRICE_CENTS = 29900; // $299
+/** Price in cents for Monthly ($299/month) — from shared/pricing.ts */
+// MONTHLY_PRICE_CENTS re-exported above from shared/pricing.ts
 
-/** Price in cents for Yearly ($2,400/year) */
-export const YEARLY_PRICE_CENTS = 240000; // $2,400
+/** Price in cents for Yearly ($2,400/year) — from shared/pricing.ts */
+// YEARLY_PRICE_CENTS re-exported above from shared/pricing.ts
 
 export const PLANS: Record<string, PlanConfig> = {
   single_letter: {

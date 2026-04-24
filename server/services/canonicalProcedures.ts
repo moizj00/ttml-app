@@ -442,10 +442,15 @@ function _buildClaudePrompt(intake: IntakeJson): string {
     desiredOutcome,
     additionalContext,
   } = intake;
-  return `Act as an expert legal drafting system. Draft a formal legal letter for California jurisdiction.
+  // Build jurisdiction string from intake — never hardcode a state
+  const jurisdictionStr =
+    [jurisdiction?.city, jurisdiction?.state, jurisdiction?.country]
+      .filter(Boolean)
+      .join(", ") || "the applicable jurisdiction";
+  return `Act as an expert legal drafting system. Draft a formal legal letter for ${jurisdictionStr}.
   Matter: ${matter?.subject ?? "Legal Matter"} (${matter?.category ?? "General"})
   Facts: ${matter?.description ?? "N/A"}
-  Jurisdiction: ${jurisdiction?.state ?? "California"}
+  Jurisdiction: ${jurisdictionStr}
   Tone: ${tonePreference ?? "Firm and professional"}
   Desired Outcome: ${desiredOutcome ?? "N/A"}
   Sender: ${sender?.name ?? "N/A"}

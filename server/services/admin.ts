@@ -38,6 +38,7 @@ import { eq } from "drizzle-orm";
 import { captureServerException } from "../sentry";
 import { invalidateUserCache, getOriginUrl } from "../supabaseAuth";
 import { hasEverSubscribed } from "../stripe";
+import { cancelPipelineJobForLetter } from "../queue";
 import { enqueueRetryFromStageJob } from "../queue";
 import { logger } from "../logger";
 
@@ -526,19 +527,22 @@ export async function forceStatusTransition(
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    // 1. Collapse the hold window
+    // 1. Cancel any pending/deferred pipeline job so it cannot fire after bypass
+    await cancelPipelineJobForLetter(input.letterId);
+
+    // 2. Collapse the hold window
     await db
       .update(letterRequests)
       .set({ freePreviewUnlockAt: new Date() })
       .where(eq(letterRequests.id, input.letterId));
 
-    // 2. Force transition to under_review
+    // 3. Force transition to under_review
     await updateLetterStatus(input.letterId, "under_review", {
       force: true,
       assignedReviewerId: ctx.userId,
     });
 
-    // 3. Log an audited review_action
+    // 4. Log an audited review_action
     await logReviewAction({
       letterRequestId: input.letterId,
       reviewerId: ctx.userId,
@@ -550,7 +554,7 @@ export async function forceStatusTransition(
       toStatus: "under_review",
     });
 
-    // 4. Fire status update email to subscriber (non-fatal)
+    // 5. Fire status update email to subscriber (non-fatal)
     try {
       const userId = letter.userId ? Number(letter.userId) : null;
       if (userId) {
@@ -570,7 +574,7 @@ export async function forceStatusTransition(
       logger.error({ err }, "[forceStatusTransition] Subscriber email failed");
     }
 
-    // 5. Notify admins/attorneys (non-fatal)
+    // 6. Notify admins/attorneys (non-fatal)
     try {
       await notifyAdmins({
         category: "letters",
