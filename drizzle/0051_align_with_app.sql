@@ -73,7 +73,8 @@ ALTER FUNCTION public.is_app_admin() SET search_path = public, pg_catalog;
 ALTER FUNCTION public.is_app_employee_or_admin() SET search_path = public, pg_catalog;
 ALTER FUNCTION public.is_app_subscriber() SET search_path = public, pg_catalog;
 ALTER FUNCTION public.update_updated_at_column() SET search_path = public, pg_catalog;
-ALTER FUNCTION public.cleanup_old_stream_chunks() SET search_path = public, pg_catalog;
+-- cleanup_old_stream_chunks is a PROCEDURE (prokind = 'p'), not a function
+ALTER PROCEDURE public.cleanup_old_stream_chunks() SET search_path = public, pg_catalog;
 ALTER FUNCTION public.count_training_examples_since_last_tune() SET search_path = public, pg_catalog;
 
 --> statement-breakpoint
