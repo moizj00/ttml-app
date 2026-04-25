@@ -225,7 +225,7 @@ describe("Phase 95 — LetterDetail renders from the server freePreview flag", (
 
   it("forwards __isFreePreview to LetterPaywall as a defensive guard", () => {
     expect(source).toMatch(
-      /\)\s*:\s*\(\s*\n?\s*<FreePreviewWaiting/
+      /\} : letter\.status === "generated_locked" && !letter\.isFreePreview \? \(\s*<LetterPaywall/
     );
   });
 
