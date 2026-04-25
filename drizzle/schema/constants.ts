@@ -132,6 +132,8 @@ export const letterStatusEnum = pgEnum("letter_status", [
   "submitted",
   "researching",
   "drafting",
+  "assembling", // legacy: pre-LangGraph in-flight pipeline status, retained in pg enum (Postgres can't DROP VALUE), not in active state machine
+  "vetting", // legacy: pre-LangGraph in-flight pipeline status, retained in pg enum (Postgres can't DROP VALUE), not in active state machine
   "ai_generation_completed_hidden",
   "letter_released_to_subscriber",
   "attorney_review_upsell_shown",
