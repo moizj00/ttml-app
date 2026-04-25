@@ -100,11 +100,18 @@ export async function submitSubscriberIntakeProcedure(
   });
 
   // Start generation immediately (24h delay is now only a visibility gate)
-  enqueueLetterGenerationProcedure(
-    requestId,
-    "INTAKE_AUTO_GENERATION",
-    "STANDARD_INTAKE_PIPELINE"
-  );
+  enqueuePipelineJob({
+    type: "runPipeline",
+    letterId: requestId,
+    intake: intakePayload,
+    userId: subscriberId,
+    appUrl: process.env.APP_URL ?? "",
+    label: `Free preview draft for #${requestId}`,
+    usageContext: {
+      shouldRefundOnFailure: true,
+      isFreeTrialSubmission: entitlement.firstLetterFree === true,
+    },
+  });
 
   return {
     requestId,

@@ -157,28 +157,35 @@ export function applyFreePreviewGate<
   const isLockedStatus =
     !!letterStatus && LOCKED_PREVIEW_STATUSES.has(letterStatus);
 
-  if (!isFreePreview && !isLockedStatus) {
-    return rows.map(v => ({ ...v, truncated: false }));
-  }
-
   const freePreviewUnlocked = isFreePreview && isFreePreviewUnlocked(letter!);
 
-  return rows.map(v => {
-    if (v.versionType === "ai_draft" && v.content) {
-      if (isFreePreview) {
-        if (freePreviewUnlocked) {
-          return {
-            ...v,
-            truncated: false,
-            freePreview: true as const,
-            isRedacted: false,
-          };
-        }
+  if (isFreePreview && !freePreviewUnlocked) {
+    return rows.map(v => {
+      if (v.versionType === "ai_draft") {
         return {
           ...v,
           content: "",
           truncated: true,
           freePreviewWaiting: true as const,
+        };
+      }
+      return { ...v, truncated: false };
+    });
+  }
+
+  if (!isFreePreview && !isLockedStatus) {
+    return rows.map(v => ({ ...v, truncated: false }));
+  }
+
+  return rows.map(v => {
+    if (v.versionType === "ai_draft" && v.content) {
+      if (isFreePreview) {
+        // We already know it's unlocked from the guard above
+        return {
+          ...v,
+          truncated: false,
+          freePreview: true as const,
+          isRedacted: false,
         };
       }
       return { ...v, content: truncateContent(v.content), truncated: true };
