@@ -11,7 +11,7 @@ import {
   getUserById,
   notifyAdmins,
 } from "../db";
-import { enqueuePipelineJob } from "../queue";
+import { enqueueDraftPreviewReleaseJob, enqueuePipelineJob } from "../queue";
 import { letterRequests } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../logger";
@@ -22,7 +22,6 @@ import {
   createCheckoutSession,
   createLetterUnlockCheckout,
 } from "../stripe/checkouts";
-import { updateLetterStatus } from "../db";
 
 // ─── Constants and Types ───────────────────────────────────────────────────
 
@@ -85,7 +84,7 @@ export async function submitSubscriberIntakeProcedure(
     letterType: letterType as any,
     subject: intakePayload.matter?.subject || "Legal Matter",
     intakeJson: intakePayload,
-    isFreePreview: entitlement.firstLetterFree,
+    isFreePreview: true,
     freePreviewUnlockAt: subscriberVisibleAt,
   });
 
@@ -104,6 +103,13 @@ export async function submitSubscriberIntakeProcedure(
     requestId,
     "INTAKE_AUTO_GENERATION",
     "STANDARD_INTAKE_PIPELINE"
+  );
+
+  enqueueDraftPreviewReleaseJob(requestId, subscriberVisibleAt).catch(err =>
+    logger.error(
+      { err, requestId, subscriberVisibleAt },
+      "[DraftPreview] Failed to enqueue 24h preview release job"
+    )
   );
 
   return { requestId, status: "submitted", subscriberVisibleAt };
@@ -134,6 +140,7 @@ export async function enqueueLetterGenerationProcedure(
       label: `Simple Draft for #${requestId}`,
       usageContext: {
         shouldRefundOnFailure: true,
+        isPreviewGatedSubmission: request.isFreePreview === true,
         isFreeTrialSubmission: request.isFreePreview === true,
       },
     },

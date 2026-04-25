@@ -13,9 +13,11 @@ import type { Job } from "pg-boss";
 import {
   QUEUE_NAME,
   getBoss,
+  enqueueDraftPreviewReleaseJob,
   type PipelineJobData,
   type RunPipelineJobData,
   type RetryFromStageJobData,
+  type ReleaseDraftPreviewJobData,
 } from "./queue";
 import {
   runFullPipeline,
@@ -41,10 +43,12 @@ import {
 import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { getDb } from "./db";
+import { dispatchFreePreviewIfReady } from "./freePreviewEmailCron";
 import { logger } from "./logger";
 
 const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
+const DRAFT_PREVIEW_RELEASE_RETRY_MS = 10 * 60 * 1000;
 
 export async function processRunPipeline(
   data: RunPipelineJobData
@@ -443,6 +447,93 @@ export async function processRetryFromStage(
   }
 }
 
+export async function processReleaseDraftPreview(
+  data: ReleaseDraftPreviewJobData
+): Promise<void> {
+  const letter = await getLetterRequestById(data.letterId);
+  if (!letter) {
+    logger.warn(
+      `[Worker] Draft preview release skipped — letter #${data.letterId} not found`
+    );
+    return;
+  }
+
+  if (letter.isFreePreview !== true) {
+    logger.info(
+      `[Worker] Draft preview release skipped for letter #${data.letterId} — not preview gated`
+    );
+    return;
+  }
+
+  if (letter.freePreviewEmailSentAt) {
+    logger.info(
+      `[Worker] Draft preview release skipped for letter #${data.letterId} — already released`
+    );
+    return;
+  }
+
+  const unlockAt = letter.freePreviewUnlockAt
+    ? new Date(letter.freePreviewUnlockAt).getTime()
+    : NaN;
+  if (!Number.isFinite(unlockAt)) {
+    logger.warn(
+      `[Worker] Draft preview release skipped for letter #${data.letterId} — missing/invalid unlock time`
+    );
+    return;
+  }
+
+  const now = Date.now();
+  if (unlockAt > now) {
+    await enqueueDraftPreviewReleaseJob(
+      data.letterId,
+      new Date(unlockAt),
+      data.attempt ?? 0
+    );
+    logger.info(
+      `[Worker] Draft preview release for letter #${data.letterId} re-scheduled at unlock time`
+    );
+    return;
+  }
+
+  if (!letter.currentAiDraftVersionId) {
+    if (letter.status === "pipeline_failed") {
+      logger.warn(
+        `[Worker] Draft preview release skipped for letter #${data.letterId} — pipeline failed before draft was saved`
+      );
+      return;
+    }
+    const nextAttempt = (data.attempt ?? 0) + 1;
+    await enqueueDraftPreviewReleaseJob(
+      data.letterId,
+      new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
+      nextAttempt
+    );
+    logger.info(
+      `[Worker] Draft preview release for letter #${data.letterId} waiting for ai_draft (attempt=${nextAttempt})`
+    );
+    return;
+  }
+
+  const result = await dispatchFreePreviewIfReady(data.letterId, {
+    requireDraft: true,
+  });
+  if (result.status === "error") {
+    const nextAttempt = (data.attempt ?? 0) + 1;
+    await enqueueDraftPreviewReleaseJob(
+      data.letterId,
+      new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
+      nextAttempt
+    );
+    throw new Error(
+      `Draft preview release failed for letter #${data.letterId}: ${result.reason ?? "unknown error"}`
+    );
+  }
+
+  logger.info(
+    `[Worker] Draft preview release for letter #${data.letterId}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`
+  );
+}
+
 export async function processJob(job: Job<PipelineJobData>): Promise<void> {
   const startTime = Date.now();
   logger.info(
@@ -456,6 +547,9 @@ export async function processJob(job: Job<PipelineJobData>): Promise<void> {
         break;
       case "retryPipelineFromStage":
         await processRetryFromStage(job.data);
+        break;
+      case "releaseDraftPreview":
+        await processReleaseDraftPreview(job.data);
         break;
       default:
         throw new Error(`Unknown job type: ${(job.data as any).type}`);

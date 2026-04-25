@@ -65,6 +65,7 @@ interface PgBossClient {
       singletonKey?: string;
       retryLimit?: number;
       expireInSeconds?: number;
+      startAfter?: number | string | Date;
     }
   ): Promise<string | null | undefined>;
   createQueue(
@@ -107,6 +108,7 @@ export interface RunPipelineJobData {
   label: string;
   usageContext?: {
     shouldRefundOnFailure: true;
+    isPreviewGatedSubmission?: boolean;
     isFreeTrialSubmission: boolean;
   };
 }
@@ -119,7 +121,16 @@ export interface RetryFromStageJobData {
   userId: number | undefined;
 }
 
-export type PipelineJobData = RunPipelineJobData | RetryFromStageJobData;
+export interface ReleaseDraftPreviewJobData {
+  type: "releaseDraftPreview";
+  letterId: number;
+  attempt?: number;
+}
+
+export type PipelineJobData =
+  | RunPipelineJobData
+  | RetryFromStageJobData
+  | ReleaseDraftPreviewJobData;
 
 // ─── pg-boss Singleton ─────────────────────────────────────────────────────
 
@@ -315,6 +326,37 @@ export async function enqueuePipelineJob(
   }
   logger.info(
     `[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`
+  );
+  return id!;
+}
+
+export async function enqueueDraftPreviewReleaseJob(
+  letterId: number,
+  startAfter: number | string | Date,
+  attempt = 0
+): Promise<string> {
+  const boss = await getBoss();
+  const data: ReleaseDraftPreviewJobData = {
+    type: "releaseDraftPreview",
+    letterId,
+    attempt,
+  };
+  const id = await boss.send(QUEUE_NAME, data as unknown as object, {
+    singletonKey: `draft-preview-release-${letterId}-${attempt}`,
+    retryLimit: 0,
+    expireInSeconds: 10 * 60,
+    startAfter,
+  });
+  if (id === null) {
+    logger.warn(
+      `[Queue] Duplicate draft preview release job suppressed for letter #${letterId} (attempt=${attempt})`
+    );
+    return `draft-preview-release-${letterId}-${attempt}-deduplicated`;
+  }
+  logger.info(
+    `[Queue] Enqueued draft preview release job ${id} for letter #${letterId} at ${new Date(
+      startAfter
+    ).toISOString()} (attempt=${attempt})`
   );
   return id!;
 }
