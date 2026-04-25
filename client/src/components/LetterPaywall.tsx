@@ -110,7 +110,7 @@ export function LetterPaywall({
       : paywallStatus.data?.state === "free_review_available";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
 
-    const payToUnlock = trpc.billing.createLetterUnlockCheckout.useMutation({
+  const payToUnlock = trpc.billing.createLetterUnlockCheckout.useMutation({
     onSuccess: ({ url }) => {
       setIsRedirecting(true);
       window.location.href = url;
@@ -141,6 +141,11 @@ export function LetterPaywall({
     payToUnlock.isPending ||
     isRedirecting ||
     subscriptionSubmitMutation.isPending;
+
+  // Defensive guard: free-preview lead-magnet letters must NEVER render the
+  // paid paywall ($299 CTA). This is caught by the parent but handled here
+  // for absolute safety against regressions.
+  if (__isFreePreview) return null;
 
   const hasDraft = !!draftContent && draftContent.length > 0 && isDraftRevealed;
 
