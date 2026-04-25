@@ -163,7 +163,13 @@ describe("processRunPipeline — success path", () => {
 
   it("calls runFullPipeline with correct letterId, intake, and userId", async () => {
     await processRunPipeline(baseRunData);
-    expect(runFullPipeline).toHaveBeenCalledWith(LETTER_ID, baseRunData.intake, undefined, USER_ID);
+    expect(runFullPipeline).toHaveBeenCalledWith(
+      LETTER_ID,
+      baseRunData.intake,
+      undefined,
+      USER_ID,
+      false
+    );
   });
 
   it("does not send alert email on success", async () => {
