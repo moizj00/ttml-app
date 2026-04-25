@@ -30,23 +30,25 @@ export async function handleLetterUnlock(
       appUrl: meta.appUrl,
       noteText: `Payment received. Letter unlocked and queued for attorney review. Stripe session: ${session.id}`,
     });
-
-    if (meta.discountCode) {
-      await trackCheckoutCommission({
-        discountCode: meta.discountCode,
-        metadataEmployeeId: meta.employeeId,
-        metadataDiscountCodeId: meta.discountCodeId,
-        paymentIntentId,
-        saleAmountCents: session.amount_total ?? SINGLE_LETTER_PRICE_CENTS,
-        subscriberId: meta.userId,
-        letterRequestId: meta.letterId,
-        appUrl: meta.appUrl,
-        planId: meta.planId,
-      }).catch((commErr) =>
-        stripeLogger.error({ err: commErr }, "[StripeWebhook] Commission tracking error")
-      );
-    }
   } catch (unlockErr) {
     stripeLogger.error({ err: unlockErr, letterId: meta.letterId }, "[StripeWebhook] Failed to unlock letter");
+  }
+
+  // Commission recording should not be coupled to unlock side effects.
+  // If unlock notifications fail, we still attempt to persist the commission.
+  if (meta.discountCode) {
+    await trackCheckoutCommission({
+      discountCode: meta.discountCode,
+      metadataEmployeeId: meta.employeeId,
+      metadataDiscountCodeId: meta.discountCodeId,
+      paymentIntentId,
+      saleAmountCents: session.amount_total ?? SINGLE_LETTER_PRICE_CENTS,
+      subscriberId: meta.userId,
+      letterRequestId: meta.letterId,
+      appUrl: meta.appUrl,
+      planId: meta.planId,
+    }).catch((commErr) =>
+      stripeLogger.error({ err: commErr }, "[StripeWebhook] Commission tracking error")
+    );
   }
 }

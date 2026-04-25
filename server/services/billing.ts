@@ -58,14 +58,18 @@ export async function fulfillLetterUnlock(params: FulfillmentUnlockParams) {
         toStatus: "pending_review",
     });
 
-    // 3. User notification
-    await createNotification({
-        userId,
-        type: "letter_unlocked",
-        title: "Payment confirmed — letter sent for review!",
-        body: `Your letter "${letter.subject}" is now in the attorney review queue.`,
-        link: `/letters/${letterId}`,
-    });
+    // 3. User notification (non-critical)
+    try {
+        await createNotification({
+            userId,
+            type: "letter_unlocked",
+            title: "Payment confirmed — letter sent for review!",
+            body: `Your letter "${letter.subject}" is now in the attorney review queue.`,
+            link: `/letters/${letterId}`,
+        });
+    } catch (err) {
+        logger.error({ err, letterId, userId }, "[BillingService] createNotification failed");
+    }
 
     // 4. Send email to subscriber
     const subscriber = await getUserById(userId);
@@ -84,19 +88,27 @@ export async function fulfillLetterUnlock(params: FulfillmentUnlockParams) {
         ? `First Letter Offer applied — letter #${letterId}`
         : `Payment received — letter #${letterId} unlocked`;
 
-    await notifyAdmins({
-        category: "letters",
-        type: "payment_received",
-        title: adminTitle,
-        body: `Letter "${letter.subject}" has been unlocked and queued for attorney review.`,
-        link: `/admin/letters/${letterId}`,
-    }).catch(err => logger.error({ err }, "[BillingService] notifyAdmins failed"));
+    if (typeof notifyAdmins === "function") {
+        await notifyAdmins({
+            category: "letters",
+            type: "payment_received",
+            title: adminTitle,
+            body: `Letter "${letter.subject}" has been unlocked and queued for attorney review.`,
+            link: `/admin/letters/${letterId}`,
+        }).catch(err => logger.error({ err }, "[BillingService] notifyAdmins failed"));
+    } else {
+        logger.warn({ letterId }, "[BillingService] notifyAdmins unavailable");
+    }
 
-    await notifyAllAttorneys({
-        letterId,
-        letterSubject: letter.subject,
-        letterType: letter.letterType,
-        jurisdiction: letter.jurisdictionState ?? "Unknown",
-        appUrl,
-    }).catch(err => logger.error({ err }, "[BillingService] notifyAllAttorneys failed"));
+    if (typeof notifyAllAttorneys === "function") {
+        await notifyAllAttorneys({
+            letterId,
+            letterSubject: letter.subject,
+            letterType: letter.letterType,
+            jurisdiction: letter.jurisdictionState ?? "Unknown",
+            appUrl,
+        }).catch(err => logger.error({ err }, "[BillingService] notifyAllAttorneys failed"));
+    } else {
+        logger.warn({ letterId }, "[BillingService] notifyAllAttorneys unavailable");
+    }
 }
