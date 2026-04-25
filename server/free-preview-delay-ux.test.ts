@@ -35,7 +35,8 @@ describe("free preview 24-hour delay UX", () => {
   });
 
   it("first free-preview submission creates free preview + ~24h unlock and enqueues free-trial usageContext", async () => {
-    const { submitSubscriberIntakeProcedure } = await import("./services/canonicalProcedures");
+    const { submitSubscriberIntakeProcedure } =
+      await import("./services/canonicalProcedures");
     const db = await import("./db");
     const stripe = await import("./stripe");
     const queue = await import("./queue");
@@ -46,7 +47,9 @@ describe("free preview 24-hour delay UX", () => {
       subscription: false,
     } as never);
     vi.mocked(db.claimFreeTrialSlot).mockResolvedValue(true as never);
-    vi.mocked(db.createLetterRequest).mockResolvedValue({ insertId: 321 } as never);
+    vi.mocked(db.createLetterRequest).mockResolvedValue({
+      insertId: 321,
+    } as never);
     vi.mocked(db.logReviewAction).mockResolvedValue(undefined as never);
 
     const intake = {
@@ -54,7 +57,11 @@ describe("free preview 24-hour delay UX", () => {
     } as any;
 
     const now = Date.now();
-    const result = await submitSubscriberIntakeProcedure(11, intake, "demand-letter");
+    const result = await submitSubscriberIntakeProcedure(
+      11,
+      intake,
+      "demand-letter"
+    );
 
     expect(result.isFreePreview).toBe(true);
     expect(result.status).toBe("submitted");
@@ -108,25 +115,35 @@ describe("free preview 24-hour delay UX", () => {
 
   it("subscriber router computes subscriberDisplayStatus=free_preview_waiting while locked", () => {
     const source = read("server", "routers", "letters", "subscriber.ts");
-    expect(source).toContain('const isFreePreviewWaiting =');
+    expect(source).toContain("const isFreePreviewWaiting =");
     expect(source).toContain('? "free_preview_waiting"');
-    expect(source).toContain('letter: { ...letter, subscriberDisplayStatus }');
+    expect(source).toContain("letter: { ...letter, subscriberDisplayStatus }");
   });
 
   it("worker forwards the broader preview-gate flag into runFullPipeline", () => {
     const source = read("server", "worker.ts");
     expect(source).toContain("const isPreviewGatedSubmission =");
-    expect(source).toMatch(/runFullPipeline\([\s\S]*isPreviewGatedSubmission[\s\S]*\)/);
+    expect(source).toMatch(
+      /runFullPipeline\([\s\S]*isPreviewGatedSubmission[\s\S]*\)/
+    );
   });
 
   it("pipeline finalizers use canonical lowercase ai_generation_completed_hidden", () => {
     const simple = read("server", "pipeline", "simple.ts");
     const vetting = read("server", "pipeline", "vetting.ts");
-    const graphFinalize = read("server", "pipeline", "graph", "nodes", "finalize.ts");
+    const graphFinalize = read(
+      "server",
+      "pipeline",
+      "graph",
+      "nodes",
+      "finalize.ts"
+    );
+    const previewGate = read("server", "pipeline", "preview-gate.ts");
 
-    expect(simple).toContain('"ai_generation_completed_hidden"');
-    expect(vetting).toContain('"ai_generation_completed_hidden"');
-    expect(graphFinalize).toContain('"ai_generation_completed_hidden"');
+    expect(previewGate).toContain('"ai_generation_completed_hidden"');
+    expect(simple).toContain("finalizeDraftPreviewStatus");
+    expect(vetting).toContain("resolveDraftPreviewFinalStatus");
+    expect(graphFinalize).toContain("resolveDraftPreviewFinalStatus");
 
     expect(simple).not.toContain('"AI_GENERATION_COMPLETED_HIDDEN"');
     expect(vetting).not.toContain('"AI_GENERATION_COMPLETED_HIDDEN"');
@@ -134,10 +151,22 @@ describe("free preview 24-hour delay UX", () => {
   });
 
   it("LetterDetail routes free-preview waiting before paywall and uses displayStatus", () => {
-    const source = read("client", "src", "pages", "subscriber", "LetterDetail.tsx");
-    expect(source).toContain("const displayStatus = (letter as any).subscriberDisplayStatus ?? letter.status;");
-    expect(source).toMatch(/letter\.isFreePreview === true[\s\S]*aiDraftVersion as any\)\?\.freePreview !== true[\s\S]*<FreePreviewWaiting/);
-    expect(source).toMatch(/\(aiDraftVersion as any\)\?\.freePreview === true[\s\S]*<FreePreviewViewer/);
+    const source = read(
+      "client",
+      "src",
+      "pages",
+      "subscriber",
+      "LetterDetail.tsx"
+    );
+    expect(source).toContain(
+      "const displayStatus = (letter as any).subscriberDisplayStatus ?? letter.status;"
+    );
+    expect(source).toMatch(
+      /letter\.isFreePreview === true[\s\S]*aiDraftVersion as any\)\?\.freePreview !== true[\s\S]*<FreePreviewWaiting/
+    );
+    expect(source).toMatch(
+      /\(aiDraftVersion as any\)\?\.freePreview === true[\s\S]*<FreePreviewViewer/
+    );
     expect(source).toMatch(/: isGeneratedLocked \? \([\s\S]*<LetterPaywall/);
   });
 
@@ -145,7 +174,9 @@ describe("free preview 24-hour delay UX", () => {
     const rows = [
       {
         versionType: "ai_draft",
-        content: Array.from({ length: 20 }, (_, i) => `line-${i + 1}`).join("\n"),
+        content: Array.from({ length: 20 }, (_, i) => `line-${i + 1}`).join(
+          "\n"
+        ),
       },
     ];
     const out = applyFreePreviewGate(rows, "generated_locked", {

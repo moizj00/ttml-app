@@ -5,10 +5,7 @@ import Stripe from "stripe";
 import { getStripe, getOrCreateStripeCustomer } from "./client";
 import { resolveStripeCoupon } from "./coupons";
 import { logger } from "../logger";
-import {
-  getPlanConfig,
-  LETTER_UNLOCK_PRICE_CENTS,
-} from "../stripe-products";
+import { getPlanConfig, LETTER_UNLOCK_PRICE_CENTS } from "../stripe-products";
 
 // ─── Create Checkout Session (subscription/one-time plans) ───────────────────
 export async function createCheckoutSession(params: {
@@ -20,7 +17,8 @@ export async function createCheckoutSession(params: {
   discountCode?: string;
   returnTo?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  const { userId, email, name, planId, origin, discountCode, returnTo } = params;
+  const { userId, email, name, planId, origin, discountCode, returnTo } =
+    params;
   const plan = getPlanConfig(planId);
   if (!plan) throw new Error(`Invalid plan: ${planId}`);
   const stripe = getStripe();
@@ -50,13 +48,17 @@ export async function createCheckoutSession(params: {
       ...(discountCode ? { discount_code: discountCode } : {}),
       ...(resolved
         ? {
-          discount_code_id: resolved.discountCodeId.toString(),
-          employee_id: resolved.employeeId.toString(),
-        }
+            discount_code_id: resolved.discountCodeId.toString(),
+            employee_id: resolved.employeeId.toString(),
+          }
         : {}),
     },
-    success_url: returnTo ? `${origin}${returnTo}?success=true&plan=${planId}` : `${origin}/subscriber/billing?success=true&plan=${planId}`,
-    cancel_url: returnTo ? `${origin}/pricing?returnTo=${encodeURIComponent(returnTo)}&canceled=true` : `${origin}/pricing?canceled=true`,
+    success_url: returnTo
+      ? `${origin}${returnTo}?success=true&plan=${planId}`
+      : `${origin}/subscriber/billing?success=true&plan=${planId}`,
+    cancel_url: returnTo
+      ? `${origin}/pricing?returnTo=${encodeURIComponent(returnTo)}&canceled=true`
+      : `${origin}/pricing?canceled=true`,
   };
 
   if (plan.interval === "one_time") {
@@ -109,9 +111,9 @@ export async function createCheckoutSession(params: {
         ...(discountCode ? { discount_code: discountCode } : {}),
         ...(resolved
           ? {
-            employee_id: resolved.employeeId.toString(),
-            discount_code_id: resolved.discountCodeId.toString(),
-          }
+              employee_id: resolved.employeeId.toString(),
+              discount_code_id: resolved.discountCodeId.toString(),
+            }
           : {}),
       },
     };
@@ -165,9 +167,9 @@ export async function createLetterUnlockCheckout(params: {
       ...(discountCode ? { discount_code: discountCode } : {}),
       ...(resolved
         ? {
-          discount_code_id: resolved.discountCodeId.toString(),
-          employee_id: resolved.employeeId.toString(),
-        }
+            discount_code_id: resolved.discountCodeId.toString(),
+            employee_id: resolved.employeeId.toString(),
+          }
         : {}),
     },
     line_items: [
@@ -178,7 +180,10 @@ export async function createLetterUnlockCheckout(params: {
             name: "Legal Letter — Attorney Review",
             description:
               "Unlock your attorney-reviewed letter and send it for licensed attorney review and approval.",
-            metadata: { plan_id: "single_letter", letter_id: letterId.toString() },
+            metadata: {
+              plan_id: "single_letter",
+              letter_id: letterId.toString(),
+            },
           },
           unit_amount: LETTER_UNLOCK_PRICE_CENTS,
         },
@@ -205,6 +210,7 @@ export async function createLetterUnlockCheckout(params: {
  * Creates a one-time $50 Stripe Checkout session for attorney review of the user's
  * first letter. The letter_id is stored in session metadata so the webhook can
  * transition it from generated_locked → pending_review after payment.
+ */
 // ─── Revision Consultation Checkout ($20 per paid revision) ──────────────────
 const REVISION_CONSULTATION_PRICE_CENTS = 2000; // $20.00
 
@@ -225,9 +231,10 @@ export async function createRevisionConsultationCheckout(params: {
   const stripe = getStripe();
   const customerId = await getOrCreateStripeCustomer(userId, email, name);
   // Truncate revision notes to fit Stripe metadata value limit (500 chars)
-  const truncatedNotes = revisionNotes.length > 490
-    ? revisionNotes.slice(0, 490) + "…"
-    : revisionNotes;
+  const truncatedNotes =
+    revisionNotes.length > 490
+      ? revisionNotes.slice(0, 490) + "…"
+      : revisionNotes;
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     client_reference_id: userId.toString(),
@@ -250,7 +257,10 @@ export async function createRevisionConsultationCheckout(params: {
             name: "Revision Consultation — $20",
             description:
               "Request attorney revisions on your approved letter draft. Each consultation covers one round of changes.",
-            metadata: { plan_id: "revision_consultation", letter_id: letterId.toString() },
+            metadata: {
+              plan_id: "revision_consultation",
+              letter_id: letterId.toString(),
+            },
           },
           unit_amount: REVISION_CONSULTATION_PRICE_CENTS,
         },
@@ -284,6 +294,8 @@ export async function createTrialReviewCheckout(params: {
   origin: string;
   discountCode?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  logger.warn("[Stripe] createTrialReviewCheckout is deprecated — first letter is now free");
+  logger.warn(
+    "[Stripe] createTrialReviewCheckout is deprecated — first letter is now free"
+  );
   return createLetterUnlockCheckout({ ...params });
 }

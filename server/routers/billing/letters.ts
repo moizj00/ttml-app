@@ -16,18 +16,12 @@ import {
   notifyAdmins,
   notifyAllAttorneys,
 } from "../../db";
-import {
-  sendLetterUnlockedEmail,
-} from "../../email";
+import { sendLetterUnlockedEmail } from "../../email";
 import { captureServerException } from "../../sentry";
-import {
-  hasActiveRecurringSubscription,
-} from "../../stripe";
+import { hasActiveRecurringSubscription } from "../../stripe";
 import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 
-import {
-  createAttorneyReviewCheckoutProcedure
-} from "../../services/canonicalProcedures";
+import { createAttorneyReviewCheckoutProcedure } from "../../services/canonicalProcedures";
 
 export const billingLettersRouter = router({
   // DEPRECATED — always rejects. Kept for backward compatibility.
@@ -54,8 +48,12 @@ export const billingLettersRouter = router({
         });
       }
 
-      const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
-      if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
+      const letter = await getLetterRequestSafeForSubscriber(
+        input.letterId,
+        ctx.user.id
+      );
+      if (!letter)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
 
       const reviewSubmittableStatuses = [
         "generated_locked",
@@ -75,7 +73,8 @@ export const billingLettersRouter = router({
         reviewerId: ctx.user.id,
         actorType: "subscriber",
         action: "subscription_submit",
-        noteText: "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
+        noteText:
+          "Subscriber submitted letter for attorney review via active subscription (paywall bypassed).",
         noteVisibility: "internal",
         fromStatus: letter.status as any,
         toStatus: "pending_review",
@@ -90,7 +89,12 @@ export const billingLettersRouter = router({
           appUrl: getAppUrl(ctx.req),
         });
       } catch (e) {
-        captureServerException(e, { tags: { component: "billing", error_type: "subscription_submit_email_failed" } });
+        captureServerException(e, {
+          tags: {
+            component: "billing",
+            error_type: "subscription_submit_email_failed",
+          },
+        });
       }
 
       try {
@@ -102,7 +106,12 @@ export const billingLettersRouter = router({
           appUrl: getAppUrl(ctx.req),
         });
       } catch (notifyErr) {
-        captureServerException(notifyErr, { tags: { component: "billing", error_type: "notify_attorneys_subscription_submit_failed" } });
+        captureServerException(notifyErr, {
+          tags: {
+            component: "billing",
+            error_type: "notify_attorneys_subscription_submit_failed",
+          },
+        });
       }
 
       try {
@@ -114,7 +123,12 @@ export const billingLettersRouter = router({
           link: `/admin/letters/${input.letterId}`,
         });
       } catch (err) {
-        captureServerException(err, { tags: { component: "billing", error_type: "notify_admins_subscription_submit" } });
+        captureServerException(err, {
+          tags: {
+            component: "billing",
+            error_type: "notify_admins_subscription_submit",
+          },
+        });
       }
 
       return { ok: true as const };

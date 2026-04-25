@@ -144,7 +144,7 @@ export const LOCKED_PREVIEW_STATUSES = new Set([
  *   - Non-free-preview + other status  → raw rows
  */
 export function applyFreePreviewGate<
-  T extends { versionType: string; content?: string | null }
+  T extends { versionType: string; content?: string | null },
 >(
   rows: T[],
   letterStatus: string | undefined,
@@ -157,10 +157,12 @@ export function applyFreePreviewGate<
   const isLockedStatus =
     !!letterStatus && LOCKED_PREVIEW_STATUSES.has(letterStatus);
 
-  const freePreviewUnlocked = isFreePreview && isFreePreviewUnlocked({
-    isFreePreview: letter?.isFreePreview,
-    freePreviewUnlockAt: letter?.freePreviewUnlockAt
-  });
+  const freePreviewUnlocked =
+    isFreePreview &&
+    isFreePreviewUnlocked({
+      isFreePreview: letter?.isFreePreview,
+      freePreviewUnlockAt: letter?.freePreviewUnlockAt,
+    });
 
   if (isFreePreview && !freePreviewUnlocked) {
     return rows.map(v => {

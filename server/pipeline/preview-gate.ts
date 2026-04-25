@@ -16,7 +16,11 @@ export function resolveDraftPreviewFinalStatus(
 
 export async function isLetterPreviewGated(letterId: number): Promise<boolean> {
   const letter = await getLetterRequestById(letterId);
-  if (!letter || letter.isFreePreview !== true || letter.submittedByAdmin === true) {
+  if (
+    !letter ||
+    letter.isFreePreview !== true ||
+    letter.submittedByAdmin === true
+  ) {
     return false;
   }
   return !(await hasLetterBeenPreviouslyUnlocked(letterId));

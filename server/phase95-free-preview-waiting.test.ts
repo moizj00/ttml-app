@@ -57,7 +57,7 @@ describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", (
   });
 
   it("decides freePreviewUnlocked via the shared helper", () => {
-    expect(source).toMatch(/isFreePreviewUnlocked\(letter!\)/);
+    expect(source).toMatch(/isFreePreviewUnlocked\(/);
   });
 
   it("returns empty content + freePreviewWaiting:true for pre-unlock free-preview", () => {
@@ -123,9 +123,7 @@ describe("Phase 95 — versions.get delegates to applyFreePreviewGate", () => {
     // isFreePreview branch, a post-payment free-preview letter would get
     // FORBIDDEN for its own ai_draft.
     expect(source).toMatch(/letter\?\.isFreePreview\s*===\s*true/);
-    expect(source).toMatch(
-      /LOCKED_PREVIEW_STATUSES\.has\(letter\.status\)/
-    );
+    expect(source).toMatch(/LOCKED_PREVIEW_STATUSES\.has\(letter\.status\)/);
     expect(source).toMatch(
       /letter\.userId\s*===\s*ctx\.user\.id\s*&&\s*\(isFreePreview\s*\|\|\s*isLocked\)/
     );
@@ -167,7 +165,9 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
   const source = readServer("draftPdfRoute.ts");
 
   it("declares the pre-review free-preview status allow-list", () => {
-    expect(source).toMatch(/const\s+FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new\s+Set\s*\(/);
+    expect(source).toMatch(
+      /const\s+FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new\s+Set\s*\(/
+    );
     expect(source).toContain('"pending_review"');
     expect(source).toContain('"under_review"');
     expect(source).toContain('"approved"');
@@ -180,8 +180,12 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
   });
 
   it("uses isFreePreviewUnlocked helper as defense-in-depth", () => {
-    expect(source).toMatch(/import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"\.\.\/shared\/utils\/free-preview"/);
-    expect(source).toMatch(/letter\.isFreePreview\s*===\s*true\s*&&\s*!isFreePreviewUnlocked\(letter\)/);
+    expect(source).toMatch(
+      /import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"\.\.\/shared\/utils\/free-preview"/
+    );
+    expect(source).toMatch(
+      /letter\.isFreePreview\s*===\s*true\s*&&\s*!isFreePreviewUnlocked\(letter\)/
+    );
     expect(source).toContain("Free preview is not yet available");
   });
 
@@ -190,7 +194,9 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
     const idxFreePreview = source.indexOf(
       "Draft PDF is available after attorney review submission."
     );
-    const idxVersionFetch = source.indexOf("getLetterVersionsByRequestId(letterId)");
+    const idxVersionFetch = source.indexOf(
+      "getLetterVersionsByRequestId(letterId)"
+    );
     expect(idxStatusGate).toBeGreaterThan(0);
     expect(idxFreePreview).toBeGreaterThan(0);
     expect(idxVersionFetch).toBeGreaterThan(0);
@@ -212,7 +218,10 @@ describe("Phase 95 — LetterDetail renders from the server freePreview flag", (
 
   it("defines freePreviewUnlocked from letter.isFreePreview + aiDraftVersion.freePreview + content", () => {
     expect(source).toMatch(
-      /letter\.isFreePreview\s*===\s*true\s*&&[\s\S]*?!freePreviewUnlocked\s*&&[\s\S]*?!aiDraftVersion\?\.content[\s\S]*?<FreePreviewWaiting/
+      /const\s+freePreviewUnlocked\s*=[\s\S]*?letter\.isFreePreview\s*===\s*true[\s\S]*?aiDraftVersion as any\)\?\.freePreview\s*===\s*true[\s\S]*?Boolean\(aiDraftVersion\?\.content\)/
+    );
+    expect(source).toMatch(
+      /<FreePreviewWaiting[\s\S]*?subject=\{letter\.subject\}/
     );
   });
 
@@ -225,7 +234,7 @@ describe("Phase 95 — LetterDetail renders from the server freePreview flag", (
 
   it("forwards __isFreePreview to LetterPaywall as a defensive guard", () => {
     expect(source).toMatch(
-      /letter\.status === "generated_locked" && !letter\.isFreePreview \? \(\s*<LetterPaywall/
+      /isGeneratedLocked\s*\?\s*\([\s\S]*?<LetterPaywall[\s\S]*?__isFreePreview=\{!!letter\.isFreePreview\}/
     );
   });
 
@@ -268,7 +277,7 @@ describe("Phase 95 — FreePreviewWaiting component", () => {
     expect(source).not.toMatch(/unlockAt:/);
   });
 
-  it("uses data-testid=\"free-preview-waiting\"", () => {
+  it('uses data-testid="free-preview-waiting"', () => {
     expect(source).toMatch(/data-testid="free-preview-waiting"/);
   });
 

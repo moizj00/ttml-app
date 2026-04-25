@@ -12,14 +12,12 @@ const { mockBoss } = vi.hoisted(() => {
     work: vi.fn().mockResolvedValue("worker-id"),
     createQueue: vi.fn().mockResolvedValue(undefined),
     findJobs: vi.fn().mockResolvedValue([]),
-    getQueueStats: vi
-      .fn()
-      .mockResolvedValue({
-        queuedCount: 0,
-        activeCount: 0,
-        deferredCount: 0,
-        totalCount: 0,
-      }),
+    getQueueStats: vi.fn().mockResolvedValue({
+      queuedCount: 0,
+      activeCount: 0,
+      deferredCount: 0,
+      totalCount: 0,
+    }),
   };
   return { mockBoss };
 });
@@ -107,8 +105,12 @@ describe("enqueuePipelineJob", () => {
   it("passes a singletonKey containing the letterId", async () => {
     await enqueuePipelineJob(baseRunData);
     const [, , jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
-    expect(typeof (jobOpts as { singletonKey: string }).singletonKey).toBe("string");
-    expect((jobOpts as { singletonKey: string }).singletonKey).toContain(String(LETTER_ID));
+    expect(typeof (jobOpts as { singletonKey: string }).singletonKey).toBe(
+      "string"
+    );
+    expect((jobOpts as { singletonKey: string }).singletonKey).toContain(
+      String(LETTER_ID)
+    );
   });
 
   it("returns the job ID from boss.send", async () => {
@@ -171,7 +173,8 @@ describe("enqueueDraftPreviewReleaseJob", () => {
     const startAfter = new Date("2026-04-26T12:00:00.000Z");
     await enqueueDraftPreviewReleaseJob(LETTER_ID, startAfter);
 
-    const [queueName, jobData, jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
+    const [queueName, jobData, jobOpts] = vi.mocked(mockBoss.send).mock
+      .calls[0];
     expect(queueName).toBe("pipeline");
     expect(jobData).toMatchObject({
       type: "releaseDraftPreview",

@@ -2,7 +2,10 @@
  * Global registry for intermediate pipeline results (drafts and vetted letters).
  * Used for RAG training data capture and near-real-time visibility.
  */
-export const _intermediateContentRegistry = new Map<number, { content: string; qualityWarnings: string[] }>();
+export const _intermediateContentRegistry = new Map<
+  number,
+  { content: string; qualityWarnings: string[] }
+>();
 
 import {
   createWorkflowJob,
@@ -10,12 +13,17 @@ import {
   updateLetterStatus,
   getLetterRequestById as getLetterById,
   markPriorPipelineRunsSuperseded,
+  getLatestResearchRun,
 } from "../db";
-import type { IntakeJson, ResearchPacket, DraftOutput, PipelineContext, PipelineErrorCode } from "../../shared/types";
+import type {
+  IntakeJson,
+  ResearchPacket,
+  DraftOutput,
+  PipelineContext,
+  PipelineErrorCode,
+} from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import {
-  buildNormalizedPromptInput,
-} from "../intake-normalizer";
+import { buildNormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode } from "./shared";
@@ -30,7 +38,10 @@ import { runSimplePipeline } from "./simple";
 
 // Modularized imports
 import { applyResearchGroundingAndRevalidate } from "./orchestration/grounding";
-import { setIntermediateContent, consumeIntermediateContent } from "./orchestration/registry";
+import {
+  setIntermediateContent,
+  consumeIntermediateContent,
+} from "./orchestration/registry";
 import { preflightApiKeyCheck } from "./orchestration/preflight";
 import { triggerN8nWorkflow } from "./orchestration/n8n";
 
@@ -59,7 +70,10 @@ export async function runFullPipeline(
 ): Promise<void> {
   const intakeCheck = validateIntakeCompleteness(intake);
   if (!intakeCheck.valid) {
-    orchLogger.error({ letterId, errors: intakeCheck.errors }, "[Pipeline] Intake pre-flight failed");
+    orchLogger.error(
+      { letterId, errors: intakeCheck.errors },
+      "[Pipeline] Intake pre-flight failed"
+    );
     throw new PipelineError(
       PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
       `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
@@ -71,23 +85,38 @@ export async function runFullPipeline(
   // ── LangGraph Pipeline Routing ──────────────────────────────────────────────
   const useLangGraph = process.env.PIPELINE_MODE === "langgraph";
   if (useLangGraph) {
-    orchLogger.info({ letterId }, "[Pipeline] Using LangGraph pipeline (PIPELINE_MODE=langgraph)");
-    const result = await runLangGraphPipeline(letterId, intake, userId, isFreePreview);
+    orchLogger.info(
+      { letterId },
+      "[Pipeline] Using LangGraph pipeline (PIPELINE_MODE=langgraph)"
+    );
+    const result = await runLangGraphPipeline(
+      letterId,
+      intake,
+      userId,
+      isFreePreview
+    );
     if (!result.success) {
       throw new PipelineError(
-        (result.errorCode as PipelineErrorCode) ?? PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,
+        (result.errorCode as PipelineErrorCode) ??
+          PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,
         result.error ?? "LangGraph pipeline failed",
         "pipeline"
       );
     }
-    orchLogger.info({ letterId, hasLetter: !!result.vettedLetter }, "[Pipeline] LangGraph pipeline completed");
+    orchLogger.info(
+      { letterId, hasLetter: !!result.vettedLetter },
+      "[Pipeline] LangGraph pipeline completed"
+    );
     return;
   }
 
   // ── Simple Pipeline Routing ──────────────────────────────────────────────────
   const useSimple = process.env.PIPELINE_MODE === "simple";
   if (useSimple) {
-    orchLogger.info({ letterId }, "[Pipeline] Using simple pipeline (PIPELINE_MODE=simple)");
+    orchLogger.info(
+      { letterId },
+      "[Pipeline] Using simple pipeline (PIPELINE_MODE=simple)"
+    );
     const result = await runSimplePipeline(letterId, intake, userId);
     if (!result.success) {
       throw new PipelineError(
@@ -111,12 +140,22 @@ export async function runFullPipeline(
     },
     intake
   );
-  orchLogger.info({ letterId, letterType: normalizedInput.letterType, jurisdictionState: normalizedInput.jurisdiction.state }, "[Pipeline] Normalized intake");
+  orchLogger.info(
+    {
+      letterId,
+      letterType: normalizedInput.letterType,
+      jurisdictionState: normalizedInput.jurisdiction.state,
+    },
+    "[Pipeline] Normalized intake"
+  );
 
   // ── Try n8n workflow first (primary path if N8N_PRIMARY=true) ────────────────
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "";
   const n8nCallbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
-  const useN8nPrimary = process.env.N8N_PRIMARY === "true" && !!n8nWebhookUrl && n8nWebhookUrl.startsWith("https://");
+  const useN8nPrimary =
+    process.env.N8N_PRIMARY === "true" &&
+    !!n8nWebhookUrl &&
+    n8nWebhookUrl.startsWith("https://");
 
   if (useN8nPrimary) {
     const n8nResult = await triggerN8nWorkflow({
@@ -124,9 +163,9 @@ export async function runFullPipeline(
       intake,
       normalizedInput,
       n8nWebhookUrl,
-      n8nCallbackSecret
+      n8nCallbackSecret,
     });
-    
+
     if (n8nResult.success) {
       return; // n8n callback will finish the job
     }
@@ -137,7 +176,10 @@ export async function runFullPipeline(
   const apiCheck = preflightApiKeyCheck("full");
   if (!apiCheck.ok) {
     const msg = `API key preflight failed: ${apiCheck.missing.join("; ")}`;
-    orchLogger.error({ letterId, err: msg }, "[Pipeline] API key preflight failed");
+    orchLogger.error(
+      { letterId, err: msg },
+      "[Pipeline] API key preflight failed"
+    );
     throw new PipelineError(
       PIPELINE_ERROR_CODES.API_KEY_MISSING,
       msg,
@@ -156,7 +198,12 @@ export async function runFullPipeline(
     provider: "multi-provider",
     requestPayloadJson: {
       letterId,
-      stages: ["perplexity-sonar-research", "openai-gpt4o-mini-draft", "openai-gpt4o-mini-assembly", "anthropic-sonnet-vetting"],
+      stages: [
+        "perplexity-sonar-research",
+        "openai-gpt4o-mini-draft",
+        "openai-gpt4o-mini-assembly",
+        "anthropic-sonnet-vetting",
+      ],
       normalizedInput,
     },
   });
@@ -178,7 +225,8 @@ export async function runFullPipeline(
     // Stage 1: Perplexity Research
     pipelineCtx.validationResults = [];
 
-    const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
+    const { packet: research, provider: researchProvider } =
+      await runResearchStage(letterId, intake, pipelineCtx);
 
     addValidationResult(pipelineCtx, {
       stage: "intake",
@@ -189,31 +237,64 @@ export async function runFullPipeline(
       timestamp: new Date().toISOString(),
     });
 
-    await applyResearchGroundingAndRevalidate(letterId, intake, researchProvider, research, pipelineCtx);
+    await applyResearchGroundingAndRevalidate(
+      letterId,
+      intake,
+      researchProvider,
+      research,
+      pipelineCtx
+    );
 
-    const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+    const draft = await runDraftingStage(
+      letterId,
+      intake,
+      research,
+      pipelineCtx
+    );
     // Capture the initial draft for best-effort fallback
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
     pipelineCtx.counterArguments = draft.counterArguments;
-    setIntermediateContent(letterId, draft.draftLetter, pipelineCtx.qualityWarnings ?? []);
+    setIntermediateContent(
+      letterId,
+      draft.draftLetter,
+      pipelineCtx.qualityWarnings ?? []
+    );
 
     const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
-      letterId, intake, research, draft, pipelineCtx
+      letterId,
+      intake,
+      research,
+      draft,
+      pipelineCtx
     );
     // Assembly/vetting produced a higher-quality version — prefer it
     pipelineCtx._intermediateDraftContent = vettingResult.vettedLetter;
-    setIntermediateContent(letterId, vettingResult.vettedLetter, pipelineCtx.qualityWarnings ?? []);
+    setIntermediateContent(
+      letterId,
+      vettingResult.vettedLetter,
+      pipelineCtx.qualityWarnings ?? []
+    );
 
     if (vettingResult.critical) {
       const criticalIssues = vettingResult.vettingReport.jurisdictionIssues
         .concat(vettingResult.vettingReport.citationsFlagged)
         .concat(vettingResult.vettingReport.factualIssuesFound);
-      orchLogger.warn({ letterId, assemblyRetries, issues: criticalIssues }, "[Pipeline] Vetting critical issues — saving degraded draft and proceeding to generated_locked");
+      orchLogger.warn(
+        { letterId, assemblyRetries, issues: criticalIssues },
+        "[Pipeline] Vetting critical issues — saving degraded draft and proceeding to generated_locked"
+      );
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      pipelineCtx.qualityWarnings.push(...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`));
+      pipelineCtx.qualityWarnings.push(
+        ...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`)
+      );
     }
 
-    await finalizeLetterAfterVetting(letterId, vettingResult.vettedLetter, vettingResult.vettingReport, pipelineCtx);
+    await finalizeLetterAfterVetting(
+      letterId,
+      vettingResult.vettedLetter,
+      vettingResult.vettingReport,
+      pipelineCtx
+    );
 
     const citationRevalidationTokens = pipelineCtx.citationRevalidationTokens;
     const isDegraded = (pipelineCtx.qualityWarnings?.length ?? 0) > 0;
@@ -223,7 +304,11 @@ export async function runFullPipeline(
       promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
       completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
       estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", citationRevalidationTokens)
+        ? calculateCost(
+            pipelineCtx.citationRevalidationModelKey ??
+              "llama-3.3-70b-versatile",
+            citationRevalidationTokens
+          )
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
@@ -248,7 +333,10 @@ export async function runFullPipeline(
     try {
       await autoAdvanceIfPreviouslyUnlocked(letterId);
     } catch (autoUnlockErr) {
-      orchLogger.error({ err: autoUnlockErr, letterId }, "[Pipeline] Auto-unlock check failed");
+      orchLogger.error(
+        { err: autoUnlockErr, letterId },
+        "[Pipeline] Auto-unlock check failed"
+      );
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -257,7 +345,8 @@ export async function runFullPipeline(
       tags: { pipeline_stage: "full_pipeline", letter_id: String(letterId) },
       extra: { pipelineJobId, errorMessage: msg },
     });
-    const pipelineErrCode = err instanceof PipelineError ? err.code : classifyErrorCode(err);
+    const pipelineErrCode =
+      err instanceof PipelineError ? err.code : classifyErrorCode(err);
 
     await Promise.all([
       updateWorkflowJob(pipelineJobId, {
@@ -267,7 +356,9 @@ export async function runFullPipeline(
       }),
       updateLetterStatus(letterId, "submitted"),
     ]);
-    throw err instanceof PipelineError ? err : new PipelineError(pipelineErrCode, msg, "pipeline");
+    throw err instanceof PipelineError
+      ? err
+      : new PipelineError(pipelineErrCode, msg, "pipeline");
   }
 }
 
@@ -276,7 +367,11 @@ export async function runFullPipeline(
 // ═══════════════════════════════════════════════════════
 // Implementation extracted to ./fallback.ts — re-exported here for callers
 // that import directly from orchestrator (e.g. worker.ts).
-export { bestEffortFallback, autoAdvanceIfPreviouslyUnlocked, FALLBACK_EXCLUDED_CODES } from "./fallback";
+export {
+  bestEffortFallback,
+  autoAdvanceIfPreviouslyUnlocked,
+  FALLBACK_EXCLUDED_CODES,
+} from "./fallback";
 
 // ═══════════════════════════════════════════════════════
 // LANGGRAPH PIPELINE (new architecture)
@@ -290,7 +385,6 @@ export {
   type PipelineResult as LangGraphPipelineResult,
   type PipelineStreamEvent as LangGraphStreamEvent,
 } from "./langgraph";
-
 
 // ═══════════════════════════════════════════════════════
 // RETRY LOGIC
@@ -306,7 +400,10 @@ export async function retryPipelineFromStage(
     const letter = await getLetterById(letterId);
     if (letter?.intakeJson && typeof letter.intakeJson === "object") {
       intake = letter.intakeJson as IntakeJson;
-      orchLogger.warn({ letterId }, "[Pipeline] Retry: intake was null/invalid in job data — recovered from database");
+      orchLogger.warn(
+        { letterId },
+        "[Pipeline] Retry: intake was null/invalid in job data — recovered from database"
+      );
     } else {
       throw new PipelineError(
         PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
@@ -320,7 +417,10 @@ export async function retryPipelineFromStage(
   const apiCheck = preflightApiKeyCheck(stage);
   if (!apiCheck.ok) {
     const msg = `API key preflight failed for ${stage} retry: ${apiCheck.missing.join("; ")}`;
-    orchLogger.error({ letterId, err: msg }, "[Pipeline] API key preflight failed for retry");
+    orchLogger.error(
+      { letterId, err: msg },
+      "[Pipeline] API key preflight failed for retry"
+    );
     throw new PipelineError(
       PIPELINE_ERROR_CODES.API_KEY_MISSING,
       msg,
@@ -347,7 +447,10 @@ export async function retryPipelineFromStage(
   });
   const rawRetryJobId = (retryJob as any)?.insertId;
   if (rawRetryJobId == null) {
-    orchLogger.warn({ letterId }, "[Pipeline] createWorkflowJob returned nullish insertId for retry job, falling back to jobId=0");
+    orchLogger.warn(
+      { letterId },
+      "[Pipeline] createWorkflowJob returned nullish insertId for retry job, falling back to jobId=0"
+    );
   }
   const retryJobId = rawRetryJobId ?? 0;
   await updateWorkflowJob(retryJobId, {
@@ -364,37 +467,71 @@ export async function retryPipelineFromStage(
 
   const runVettingAndFinalize = async (
     research: ResearchPacket,
-    draft: DraftOutput,
+    draft: DraftOutput
   ) => {
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
     pipelineCtx.counterArguments = draft.counterArguments;
-    _intermediateContentRegistry.set(letterId, { content: draft.draftLetter, qualityWarnings: pipelineCtx.qualityWarnings ?? [] });
+    _intermediateContentRegistry.set(letterId, {
+      content: draft.draftLetter,
+      qualityWarnings: pipelineCtx.qualityWarnings ?? [],
+    });
 
     const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
-      letterId, intake, research, draft, pipelineCtx
+      letterId,
+      intake,
+      research,
+      draft,
+      pipelineCtx
     );
     pipelineCtx._intermediateDraftContent = vettingResult.vettedLetter;
-    _intermediateContentRegistry.set(letterId, { content: vettingResult.vettedLetter, qualityWarnings: pipelineCtx.qualityWarnings ?? [] });
+    _intermediateContentRegistry.set(letterId, {
+      content: vettingResult.vettedLetter,
+      qualityWarnings: pipelineCtx.qualityWarnings ?? [],
+    });
 
     if (vettingResult.critical) {
       const criticalIssues = vettingResult.vettingReport.jurisdictionIssues
         .concat(vettingResult.vettingReport.citationsFlagged)
         .concat(vettingResult.vettingReport.factualIssuesFound);
-      orchLogger.warn({ letterId, assemblyRetries, issues: criticalIssues }, "[Pipeline] Retry vetting critical issues — saving degraded draft");
+      orchLogger.warn(
+        { letterId, assemblyRetries, issues: criticalIssues },
+        "[Pipeline] Retry vetting critical issues — saving degraded draft"
+      );
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
-      pipelineCtx.qualityWarnings.push(...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`));
-      pipelineCtx.qualityWarnings.push(`Vetting found critical issues after ${assemblyRetries} assembly retries. Attorney scrutiny required.`);
+      pipelineCtx.qualityWarnings.push(
+        ...criticalIssues.map(i => `VETTING_CRITICAL: ${i}`)
+      );
+      pipelineCtx.qualityWarnings.push(
+        `Vetting found critical issues after ${assemblyRetries} assembly retries. Attorney scrutiny required.`
+      );
     }
-    await finalizeLetterAfterVetting(letterId, vettingResult.vettedLetter, vettingResult.vettingReport, pipelineCtx);
+    await finalizeLetterAfterVetting(
+      letterId,
+      vettingResult.vettedLetter,
+      vettingResult.vettingReport,
+      pipelineCtx
+    );
     return vettingResult;
   };
 
   try {
     if (stage === "research") {
       await updateLetterStatus(letterId, "submitted", { force: true });
-      const { packet: research, provider: researchProvider } = await runResearchStage(letterId, intake, pipelineCtx);
-      await applyResearchGroundingAndRevalidate(letterId, intake, researchProvider, research, pipelineCtx);
-      const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+      const { packet: research, provider: researchProvider } =
+        await runResearchStage(letterId, intake, pipelineCtx);
+      await applyResearchGroundingAndRevalidate(
+        letterId,
+        intake,
+        researchProvider,
+        research,
+        pipelineCtx
+      );
+      const draft = await runDraftingStage(
+        letterId,
+        intake,
+        research,
+        pipelineCtx
+      );
       await runVettingAndFinalize(research, draft);
     } else {
       const latestResearch = await getLatestResearchRun(letterId);
@@ -402,11 +539,23 @@ export async function retryPipelineFromStage(
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;
       const provider = latestResearch.provider ?? "perplexity";
-      await applyResearchGroundingAndRevalidate(letterId, intake, provider, research, pipelineCtx, {
-        researchFromCache: latestResearch.cacheHit === true,
-      });
+      await applyResearchGroundingAndRevalidate(
+        letterId,
+        intake,
+        provider,
+        research,
+        pipelineCtx,
+        {
+          researchFromCache: latestResearch.cacheHit === true,
+        }
+      );
       await updateLetterStatus(letterId, "drafting", { force: true });
-      const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
+      const draft = await runDraftingStage(
+        letterId,
+        intake,
+        research,
+        pipelineCtx
+      );
       await runVettingAndFinalize(research, draft);
     }
     const retryCitationTokens = pipelineCtx.citationRevalidationTokens;
@@ -417,7 +566,11 @@ export async function retryPipelineFromStage(
       promptTokens: retryCitationTokens?.promptTokens ?? 0,
       completionTokens: retryCitationTokens?.completionTokens ?? 0,
       estimatedCostUsd: retryCitationTokens
-        ? calculateCost(pipelineCtx.citationRevalidationModelKey ?? "llama-3.3-70b-versatile", retryCitationTokens)
+        ? calculateCost(
+            pipelineCtx.citationRevalidationModelKey ??
+              "llama-3.3-70b-versatile",
+            retryCitationTokens
+          )
         : "0",
       responsePayloadJson: {
         validationResults: pipelineCtx.validationResults,
@@ -435,10 +588,13 @@ export async function retryPipelineFromStage(
     const retryErrCode = classifyErrorCode(err);
     await updateWorkflowJob(retryJobId, {
       status: "failed",
-      errorMessage: formatStructuredError(retryErrCode, msg, "citation_revalidation"),
+      errorMessage: formatStructuredError(
+        retryErrCode,
+        msg,
+        "citation_revalidation"
+      ),
       completedAt: new Date(),
     });
     throw err;
   }
 }
-

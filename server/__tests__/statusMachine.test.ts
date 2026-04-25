@@ -10,7 +10,12 @@ import {
 } from "../../drizzle/schema";
 import { LETTER_STAGES, TERMINAL_ERROR_STATUSES } from "../../client/src/lib/letterStages";
 
-const LEGACY_STATUSES = ["generated_unlocked", "upsell_dismissed"];
+const LEGACY_STATUSES = [
+  "generated_unlocked",
+  "upsell_dismissed",
+  "assembling",
+  "vetting",
+];
 
 describe("Status Machine", () => {
   it("every status in LETTER_STATUSES has an entry in ALLOWED_TRANSITIONS", () => {

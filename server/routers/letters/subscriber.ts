@@ -45,9 +45,7 @@ export const subscriberProcedures = {
       const actions = await getReviewActions(input.id, false);
 
       const isFreePreviewWaiting =
-        letter.isFreePreview === true &&
-        letter.freePreviewUnlockAt instanceof Date &&
-        letter.freePreviewUnlockAt.getTime() > Date.now();
+        letter.isFreePreview === true && letter.visibilityStatus === "hidden";
 
       const subscriberDisplayStatus = isFreePreviewWaiting
         ? "free_preview_waiting"

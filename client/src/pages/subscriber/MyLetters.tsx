@@ -464,7 +464,8 @@ export default function MyLetters() {
               const isAwaitingApproval =
                 letter.status === "client_approval_pending";
               const needsAction =
-                previewState.ready || NEEDS_ACTION_STATUSES.includes(letter.status);
+                previewState.ready ||
+                NEEDS_ACTION_STATUSES.includes(letter.status);
               const quickActions = getQuickActions(letter);
 
               return (

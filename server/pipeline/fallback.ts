@@ -32,7 +32,11 @@ import {
 } from "../db";
 import type { IntakeJson } from "../../shared/types";
 import { PIPELINE_ERROR_CODES } from "../../shared/types";
-import { sendLetterReadyEmail, sendStatusUpdateEmail, sendAdminAlertEmail } from "../email";
+import {
+  sendLetterReadyEmail,
+  sendStatusUpdateEmail,
+  sendAdminAlertEmail,
+} from "../email";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
@@ -84,31 +88,61 @@ export async function bestEffortFallback(opts: {
   errorMessage: string;
   dbFields?: { subject?: string; jurisdictionState?: string | null };
 }): Promise<boolean> {
-  const { letterId, intake, intermediateDraftContent, qualityWarnings, pipelineErrorCode, errorMessage, dbFields } = opts;
+  const {
+    letterId,
+    intake,
+    intermediateDraftContent,
+    qualityWarnings,
+    pipelineErrorCode,
+    errorMessage,
+    dbFields,
+  } = opts;
 
   if (FALLBACK_EXCLUDED_CODES.has(pipelineErrorCode)) {
-    fallbackLogger.warn({ letterId, pipelineErrorCode }, "[Pipeline] Fallback excluded: error code is fail-stop");
+    fallbackLogger.warn(
+      { letterId, pipelineErrorCode },
+      "[Pipeline] Fallback excluded: error code is fail-stop"
+    );
     return false;
   }
 
   // Guard: skip fallback entirely if the letter has already progressed past generated_locked
   const postGeneratedStatuses = new Set([
     "generated_unlocked",
-    "pending_review", "under_review", "approved", "needs_changes",
-    "client_approval_pending", "client_approved",
-    "client_revision_requested", "client_declined", "sent", "rejected",
+    "pending_review",
+    "under_review",
+    "approved",
+    "needs_changes",
+    "client_approval_pending",
+    "client_approved",
+    "client_revision_requested",
+    "client_declined",
+    "sent",
+    "rejected",
   ]);
   try {
     const currentLetter = await getLetterById(letterId);
-    if (currentLetter?.status && postGeneratedStatuses.has(currentLetter.status)) {
-      fallbackLogger.warn({ letterId, status: currentLetter.status }, "[Pipeline] bestEffortFallback: letter already past generated_locked — skipping fallback entirely");
+    if (
+      currentLetter?.status &&
+      postGeneratedStatuses.has(currentLetter.status)
+    ) {
+      fallbackLogger.warn(
+        { letterId, status: currentLetter.status },
+        "[Pipeline] bestEffortFallback: letter already past generated_locked — skipping fallback entirely"
+      );
       return true;
     }
   } catch (statusCheckErr) {
-    fallbackLogger.warn({ err: statusCheckErr, letterId }, "[Pipeline] bestEffortFallback: failed to check current status, proceeding with fallback");
+    fallbackLogger.warn(
+      { err: statusCheckErr, letterId },
+      "[Pipeline] bestEffortFallback: failed to check current status, proceeding with fallback"
+    );
   }
 
-  fallbackLogger.warn({ letterId, pipelineErrorCode }, "[Pipeline] Attempting best-effort draft fallback");
+  fallbackLogger.warn(
+    { letterId, pipelineErrorCode },
+    "[Pipeline] Attempting best-effort draft fallback"
+  );
 
   try {
     let fallbackContent: string | null = null;
@@ -122,11 +156,14 @@ export async function bestEffortFallback(opts: {
 
     // 2. Previously-persisted ai_draft version via currentAiDraftVersionId pointer
     if (!fallbackContent) {
-      const { getLetterVersionById, getLetterVersionsByRequestId } = await import("../db");
+      const { getLetterVersionById, getLetterVersionsByRequestId } =
+        await import("../db");
       const letterRecord = await getLetterById(letterId);
       if (letterRecord?.currentAiDraftVersionId) {
         try {
-          const existingVersion = await getLetterVersionById(letterRecord.currentAiDraftVersionId);
+          const existingVersion = await getLetterVersionById(
+            letterRecord.currentAiDraftVersionId
+          );
           if (existingVersion?.content) {
             fallbackContent = existingVersion.content;
             fallbackSource = "db_ai_draft_pointer";
@@ -139,8 +176,13 @@ export async function bestEffortFallback(opts: {
       // 3. Scan all versions for any usable content
       if (!fallbackContent) {
         try {
-          const allVersions = await getLetterVersionsByRequestId(letterId, true);
-          const candidate = allVersions.find(v => v.content && v.content.length > 50);
+          const allVersions = await getLetterVersionsByRequestId(
+            letterId,
+            true
+          );
+          const candidate = allVersions.find(
+            v => v.content && v.content.length > 50
+          );
           if (candidate?.content) {
             fallbackContent = candidate.content;
             fallbackSource = `db_version_${candidate.versionType}`;
@@ -155,12 +197,29 @@ export async function bestEffortFallback(opts: {
       if (!fallbackContent) {
         try {
           const researchRun = await getLatestResearchRun(letterId);
-          const researchResult = researchRun?.resultJson as Record<string, unknown> | null;
+          const researchResult = researchRun?.resultJson as Record<
+            string,
+            unknown
+          > | null;
           if (researchResult?.researchSummary) {
-            const subject = dbFields?.subject ?? intake.matter?.subject ?? "Legal Matter";
-            const jurisdiction = dbFields?.jurisdictionState ?? intake.jurisdiction?.state ?? intake.jurisdiction?.country ?? "Your Jurisdiction";
-            const issues = (researchResult.issuesIdentified as string[] | undefined)?.slice(0, 5) ?? [];
-            const rules = (researchResult.applicableRules as Array<{ ruleTitle?: string; citationText?: string }> | undefined)?.slice(0, 3) ?? [];
+            const subject =
+              dbFields?.subject ?? intake.matter?.subject ?? "Legal Matter";
+            const jurisdiction =
+              dbFields?.jurisdictionState ??
+              intake.jurisdiction?.state ??
+              intake.jurisdiction?.country ??
+              "Your Jurisdiction";
+            const issues =
+              (researchResult.issuesIdentified as string[] | undefined)?.slice(
+                0,
+                5
+              ) ?? [];
+            const rules =
+              (
+                researchResult.applicableRules as
+                  | Array<{ ruleTitle?: string; citationText?: string }>
+                  | undefined
+              )?.slice(0, 3) ?? [];
             const skeleton = [
               `RE: ${subject}`,
               "",
@@ -172,15 +231,21 @@ export async function bestEffortFallback(opts: {
               "─".repeat(40),
               String(researchResult.researchSummary),
               "",
-              issues.length > 0 ? `KEY ISSUES IDENTIFIED\n${"─".repeat(40)}\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}` : "",
+              issues.length > 0
+                ? `KEY ISSUES IDENTIFIED\n${"─".repeat(40)}\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}`
+                : "",
               "",
-              rules.length > 0 ? `APPLICABLE LEGAL STANDARDS\n${"─".repeat(40)}\n${rules.map(r => `• ${r.ruleTitle ?? ""}: ${r.citationText ?? ""}`).join("\n")}` : "",
+              rules.length > 0
+                ? `APPLICABLE LEGAL STANDARDS\n${"─".repeat(40)}\n${rules.map(r => `• ${r.ruleTitle ?? ""}: ${r.citationText ?? ""}`).join("\n")}`
+                : "",
               "",
               `[ATTORNEY NOTE: This is a research-based skeleton draft produced via best-effort fallback. Full drafting did not complete. The research above is accurate, but the letter body must be written by the reviewing attorney.]`,
               "",
               `Sincerely,`,
               `[Sender Name]`,
-            ].filter(line => line !== "").join("\n");
+            ]
+              .filter(line => line !== "")
+              .join("\n");
             fallbackContent = skeleton;
             fallbackSource = "research_skeleton";
           }
@@ -191,7 +256,10 @@ export async function bestEffortFallback(opts: {
     }
 
     if (!fallbackContent) {
-      fallbackLogger.warn({ letterId }, "[Pipeline] No fallback content found — cannot produce degraded draft");
+      fallbackLogger.warn(
+        { letterId },
+        "[Pipeline] No fallback content found — cannot produce degraded draft"
+      );
       return false;
     }
 
@@ -199,7 +267,10 @@ export async function bestEffortFallback(opts: {
       `Pipeline failed after all retries with error: ${pipelineErrorCode} — ${errorMessage}`,
       ...(qualityWarnings ?? []),
     ];
-    fallbackLogger.warn({ letterId, fallbackSource, reasonCount: degradationReasons.length }, "[Pipeline] Saving degraded draft");
+    fallbackLogger.warn(
+      { letterId, fallbackSource, reasonCount: degradationReasons.length },
+      "[Pipeline] Saving degraded draft"
+    );
 
     // Parallelize: qualityDegraded flag + version creation are independent
     const [, version] = await Promise.all([
@@ -216,7 +287,8 @@ export async function bestEffortFallback(opts: {
           qualityDegraded: true,
           degradationReasons,
           pipelineErrorCode,
-          wordCount: fallbackContent.split(/\s+/).filter(w => w.length > 0).length,
+          wordCount: fallbackContent.split(/\s+/).filter(w => w.length > 0)
+            .length,
         },
       }),
     ]);
@@ -229,7 +301,9 @@ export async function bestEffortFallback(opts: {
 
     // Parallelize: version pointer + status + review action are independent
     await Promise.all([
-      updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId }),
+      updateLetterVersionPointers(letterId, {
+        currentAiDraftVersionId: versionId,
+      }),
       finalizeDraftPreviewStatus(letterId, isPreviewGated, { force: true }),
       logReviewAction({
         letterRequestId: letterId,
@@ -246,7 +320,7 @@ export async function bestEffortFallback(opts: {
     // so admin-forced free-preview letters can be dispatched now. Normal
     // free-preview letters remain on the 24h timer via the cron. Non-free-
     // preview letters are no-op'd by the dispatcher. Fire-and-forget.
-    dispatchFreePreviewIfReady(letterId).catch((err) =>
+    dispatchFreePreviewIfReady(letterId).catch(err =>
       fallbackLogger.warn(
         { letterId, err: err instanceof Error ? err.message : String(err) },
         "[Pipeline] dispatchFreePreviewIfReady threw in fallback (non-fatal)"
@@ -256,30 +330,46 @@ export async function bestEffortFallback(opts: {
     // Notify admins (parallelized fan-out)
     try {
       const admins = await getAllUsers("admin");
-      const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-      await Promise.allSettled(admins.map(async (admin) => {
-        if (admin.email) {
-          sendAdminAlertEmail({
-            to: admin.email,
-            name: admin.name ?? "Admin",
-            subject: `Degraded draft produced for letter #${letterId}`,
-            preheader: `Quality fallback triggered after retry exhaustion — attorney review required`,
-            bodyHtml: `<p>Letter #${letterId} was produced via best-effort fallback after all pipeline retries were exhausted (error: <strong>${pipelineErrorCode}</strong>).</p><p>Degradation reasons:</p><ul>${degradationReasons.map(r => `<li>${r}</li>`).join("")}</ul><p>The draft is now in <strong>generated_locked</strong> status awaiting subscriber unlock and attorney review.</p>`,
-            ctaText: "View Letter",
-            ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
-          }).catch(e => fallbackLogger.error({ err: e, letterId }, "[Pipeline] Failed to send degraded-draft admin email"));
-        }
-        createNotification({
-          userId: admin.id,
-          type: "quality_alert",
-          category: "letters",
-          title: `Degraded draft: letter #${letterId}`,
-          body: `Pipeline error (${pipelineErrorCode}) after retries exhausted — best-effort fallback used. Attorney scrutiny needed.`,
-          link: `/admin/letters/${letterId}`,
-        }).catch(e => fallbackLogger.error({ err: e, letterId }, "[Pipeline] Failed to create degraded-draft notification"));
-      }));
+      const appBaseUrl =
+        process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+      await Promise.allSettled(
+        admins.map(async admin => {
+          if (admin.email) {
+            sendAdminAlertEmail({
+              to: admin.email,
+              name: admin.name ?? "Admin",
+              subject: `Degraded draft produced for letter #${letterId}`,
+              preheader: `Quality fallback triggered after retry exhaustion — attorney review required`,
+              bodyHtml: `<p>Letter #${letterId} was produced via best-effort fallback after all pipeline retries were exhausted (error: <strong>${pipelineErrorCode}</strong>).</p><p>Degradation reasons:</p><ul>${degradationReasons.map(r => `<li>${r}</li>`).join("")}</ul><p>The draft is now in <strong>generated_locked</strong> status awaiting subscriber unlock and attorney review.</p>`,
+              ctaText: "View Letter",
+              ctaUrl: `${appBaseUrl}/admin/letters/${letterId}`,
+            }).catch(e =>
+              fallbackLogger.error(
+                { err: e, letterId },
+                "[Pipeline] Failed to send degraded-draft admin email"
+              )
+            );
+          }
+          createNotification({
+            userId: admin.id,
+            type: "quality_alert",
+            category: "letters",
+            title: `Degraded draft: letter #${letterId}`,
+            body: `Pipeline error (${pipelineErrorCode}) after retries exhausted — best-effort fallback used. Attorney scrutiny needed.`,
+            link: `/admin/letters/${letterId}`,
+          }).catch(e =>
+            fallbackLogger.error(
+              { err: e, letterId },
+              "[Pipeline] Failed to create degraded-draft notification"
+            )
+          );
+        })
+      );
     } catch (notifyErr) {
-      fallbackLogger.error({ err: notifyErr, letterId }, "[Pipeline] Failed to notify admins of degraded draft");
+      fallbackLogger.error(
+        { err: notifyErr, letterId },
+        "[Pipeline] Failed to notify admins of degraded draft"
+      );
     }
 
     // Send subscriber "letter ready" email (reuse the status-check read from above)
@@ -289,7 +379,9 @@ export async function bestEffortFallback(opts: {
     // waiting-card UI the subscriber sees on the free-preview path.
     try {
       const letterRecord = await getLetterById(letterId);
-      const wasAlreadyUnlocked = letterRecord ? await hasLetterBeenPreviouslyUnlocked(letterId) : false;
+      const wasAlreadyUnlocked = letterRecord
+        ? await hasLetterBeenPreviouslyUnlocked(letterId)
+        : false;
       if (
         letterRecord &&
         !wasAlreadyUnlocked &&
@@ -298,17 +390,25 @@ export async function bestEffortFallback(opts: {
       ) {
         const subscriber = await getUserById(letterRecord.userId);
         if (subscriber?.email) {
-          const isFirstLetter = !wasAlreadyUnlocked && await isUserFirstLetterEligible(letterRecord.userId!);
+          const isFirstLetter =
+            !wasAlreadyUnlocked &&
+            (await isUserFirstLetterEligible(letterRecord.userId!));
           sendLetterReadyEmail({
             to: subscriber.email,
             name: subscriber.name ?? "Subscriber",
             subject: letterRecord.subject,
             letterId,
-            appUrl: process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
+            appUrl:
+              process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com",
             letterType: letterRecord.letterType ?? undefined,
             jurisdictionState: letterRecord.jurisdictionState ?? undefined,
             isFirstLetter,
-          }).catch(e => fallbackLogger.error({ err: e, letterId }, "[Pipeline] Failed to send letter-ready email for fallback"));
+          }).catch(e =>
+            fallbackLogger.error(
+              { err: e, letterId },
+              "[Pipeline] Failed to send letter-ready email for fallback"
+            )
+          );
         }
       } else if (letterRecord?.isFreePreview) {
         fallbackLogger.info(
@@ -317,7 +417,10 @@ export async function bestEffortFallback(opts: {
         );
       }
     } catch (emailErr) {
-      fallbackLogger.error({ err: emailErr, letterId }, "[Pipeline] Failed to send subscriber email for fallback draft");
+      fallbackLogger.error(
+        { err: emailErr, letterId },
+        "[Pipeline] Failed to send subscriber email for fallback draft"
+      );
     }
 
     try {
@@ -328,9 +431,15 @@ export async function bestEffortFallback(opts: {
 
     return true;
   } catch (fallbackErr) {
-    fallbackLogger.error({ err: fallbackErr, letterId }, "[Pipeline] Best-effort fallback failed");
+    fallbackLogger.error(
+      { err: fallbackErr, letterId },
+      "[Pipeline] Best-effort fallback failed"
+    );
     captureServerException(fallbackErr, {
-      tags: { pipeline_stage: "best_effort_fallback", letter_id: String(letterId) },
+      tags: {
+        pipeline_stage: "best_effort_fallback",
+        letter_id: String(letterId),
+      },
     });
     return false;
   }
@@ -354,12 +463,19 @@ export async function autoAdvanceIfPreviouslyUnlocked(
 ): Promise<boolean> {
   const letterRecord = await getLetterById(letterId);
   if (letterRecord?.submittedByAdmin) {
-    fallbackLogger.info({ letterId }, "[Pipeline] Letter generated_locked → pending_review (admin-submitted, billing bypassed)");
+    fallbackLogger.info(
+      { letterId },
+      "[Pipeline] Letter generated_locked → pending_review (admin-submitted, billing bypassed)"
+    );
     try {
       await updateLetterStatus(letterId, "pending_review");
     } catch (statusErr) {
-      const errMsg = statusErr instanceof Error ? statusErr.message : String(statusErr);
-      fallbackLogger.warn({ letterId, err: errMsg }, "[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race for admin-submitted letter — skipping");
+      const errMsg =
+        statusErr instanceof Error ? statusErr.message : String(statusErr);
+      fallbackLogger.warn(
+        { letterId, err: errMsg },
+        "[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race for admin-submitted letter — skipping"
+      );
       return false;
     }
     await logReviewAction({
@@ -372,29 +488,45 @@ export async function autoAdvanceIfPreviouslyUnlocked(
       fromStatus: "generated_locked",
       toStatus: "pending_review",
     });
-    const appBaseUrl = process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
+    const appBaseUrl =
+      process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
     notifyAllAttorneys({
       letterId,
       letterSubject: letterRecord.subject,
       letterType: letterRecord.letterType,
       jurisdiction: letterRecord.jurisdictionState ?? "Unknown",
       appUrl: appBaseUrl,
-    }).catch(err => fallbackLogger.error({ err, letterId }, "[Pipeline] Failed to notify attorneys for admin-submitted letter"));
+    }).catch(err =>
+      fallbackLogger.error(
+        { err, letterId },
+        "[Pipeline] Failed to notify attorneys for admin-submitted letter"
+      )
+    );
     return true;
   }
 
   const wasUnlocked = await hasLetterBeenPreviouslyUnlocked(letterId);
   if (!wasUnlocked) {
-    fallbackLogger.info({ letterId }, "[Pipeline] Letter has not been previously unlocked — staying at generated_locked");
+    fallbackLogger.info(
+      { letterId },
+      "[Pipeline] Letter has not been previously unlocked — staying at generated_locked"
+    );
     return false;
   }
 
-  fallbackLogger.info({ letterId }, "[Pipeline] Letter generated_locked → pending_review (previously unlocked, auto-advance after re-pipeline)");
+  fallbackLogger.info(
+    { letterId },
+    "[Pipeline] Letter generated_locked → pending_review (previously unlocked, auto-advance after re-pipeline)"
+  );
   try {
     await updateLetterStatus(letterId, "pending_review");
   } catch (statusErr) {
-    const errMsg = statusErr instanceof Error ? statusErr.message : String(statusErr);
-    fallbackLogger.warn({ letterId, err: errMsg }, "[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race — skipping");
+    const errMsg =
+      statusErr instanceof Error ? statusErr.message : String(statusErr);
+    fallbackLogger.warn(
+      { letterId, err: errMsg },
+      "[Pipeline] autoAdvanceIfPreviouslyUnlocked: status update race — skipping"
+    );
     return false;
   }
   await logReviewAction({
@@ -411,7 +543,10 @@ export async function autoAdvanceIfPreviouslyUnlocked(
   if (letterRecord) {
     const appBaseUrl =
       process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
-    const subscriber = letterRecord.userId != null ? await getUserById(letterRecord.userId) : null;
+    const subscriber =
+      letterRecord.userId != null
+        ? await getUserById(letterRecord.userId)
+        : null;
     if (subscriber?.email) {
       sendStatusUpdateEmail({
         to: subscriber.email,
@@ -421,7 +556,10 @@ export async function autoAdvanceIfPreviouslyUnlocked(
         newStatus: "pending_review",
         appUrl: appBaseUrl,
       }).catch(err =>
-        fallbackLogger.error({ err, letterId }, "[Pipeline] Failed to send pending_review email")
+        fallbackLogger.error(
+          { err, letterId },
+          "[Pipeline] Failed to send pending_review email"
+        )
       );
     }
     // Notify all attorneys (email + in-app) via centralized helper
@@ -432,7 +570,10 @@ export async function autoAdvanceIfPreviouslyUnlocked(
       jurisdiction: letterRecord.jurisdictionState ?? "Unknown",
       appUrl: appBaseUrl,
     }).catch(err =>
-      fallbackLogger.error({ err, letterId }, "[Pipeline] Failed to notify attorneys")
+      fallbackLogger.error(
+        { err, letterId },
+        "[Pipeline] Failed to notify attorneys"
+      )
     );
   }
 

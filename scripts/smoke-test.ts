@@ -268,14 +268,20 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     );
     console.log("         Watch Railway logs for [Pipeline] entries.\n");
     try {
-      await runFullPipeline(letterId, TEST_INTAKE, {
-        subject: "[SMOKE TEST] Unpaid Invoice — CA Demand Letter",
-        issueSummary: TEST_INTAKE.matter.description.slice(0, 500),
-        jurisdictionCountry: "US",
-        jurisdictionState: "CA",
-        jurisdictionCity: "San Francisco",
-        letterType: "demand-letter",
-      });
+      await runFullPipeline(
+        letterId,
+        TEST_INTAKE,
+        {
+          subject: "[SMOKE TEST] Unpaid Invoice — CA Demand Letter",
+          issueSummary: TEST_INTAKE.matter.description.slice(0, 500),
+          jurisdictionCountry: "US",
+          jurisdictionState: "CA",
+          jurisdictionCity: "San Francisco",
+          letterType: "demand-letter",
+        },
+        USER_ID,
+        true
+      );
       console.log("[Step 2] Pipeline complete.");
       const letterAfterPipeline = await getLetterRequestById(letterId);
       check(
