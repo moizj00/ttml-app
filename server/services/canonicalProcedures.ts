@@ -99,11 +99,19 @@ export async function submitSubscriberIntakeProcedure(
   });
 
   // Start generation immediately (24h delay is now only a visibility gate)
-  enqueueLetterGenerationProcedure(
-    requestId,
-    "INTAKE_AUTO_GENERATION",
-    "STANDARD_INTAKE_PIPELINE"
-  );
+  enqueuePipelineJob({
+    type: "runPipeline",
+    letterId: requestId,
+    intake: intakePayload,
+    userId: subscriberId,
+    appUrl: process.env.APP_URL ?? "",
+    label: `Free preview draft for #${requestId}`,
+    usageContext: {
+      shouldRefundOnFailure: true,
+      isPreviewGatedSubmission: true,
+      isFreeTrialSubmission: entitlement.firstLetterFree === true,
+    },
+  });
 
   enqueueDraftPreviewReleaseJob(requestId, subscriberVisibleAt).catch(err =>
     logger.error(
@@ -112,17 +120,27 @@ export async function submitSubscriberIntakeProcedure(
     )
   );
 
-  return { requestId, status: "submitted", subscriberVisibleAt };
+  return {
+    requestId,
+    status: "submitted",
+    subscriberVisibleAt,
+    isFreePreview: true,
+  };
 }
 
 /**
  * PROCEDURE 2: enqueueLetterGenerationProcedure
- * Inputs: requestId, method, pipeline.
+ *
+ * Generation starts IMMEDIATELY. The 24h cooling window controls VISIBILITY,
+ * not generation — see `isFreePreviewUnlocked` in shared/utils/free-preview.ts.
+ * Generate early, reveal late: by the time the 24h window elapses, the draft
+ * is already saved and the subscriber lands on a finished preview.
  */
 export async function enqueueLetterGenerationProcedure(
   requestId: number,
-  method: LetterGenerationMethod,
-  pipeline: LetterGenerationPipeline
+  _method: LetterGenerationMethod,
+  _pipeline: LetterGenerationPipeline,
+  usageContext: { isFreeTrialSubmission?: boolean } = {}
 ) {
   // Generation should run immediately; the 24h free-preview behavior is a
   // visibility gate enforced by freePreviewUnlockAt, not a queue delay.
@@ -141,7 +159,7 @@ export async function enqueueLetterGenerationProcedure(
       usageContext: {
         shouldRefundOnFailure: true,
         isPreviewGatedSubmission: request.isFreePreview === true,
-        isFreeTrialSubmission: request.isFreePreview === true,
+        isFreeTrialSubmission: usageContext.isFreeTrialSubmission === true,
       },
     },
     { startAfter: new Date() }
@@ -243,25 +261,35 @@ export async function resolveLetterVisibilityProcedure(
   if (request.status === "pipeline_failed")
     return { status: "locked_generation_failed" };
 
-  // If the letter's status is no longer ai_generation_completed_hidden (meaning admin already bypassed it),
-  // return visible immediately without checking the clock.
-  if (request.status !== "ai_generation_completed_hidden") {
+  // Only free preview letters should use the 24-hour visibility logic.
+  if (request.isFreePreview !== true) {
+    if (!request.currentAiDraftVersionId || request.status === "drafting") {
+      return { status: "locked_generation_pending" };
+    }
     return { status: "visible_after_24_hours" };
   }
 
-  if (!request.currentAiDraftVersionId)
-    return { status: "locked_generation_pending" };
+  // logic for isFreePreview=true:
+  // If status is submitted/researching/drafting/ai_generation_completed_hidden and NOW() < freePreviewUnlockAt, return hidden_before_24_hours.
+  const isEarly = visibleAt && now < visibleAt;
+  const isProcessingStatus = [
+    "submitted",
+    "researching",
+    "drafting",
+    "ai_generation_completed_hidden",
+  ].includes(request.status);
 
-  // Rule: release at unlock time OR if it's already released/further along
-  if (
-    visibleAt &&
-    now < visibleAt &&
-    request.status === "ai_generation_completed_hidden"
-  ) {
+  if (isEarly && isProcessingStatus) {
     return { status: "hidden_before_24_hours" };
   }
 
-  return { status: "visible_after_24_hours" };
+  // If NOW() >= freePreviewUnlockAt and currentAiDraftVersionId exists, return visible_after_24_hours.
+  if (!isEarly && request.currentAiDraftVersionId) {
+    return { status: "visible_after_24_hours" };
+  }
+
+  // If NOW() >= freePreviewUnlockAt but draft is not ready yet, return locked_generation_pending.
+  return { status: "locked_generation_pending" };
 }
 
 /**
@@ -279,11 +307,25 @@ export async function getSubscriberReleasedLetterProcedure(
 
   if (visibility.status === "visible_after_24_hours") {
     const request = await getLetterRequestById(requestId);
-    if (request?.status === "ai_generation_completed_hidden") {
+
+    // Only transition to letter_released_to_subscriber when:
+    // - request.isFreePreview === true
+    // - currentAiDraftVersionId exists
+    if (
+      request?.isFreePreview === true &&
+      request.currentAiDraftVersionId &&
+      request.status === "ai_generation_completed_hidden"
+    ) {
       await updateLetterStatus(requestId, "letter_released_to_subscriber");
+      await updateLetterStatus(requestId, "attorney_review_upsell_shown");
+    } else if (
+      request?.isFreePreview === true &&
+      request.currentAiDraftVersionId &&
+      request.status === "letter_released_to_subscriber"
+    ) {
+      await updateLetterStatus(requestId, "attorney_review_upsell_shown");
     }
 
-    await markAttorneyReviewUpsellShownProcedure(requestId, subscriberId);
     return { status: "visible", visibility };
   }
 

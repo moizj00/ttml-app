@@ -54,6 +54,10 @@ export async function processRunPipeline(
   data: RunPipelineJobData
 ): Promise<void> {
   const { letterId, intake, userId, appUrl, label, usageContext } = data;
+  const isPreviewGatedSubmission =
+    usageContext?.isPreviewGatedSubmission ??
+    usageContext?.isFreeTrialSubmission ??
+    false;
 
   const lockAcquired = await acquirePipelineLock(letterId);
   if (!lockAcquired) {
@@ -94,7 +98,7 @@ export async function processRunPipeline(
         letterId,
         userId,
         intake: intake as Record<string, any>,
-        isFreePreview: usageContext?.isFreeTrialSubmission ?? false,
+        isFreePreview: isPreviewGatedSubmission,
       });
       logger.info(
         `[Worker] LangGraph pipeline completed for letter #${letterId}`
@@ -207,7 +211,7 @@ export async function processRunPipeline(
           intake as any,
           undefined,
           userId,
-          usageContext?.isFreeTrialSubmission ?? false
+          isPreviewGatedSubmission
         );
         return;
       } catch (err) {

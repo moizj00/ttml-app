@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 import AppLayout from "@/components/shared/AppLayout";
 import StatusBadge from "@/components/shared/StatusBadge";
 import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
+import { FreePreviewViewer } from "@/components/FreePreviewViewer";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,30 +16,53 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   FileText,
   PlusCircle,
   Search,
   Lock,
   Download,
   FileCheck,
-  CreditCard,
   Eye,
   ArrowDownUp,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { useState } from "react";
 import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 
-const ACTIVE_STATUSES = ["submitted", "researching", "drafting"];
-const NEEDS_APPROVAL_STATUSES = ["client_approval_pending"];
+const ACTIVE_STATUSES = [
+  "submitted",
+  "researching",
+  "drafting",
+  "ai_generation_completed_hidden",
+];
 const NEEDS_ACTION_STATUSES = [
   "generated_locked",
+  "letter_released_to_subscriber",
+  "attorney_review_upsell_shown",
   "needs_changes",
   "client_approval_pending",
   "client_revision_requested",
+];
+const PREVIEW_PROCESSING_STATUSES = [
+  "submitted",
+  "researching",
+  "drafting",
+  "ai_generation_completed_hidden",
+];
+const PREVIEW_READY_STATUSES = [
+  "ai_generation_completed_hidden",
+  "letter_released_to_subscriber",
+  "attorney_review_upsell_shown",
+  "attorney_review_checkout_started",
+  "attorney_review_payment_confirmed",
 ];
 
 type SortKey = "date_desc" | "date_asc" | "type";
@@ -58,6 +84,48 @@ function sortLetters(letters: any[], sort: SortKey) {
   return sorted;
 }
 
+function getPreviewState(letter: any, nowMs: number) {
+  const previewGated = letter.isFreePreview === true;
+  const unlockAt = letter.freePreviewUnlockAt
+    ? new Date(letter.freePreviewUnlockAt).getTime()
+    : Number.POSITIVE_INFINITY;
+  const hasDraft = !!letter.currentAiDraftVersionId;
+  const unlocked = Number.isFinite(unlockAt) && unlockAt <= nowMs;
+  const ready =
+    previewGated &&
+    hasDraft &&
+    unlocked &&
+    PREVIEW_READY_STATUSES.includes(letter.status);
+  const inProcess =
+    previewGated &&
+    !ready &&
+    PREVIEW_PROCESSING_STATUSES.includes(letter.status);
+
+  return { previewGated, ready, inProcess, unlocked, hasDraft };
+}
+
+function PreviewStatusPill({
+  state,
+}: {
+  state: ReturnType<typeof getPreviewState>;
+}) {
+  if (state.ready) {
+    return (
+      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+        Draft Preview Ready
+      </Badge>
+    );
+  }
+  if (state.inProcess) {
+    return (
+      <Badge className="border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50">
+        In Process
+      </Badge>
+    );
+  }
+  return null;
+}
+
 function getQuickActions(letter: any) {
   const actions: Array<{
     label: string;
@@ -67,7 +135,6 @@ function getQuickActions(letter: any) {
     color?: string;
   }> = [];
 
-  // Subscriber needs to approve the attorney-submitted letter
   if (letter.status === "client_approval_pending") {
     actions.push({
       label: "Review & Approve",
@@ -78,7 +145,6 @@ function getQuickActions(letter: any) {
     });
   }
 
-  // PDF is ready after attorney approval
   if (
     (letter.status === "approved" ||
       letter.status === "client_approved" ||
@@ -94,7 +160,6 @@ function getQuickActions(letter: any) {
     });
   }
 
-  // PDF still generating after approval
   if (
     (letter.status === "approved" ||
       letter.status === "client_approved" ||
@@ -109,7 +174,7 @@ function getQuickActions(letter: any) {
     });
   }
 
-  if (letter.status === "generated_locked") {
+  if (letter.status === "generated_locked" && letter.isFreePreview !== true) {
     actions.push({
       label: "View Draft",
       icon: FileText,
@@ -119,7 +184,6 @@ function getQuickActions(letter: any) {
     });
   }
 
-  // Subscriber revision requested — waiting for attorney
   if (letter.status === "client_revision_requested") {
     actions.push({
       label: "View Details",
@@ -136,20 +200,48 @@ export default function MyLetters() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [previewLetterId, setPreviewLetterId] = useState<number | null>(null);
   const { data: letters, isLoading } = trpc.letters.myLetters.useQuery(
     undefined,
     {
       refetchInterval: query => {
         const list = query.state.data;
-        if (list?.some((l: any) => ACTIVE_STATUSES.includes(l.status)))
+        if (!list?.length) return false;
+        if (list.some((l: any) => ACTIVE_STATUSES.includes(l.status)))
           return 8000;
+        if (
+          list.some((l: any) => {
+            const state = getPreviewState(l, Date.now());
+            return state.previewGated && !state.ready;
+          })
+        )
+          return 60_000;
         return false;
       },
+    }
+  );
+  const previewDetail = trpc.letters.detail.useQuery(
+    { id: previewLetterId ?? 0 },
+    {
+      enabled: previewLetterId != null,
+      retry: false,
     }
   );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sort, setSort] = useState<SortKey>("date_desc");
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (previewDetail.data) {
+      utils.letters.myLetters.invalidate();
+    }
+  }, [previewDetail.data, utils.letters.myLetters]);
 
   useLetterListRealtime({
     userId: user?.id,
@@ -159,10 +251,15 @@ export default function MyLetters() {
 
   const filtered = sortLetters(
     (letters ?? []).filter(l => {
+      const previewState = getPreviewState(l, nowMs);
       const matchSearch = l.subject
         .toLowerCase()
         .includes(search.toLowerCase());
-      const matchStatus = statusFilter === "all" || l.status === statusFilter;
+      const matchStatus =
+        statusFilter === "all" ||
+        l.status === statusFilter ||
+        (statusFilter === "in_process" && previewState.inProcess) ||
+        (statusFilter === "draft_preview_ready" && previewState.ready);
       return matchSearch && matchStatus;
     }),
     sort
@@ -177,9 +274,15 @@ export default function MyLetters() {
   const approvalPendingCount = (letters ?? []).filter(
     l => l.status === "client_approval_pending"
   ).length;
-  const actionCount = (letters ?? []).filter(l =>
-    NEEDS_ACTION_STATUSES.includes(l.status)
-  ).length;
+  const actionCount = (letters ?? []).filter(l => {
+    const state = getPreviewState(l, nowMs);
+    return state.ready || NEEDS_ACTION_STATUSES.includes(l.status);
+  }).length;
+
+  const previewLetter = previewDetail.data?.letter;
+  const previewDraft = previewDetail.data?.versions?.find(
+    (v: any) => v.versionType === "ai_draft"
+  );
 
   return (
     <AppLayout
@@ -188,8 +291,41 @@ export default function MyLetters() {
         { label: "My Letters" },
       ]}
     >
+      <Dialog
+        open={previewLetterId != null}
+        onOpenChange={open => {
+          if (!open) setPreviewLetterId(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          {previewDetail.isLoading ? (
+            <div className="flex min-h-48 items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Loading draft preview...
+            </div>
+          ) : previewLetter && previewDraft?.content ? (
+            <FreePreviewViewer
+              letterId={previewLetter.id}
+              subject={previewLetter.subject}
+              draftContent={previewDraft.content}
+              jurisdictionState={previewLetter.jurisdictionState}
+              letterType={previewLetter.letterType}
+            />
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Draft preview is still being prepared</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Your draft exists in the queue but is not ready to view yet.
+                Please check My Letters again shortly.
+              </p>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold text-foreground">My Letters</h1>
@@ -227,7 +363,6 @@ export default function MyLetters() {
           </Button>
         </div>
 
-        {/* Filters + Sort */}
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -239,11 +374,15 @@ export default function MyLetters() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-44">
+            <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="in_process">In Process</SelectItem>
+              <SelectItem value="draft_preview_ready">
+                Draft Preview Ready
+              </SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="researching">Researching</SelectItem>
               <SelectItem value="drafting">Drafting</SelectItem>
@@ -279,7 +418,6 @@ export default function MyLetters() {
           </Select>
         </div>
 
-        {/* Letter List */}
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map(i => (
@@ -311,6 +449,7 @@ export default function MyLetters() {
         ) : (
           <div className="space-y-2">
             {filtered.map(letter => {
+              const previewState = getPreviewState(letter, nowMs);
               const hasPdf =
                 (letter.status === "approved" ||
                   letter.status === "client_approved" ||
@@ -320,10 +459,12 @@ export default function MyLetters() {
                 letter.status === "approved" ||
                 letter.status === "client_approved" ||
                 letter.status === "sent";
-              const isLocked = letter.status === "generated_locked";
+              const isLocked =
+                letter.status === "generated_locked" || previewState.ready;
               const isAwaitingApproval =
                 letter.status === "client_approval_pending";
-              const needsAction = NEEDS_ACTION_STATUSES.includes(letter.status);
+              const needsAction =
+                previewState.ready || NEEDS_ACTION_STATUSES.includes(letter.status);
               const quickActions = getQuickActions(letter);
 
               return (
@@ -342,7 +483,6 @@ export default function MyLetters() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Icon */}
                     <div
                       className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
                         isApproved
@@ -365,21 +505,30 @@ export default function MyLetters() {
                       )}
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <button
-                          onClick={() => navigate(`/letters/${letter.id}`)}
+                          onClick={() => {
+                            if (previewState.ready) {
+                              setPreviewLetterId(letter.id);
+                            } else {
+                              navigate(`/letters/${letter.id}`);
+                            }
+                          }}
                           className="text-sm font-semibold text-foreground leading-tight truncate max-w-full text-left hover:underline"
                         >
                           {letter.subject}
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <StatusBadge
-                            status={letter.status}
-                            approvedByRole={letter.approvedByRole}
-                            size="sm"
-                          />
+                          {previewState.inProcess || previewState.ready ? (
+                            <PreviewStatusPill state={previewState} />
+                          ) : (
+                            <StatusBadge
+                              status={letter.status}
+                              approvedByRole={letter.approvedByRole}
+                              size="sm"
+                            />
+                          )}
                           {hasPdf && (
                             <Badge
                               variant="outline"
@@ -400,7 +549,7 @@ export default function MyLetters() {
                         {letter.jurisdictionState && (
                           <>
                             <span className="text-muted-foreground/30 text-xs">
-                              ·
+                              .
                             </span>
                             <span className="text-xs text-muted-foreground">
                               {letter.jurisdictionState}
@@ -408,7 +557,7 @@ export default function MyLetters() {
                           </>
                         )}
                         <span className="text-muted-foreground/30 text-xs">
-                          ·
+                          .
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {new Date(letter.createdAt).toLocaleDateString(
@@ -418,9 +567,21 @@ export default function MyLetters() {
                         </span>
                       </div>
 
-                      {/* Quick-action buttons */}
-                      {quickActions.length > 0 && (
+                      {(previewState.ready || quickActions.length > 0) && (
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {previewState.ready && (
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setPreviewLetterId(letter.id);
+                              }}
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1.5" />
+                              Preview Draft
+                            </Button>
+                          )}
                           {quickActions.map(action => {
                             const ActionIcon = action.icon;
                             const isExternal = action.href.startsWith("http");
@@ -464,24 +625,16 @@ export default function MyLetters() {
                         </div>
                       )}
 
-                      {/* Compact progress tracker */}
                       <div className="mt-2.5 w-full">
                         <LetterStatusTracker
                           status={letter.status}
                           size="compact"
                           isFreePreview={(letter as any).isFreePreview === true}
-                          freePreviewUnlocked={
-                            (letter as any).isFreePreview === true &&
-                            (letter as any).freePreviewUnlockAt &&
-                            new Date(
-                              (letter as any).freePreviewUnlockAt
-                            ).getTime() <= Date.now()
-                          }
+                          freePreviewUnlocked={previewState.ready}
                         />
                       </div>
 
-                      {/* No action — view link */}
-                      {quickActions.length === 0 && (
+                      {!previewState.ready && quickActions.length === 0 && (
                         <button
                           onClick={() => navigate(`/letters/${letter.id}`)}
                           className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
@@ -497,7 +650,6 @@ export default function MyLetters() {
           </div>
         )}
 
-        {/* Footer count */}
         {filtered.length > 0 && (
           <p className="text-xs text-muted-foreground text-center pb-2">
             Showing {filtered.length} of {letters?.length ?? 0} letters

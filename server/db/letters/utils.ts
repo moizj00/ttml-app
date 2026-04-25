@@ -14,22 +14,29 @@ import {
 } from "../../../drizzle/schema";
 import { getDb } from "../core";
 
+const NON_COMPLETED_LETTER_STATUSES = [
+    "submitted",
+    "researching",
+    "drafting",
+    "ai_generation_completed_hidden",
+    "letter_released_to_subscriber",
+    "attorney_review_upsell_shown",
+    "attorney_review_checkout_started",
+    "attorney_review_payment_confirmed",
+    "generated_locked",
+    "pipeline_failed",
+];
+
 export async function countCompletedLetters(
     userId: number,
     excludeLetterId?: number
 ): Promise<number> {
     const db = await getDb();
     if (!db) return 0;
-    const earlyStatuses = [
-        "submitted",
-        "researching",
-        "drafting",
-        "pipeline_failed",
-    ];
     const conditions = [
         eq(letterRequests.userId, userId),
         sql`${letterRequests.status} NOT IN (${sql.join(
-            earlyStatuses.map(s => sql`${s}`),
+            NON_COMPLETED_LETTER_STATUSES.map(s => sql`${s}`),
             sql`, `
         )})`,
     ];
@@ -54,13 +61,7 @@ export async function isUserFirstLetterEligible(
         .where(
             and(
                 eq(letterRequests.userId, userId),
-                notInArray(letterRequests.status, [
-                    "submitted",
-                    "researching",
-                    "drafting",
-                    "generated_locked",
-                    "pipeline_failed",
-                ])
+                notInArray(letterRequests.status, NON_COMPLETED_LETTER_STATUSES)
             )
         )
         .limit(1);

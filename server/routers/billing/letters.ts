@@ -57,8 +57,12 @@ export const billingLettersRouter = router({
       const letter = await getLetterRequestSafeForSubscriber(input.letterId, ctx.user.id);
       if (!letter) throw new TRPCError({ code: "NOT_FOUND", message: "Letter not found" });
 
-      // Allow from either legacy locked or new procedural state
-      if (letter.status !== "generated_locked" && letter.status !== "attorney_review_upsell_shown") {
+      const reviewSubmittableStatuses = [
+        "generated_locked",
+        "letter_released_to_subscriber",
+        "attorney_review_upsell_shown",
+      ];
+      if (!reviewSubmittableStatuses.includes(letter.status)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Letter is not in a status that allows review submission",

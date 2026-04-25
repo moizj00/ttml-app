@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import type { PipelineStateType } from "../state";
 import { dispatchFreePreviewIfReady } from "../../../freePreviewEmailCron";
 import { breadcrumb, totalTokens } from "../memory";
+import { resolveDraftPreviewFinalStatus } from "../../preview-gate";
 
 const log = createLogger({ module: "LangGraph:FinalizeNode" });
 
@@ -102,10 +103,7 @@ export async function finalizeNode(
 
   // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
   // If this is a free preview, set status to ai_generation_completed_hidden (Procedure 4)
-  const isFreePreview = state.isFreePreview ?? false;
-  const finalStatus = isFreePreview
-    ? "ai_generation_completed_hidden"
-    : "generated_locked";
+  const finalStatus = resolveDraftPreviewFinalStatus(state.isFreePreview);
   await updateLetterStatus(letterId, finalStatus);
 
   // Close out the workflow_jobs row so admin monitor shows this run as

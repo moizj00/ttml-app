@@ -5,6 +5,10 @@ import {
   documentAnalysisResultLenientSchema,
   type DocumentAnalysisResult,
 } from "../../shared/types";
+import {
+  applyFreePreviewGate,
+  LOCKED_PREVIEW_STATUSES,
+} from "../db/letter-versions";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { systemRouter } from "../_core/systemRouter";
 import {

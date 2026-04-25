@@ -36,6 +36,10 @@ import { sendLetterReadyEmail, sendStatusUpdateEmail, sendAdminAlertEmail } from
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
+import {
+  finalizeDraftPreviewStatus,
+  isLetterPreviewGated,
+} from "./preview-gate";
 
 const fallbackLogger = createLogger({ module: "PipelineFallback" });
 
@@ -218,10 +222,15 @@ export async function bestEffortFallback(opts: {
     ]);
     const versionId = (version as any)?.insertId ?? 0;
 
+    const isPreviewGated = await isLetterPreviewGated(letterId);
+    const finalStatus = isPreviewGated
+      ? "ai_generation_completed_hidden"
+      : "generated_locked";
+
     // Parallelize: version pointer + status + review action are independent
     await Promise.all([
       updateLetterVersionPointers(letterId, { currentAiDraftVersionId: versionId }),
-      updateLetterStatus(letterId, "generated_locked", { force: true }),
+      finalizeDraftPreviewStatus(letterId, isPreviewGated, { force: true }),
       logReviewAction({
         letterRequestId: letterId,
         actorType: "system",
@@ -229,7 +238,7 @@ export async function bestEffortFallback(opts: {
         noteText: `Draft produced via best-effort fallback after all retries exhausted (${pipelineErrorCode}). Quality flags raised — attorney scrutiny required. Degradation reasons: ${degradationReasons.join("; ")}`,
         noteVisibility: "internal",
         fromStatus: "drafting",
-        toStatus: "generated_locked",
+        toStatus: finalStatus,
       }),
     ]);
 

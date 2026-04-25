@@ -8,10 +8,13 @@ import {
   createWorkflowJob,
   updateWorkflowJob,
   getAllUsers,
-  getLetterRequestById,
 } from "../db";
 import { sendAdminAlertEmail } from "../email";
 import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
+import {
+  finalizeDraftPreviewStatus,
+  isLetterPreviewGated,
+} from "./preview-gate";
 
 const logger = createLogger({ module: "simple-pipeline" });
 
@@ -156,16 +159,8 @@ export async function runSimplePipeline(
       currentAiDraftVersionId: version.insertId,
     });
 
-    // Check if lead-magnet free preview — if so, we transition to hidden state
-    // so the subscriber can't see it until the 24h cron/dispatcher fires.
-    // Otherwise, transition to paywall (generated_locked).
-    const request = await getLetterRequestById(letterId);
-    const toStatus = request?.isFreePreview
-      ? "ai_generation_completed_hidden"
-      : "generated_locked";
-
-    // Mark as complete
-    await updateLetterStatus(letterId, toStatus);
+    const isPreviewGated = await isLetterPreviewGated(letterId);
+    await finalizeDraftPreviewStatus(letterId, isPreviewGated);
 
     // Free-preview hook: if this letter is on the lead-magnet path and admin
     // has force-unlocked it, fire the "your preview is ready" email now that

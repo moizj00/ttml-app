@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { captureServerException } from "../sentry";
+import { isFreePreviewUnlocked } from "../../shared/utils/free-preview";
 import {
   adminVerificationCodes,
   attachments,
@@ -54,26 +55,29 @@ export async function createLetterVersion(data: {
   return result[0];
 }
 
+/**
+ * Return the versions visible to a subscriber for a given letter.
+ *
+ * Free-preview visibility gate:
+ *   - If `letter.isFreePreview === true`, we call `isFreePreviewUnlocked(letter)`
+ *     to decide whether to return the full draft. This is the ONLY place
+ *     timestamp math happens for the free-preview path. Do not re-implement
+ *     it in the caller.
+ *   - Pre-unlock: ai_draft is returned with empty content + `freePreviewWaiting: true`.
+ *     The UI renders <FreePreviewWaiting/> instead of any content.
+ *   - Post-unlock: ai_draft is returned full, un-redacted, stamped with
+ *     `freePreview: true`. The UI renders <FreePreviewViewer/>.
+ *
+ * Non-free-preview locked letters still receive the ~20% truncated paywall preview.
+ */
 export async function getLetterVersionsByRequestId(
   letterRequestId: number,
   includeInternal = false,
   letterStatus?: string,
-  /**
-   * When true, the ai_draft is returned un-truncated even if the letter is in
-   * `generated_locked`. This is the free-preview lead-magnet path — the caller
-   * (subscriber router) sets this once the 24h cooling-off window has elapsed
-   * (letter.isFreePreview AND letter.freePreviewUnlockAt <= NOW()).
-   * The UI is responsible for rendering the content non-selectable with a
-   * DRAFT watermark (see client/src/components/FreePreviewViewer.tsx).
-   */
-  freePreviewUnlocked = false,
-  /**
-   * When true AND `freePreviewUnlocked` is false, the ai_draft is returned with
-   * empty content + `freePreviewWaiting: true`. Prevents leaking even the
-   * truncated 20% slice to free-preview subscribers during the 24h cooling
-   * window — the UI renders <FreePreviewWaiting/> instead of the paywall.
-   */
-  isFreePreview = false
+  letter?: {
+    isFreePreview?: boolean | null;
+    freePreviewUnlockAt?: Date | string | null;
+  } | null
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -96,44 +100,101 @@ export async function getLetterVersionsByRequestId(
     )
     .orderBy(desc(letterVersions.createdAt));
 
-  const isLockedState =
-    letterStatus === "generated_locked" ||
-    letterStatus === "ai_generation_completed_hidden" ||
-    letterStatus === "letter_released_to_subscriber" ||
-    letterStatus === "attorney_review_upsell_shown";
+  return applyFreePreviewGate(rows, letterStatus, letter ?? null);
+}
 
-  if (isLockedState) {
+/**
+ * Letter statuses during which the paid paywall is active — ai_draft is
+ * visible to the subscriber but must be truncated. Does NOT control
+ * free-preview visibility (that runs whenever `isFreePreview === true`,
+ * independent of status — see `applyFreePreviewGate`).
+ *
+ * Exported so router-level access checks (e.g. versions.get) can refuse
+ * ai_draft requests for statuses outside the locked band AND outside the
+ * free-preview path.
+ */
+export const LOCKED_PREVIEW_STATUSES = new Set([
+  "generated_locked",
+  "ai_generation_completed_hidden",
+  "letter_released_to_subscriber",
+  "attorney_review_upsell_shown",
+]);
+
+/**
+ * Pure version of the free-preview / paywall gate — no DB, no IO. Exported
+ * for unit tests so the decision branches can be verified directly.
+ *
+ * The free-preview branch runs whenever `letter.isFreePreview === true`,
+ * INDEPENDENT of `letterStatus`. Two reasons:
+ *
+ *   1. Generation now starts immediately (the 24h window is visibility-only),
+ *      so an ai_draft can exist while status is still `drafting` — gating
+ *      only on locked statuses would leak draft content early.
+ *   2. After payment, status advances past the locked set (`pending_review`,
+ *      `under_review`, …) but the subscriber's client still relies on the
+ *      server stamping `freePreview: true`. Skipping the gate there would
+ *      pin the UI on <FreePreviewWaiting/> indefinitely.
+ *
+ * `LOCKED_PREVIEW_STATUSES` now controls ONLY the non-free-preview paywall
+ * truncation — that path is the only one that needs a status gate.
+ *
+ *   - Free-preview + unlocked → full draft, `freePreview: true`, un-redacted
+ *   - Free-preview + waiting  → empty content, `freePreviewWaiting: true`
+ *   - Non-free-preview + locked status → 20% truncated paywall preview
+ *   - Non-free-preview + other status  → raw rows
+ */
+export function applyFreePreviewGate<
+  T extends { versionType: string; content?: string | null }
+>(
+  rows: T[],
+  letterStatus: string | undefined,
+  letter: {
+    isFreePreview?: boolean | null;
+    freePreviewUnlockAt?: Date | string | null;
+  } | null
+): Array<T & Record<string, any>> {
+  const isFreePreview = letter?.isFreePreview === true;
+  const isLockedStatus =
+    !!letterStatus && LOCKED_PREVIEW_STATUSES.has(letterStatus);
+
+  const freePreviewUnlocked = isFreePreview && isFreePreviewUnlocked({
+    isFreePreview: letter?.isFreePreview,
+    freePreviewUnlockAt: letter?.freePreviewUnlockAt
+  });
+
+  if (isFreePreview && !freePreviewUnlocked) {
     return rows.map(v => {
-      if (v.versionType === "ai_draft" && v.content) {
-        // Free-preview lead-magnet override: return the full draft, stamped
-        // with `freePreview: true` so the frontend can route to the
-        // FreePreviewViewer (un-redacted + watermark) instead of the paywall.
-        if (freePreviewUnlocked) {
-          // Remove PII redaction for unlocked free previews.
-          return {
-            ...v,
-            truncated: false,
-            freePreview: true as const,
-            isRedacted: false,
-          };
-        }
-        // Pre-unlock free-preview: do NOT leak even the 20% slice. The UI
-        // shows <FreePreviewWaiting/> based on the `freePreviewWaiting` flag.
-        if (isFreePreview) {
-          return {
-            ...v,
-            content: "",
-            truncated: true,
-            freePreviewWaiting: true as const,
-          };
-        }
-        // Standard truncation for paid paywall
-        return { ...v, content: truncateContent(v.content), truncated: true };
+      if (v.versionType === "ai_draft") {
+        return {
+          ...v,
+          content: "",
+          truncated: true,
+          freePreviewWaiting: true as const,
+        };
       }
       return { ...v, truncated: false };
     });
   }
-  return rows.map(v => ({ ...v, truncated: false }));
+
+  if (!isFreePreview && !isLockedStatus) {
+    return rows.map(v => ({ ...v, truncated: false }));
+  }
+
+  return rows.map(v => {
+    if (v.versionType === "ai_draft" && v.content) {
+      if (isFreePreview) {
+        // We already know it's unlocked from the guard above
+        return {
+          ...v,
+          truncated: false,
+          freePreview: true as const,
+          isRedacted: false,
+        };
+      }
+      return { ...v, content: truncateContent(v.content), truncated: true };
+    }
+    return { ...v, truncated: false };
+  });
 }
 
 function truncateContent(content: string): string {

@@ -1,31 +1,28 @@
 /**
  * Phase 95 — Free-preview waiting screen (pre-unlock content gate)
  *
- * Closes the gap where free-preview subscribers could see the truncated 20%
- * draft preview before the 24h cooling window elapsed. Three layers must
- * agree on the new rule: when `letter.isFreePreview === true` AND
- * `freePreviewUnlockAt > NOW()`, no ai_draft content is exposed (not even
- * the 20% slice) and the response is tagged `freePreviewWaiting: true` so
- * the client routes to <FreePreviewWaiting/> instead of <LetterPaywall/>.
+ * Rewritten alongside the phase-96 consolidation: the 24-hour cooling window
+ * is now a SINGLE server-side visibility gate driven by
+ * `isFreePreviewUnlocked(letter)` in `shared/utils/free-preview.ts`. All
+ * server-side content fetch sites (version DAL, versions.get, draftPdfRoute)
+ * call the helper. The frontend renders from the server's `freePreview` flag
+ * on the ai_draft version — no client-side clocks.
  *
- *   1. server/db/letter-versions.ts — getLetterVersionsByRequestId returns
- *      empty content + freePreviewWaiting flag for pre-unlock free-preview.
- *   2. server/routers/versions.ts — versions.get mirrors the same gate when
- *      a subscriber fetches an ai_draft version directly by id.
- *   3. server/routers/letters/subscriber.ts — passes letter.isFreePreview
- *      down to the versions DAL (otherwise the gate is dead code).
- *   4. server/draftPdfRoute.ts — 403s the watermarked PDF endpoint while
- *      the cooling window is still open, otherwise the in-app gate leaks
- *      via the PDF stream.
- *   5. client/src/pages/subscriber/LetterDetail.tsx — 3-way branching that
- *      renders FreePreviewWaiting before falling through to LetterPaywall.
+ * This suite pins down:
+ *   1. server/db/letter-versions.ts — pre-unlock free-preview returns empty
+ *      content + freePreviewWaiting:true; post-unlock returns full draft +
+ *      freePreview:true. Uses the shared helper.
+ *   2. server/routers/versions.ts — single-version `get` mirrors the gate.
+ *   3. server/draftPdfRoute.ts — blocks pre-review free-preview PDF downloads.
+ *   4. server/routers/letters/subscriber.ts — passes the letter object down
+ *      to the DAL (no local timestamp math).
+ *   5. client/src/pages/subscriber/LetterDetail.tsx — renders branches from
+ *      `aiDraftVersion.freePreview` server flag, not statuses.
  *   6. client/src/components/LetterPaywall.tsx — defensive __isFreePreview
- *      guard returns null after all hooks (rules-of-hooks compliant).
- *   7. client/src/components/FreePreviewWaiting.tsx — exists, has
- *      data-testid="free-preview-waiting", no payment CTA.
- *
- * Strategy: source-code structural assertions, matching phase94's pattern
- * (vitest.setup.ts stubs DB/env so live integration tests aren't viable).
+ *      guard.
+ *   7. client/src/components/FreePreviewWaiting.tsx — exists with the
+ *      required data-testid and no payment CTA. No countdown (the waiting
+ *      state is driven by the server flag, not client clocks).
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "fs";
@@ -42,26 +39,36 @@ function readClient(...parts: string[]): string {
   return readFileSync(join(CLIENT, ...parts), "utf-8");
 }
 
-// ─── 1. letter-versions DAL — new isFreePreview parameter + gate ──────────
+// ─── 1. letter-versions DAL — helper-driven gate ──────────────────────────
 
 describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", () => {
   const source = readServer("db", "letter-versions.ts");
 
-  it("declares the new isFreePreview parameter on getLetterVersionsByRequestId", () => {
+  it("imports the shared isFreePreviewUnlocked helper", () => {
     expect(source).toMatch(
-      /export async function getLetterVersionsByRequestId\([\s\S]*?isFreePreview\s*=\s*false[\s\S]*?\)/
+      /import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"[^"]*shared\/utils\/free-preview"/
     );
   });
 
-  it("returns empty content + freePreviewWaiting:true inside the generated_locked branch when isFreePreview && !freePreviewUnlocked", () => {
+  it("accepts the letter object as a parameter (no separate unlock booleans)", () => {
     expect(source).toMatch(
-      /if\s*\(\s*isFreePreview\s*\)\s*\{[\s\S]*?content:\s*""[\s\S]*?freePreviewWaiting:\s*true\s*as\s*const[\s\S]*?\}/
+      /getLetterVersionsByRequestId\([\s\S]*?letter\?:\s*\{[\s\S]*?isFreePreview\?[\s\S]*?freePreviewUnlockAt\?[\s\S]*?\}[\s\S]*?\)/
     );
   });
 
-  it("preserves the existing freePreviewUnlocked branch (full draft + freePreview:true)", () => {
+  it("decides freePreviewUnlocked via the shared helper", () => {
+    expect(source).toMatch(/isFreePreviewUnlocked\(letter!\)/);
+  });
+
+  it("returns empty content + freePreviewWaiting:true for pre-unlock free-preview", () => {
     expect(source).toMatch(
-      /if\s*\(\s*freePreviewUnlocked\s*\)[\s\S]*?freePreview:\s*true\s*as\s*const/
+      /content:\s*""[\s\S]*?freePreviewWaiting:\s*true\s*as\s*const/
+    );
+  });
+
+  it("returns full draft + freePreview:true for unlocked free-preview", () => {
+    expect(source).toMatch(
+      /freePreviewUnlocked[\s\S]*?freePreview:\s*true\s*as\s*const/
     );
   });
 
@@ -69,7 +76,7 @@ describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", (
     expect(source).toMatch(/truncateContent\(v\.content\)/);
   });
 
-  it("orders the branches so the pre-unlock free-preview gate runs BEFORE the truncation fallback", () => {
+  it("orders the branches so the free-preview gate runs BEFORE truncation", () => {
     const idxFreePreview = source.indexOf("freePreviewWaiting: true as const");
     const idxTruncate = source.indexOf("truncateContent(v.content)");
     expect(idxFreePreview).toBeGreaterThan(0);
@@ -78,35 +85,79 @@ describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", (
   });
 });
 
-// ─── 2. subscriber router — passes letter.isFreePreview into the DAL ──────
+// ─── 2. subscriber router — passes letter object down ─────────────────────
 
-describe("Phase 95 — subscriber.detail wires isFreePreview into the DAL", () => {
+describe("Phase 95 — subscriber.detail passes the letter object to the DAL", () => {
   const source = readServer("routers", "letters", "subscriber.ts");
 
-  it("passes letter.isFreePreview === true as the 5th argument", () => {
+  it("calls getLetterVersionsByRequestId(input.id, false, letter.status, letter)", () => {
     expect(source).toMatch(
-      /getLetterVersionsByRequestId\(\s*input\.id,\s*false,\s*letter\.status,\s*freePreviewUnlocked,\s*letter\.isFreePreview\s*===\s*true\s*\)/
+      /getLetterVersionsByRequestId\(\s*input\.id,\s*false,\s*letter\.status,\s*letter\s*\)/
     );
+  });
+
+  it("does NOT inline freePreviewUnlockAt timestamp math in this router", () => {
+    expect(source).not.toMatch(/freePreviewUnlockAt.*getTime\(\)/);
   });
 });
 
-// ─── 3. versions.get — duplicate truncation path mirrors the gate ─────────
+// ─── 3. versions.get — delegates to the shared DAL helper ─────────────────
 
-describe("Phase 95 — versions.get mirrors the pre-unlock gate", () => {
+describe("Phase 95 — versions.get delegates to applyFreePreviewGate", () => {
   const source = readServer("routers", "versions.ts");
 
-  it("returns empty content + freePreviewWaiting:true for pre-unlock free-preview", () => {
+  it("imports applyFreePreviewGate and LOCKED_PREVIEW_STATUSES from the DAL", () => {
     expect(source).toMatch(
-      /letter\.isFreePreview\s*===\s*true[\s\S]*?content:\s*""[\s\S]*?freePreviewWaiting:\s*true\s*as\s*const/
+      /import\s*\{[\s\S]*?applyFreePreviewGate[\s\S]*?LOCKED_PREVIEW_STATUSES[\s\S]*?\}\s*from\s*"\.\.\/db\/letter-versions"/
     );
   });
 
-  it("orders the gate BEFORE the inline 20% truncation slice", () => {
-    const idxFreePreview = source.indexOf("freePreviewWaiting: true as const");
-    const idxSlice = source.indexOf("Math.floor(lines.length * 0.2)");
-    expect(idxFreePreview).toBeGreaterThan(0);
-    expect(idxSlice).toBeGreaterThan(0);
-    expect(idxFreePreview).toBeLessThan(idxSlice);
+  it("calls applyFreePreviewGate on a single-version array", () => {
+    expect(source).toMatch(
+      /applyFreePreviewGate\(\s*\[\s*version as any\s*\],\s*letter\.status,\s*letter\s*\)/
+    );
+  });
+
+  it("admits subscriber ai_draft access when free-preview OR locked (ownership first)", () => {
+    // Access guard: ownership + (isFreePreview || isLocked). Without the
+    // isFreePreview branch, a post-payment free-preview letter would get
+    // FORBIDDEN for its own ai_draft.
+    expect(source).toMatch(/letter\?\.isFreePreview\s*===\s*true/);
+    expect(source).toMatch(
+      /LOCKED_PREVIEW_STATUSES\.has\(letter\.status\)/
+    );
+    expect(source).toMatch(
+      /letter\.userId\s*===\s*ctx\.user\.id\s*&&\s*\(isFreePreview\s*\|\|\s*isLocked\)/
+    );
+  });
+
+  it("does NOT inline timestamp math or truncation logic (consolidated into DAL)", () => {
+    expect(source).not.toMatch(/freePreviewUnlockAt\.getTime\(\)/);
+    expect(source).not.toMatch(/Math\.floor\(lines\.length\s*\*\s*0\.2\)/);
+  });
+});
+
+// ─── 3b. DAL exports the status set used by callers ───────────────────────
+
+describe("Phase 95 — DAL exports LOCKED_PREVIEW_STATUSES as a module const", () => {
+  const source = readServer("db", "letter-versions.ts");
+
+  it("LOCKED_PREVIEW_STATUSES is a module-scope export", () => {
+    expect(source).toMatch(
+      /export const LOCKED_PREVIEW_STATUSES\s*=\s*new Set\(\[/
+    );
+  });
+
+  it("covers all four pre-review locked statuses", () => {
+    const match = source.match(
+      /LOCKED_PREVIEW_STATUSES\s*=\s*new Set\(\[([\s\S]*?)\]\)/
+    );
+    expect(match).toBeTruthy();
+    const list = match![1];
+    expect(list).toContain('"generated_locked"');
+    expect(list).toContain('"ai_generation_completed_hidden"');
+    expect(list).toContain('"letter_released_to_subscriber"');
+    expect(list).toContain('"attorney_review_upsell_shown"');
   });
 });
 
@@ -148,9 +199,9 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
   });
 });
 
-// ─── 5. LetterDetail — 3-way branching, hoisted out of isGeneratedLocked ──
+// ─── 5. LetterDetail — server-flag driven branching ───────────────────────
 
-describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGeneratedLocked", () => {
+describe("Phase 95 — LetterDetail renders from the server freePreview flag", () => {
   const source = readClient("pages", "subscriber", "LetterDetail.tsx");
 
   it("imports the new FreePreviewWaiting component", () => {
@@ -159,7 +210,7 @@ describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGenerat
     );
   });
 
-  it("renders FreePreviewWaiting when free-preview AND not yet unlocked", () => {
+  it("defines freePreviewUnlocked from letter.isFreePreview + aiDraftVersion.freePreview + content", () => {
     expect(source).toMatch(
       /letter\.isFreePreview\s*===\s*true\s*&&[\s\S]*?!freePreviewUnlocked\s*&&[\s\S]*?!aiDraftVersion\?\.content[\s\S]*?<FreePreviewWaiting/
     );
@@ -174,8 +225,12 @@ describe("Phase 95 — LetterDetail renders FreePreviewWaiting outside isGenerat
 
   it("forwards __isFreePreview to LetterPaywall as a defensive guard", () => {
     expect(source).toMatch(
-      /<LetterPaywall[\s\S]*?__isFreePreview=\{letter\.isFreePreview\s*===\s*true\}/
+      /letter\.status === "generated_locked" && !letter\.isFreePreview \? \(\s*<LetterPaywall/
     );
+  });
+
+  it("popup effect requires freePreviewUnlocked AND content before opening", () => {
+    expect(source).toMatch(/if\s*\(!freePreviewUnlocked\)\s*return/);
   });
 });
 
@@ -188,17 +243,8 @@ describe("Phase 95 — LetterPaywall defensive __isFreePreview guard", () => {
     expect(source).toMatch(/__isFreePreview\?:\s*boolean/);
   });
 
-  it("destructures __isFreePreview and returns null when truthy", () => {
-    expect(source).toMatch(/__isFreePreview,?\s*\}:\s*LetterPaywallProps/);
+  it("returns null when __isFreePreview is truthy", () => {
     expect(source).toMatch(/if\s*\(__isFreePreview\)\s*return\s*null/);
-  });
-
-  it("places the guard AFTER hook calls (rules-of-hooks compliant)", () => {
-    const idxFirstHook = source.search(/useMemo|useState|useLocation|useSearch|trpc\./);
-    const idxGuard = source.indexOf("if (__isFreePreview) return null");
-    expect(idxFirstHook).toBeGreaterThan(0);
-    expect(idxGuard).toBeGreaterThan(0);
-    expect(idxGuard).toBeGreaterThan(idxFirstHook);
   });
 });
 

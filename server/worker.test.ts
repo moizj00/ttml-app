@@ -15,6 +15,7 @@ vi.mock("./queue", () => ({
   }),
   enqueuePipelineJob: vi.fn().mockResolvedValue("mock-job-id"),
   enqueueRetryFromStageJob: vi.fn().mockResolvedValue("mock-job-id"),
+  enqueueDraftPreviewReleaseJob: vi.fn().mockResolvedValue("release-job-id"),
   getBoss: vi.fn().mockResolvedValue({
     on: vi.fn(),
     work: vi.fn().mockResolvedValue("worker-id"),
@@ -59,6 +60,10 @@ vi.mock("./db", () => ({
 
 vi.mock("./email", () => ({ sendJobFailedAlertEmail: vi.fn().mockResolvedValue(undefined) }));
 
+vi.mock("./freePreviewEmailCron", () => ({
+  dispatchFreePreviewIfReady: vi.fn().mockResolvedValue({ status: "sent" }),
+}));
+
 vi.mock("./sentry", () => ({ captureServerException: vi.fn(), initServerSentry: vi.fn() }));
 
 vi.mock("./_core/env", () => ({
@@ -73,6 +78,8 @@ const { processRunPipeline, processRetryFromStage, processJob } = await import("
 const { runFullPipeline, retryPipelineFromStage: retryPipelineFn, bestEffortFallback, consumeIntermediateContent } = await import("./pipeline");
 const { acquirePipelineLock, releasePipelineLock, markPriorPipelineRunsSuperseded, getLetterRequestById, updateLetterStatus, getAllUsers, decrementLettersUsed, refundFreeTrialSlot } = await import("./db");
 const { sendJobFailedAlertEmail } = await import("./email");
+const { enqueueDraftPreviewReleaseJob } = await import("./queue");
+const { dispatchFreePreviewIfReady } = await import("./freePreviewEmailCron");
 const { PipelineError } = await import("../shared/types");
 
 const LETTER_ID = 42;
@@ -163,7 +170,31 @@ describe("processRunPipeline — success path", () => {
 
   it("calls runFullPipeline with correct letterId, intake, and userId", async () => {
     await processRunPipeline(baseRunData);
-    expect(runFullPipeline).toHaveBeenCalledWith(LETTER_ID, baseRunData.intake, undefined, USER_ID);
+    expect(runFullPipeline).toHaveBeenCalledWith(
+      LETTER_ID,
+      baseRunData.intake,
+      undefined,
+      USER_ID,
+      false
+    );
+  });
+
+  it("forwards isPreviewGatedSubmission into runFullPipeline", async () => {
+    await processRunPipeline({
+      ...baseRunData,
+      usageContext: {
+        shouldRefundOnFailure: true,
+        isPreviewGatedSubmission: true,
+        isFreeTrialSubmission: false,
+      },
+    });
+    expect(runFullPipeline).toHaveBeenCalledWith(
+      LETTER_ID,
+      baseRunData.intake,
+      undefined,
+      USER_ID,
+      true
+    );
   });
 
   it("does not send alert email on success", async () => {
@@ -438,6 +469,51 @@ describe("processJob — job type router", () => {
     await processJob(makeMockJob(baseRetryData) as Job<PipelineJobData>);
     expect(retryPipelineFn).toHaveBeenCalledOnce();
     expect(runFullPipeline).not.toHaveBeenCalled();
+  });
+
+  it("routes 'releaseDraftPreview' jobs to the free-preview dispatcher", async () => {
+    vi.mocked(getLetterRequestById).mockResolvedValue({
+      ...mockLetter,
+      isFreePreview: true,
+      freePreviewUnlockAt: new Date(Date.now() - 1000),
+      freePreviewEmailSentAt: null,
+      currentAiDraftVersionId: 123,
+    } as never);
+
+    await processJob(
+      makeMockJob({
+        type: "releaseDraftPreview",
+        letterId: LETTER_ID,
+      }) as Job<PipelineJobData>
+    );
+
+    expect(dispatchFreePreviewIfReady).toHaveBeenCalledWith(LETTER_ID, {
+      requireDraft: true,
+    });
+  });
+
+  it("requeues releaseDraftPreview when the 24h timer elapsed before the draft exists", async () => {
+    vi.mocked(getLetterRequestById).mockResolvedValue({
+      ...mockLetter,
+      isFreePreview: true,
+      freePreviewUnlockAt: new Date(Date.now() - 1000),
+      freePreviewEmailSentAt: null,
+      currentAiDraftVersionId: null,
+    } as never);
+
+    await processJob(
+      makeMockJob({
+        type: "releaseDraftPreview",
+        letterId: LETTER_ID,
+      }) as Job<PipelineJobData>
+    );
+
+    expect(enqueueDraftPreviewReleaseJob).toHaveBeenCalledWith(
+      LETTER_ID,
+      expect.any(Date),
+      1
+    );
+    expect(dispatchFreePreviewIfReady).not.toHaveBeenCalled();
   });
 
   it("throws for an unknown job type", async () => {

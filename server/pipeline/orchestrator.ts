@@ -397,7 +397,7 @@ export async function retryPipelineFromStage(
       const draft = await runDraftingStage(letterId, intake, research, pipelineCtx);
       await runVettingAndFinalize(research, draft);
     } else {
-      const latestResearch = await getLatestResearchByLetterId(letterId);
+      const latestResearch = await getLatestResearchRun(letterId);
       if (!latestResearch?.resultJson)
         throw new Error("No completed research run found for retry");
       const research = latestResearch.resultJson as ResearchPacket;

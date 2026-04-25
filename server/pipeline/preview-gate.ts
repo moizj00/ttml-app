@@ -1,4 +1,8 @@
-import { getLetterRequestById, updateLetterStatus } from "../db";
+import {
+  getLetterRequestById,
+  hasLetterBeenPreviouslyUnlocked,
+  updateLetterStatus,
+} from "../db";
 
 export type DraftPreviewFinalStatus =
   | "ai_generation_completed_hidden"
@@ -12,7 +16,10 @@ export function resolveDraftPreviewFinalStatus(
 
 export async function isLetterPreviewGated(letterId: number): Promise<boolean> {
   const letter = await getLetterRequestById(letterId);
-  return letter?.isFreePreview === true && letter.submittedByAdmin !== true;
+  if (!letter || letter.isFreePreview !== true || letter.submittedByAdmin === true) {
+    return false;
+  }
+  return !(await hasLetterBeenPreviouslyUnlocked(letterId));
 }
 
 export async function finalizeDraftPreviewStatus(

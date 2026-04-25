@@ -331,8 +331,10 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     letterId,
     false,
     "ai_generation_completed_hidden",
-    false,
-    true
+    {
+      isFreePreview: lockedLetter?.isFreePreview,
+      freePreviewUnlockAt: lockedLetter?.freePreviewUnlockAt,
+    }
   );
   const truncatedDraft = subscriberVersions.find(
     v => v.versionType === "ai_draft"
@@ -408,8 +410,10 @@ ${Array.from({ length: 30 }, (_, i) => `Lorem ipsum line ${i + 1} — additional
     letterId,
     false,
     letterAfterPreview?.status,
-    true,
-    true
+    {
+      isFreePreview: letterAfterPreview?.isFreePreview,
+      freePreviewUnlockAt: letterAfterPreview?.freePreviewUnlockAt,
+    }
   );
   const unlockedDraft = unlockedSubscriberVersions.find(
     v => v.versionType === "ai_draft"

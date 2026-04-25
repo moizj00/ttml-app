@@ -72,10 +72,7 @@ export default function SubmitLetter() {
 
   const handleProgressModalClose = () => {
     setProgressModalOpen(false);
-    const destination = submittedLetterId
-      ? `/letters/${submittedLetterId}`
-      : "/letters";
-    navigate(destination);
+    navigate("/letters");
   };
 
   // Show subscription gate if user cannot submit
@@ -119,8 +116,7 @@ export default function SubmitLetter() {
         { label: "Submit Letter" },
       ]}
     >
-      {/* Post-submit free-preview progress modal — 90-second fake timer that
-          masks the background pipeline and communicates the 24h email gate.
+      {/* Post-submit progress modal: quiet 24h draft-preview confirmation.
           Rendered as a sibling so it overlays the whole intake flow. */}
       <LetterSubmitProgressModal
         open={progressModalOpen}

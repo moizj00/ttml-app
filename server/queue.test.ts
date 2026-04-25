@@ -45,6 +45,7 @@ process.env.DATABASE_URL = "postgresql://mock:5432/test";
 
 const {
   enqueuePipelineJob,
+  enqueueDraftPreviewReleaseJob,
   enqueueRetryFromStageJob,
   getPipelineQueue,
   QUEUE_NAME,
@@ -162,6 +163,35 @@ describe("enqueueRetryFromStageJob", () => {
     const id = await enqueueRetryFromStageJob(baseRetryData);
     expect(id).toContain("retry");
     expect(id).toContain("drafting");
+  });
+});
+
+describe("enqueueDraftPreviewReleaseJob", () => {
+  it("sends a delayed release job to the pipeline queue", async () => {
+    const startAfter = new Date("2026-04-26T12:00:00.000Z");
+    await enqueueDraftPreviewReleaseJob(LETTER_ID, startAfter);
+
+    const [queueName, jobData, jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(queueName).toBe("pipeline");
+    expect(jobData).toMatchObject({
+      type: "releaseDraftPreview",
+      letterId: LETTER_ID,
+      attempt: 0,
+    });
+    expect(jobOpts).toMatchObject({
+      singletonKey: `draft-preview-release-${LETTER_ID}-0`,
+      retryLimit: 0,
+      startAfter,
+    });
+  });
+
+  it("increments the singleton key by retry attempt", async () => {
+    await enqueueDraftPreviewReleaseJob(LETTER_ID, Date.now(), 3);
+    const [, jobData, jobOpts] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(jobData).toMatchObject({ attempt: 3 });
+    expect((jobOpts as { singletonKey: string }).singletonKey).toBe(
+      `draft-preview-release-${LETTER_ID}-3`
+    );
   });
 });
 

@@ -70,8 +70,13 @@ export const STATUS_CONFIG: Record<
     color: "text-purple-600",
     bgColor: "bg-purple-100",
   },
+  free_preview_waiting: {
+    label: "Preparing",
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-100",
+  },
   ai_generation_completed_hidden: {
-    label: "Research & Draft Complete",
+    label: "Preparing",
     color: "text-indigo-600",
     bgColor: "bg-indigo-100",
   },

@@ -32,8 +32,10 @@ export async function getLetterRequestsByUserId(userId: number) {
             pdfStoragePath: letterRequests.pdfStoragePath,
             createdAt: letterRequests.createdAt,
             approvedByRole: letterRequests.approvedByRole,
+            currentAiDraftVersionId: letterRequests.currentAiDraftVersionId,
             isFreePreview: letterRequests.isFreePreview,
             freePreviewUnlockAt: letterRequests.freePreviewUnlockAt,
+            freePreviewEmailSentAt: letterRequests.freePreviewEmailSentAt,
         })
         .from(letterRequests)
         .where(

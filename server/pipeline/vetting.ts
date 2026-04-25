@@ -64,6 +64,7 @@ import {
 } from "./citations";
 import { runAssemblyStage } from "./assembly";
 import { parseVettingResponse, runPostVetChecks } from "./vetting-parser";
+import { resolveDraftPreviewFinalStatus } from "./preview-gate";
 
 // ═══════════════════════════════════════════════════════
 // STAGE 4: CLAUDE VETTING PASS
@@ -688,9 +689,7 @@ export async function finalizeLetterAfterVetting(
     );
   }
 
-  const finalStatus = pipelineCtx?.isFreePreview
-    ? "ai_generation_completed_hidden"
-    : "generated_locked";
+  const finalStatus = resolveDraftPreviewFinalStatus(pipelineCtx?.isFreePreview);
   const noteText = isDegraded
     ? `Draft ready with quality warnings. Our professional drafting models completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
     : `Draft ready. Our professional drafting models have completed research, drafting, and quality vetting. Submit for attorney review to receive your finalised letter.`;

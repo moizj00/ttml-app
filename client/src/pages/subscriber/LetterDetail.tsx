@@ -72,6 +72,7 @@ const TransitionBanner = ({ status }: { status: string }) => {
 
 const POLLING_STATUSES = [
   "submitted",
+  "free_preview_waiting",
   "researching",
   "drafting",
   "PROCESSED_HIDDEN",
@@ -85,6 +86,7 @@ const POLLING_STATUSES = [
 ];
 
 const STATUS_LABELS: Record<string, string> = {
+  free_preview_waiting: "Your professional draft is being prepared.",
   researching: "Our team is researching your legal situation...",
   drafting: "Drafting your letter...",
   PROCESSED_HIDDEN: "Finalizing your professional draft...",
@@ -119,37 +121,38 @@ export default function LetterDetail() {
     {
       enabled: !!letterId,
       refetchInterval: query => {
-        const status = query.state.data?.letter?.status;
+        const letter = query.state.data?.letter as any;
+        const status = letter?.subscriberDisplayStatus ?? letter?.status;
         return status && POLLING_STATUSES.includes(status) ? 10000 : false;
       },
     }
   );
 
-  // Trigger conversion popup for free preview users who stay on the page
+  // Free-preview conversion popup — fires ONLY after the server has unlocked
+  // the preview (aiDraftVersion.freePreview === true) AND content is visible.
+  // No time-based guess; no popup when the user is still looking at
+  // FreePreviewWaiting. Rule: "no visible full preview, no popup".
   useEffect(() => {
     const aiDraftVersion = data?.versions?.find(
       (v: any) => v.versionType === "ai_draft"
     );
-    const isUnlocked = (aiDraftVersion as any)?.freePreview === true;
+    const freePreviewUnlocked =
+      data?.letter?.isFreePreview === true &&
+      (aiDraftVersion as any)?.freePreview === true &&
+      Boolean(aiDraftVersion?.content);
 
-    if (
-      data?.letter?.isFreePreview &&
-      isUnlocked &&
-      aiDraftVersion?.content &&
-      !conversionPopupOpen
-    ) {
-      const now = Date.now();
-      const FIVE_MINUTES = 5 * 60 * 1000;
+    if (!freePreviewUnlocked) return;
+    if (conversionPopupOpen) return;
 
-      // Only show if never shown OR at least 5 minutes have passed since last close
-      if (lastPopupTime === 0 || now - lastPopupTime >= FIVE_MINUTES) {
-        // Delay slightly for better UX (let them look at the draft first for 3 seconds)
-        const timer = setTimeout(() => {
-          setConversionPopupOpen(true);
-        }, 3000);
-        return () => clearTimeout(timer);
-      }
-    }
+    const now = Date.now();
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (lastPopupTime !== 0 && now - lastPopupTime < FIVE_MINUTES) return;
+
+    // Delay slightly so the user sees the draft before the upsell.
+    const timer = setTimeout(() => {
+      setConversionPopupOpen(true);
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [
     data?.letter?.isFreePreview,
     data?.versions,
@@ -348,21 +351,22 @@ export default function LetterDetail() {
   }
 
   const { letter, actions, versions, attachments } = data;
+  const displayStatus = (letter as any).subscriberDisplayStatus ?? letter.status;
   const finalVersion = versions?.find(v => v.versionType === "final_approved");
   const aiDraftVersion = versions?.find(v => v.versionType === "ai_draft");
   const userVisibleActions = actions?.filter(
     a => a.noteVisibility === "user_visible" && a.noteText
   );
-  const isPolling = POLLING_STATUSES.includes(letter.status);
+  const isPolling = POLLING_STATUSES.includes(displayStatus);
   const freePreviewUnlocked =
     letter.isFreePreview === true &&
     (aiDraftVersion as any)?.freePreview === true &&
     Boolean(aiDraftVersion?.content);
   const isGeneratedLocked =
-    (letter.status === "generated_locked" ||
-      letter.status === "generated_unlocked" ||
-      letter.status === "letter_released_to_subscriber" ||
-      letter.status === "attorney_review_upsell_shown") &&
+    (displayStatus === "generated_locked" ||
+      displayStatus === "generated_unlocked" ||
+      displayStatus === "letter_released_to_subscriber" ||
+      displayStatus === "attorney_review_upsell_shown") &&
     !(letter as any).submittedByAdmin;
   const isApproved =
     letter.status === "approved" ||
@@ -425,7 +429,7 @@ export default function LetterDetail() {
                 </p>
                 <div className="flex items-center gap-3 mt-2">
                   <StatusBadge
-                    status={letter.status}
+                    status={displayStatus}
                     approvedByRole={letter.approvedByRole}
                   />
                   <span className="text-xs text-muted-foreground">
@@ -433,7 +437,7 @@ export default function LetterDetail() {
                   </span>
                   {isPolling &&
                     !["submitted", "researching", "drafting"].includes(
-                      letter.status
+                      displayStatus
                     ) && (
                       <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -509,9 +513,9 @@ export default function LetterDetail() {
         ) && <TransitionBanner status={letter.status} />}
 
         <LetterStatusDisplay
-          status={letter.status}
+          status={displayStatus}
           isFreePreview={letter.isFreePreview === true}
-          freePreviewUnlocked={(aiDraftVersion as any)?.freePreview === true}
+          freePreviewUnlocked={freePreviewUnlocked}
         />
 
         {/*
@@ -525,10 +529,9 @@ export default function LetterDetail() {
          *      (truncated preview, payment CTAs).
          */}
         {letter.isFreePreview === true &&
-        !freePreviewUnlocked &&
-        !aiDraftVersion?.content ? (
+        (aiDraftVersion as any)?.freePreview !== true ? (
           <FreePreviewWaiting subject={letter.subject} />
-        ) : letter.isFreePreview === true && freePreviewUnlocked ? (
+        ) : (aiDraftVersion as any)?.freePreview === true ? (
           <FreePreviewViewer
             letterId={letterId}
             subject={letter.subject}
@@ -536,7 +539,7 @@ export default function LetterDetail() {
             jurisdictionState={letter.jurisdictionState}
             letterType={letter.letterType}
           />
-        ) : letter.status === "generated_locked" && !letter.isFreePreview ? (
+        ) : isGeneratedLocked ? (
           <LetterPaywall
             letterId={letterId}
             letterType={letter.letterType}
