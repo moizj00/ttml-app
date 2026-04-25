@@ -22,7 +22,6 @@ import {
   createCheckoutSession,
   createLetterUnlockCheckout,
 } from "../stripe/checkouts";
-import { updateLetterStatus } from "../db";
 
 // ─── Constants and Types ───────────────────────────────────────────────────
 

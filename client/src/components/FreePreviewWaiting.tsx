@@ -14,14 +14,13 @@ export function FreePreviewWaiting({ subject }: FreePreviewWaitingProps) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-blue-900">
           <Clock className="h-5 w-5 text-blue-600" />
-          Your letter is being prepared
+          Your professional draft is being prepared
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-blue-900/90">
-          Your free draft preview for{" "}
-          <span className="font-medium">{subject}</span> will be ready within 24
-          hours. We&apos;ll email you when it&apos;s available.
+          Your preview for <span className="font-medium">{subject}</span> will
+          be ready in about 24 hours. We&apos;ll email you when it&apos;s ready.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
