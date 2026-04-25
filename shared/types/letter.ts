@@ -71,7 +71,7 @@ export const STATUS_CONFIG: Record<
     bgColor: "bg-purple-100",
   },
   ai_generation_completed_hidden: {
-    label: "Research & Draft Complete",
+    label: "Preparing",
     color: "text-indigo-600",
     bgColor: "bg-indigo-100",
   },

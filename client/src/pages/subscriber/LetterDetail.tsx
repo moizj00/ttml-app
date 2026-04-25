@@ -524,9 +524,7 @@ export default function LetterDetail() {
          *   c) generated_locked non-free-preview → standard LetterPaywall
          *      (truncated preview, payment CTAs).
          */}
-        {letter.isFreePreview === true &&
-        !freePreviewUnlocked &&
-        !aiDraftVersion?.content ? (
+        {letter.isFreePreview === true && !freePreviewUnlocked ? (
           <FreePreviewWaiting subject={letter.subject} />
         ) : letter.isFreePreview === true && freePreviewUnlocked ? (
           <FreePreviewViewer
