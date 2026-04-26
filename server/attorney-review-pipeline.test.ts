@@ -395,12 +395,22 @@ describe("Subscriber Letter Delivery — Approved Letter Visible in My Letters",
   });
 
   it("subscriber LetterDetail page shows download button for approved letters", () => {
-    const subscriberLetterDetail = readFileSync(
+    // After modularization, the download UI moved into ActionButtons + ApprovedLetterPanel sub-components.
+    const shell = readFileSync(
       join(CLIENT_SRC, "pages", "subscriber", "LetterDetail.tsx"),
       "utf-8"
     );
-    expect(subscriberLetterDetail).toContain("approved");
-    expect(subscriberLetterDetail).toContain("Download");
+    const actionButtons = readFileSync(
+      join(CLIENT_SRC, "components", "subscriber", "letter-detail", "ActionButtons.tsx"),
+      "utf-8"
+    );
+    const approvedPanel = readFileSync(
+      join(CLIENT_SRC, "components", "subscriber", "letter-detail", "ApprovedLetterPanel.tsx"),
+      "utf-8"
+    );
+    const combined = shell + actionButtons + approvedPanel;
+    expect(combined).toContain("approved");
+    expect(combined).toContain("Download");
   });
 });
 

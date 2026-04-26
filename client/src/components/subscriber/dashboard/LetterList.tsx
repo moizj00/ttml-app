@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import StatusBadge from "@/components/shared/StatusBadge";
 import LetterStatusTracker from "@/components/shared/LetterStatusTracker";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG } from "@shared/types";
 import { getStatusCTA, timeAgo } from "./DashboardHelpers";
 import { staggerStyle } from "@/hooks/useAnimations";
 
 interface LetterListProps {
   letters: any[];
   isLoading: boolean;
-  letterVisible: number;
+  letterVisible: boolean[];
 }
 
 export function LetterList({
@@ -65,13 +65,13 @@ export function LetterList({
           <Card
             key={letter.id}
             className={`overflow-hidden transition-all duration-500 ease-out hover:shadow-md ${
-              idx < letterVisible
+              letterVisible[idx]
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-4"
             } ${
               isActionRequired ? "ring-1 ring-amber-300 bg-amber-50/30" : ""
             }`}
-            style={staggerStyle(idx)}
+            style={staggerStyle(idx, !!letterVisible[idx])}
           >
             <CardContent className="p-0">
               {/* Top section: letter info + status badge */}

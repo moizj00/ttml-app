@@ -130,7 +130,7 @@ describe("free preview 24-hour delay UX", () => {
 
   it("pipeline finalizers use canonical lowercase ai_generation_completed_hidden", () => {
     const simple = read("server", "pipeline", "simple.ts");
-    const vetting = read("server", "pipeline", "vetting.ts");
+    const vetting = read("server", "pipeline", "vetting", "index.ts");
     const graphFinalize = read(
       "server",
       "pipeline",

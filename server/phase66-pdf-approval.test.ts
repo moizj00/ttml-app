@@ -230,7 +230,7 @@ describe("My Letters page", () => {
     );
     const approvedPanelSrc = fs.readFileSync(
       path.resolve(
-        new URL("../client/src/pages/subscriber/letter-detail/ApprovedLetterPanel.tsx", import.meta.url).pathname
+        new URL("../client/src/components/subscriber/letter-detail/ApprovedLetterPanel.tsx", import.meta.url).pathname
       ),
       "utf-8"
     );

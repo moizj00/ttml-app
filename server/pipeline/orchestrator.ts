@@ -46,6 +46,7 @@ import {
   preflightApiKeyCheck,
   validatePipelinePreflight,
 } from "./orchestration/preflight";
+import { validateIntakeCompleteness } from "./validators";
 import { triggerN8nWorkflow } from "./orchestration/n8n";
 import { handlePipelineError } from "./orchestration/errors";
 import { updatePipelineJobStatus } from "./orchestration/status";

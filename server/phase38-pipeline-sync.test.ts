@@ -250,8 +250,8 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
         path.join(CLIENT_DIR, "pages/subscriber/LetterDetail.tsx"),
         "utf-8"
       );
-      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
-        ? fs.readFileSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
+      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
+        ? fs.readFileSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
         : "";
       const combined = letterDetail + approvedPanel;
       expect(combined).toMatch(/handleDownloadPdf|handleDownload|window\.open\(pdfUrl/);
@@ -262,8 +262,8 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
         path.join(CLIENT_DIR, "pages/subscriber/LetterDetail.tsx"),
         "utf-8"
       );
-      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
-        ? fs.readFileSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
+      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
+        ? fs.readFileSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
         : "";
       const combined = letterDetail + approvedPanel;
       expect(combined).toMatch(/data\?\.letter\?\.pdfUrl|pdfUrl/);
@@ -274,8 +274,8 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
         path.join(CLIENT_DIR, "pages/subscriber/LetterDetail.tsx"),
         "utf-8"
       );
-      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
-        ? fs.readFileSync(path.join(CLIENT_DIR, "pages/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
+      const approvedPanel = fs.existsSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"))
+        ? fs.readFileSync(path.join(CLIENT_DIR, "components/subscriber/letter-detail/ApprovedLetterPanel.tsx"), "utf-8")
         : "";
       const combined = letterDetail + approvedPanel;
       expect(combined).toContain("Download PDF");
