@@ -1,10 +1,19 @@
 import { z } from "zod";
 
 /**
- * Named-key access to letter statuses for callers that prefer
- * `LETTER_STATUS.submitted` over the raw tuple in `drizzle/schema/constants`.
- * The canonical tuple `LETTER_STATUSES` and type `LetterStatus` live in
- * `drizzle/schema/constants.ts` and should be used for type checks.
+ * Named-key access to every letter status referenced by this module's
+ * `ALLOWED_TRANSITIONS` and `STATUS_CONFIG`, plus the active state-machine
+ * statuses from `drizzle/schema/constants.ts`.
+ *
+ * Use `LETTER_STATUS.submitted` instead of the literal `"submitted"`.
+ * The canonical TS tuple `LETTER_STATUSES` and union type `LetterStatus`
+ * live in `drizzle/schema/constants.ts` — use those for type checks.
+ *
+ * `generated_unlocked` is included because the in-file `ALLOWED_TRANSITIONS`
+ * map and `STATUS_CONFIG` still reference it. The pgEnum-only legacy values
+ * (`assembling`, `vetting`, `upsell_dismissed`) are NOT included — they are
+ * never produced by the current state machine and never compared against
+ * in TS code.
  */
 export const LETTER_STATUS = {
   submitted: "submitted",
@@ -16,6 +25,7 @@ export const LETTER_STATUS = {
   attorney_review_checkout_started: "attorney_review_checkout_started",
   attorney_review_payment_confirmed: "attorney_review_payment_confirmed",
   generated_locked: "generated_locked",
+  generated_unlocked: "generated_unlocked",
   pending_review: "pending_review",
   under_review: "under_review",
   needs_changes: "needs_changes",

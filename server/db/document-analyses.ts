@@ -16,6 +16,9 @@ export async function listDocumentAnalysesByUser(opts: {
   const db = await getDb();
   if (!db) return { rows: [], nextCursor: undefined };
 
+  // Cursor is the id of the last seen row. Order by id DESC so the WHERE
+  // predicate (`id < cursor`) matches the sort order — pagination stays
+  // stable even when createdAt ties.
   const conditions = opts.cursor
     ? and(eq(documentAnalyses.userId, opts.userId), lt(documentAnalyses.id, opts.cursor))
     : eq(documentAnalyses.userId, opts.userId);
@@ -24,7 +27,7 @@ export async function listDocumentAnalysesByUser(opts: {
     .select()
     .from(documentAnalyses)
     .where(conditions)
-    .orderBy(desc(documentAnalyses.createdAt), desc(documentAnalyses.id))
+    .orderBy(desc(documentAnalyses.id))
     .limit(opts.limit + 1);
 
   let nextCursor: number | undefined;
