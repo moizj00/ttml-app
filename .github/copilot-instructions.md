@@ -32,7 +32,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **PDF Download**: Professional PDF generation with rich text, attorney-approved badge, and certified footer.
 - **How It Works**: Scroll-paced animations with SVG gradients, respecting `prefers-reduced-motion`.
 - **Shared Footer**: 4-column layout ([client/src/components/shared/Footer.tsx](client/src/components/shared/Footer.tsx)) with brand info, services, company links, newsletter signup, and social media.
-- **Competitive Positioning**: Homepage hero, pricing page, and homepage pricing section all use the unified positioning: "AI drafting + attorney review, delivered in hours, starting at \$200."
+- **Competitive Positioning**: Homepage hero, pricing page, and homepage pricing section all use the unified positioning: "AI drafting + attorney review, delivered in hours, starting at \$299."
 - **Trust Section**: Homepage "By the Numbers" section with 4 stat-driven trust badges.
 - **Competitive FAQ**: FAQ page has a "Why Talk to My Lawyer" category with 5 competitive comparison entries.
 

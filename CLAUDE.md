@@ -130,7 +130,7 @@ Almost all client-server calls use tRPC v11. REST is **only** used for:
 
 ## Key Workflows
 
-**Letter lifecycle:** `submitted → researching → drafting → generated_locked → [Stripe payment] → pending_review → under_review → approved → client_approval_pending → client_approved → sent`
+**Letter lifecycle (primary path):** `submitted → researching → drafting → ai_generation_completed_hidden (24h hold) → letter_released_to_subscriber/upsell statuses → pending_review → under_review → approved → client_approval_pending → client_approved → sent`
 
 **PDF generation** is triggered on `clientApprove` (subscriber action) — not when the attorney submits.
 

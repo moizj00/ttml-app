@@ -1,6 +1,6 @@
 # Pipeline Architecture — Talk to My Lawyer
 
-> **Last updated:** April 12, 2026  
+> **Last updated:** April 26, 2026  
 > **Status:** Canonical — production-verified
 > **Authoritative file for:** AI pipeline deep-dive — stages, RAG, resilience, n8n, and model configuration.
 > For the high-level architecture overview, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
@@ -43,8 +43,11 @@ Stage 4: Anthropic claude-sonnet (vetting)
           anti-bloat, geopolitical awareness)
     │
     ▼
-Status: generated_locked
-         (auto-stops polling; 24h wait; email sent; watermarked read-only)
+Status: ai_generation_completed_hidden
+         (24h hold before subscriber visibility)
+    │
+    ▼
+Status: letter_released_to_subscriber / attorney_review_upsell_shown
     │
     ▼ (Subscribe or Pay to submit)
 Status: pending_review
@@ -171,18 +174,25 @@ Because `N8N_PRIMARY` is not set, the pipeline **always** uses the direct 4-stag
 
 ---
 
-## Status Machine (matches `shared/types.ts` → `ALLOWED_TRANSITIONS`)
+## Status Machine (matches `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`)
 
 ```
-submitted → researching → drafting → generated_locked
-    │            │            │           │
-    │            │            │     [Stripe $200 payment or subscription]
-    │            │            │           │
-    │            │            │           ▼
-    │            │            │     pending_review → under_review → approved
-    │            │            │                   ↻ (release)      → rejected → submitted
-    │            │            │                                     → needs_changes → submitted | pending_review
+submitted → researching → drafting → ai_generation_completed_hidden
+    │            │            │                    │
+    │            │            │             (24h hold / admin bypass)
+    │            │            │                    │
+    │            │            │                    ▼
+    │            │            │      letter_released_to_subscriber
+    │            │            │                → attorney_review_upsell_shown
+    │            │            │                → attorney_review_checkout_started
+    │            │            │                → attorney_review_payment_confirmed
+    │            │            │                    │
+    │            │            │                    ▼
+    │            │            │          pending_review → under_review → approved
+    │            │            │                        ↻ (release)      → rejected → submitted
+    │            │            │                                          → needs_changes → submitted | pending_review
     │            │            │
+    │            │            └→ generated_locked (legacy compatibility path) → pending_review
     │            │            └→ submitted (pipeline failure reset)
     │            └→ submitted (pipeline failure reset)
     └→ pipeline_failed (any stage failure after retries)
@@ -199,8 +209,13 @@ Exact transitions from `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`:
 
 - `submitted → researching | pipeline_failed`
 - `researching → drafting | submitted | pipeline_failed`
-- `drafting → generated_locked | submitted | pipeline_failed`
-- `generated_locked → pending_review` ($200 per-letter paywall or subscription)
+- `drafting → ai_generation_completed_hidden | generated_locked | submitted | pipeline_failed`
+- `ai_generation_completed_hidden → letter_released_to_subscriber | under_review | pipeline_failed`
+- `letter_released_to_subscriber → attorney_review_upsell_shown | attorney_review_checkout_started | pending_review`
+- `attorney_review_upsell_shown → attorney_review_checkout_started | pending_review`
+- `attorney_review_checkout_started → attorney_review_payment_confirmed | pending_review`
+- `attorney_review_payment_confirmed → pending_review`
+- `generated_locked → pending_review` ($299 per-letter paywall or subscription, legacy compatibility path)
 - `pending_review → under_review`
 - `under_review → approved | rejected | needs_changes | pending_review` (release claim)
 - `needs_changes → submitted | pending_review`

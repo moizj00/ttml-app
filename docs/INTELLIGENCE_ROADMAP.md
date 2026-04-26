@@ -1,6 +1,6 @@
 # Talk to My Lawyer — Intelligence Roadmap
 
-> **Last updated:** April 12, 2026  
+> **Last updated:** April 26, 2026  
 > **Status:** Canonical — strategic intelligence roadmap
 
 > Making this the most intelligent letter generation application of all time.
@@ -14,7 +14,7 @@
 
 | Competitor | Model | Price | Attorney Review | Research Pipeline | Document Analyzer | Case Scoring |
 |---|---|---|---|---|---|---|
-| **Talk to My Lawyer** | AI + Attorney Review | $200/letter | Yes | Yes (Perplexity + citation verification) | Yes (emotional intelligence) | No (planned) |
+| **Talk to My Lawyer** | AI + Attorney Review | $299/letter | Yes | Yes (Perplexity + citation verification) | Yes (emotional intelligence) | No (planned) |
 | DocDraft | AI + Attorney Review | $209.99 | Yes | No | No | No |
 | DoNotPay | AI only (no attorney) | $36/yr subscription | No | No | No | No |
 | AI Lawyer | AI + templates | Free + paid tiers | No | No | No | No |
@@ -29,7 +29,7 @@
 
 **For** individuals and small businesses **who** need a professional legal letter but can't afford $300–500/hour attorneys,
 **Talk to My Lawyer** is an **AI-powered legal letter service**
-**that** delivers attorney-reviewed, jurisdiction-specific letters in hours — not weeks — starting at $200.
+**that** delivers attorney-reviewed, jurisdiction-specific letters in hours — not weeks — starting at $299.
 **Unlike** template services (which offer no legal review), DIY tools (which offer no research), and Big Law (which costs 10x more),
 **we** combine AI drafting with web-grounded legal research, citation verification, and human attorney sign-off in a single automated pipeline.
 
@@ -129,7 +129,7 @@
 
 ### What to build
 1. **Competitive positioning on homepage** — Integrate positioning statement into hero section. Add "Why Talk to My Lawyer" comparison section.
-2. **Stat-driven trust section** — "By the Numbers" section: "60% settlement rate," "Attorney-reviewed in 24 hours," "Starting at $200," "10 types of legal letters." Source citations included.
+2. **Stat-driven trust section** — "By the Numbers" section: "60% settlement rate," "Attorney-reviewed in 24 hours," "Starting at $299," "10 types of legal letters." Source citations included.
 3. **Competitive comparison FAQ entries** — 5 new entries: "Why not use a free template?" "Why is attorney review important?" "How is this different from a form-based service?" "What makes AI-drafted letters effective?" "Why jurisdiction-specific research?"
 4. **3-month content calendar** — 12 topic briefs targeting high-intent keywords. Each: target keyword, search intent, outline, internal linking targets, CTA. Repurposing waterfall: blog → LinkedIn → X thread → newsletter.
 5. **Newsletter template** — Reusable template: hook headline, key insight from blog, stat of the week, featured service spotlight, CTA. Connects to existing newsletter system.

@@ -1,6 +1,6 @@
 # TTML Agent Guide — Developer Workflow & Gotchas
 
-> **Last updated:** April 12, 2026  
+> **Last updated:** April 26, 2026  
 > **Status:** Canonical — authoritative reference for all agents and developers
 
 > **Purpose:** This document covers developer workflow, conventions, gotchas, and common pitfalls when working on the TTML codebase. For architecture, tech stack, module map, and status machine, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
@@ -33,7 +33,7 @@
 
 See `ARCHITECTURE.md` for the full status machine diagram. The source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
 
-**GOTCHA:** `generated_locked` is the PAYWALL status. The subscriber sees a blurred preview. They must pay (via Stripe checkout) to move to `pending_review`. Never skip this state.
+**GOTCHA:** Current flow uses a 24h hold before subscriber visibility: `drafting` usually transitions to `ai_generation_completed_hidden`, then to `letter_released_to_subscriber` / upsell statuses, then to `pending_review` after checkout/payment. `generated_locked` remains as a compatibility status and can still appear in legacy paths.
 
 ### 1.5 tRPC — NOT REST
 The app uses tRPC v11 for almost all client-server communication. REST is only used for:
@@ -70,9 +70,9 @@ Auth is a HYBRID system:
 
 ### 1.8 Pricing — Single Source of Truth
 All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
-- Single Letter: $200 one-time (1 letter)
-- Monthly: $200/month (4 letters)
-- Yearly: $2,000/year (4 letters/month, 2 months free)
+- Single Letter: $299 one-time (1 letter)
+- Monthly: $299/month (4 letters)
+- Yearly: $2,400/year (8 letters total)
 - Paid Revision: $20 (after the first free revision)
 - Affiliate discount: 20% (constant `AFFILIATE_DISCOUNT_PERCENT`)
 - Stripe amounts are in CENTS (multiply by 100)
@@ -147,16 +147,15 @@ Express is configured with `express.json({ limit: "12mb" })` to accommodate larg
 1. Subscriber fills multi-step intake form (`/submit`)
 2. Server validates and normalizes intake data
 3. Pipeline starts (4 stages) — subscriber sees real-time progress
-4. On completion, letter enters `generated_locked` (PAYWALL)
-5. Subscriber sees blurred preview, pays $200
-6. Payment moves letter to `pending_review`
+4. On completion, letter typically enters `ai_generation_completed_hidden` (24h visibility hold)
+5. After hold expiry, subscriber-visible statuses proceed through `letter_released_to_subscriber` and upsell/payment statuses
+6. Checkout/payment transitions letter to `pending_review`
 7. Letter appears in Attorney Review Queue
 8. Attorney claims it → `under_review`
 9. Attorney edits in Tiptap, submits → `approved` (transient) → `client_approval_pending`
 10. Subscriber reviews, approves → `client_approved` (PDF generated) → `sent`
-11. OR Subscriber requests revision (first free, then $20 each) → `client_revision_requested` → `pending_review`
-12. Server generates branded PDF, sends email
-13. After client approval → `sent`
+11. OR subscriber requests revision (first free, then $20 each) → `client_revision_requested` → `pending_review`
+12. Server generates branded PDF and sends delivery email
 
 ### Recursive Learning System
 - When attorneys edit AI drafts, the system extracts "lessons" (`server/learning/`)
