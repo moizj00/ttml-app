@@ -36,7 +36,7 @@ import {
   archiveIneffectiveLessons,
 } from "./learning";
 import { logger } from "./logger";
-import { getBoss, QUEUE_NAME } from "./queue";
+import { getBoss, QUEUE_NAME, isQueueConnectionConfigured } from "./queue";
 import type { PipelineJobData } from "./queue";
 import { getLetterRequestById } from "./db";
 
@@ -66,6 +66,13 @@ export async function cleanupStalePipelineJobs(): Promise<{
   cancelled: number;
   errors: number;
 }> {
+  if (!isQueueConnectionConfigured()) {
+    logger.info(
+      "[Cron] cleanupStalePipelineJobs: skipped (queue DB URL not configured)"
+    );
+    return { cancelled: 0, errors: 0 };
+  }
+
   let cancelled = 0;
   let errors = 0;
   try {

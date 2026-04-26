@@ -82,10 +82,10 @@ interface PgBossClient {
   ): Promise<unknown>;
 }
 
-const PgBoss: { new (options: PgBossConstructorOptions): PgBossClient } =
+const PgBoss: { new(options: PgBossConstructorOptions): PgBossClient } =
   // pg-boss v10+ exports a named class: { PgBoss, ... }. Older CJS builds used default.
   ((PgBossPkg as any)?.PgBoss ?? (PgBossPkg as any)?.default ?? PgBossPkg) as {
-    new (options: PgBossConstructorOptions): PgBossClient;
+    new(options: PgBossConstructorOptions): PgBossClient;
   };
 import { logger } from "./logger";
 
@@ -137,6 +137,14 @@ export type PipelineJobData =
 let _boss: PgBossClient | null = null;
 let _bossStarting: Promise<PgBossClient> | null = null;
 
+export function isQueueConnectionConfigured(): boolean {
+  return Boolean(
+    process.env.SUPABASE_DIRECT_URL ||
+    process.env.SUPABASE_DATABASE_URL ||
+    process.env.DATABASE_URL
+  );
+}
+
 function getConnectionString(): string {
   const envSource = process.env.SUPABASE_DIRECT_URL
     ? "SUPABASE_DIRECT_URL"
@@ -167,8 +175,8 @@ function getConnectionString(): string {
   ) {
     logger.warn(
       `[Queue] WARNING: ${envSource} appears to be a connection pooler URL. ` +
-        `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
-        `Set SUPABASE_DIRECT_URL to the direct connection string.`
+      `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
+      `Set SUPABASE_DIRECT_URL to the direct connection string.`
     );
   }
 
