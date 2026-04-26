@@ -1,5 +1,4 @@
 import AppLayout from "@/components/shared/AppLayout";
-import StatusBadge from "@/components/shared/StatusBadge";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { FreePreviewViewer } from "@/components/FreePreviewViewer";
 import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
@@ -9,21 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FileText,
-  Download,
-  MessageSquare,
   ArrowLeft,
-  CheckCircle,
   AlertCircle,
   Clock,
-  Copy,
-  Trash2,
-  XCircle,
-  RotateCcw,
-  Eye,
-  Send,
 } from "lucide-react";
 import { Link, useParams, useSearch } from "wouter";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
@@ -36,39 +25,14 @@ import { NeedsChangesPanel } from "./letter-detail/NeedsChangesPanel";
 import { ApprovedLetterPanel } from "./letter-detail/ApprovedLetterPanel";
 import { LetterContentRenderer } from "./letter-detail/LetterContentRenderer";
 
-const TransitionBanner = ({ status }: { status: string }) => {
-  if (status === "client_approval_pending") {
-    return (
-      <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex items-start gap-3 w-full">
-        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <h4 className="font-medium">Action Required: Review Your Letter</h4>
-          <p className="text-sm mt-1 opacity-90">
-            An attorney has completed their review and your letter is ready for
-            your final approval before it is sent.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  if (status === "needs_changes") {
-    return (
-      <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex items-start gap-3 w-full">
-        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <h4 className="font-medium">
-            Action Required: Attorney Requested Changes
-          </h4>
-          <p className="text-sm mt-1 opacity-90">
-            Please provide the requested information below so our attorneys can
-            finalize your letter.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
+// Sub-components
+import { TransitionBanner } from "@/components/subscriber/letter-detail/TransitionBanner";
+import { LetterHeader } from "@/components/subscriber/letter-detail/LetterHeader";
+import { ActionButtons } from "@/components/subscriber/letter-detail/ActionButtons";
+import { StatusSpecificBanners } from "@/components/subscriber/letter-detail/StatusSpecificBanners";
+import { AttorneyNotes } from "@/components/subscriber/letter-detail/AttorneyNotes";
+import { DeliveryConfirmation } from "@/components/subscriber/letter-detail/DeliveryConfirmation";
+import { AttachmentsList } from "@/components/subscriber/letter-detail/AttachmentsList";
 
 const POLLING_STATUSES = [
   "submitted",
@@ -128,10 +92,6 @@ export default function LetterDetail() {
     }
   );
 
-  // Free-preview conversion popup — fires ONLY after the server has unlocked
-  // the preview (aiDraftVersion.freePreview === true) AND content is visible.
-  // No time-based guess; no popup when the user is still looking at
-  // FreePreviewWaiting. Rule: "no visible full preview, no popup".
   useEffect(() => {
     const aiDraftVersion = data?.versions?.find(
       (v: any) => v.versionType === "ai_draft"
@@ -148,7 +108,6 @@ export default function LetterDetail() {
     const FIVE_MINUTES = 5 * 60 * 1000;
     if (lastPopupTime !== 0 && now - lastPopupTime < FIVE_MINUTES) return;
 
-    // Delay slightly so the user sees the draft before the upsell.
     const timer = setTimeout(() => {
       setConversionPopupOpen(true);
     }, 3000);
@@ -194,7 +153,6 @@ export default function LetterDetail() {
   const utils = trpc.useUtils();
   const invalidate = () => utils.letters.detail.invalidate({ id: letterId });
 
-  // Delivery log — only fetch when letter has been sent
   const { data: deliveryLogData } = trpc.letters.deliveryLog.useQuery(
     { letterId },
     { enabled: !!letterId }
@@ -215,7 +173,6 @@ export default function LetterDetail() {
           toast.warning(label);
         else toast.info(label);
       }
-      // Auto-open preview modal when letter transitions to client_approval_pending
       if (newStatus === "client_approval_pending") {
         setPreviewModalDismissed(false);
         setPreviewModalOpen(true);
@@ -223,7 +180,6 @@ export default function LetterDetail() {
     },
   });
 
-  // Auto-open preview modal on initial load if status is client_approval_pending
   useEffect(() => {
     if (
       data?.letter?.status === "client_approval_pending" &&
@@ -381,7 +337,6 @@ export default function LetterDetail() {
         { label: letter.subject },
       ]}
     >
-      {/* Subscriber Letter Preview Modal — auto-opens for client_approval_pending */}
       <SubscriberLetterPreviewModal
         letterId={letterId}
         open={previewModalOpen}
@@ -411,100 +366,31 @@ export default function LetterDetail() {
             letter.status === "client_approval_pending" ? "5rem" : undefined,
         }}
       >
-        {/* Header */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <FileText className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground leading-tight">
-                  {letter.subject}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {LETTER_TYPE_CONFIG[letter.letterType]?.label ??
-                    letter.letterType}
-                  {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
-                </p>
-                <div className="flex items-center gap-3 mt-2">
-                  <StatusBadge
-                    status={displayStatus}
-                    approvedByRole={letter.approvedByRole}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Submitted {new Date(letter.createdAt).toLocaleDateString()}
-                  </span>
-                  {isPolling &&
-                    !["submitted", "researching", "drafting"].includes(
-                      displayStatus
-                    ) && (
-                      <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Updating...
-                      </span>
-                    )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-              {/* Re-open preview modal button for client_approval_pending */}
-              {letter.status === "client_approval_pending" &&
-                previewModalDismissed && (
-                  <Button
-                    onClick={() => {
-                      setPreviewModalDismissed(false);
-                      setPreviewModalOpen(true);
-                    }}
-                    size="sm"
-                    variant="outline"
-                    className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 flex-1 sm:flex-initial"
-                    data-testid="button-reopen-preview-modal"
-                  >
-                    <Eye className="w-4 h-4 mr-1" />
-                    Review Letter
-                  </Button>
-                )}
-              {isApproved && finalVersion && (
-                <>
-                  <Button
-                    onClick={handleCopy}
-                    size="sm"
-                    variant="outline"
-                    className="bg-background flex-1 sm:flex-initial"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copy
-                  </Button>
-                  <Button
-                    onClick={() => pdfUrl && window.open(pdfUrl, "_blank")}
-                    size="sm"
-                    className="flex-1 sm:flex-initial"
-                    disabled={!pdfUrl}
-                  >
-                    <Download className="w-4 h-4 mr-1" />
-                    {pdfUrl ? "Download PDF" : "Generating..."}
-                  </Button>
-                </>
-              )}
-              {[
-                "approved",
-                "client_approved",
-                "sent",
-                "rejected",
-                "client_declined",
-              ].includes(letter.status) && (
-                <Button
-                  onClick={handleArchive}
-                  size="sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
-                  disabled={archiveMutation.isPending}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+            <LetterHeader
+              subject={letter.subject}
+              letterType={letter.letterType}
+              jurisdictionState={letter.jurisdictionState}
+              status={displayStatus}
+              approvedByRole={letter.approvedByRole}
+              createdAt={letter.createdAt}
+              isPolling={isPolling}
+            />
+            <ActionButtons
+              status={letter.status}
+              previewModalDismissed={previewModalDismissed}
+              onOpenPreview={() => {
+                setPreviewModalDismissed(false);
+                setPreviewModalOpen(true);
+              }}
+              isApproved={isApproved}
+              hasFinalVersion={!!finalVersion}
+              pdfUrl={pdfUrl}
+              onCopy={handleCopy}
+              onArchive={handleArchive}
+              archivePending={archiveMutation.isPending}
+            />
           </div>
         </div>
 
@@ -518,16 +404,6 @@ export default function LetterDetail() {
           freePreviewUnlocked={freePreviewUnlocked}
         />
 
-        {/*
-         * Routing rule (3-way):
-         *   a) Free-preview and locked (no server freePreview stamp + empty content)
-         *      → FreePreviewWaiting.
-         *   b) Free-preview and unlocked (server stamped freePreview=true) →
-         *      FreePreviewViewer (full draft, non-selectable, DRAFT watermark,
-         *      subscribe CTA).
-         *   c) generated_locked non-free-preview → standard LetterPaywall
-         *      (truncated preview, payment CTAs).
-         */}
         {letter.isFreePreview === true &&
         (aiDraftVersion as any)?.freePreview !== true ? (
           <FreePreviewWaiting subject={letter.subject} />
@@ -565,55 +441,11 @@ export default function LetterDetail() {
           />
         )}
 
-        {letter.status === "client_approved" && (
-          <Card className="border-emerald-200 bg-emerald-50/30">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-emerald-800">
-                    You have approved this letter
-                  </p>
-                  {pdfUrl ? (
-                    <p className="text-sm text-emerald-700 mt-1">
-                      Your PDF is ready. You can download it or send it to the
-                      recipient below.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-emerald-700 mt-1 flex items-center gap-2">
-                      <span className="inline-block w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                      Your PDF is being generated and will be available for
-                      download shortly.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <StatusSpecificBanners status={letter.status} pdfUrl={pdfUrl} />
 
-        {!isGeneratedLocked &&
-          userVisibleActions &&
-          userVisibleActions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-primary" />
-                  Attorney Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {userVisibleActions.map(action => (
-                  <div key={action.id} className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-sm text-foreground">{action.noteText}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(action.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+        {!isGeneratedLocked && userVisibleActions && (
+          <AttorneyNotes actions={userVisibleActions} />
+        )}
 
         {letter.status === "needs_changes" && (
           <NeedsChangesPanel
@@ -671,106 +503,11 @@ export default function LetterDetail() {
           />
         )}
 
-        {letter.status === "client_declined" && (
-          <Card className="border-red-200 bg-red-50/30">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-red-800">
-                    You Declined This Letter
-                  </p>
-                  <p className="text-sm text-red-700 mt-1">
-                    You chose not to proceed with this letter. If you need
-                    assistance with a similar matter, you can submit a new
-                    letter request.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <DeliveryConfirmation deliveryLogs={deliveryLogData || []} />
 
-        {letter.status === "client_revision_requested" && (
-          <Card className="border-violet-200 bg-violet-50/30">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <RotateCcw className="w-5 h-5 text-violet-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-violet-800">
-                    Revision Requested
-                  </p>
-                  <p className="text-sm text-violet-700 mt-1">
-                    Your revision request has been sent to the attorney. The
-                    letter will be revised and returned for your approval.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {letter.status === "rejected" && (
-          <RejectionRetryBlock letterId={letterId} onRetry={invalidate} />
-        )}
-
-        {/* Delivery confirmation — shown when at least one delivery log entry exists */}
-        {deliveryLogData && deliveryLogData.length > 0 && (
-          <Card className="border-green-200 bg-green-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Send className="w-4 h-4 text-green-600" />
-                Delivery Confirmation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {deliveryLogData.map(entry => (
-                <div key={entry.id} className="flex items-start gap-3 text-sm">
-                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-green-800 font-medium">
-                      Letter delivered via {entry.deliveryMethod}
-                      {entry.recipientEmail && ` to ${entry.recipientEmail}`}
-                    </p>
-                    {entry.deliveredAt && (
-                      <p className="text-green-600 text-xs mt-0.5">
-                        {new Date(entry.deliveredAt).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {attachments && attachments.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">
-                Attachments ({attachments.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {attachments.map(att => (
-                <a
-                  key={att.id}
-                  href={att.storageUrl ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-2.5 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
-                >
-                  <FileText className="w-4 h-4 text-primary flex-shrink-0" />
-                  <span className="text-sm text-foreground flex-1 truncate">
-                    {att.fileName ?? "Attachment"}
-                  </span>
-                  <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                </a>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+        <AttachmentsList attachments={attachments || []} />
       </div>
     </AppLayout>
   );
 }
+
