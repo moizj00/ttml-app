@@ -129,7 +129,7 @@ export function AnalysisHistory({
                   data-testid={`row-analysis-${row.id}`}
                 >
                   <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
                       <FileText className="w-4 h-4 text-blue-600" />
                     </div>
                     <div className="min-w-0">
@@ -178,7 +178,7 @@ export function AnalysisHistory({
                       size="sm"
                       variant="outline"
                       onClick={() => onUseAnalysis(analysis)}
-                      className="flex-shrink-0 gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+                      className="shrink-0 gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
                       data-testid={`button-use-analysis-${row.id}`}
                     >
                       <ArrowRight className="w-3.5 h-3.5" />

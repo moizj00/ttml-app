@@ -26,7 +26,7 @@ export const DeliveryConfirmation = ({
       <CardContent className="space-y-2">
         {deliveryLogs.map(entry => (
           <div key={entry.id} className="flex items-start gap-3 text-sm">
-            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-green-800 font-medium">
                 Letter delivered via {entry.deliveryMethod}
