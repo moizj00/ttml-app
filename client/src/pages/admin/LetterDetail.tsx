@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   parsePipelineError,
   PIPELINE_ERROR_LABELS,
+  LETTER_STATUS,
 } from "../../../../shared/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -43,23 +44,22 @@ import { toast } from "sonner";
 import StatusBadge from "@/components/shared/StatusBadge";
 import StatusTimeline from "@/components/shared/StatusTimeline";
 
-const ALL_STATUSES = [
+// v2.1: canonical status list sourced from shared/types/letter.ts so the
+// admin dropdown stays in sync with the state-machine enum (covers the new
+// attorney-review funnel statuses: ai_generation_completed_hidden,
+// letter_released_to_subscriber, attorney_review_upsell_shown,
+// attorney_review_checkout_started, attorney_review_payment_confirmed).
+const ALL_STATUSES = Object.values(LETTER_STATUS) as readonly string[];
+
+// Pre-release statuses where the free-preview force-unlock action is
+// meaningful. Past these (i.e. subscriber already paid / attorney started),
+// forcing the preview is a no-op and the admin should use forceStatusTransition.
+const FREE_PREVIEW_PRE_RELEASE_STATUSES = new Set<string>([
   "submitted",
   "researching",
   "drafting",
-  "generated_locked",
-  "pending_review",
-  "under_review",
-  "approved",
-  "rejected",
-  "needs_changes",
-  "client_approval_pending",
-  "client_revision_requested",
-  "client_declined",
-  "client_approved",
-  "sent",
-  "pipeline_failed",
-] as const;
+  "ai_generation_completed_hidden",
+]);
 
 export default function AdminLetterDetail() {
   const { id } = useParams<{ id: string }>();
@@ -126,6 +126,24 @@ export default function AdminLetterDetail() {
     },
     onError: err => toast.error("Repair failed", { description: err.message }),
   });
+
+  // v2.1: Force the 24h free-preview cooling window to 0. If the draft is
+  // already saved, the preview email + status transition fire immediately.
+  // If the pipeline is still running, the dispatcher hook in the finalizer
+  // releases as soon as the draft lands.
+  const forceFreePreviewUnlockMutation =
+    trpc.admin.forceFreePreviewUnlock.useMutation({
+      onSuccess: (data: any) => {
+        toast.success("Free preview unlock forced", {
+          description: data?.dispatched
+            ? "Preview email + status transition fired immediately."
+            : "Window collapsed to now. Pipeline finalizer will release once the draft is saved.",
+        });
+        refetch();
+      },
+      onError: err =>
+        toast.error("Force unlock failed", { description: err.message }),
+    });
 
   if (!letterId || isNaN(letterId) || letterId <= 0) {
     return (
@@ -333,10 +351,39 @@ export default function AdminLetterDetail() {
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 Force Status Transition
               </Button>
+              {/* v2.1: Force Preview Unlock Now — separate from force-status. */}
+              {l.isFreePreview === true &&
+                FREE_PREVIEW_PRE_RELEASE_STATUSES.has(letterStatus) && (
+                  <Button
+                    data-testid="button-force-free-preview-unlock"
+                    variant="outline"
+                    size="sm"
+                    className="border-purple-400 text-purple-700"
+                    onClick={() =>
+                      forceFreePreviewUnlockMutation.mutate({
+                        letterId,
+                        reason: "Admin force preview unlock",
+                      })
+                    }
+                    disabled={forceFreePreviewUnlockMutation.isPending}
+                  >
+                    <Cpu
+                      className={`h-4 w-4 mr-2 ${forceFreePreviewUnlockMutation.isPending ? "animate-spin" : ""}`}
+                    />
+                    {forceFreePreviewUnlockMutation.isPending
+                      ? "Forcing..."
+                      : "Force Preview Unlock Now"}
+                  </Button>
+                )}
+              {/* v2.1: extended retry visibility — also show when pipeline_failed
+                  or when ai_draft is missing (currentAiDraftVersionId == null). */}
               {(letter.status === "submitted" ||
                 letter.status === "researching" ||
-                letter.status === "drafting") && (
+                letter.status === "drafting" ||
+                letter.status === "pipeline_failed" ||
+                l.currentAiDraftVersionId == null) && (
                 <Button
+                  data-testid="button-retry-ai-generation"
                   variant="outline"
                   size="sm"
                   className="border-blue-400 text-blue-700"
@@ -348,7 +395,7 @@ export default function AdminLetterDetail() {
                   <RefreshCw
                     className={`h-4 w-4 mr-2 ${retryMutation.isPending ? "animate-spin" : ""}`}
                   />
-                  Retry Pipeline
+                  {retryMutation.isPending ? "Retrying..." : "Retry AI Generation"}
                 </Button>
               )}
               {l.status === "pending_review" && !l.assignedReviewerId && (

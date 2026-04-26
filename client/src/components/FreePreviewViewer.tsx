@@ -19,7 +19,7 @@ import { trpc } from "@/lib/trpc";
  *     read it. The goal is to raise friction enough that sharing the
  *     preview isn't a one-click action and to make it clear to the
  *     subscriber that this is a preview, not a deliverable.
- *   - Large diagonal "DRAFT" watermark overlays the letter.
+ *   - Large diagonal "DRAFTED" watermark overlays the letter.
  *   - Single CTA: "Submit For Attorney Review" → navigates to /pricing
  *     so the subscriber can start a subscription. Once subscribed they
  *     can submit the same letter for actual attorney review.
@@ -192,7 +192,7 @@ export function FreePreviewViewer({
             className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-2 py-0.5 tracking-wider"
             data-testid="draft-preview-unreviewed-badge"
           >
-            DRAFT — Unreviewed
+            DRAFTED — Unreviewed
           </span>
         </div>
         <CardContent className="p-0">
@@ -221,7 +221,7 @@ export function FreePreviewViewer({
               {draftContent}
             </pre>
 
-            {/* Large diagonal DRAFT watermark spanning the whole region */}
+            {/* Large diagonal DRAFTED watermark spanning the whole region */}
             <div
               className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
               aria-hidden="true"
@@ -230,7 +230,7 @@ export function FreePreviewViewer({
                 className="text-[8rem] font-black text-amber-700/15 rotate-[-30deg] tracking-[0.3em] select-none whitespace-nowrap"
                 style={{ userSelect: "none" }}
               >
-                DRAFT
+                DRAFTED
               </span>
             </div>
           </div>

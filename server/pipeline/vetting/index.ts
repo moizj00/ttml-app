@@ -91,6 +91,7 @@ import type {
   PostVetDeterministicContext,
 } from "../vetting-prompts";
 import { logger } from "../../logger";
+import { dispatchFreePreviewIfReady } from "../../freePreviewEmailCron";
 import { notifyAdminsOfDegradedDraft } from "./notifications";
 
 const VETTING_TIMEOUT_MS = 120_000;
@@ -716,6 +717,19 @@ export async function finalizeLetterAfterVetting(
       toStatus: finalStatus,
     }),
   ]);
+
+  // Free-preview hook: parity with simple/graph/fallback paths. If the
+  // letter is on the free-preview lead-magnet path AND the unlock window
+  // has already elapsed (admin-forced), fire the "your preview is ready"
+  // email immediately now that the draft is saved. Normal free-preview
+  // letters still wait until the 24h cron tick. Non-free-preview letters
+  // are no-ops in the dispatcher. Fire-and-forget — never abort finalize.
+  dispatchFreePreviewIfReady(letterId).catch(err =>
+    logger.warn(
+      { letterId, err: err instanceof Error ? err.message : String(err) },
+      "[Pipeline] dispatchFreePreviewIfReady threw after vetting finalize (non-fatal)"
+    )
+  );
 
   // ── Admin alert for degraded drafts (fire-and-forget, parallelized) ────────
   if (isDegraded) {
