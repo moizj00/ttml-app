@@ -117,6 +117,9 @@ pipeline_failed → submitted (admin retry)
 **Modularized Pages** (directory pattern with `index.tsx` + `hooks/` + sub-components):
 
 - `DocumentAnalyzer/`, `ReviewModal/`, `Learning/`, `Affiliate/`, `AffiliateDashboard/`, `ReviewDetail/`, `SubscriberLetterPreviewModal/`
+- Subscriber dashboard and detail views are also modularized:
+      - `client/src/pages/subscriber/Dashboard.tsx` composes `client/src/components/subscriber/dashboard/*`
+      - `client/src/pages/subscriber/LetterDetail.tsx` composes `client/src/components/subscriber/letter-detail/*`
 
 ### Backend (`server/`)
 
@@ -124,7 +127,7 @@ pipeline_failed → submitted (admin retry)
 ├── _core/                     # Express server, tRPC init, context, env, admin2fa, cookies, vite
 ├── routers/                   # tRPC sub-routers (admin/, letters/, review/, affiliate/, billing/, blog)
 ├── db/                        # Data access layer (all DB operations go through here)
-├── pipeline/                  # 4-stage AI pipeline (orchestrator, research, drafting, assembly, vetting)
+├── pipeline/                  # 4-stage AI pipeline (orchestrator + modular orchestration/research/vetting handlers)
 ├── learning/                  # Recursive learning (extraction, quality, categories, dedup)
 ├── stripe/                    # Stripe checkout/billing (client, checkouts, subscriptions, coupons)
 ├── emailPreview/              # Email template preview (builder, templates)
@@ -140,6 +143,11 @@ pipeline_failed → submitted (admin retry)
 ├── stalePipelineLockRecovery.ts # Auto-release stuck pipeline locks (15 min)
 └── staleReviewReleaser.ts     # Auto-release unclaimed reviews
 ```
+
+Implementation notes for maintainability:
+
+- Admin router is decomposed under `server/routers/admin/` with `index.ts` composing `letters.ts`, `users.ts`, `jobs.ts`, and `learning.ts`.
+- Pipeline routing remains at `server/pipeline/orchestrator.ts`, with shared helpers in `server/pipeline/orchestration/` and stage modules in `server/pipeline/research/` and `server/pipeline/vetting/`.
 
 ### Shared (`shared/`)
 
@@ -196,11 +204,13 @@ Root router: `server/routers/index.ts` → `appRouter`. Mounted at `/api/trpc`.
 
 **REST-only endpoints:** auth signup/login, Stripe webhooks, n8n callback, PDF streaming, health checks.
 
+`admin` router composition: `server/routers/admin/index.ts` merges domain procedures from `server/routers/admin/{letters,users,jobs,learning}.ts`.
+
 ---
 
 ## AI Pipeline (4 Stages)
 
-Defined in `server/pipeline/orchestrator.ts`.
+Defined in `server/pipeline/orchestrator.ts`, with modular handlers in `server/pipeline/orchestration/`, `server/pipeline/research/`, and `server/pipeline/vetting/`.
 
 | Stage        | Model                          | Purpose                                                    | Output                |
 | ------------ | ------------------------------ | ---------------------------------------------------------- | --------------------- |
