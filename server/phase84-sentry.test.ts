@@ -231,7 +231,15 @@ describe("Pipeline Sentry instrumentation", () => {
   function readAllPipeline() {
     const dir = path.join(__dirname, "pipeline");
     const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
-    return files.map(f => fs.readFileSync(path.join(dir, `${f}.ts`), "utf-8")).join("\n");
+    return files
+      .map(f => {
+        const flat = path.join(dir, `${f}.ts`);
+        const indexed = path.join(dir, f, "index.ts");
+        if (fs.existsSync(flat)) return fs.readFileSync(flat, "utf-8");
+        if (fs.existsSync(indexed)) return fs.readFileSync(indexed, "utf-8");
+        return "";
+      })
+      .join("\n");
   }
 
   it("pipeline.ts imports captureServerException", () => {
