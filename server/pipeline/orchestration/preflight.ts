@@ -1,4 +1,12 @@
 import { createLogger } from "../../logger";
+import { 
+  validateIntakeCompleteness,
+} from "../validators";
+import { PipelineError, PIPELINE_ERROR_CODES } from "../../../shared/types";
+import { buildNormalizedPromptInput } from "../../intake-normalizer";
+import type { IntakeJson } from "../../../shared/types";
+
+const logger = createLogger({ module: "PipelinePreflight" });
 
 /**
  * Pre-flight check for API keys needed by the pipeline.
@@ -28,3 +36,57 @@ export function preflightApiKeyCheck(stage: "research" | "drafting" | "full"): {
   const ok = stage === "research" ? canResearch : stage === "drafting" ? canDraft : (canResearch && canDraft);
   return { ok, missing, canResearch, canDraft };
 }
+
+/**
+ * Validates the intake data and builds the normalized input for the pipeline.
+ */
+export async function validatePipelinePreflight(
+  letterId: number,
+  intake: IntakeJson,
+  dbFields?: {
+    subject: string;
+    issueSummary?: string | null;
+    jurisdictionCountry?: string | null;
+    jurisdictionState?: string | null;
+    jurisdictionCity?: string | null;
+    letterType: string;
+  }
+) {
+  const intakeCheck = validateIntakeCompleteness(intake);
+  if (!intakeCheck.valid) {
+    logger.error(
+      { letterId, errors: intakeCheck.errors },
+      "[Pipeline] Intake pre-flight failed"
+    );
+    throw new PipelineError(
+      PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
+      `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
+      "pipeline",
+      intakeCheck.errors.join("; ")
+    );
+  }
+
+  const normalizedInput = buildNormalizedPromptInput(
+    dbFields ?? {
+      subject: intake.matter?.subject ?? "Legal Matter",
+      issueSummary: intake.matter?.description,
+      jurisdictionCountry: intake.jurisdiction?.country,
+      jurisdictionState: intake.jurisdiction?.state,
+      jurisdictionCity: intake.jurisdiction?.city,
+      letterType: intake.letterType,
+    },
+    intake
+  );
+
+  logger.info(
+    {
+      letterId,
+      letterType: normalizedInput.letterType,
+      jurisdictionState: normalizedInput.jurisdiction.state,
+    },
+    "[Pipeline] Normalized intake"
+  );
+
+  return normalizedInput;
+}
+

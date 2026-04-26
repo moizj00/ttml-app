@@ -23,15 +23,15 @@ import type {
   PipelineErrorCode,
 } from "../../shared/types";
 import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
-import { buildNormalizedPromptInput } from "../intake-normalizer";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode } from "./shared";
 import { calculateCost } from "./providers";
-import { validateIntakeCompleteness, addValidationResult } from "./validators";
+import { addValidationResult } from "./validators";
 import { autoAdvanceIfPreviouslyUnlocked } from "./fallback";
-import { runResearchStage } from "./research";
+import { runResearchStage } from "./research/index";
 import { runDraftingStage } from "./drafting";
+
 import { runAssemblyVettingLoop, finalizeLetterAfterVetting } from "./vetting";
 import { runPipeline as runLangGraphPipeline } from "./langgraph";
 import { runSimplePipeline } from "./simple";
@@ -42,10 +42,16 @@ import {
   setIntermediateContent,
   consumeIntermediateContent,
 } from "./orchestration/registry";
-import { preflightApiKeyCheck } from "./orchestration/preflight";
+import {
+  preflightApiKeyCheck,
+  validatePipelinePreflight,
+} from "./orchestration/preflight";
 import { triggerN8nWorkflow } from "./orchestration/n8n";
+import { handlePipelineError } from "./orchestration/errors";
+import { updatePipelineJobStatus } from "./orchestration/status";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
+
 
 // Re-export common functions for backward compatibility/external use
 export { preflightApiKeyCheck };
@@ -68,21 +74,14 @@ export async function runFullPipeline(
   userId?: number,
   isFreePreview?: boolean
 ): Promise<void> {
-  const intakeCheck = validateIntakeCompleteness(intake);
-  if (!intakeCheck.valid) {
-    orchLogger.error(
-      { letterId, errors: intakeCheck.errors },
-      "[Pipeline] Intake pre-flight failed"
-    );
-    throw new PipelineError(
-      PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE,
-      `Intake validation failed: ${intakeCheck.errors.join("; ")}`,
-      "pipeline",
-      intakeCheck.errors.join("; ")
-    );
-  }
+  const normalizedInput = await validatePipelinePreflight(
+    letterId,
+    intake,
+    dbFields
+  );
 
   // ── LangGraph Pipeline Routing ──────────────────────────────────────────────
+
   const useLangGraph = process.env.PIPELINE_MODE === "langgraph";
   if (useLangGraph) {
     orchLogger.info(
@@ -129,27 +128,8 @@ export async function runFullPipeline(
     return;
   }
 
-  const normalizedInput = buildNormalizedPromptInput(
-    dbFields ?? {
-      subject: intake.matter?.subject ?? "Legal Matter",
-      issueSummary: intake.matter?.description,
-      jurisdictionCountry: intake.jurisdiction?.country,
-      jurisdictionState: intake.jurisdiction?.state,
-      jurisdictionCity: intake.jurisdiction?.city,
-      letterType: intake.letterType,
-    },
-    intake
-  );
-  orchLogger.info(
-    {
-      letterId,
-      letterType: normalizedInput.letterType,
-      jurisdictionState: normalizedInput.jurisdiction.state,
-    },
-    "[Pipeline] Normalized intake"
-  );
-
   // ── Try n8n workflow first (primary path if N8N_PRIMARY=true) ────────────────
+
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "";
   const n8nCallbackSecret = process.env.N8N_CALLBACK_SECRET ?? "";
   const useN8nPrimary =
@@ -296,39 +276,12 @@ export async function runFullPipeline(
       pipelineCtx
     );
 
-    const citationRevalidationTokens = pipelineCtx.citationRevalidationTokens;
-    const isDegraded = (pipelineCtx.qualityWarnings?.length ?? 0) > 0;
-    await updateWorkflowJob(pipelineJobId, {
-      status: "completed",
-      completedAt: new Date(),
-      promptTokens: citationRevalidationTokens?.promptTokens ?? 0,
-      completionTokens: citationRevalidationTokens?.completionTokens ?? 0,
-      estimatedCostUsd: citationRevalidationTokens
-        ? calculateCost(
-            pipelineCtx.citationRevalidationModelKey ??
-              "llama-3.3-70b-versatile",
-            citationRevalidationTokens
-          )
-        : "0",
-      responsePayloadJson: {
-        validationResults: pipelineCtx.validationResults,
-        webGrounded: pipelineCtx.webGrounded,
-        groundingReport: pipelineCtx.groundingReport,
-        consistencyReport: pipelineCtx.consistencyReport,
-        vettingReport: vettingResult.vettingReport,
-        counterArguments: pipelineCtx.counterArguments,
-        assemblyRetries,
-        ragExampleCount: pipelineCtx.ragExampleCount ?? 0,
-        ragSimilarityScores: pipelineCtx.ragSimilarityScores ?? [],
-        ragAbGroup: pipelineCtx.ragAbGroup ?? "test",
-        ragInjected: (pipelineCtx.ragExampleCount ?? 0) > 0,
-        lessonCount: pipelineCtx.lessonCount ?? 0,
-        ...(isDegraded && {
-          qualityDegraded: true,
-          degradationReasons: pipelineCtx.qualityWarnings,
-        }),
-      },
-    });
+    await updatePipelineJobStatus(
+      pipelineJobId,
+      pipelineCtx,
+      vettingResult,
+      assemblyRetries
+    );
 
     try {
       await autoAdvanceIfPreviouslyUnlocked(letterId);
@@ -339,28 +292,10 @@ export async function runFullPipeline(
       );
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    orchLogger.error({ letterId, err: msg }, "[Pipeline] Full pipeline failed");
-    captureServerException(err, {
-      tags: { pipeline_stage: "full_pipeline", letter_id: String(letterId) },
-      extra: { pipelineJobId, errorMessage: msg },
-    });
-    const pipelineErrCode =
-      err instanceof PipelineError ? err.code : classifyErrorCode(err);
-
-    await Promise.all([
-      updateWorkflowJob(pipelineJobId, {
-        status: "failed",
-        errorMessage: formatStructuredError(pipelineErrCode, msg, "pipeline"),
-        completedAt: new Date(),
-      }),
-      updateLetterStatus(letterId, "submitted"),
-    ]);
-    throw err instanceof PipelineError
-      ? err
-      : new PipelineError(pipelineErrCode, msg, "pipeline");
+    await handlePipelineError(letterId, pipelineJobId, err);
   }
 }
+
 
 // ═══════════════════════════════════════════════════════
 // BEST-EFFORT FALLBACK (called by worker after retry exhaustion)
