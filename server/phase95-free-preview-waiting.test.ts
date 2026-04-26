@@ -166,11 +166,11 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
 
   it("declares the pre-review free-preview status allow-list", () => {
     expect(source).toMatch(
-      /const\s+FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new\s+Set\s*\(/
+      /const\s+FREE_PREVIEW_PDF_ALLOWED_STATUSES\s*=\s*new\s+Set(?:<[^>]+>)?\s*\(/
     );
-    expect(source).toContain('"pending_review"');
-    expect(source).toContain('"under_review"');
-    expect(source).toContain('"approved"');
+    expect(source).toContain("LETTER_STATUS.pending_review");
+    expect(source).toContain("LETTER_STATUS.under_review");
+    expect(source).toContain("LETTER_STATUS.approved");
   });
 
   it("blocks free-preview PDFs before attorney-review statuses", () => {

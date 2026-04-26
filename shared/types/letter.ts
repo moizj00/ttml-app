@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+/**
+ * Named-key access to letter statuses for callers that prefer
+ * `LETTER_STATUS.submitted` over the raw tuple in `drizzle/schema/constants`.
+ * The canonical tuple `LETTER_STATUSES` and type `LetterStatus` live in
+ * `drizzle/schema/constants.ts` and should be used for type checks.
+ */
+export const LETTER_STATUS = {
+  submitted: "submitted",
+  researching: "researching",
+  drafting: "drafting",
+  ai_generation_completed_hidden: "ai_generation_completed_hidden",
+  letter_released_to_subscriber: "letter_released_to_subscriber",
+  attorney_review_upsell_shown: "attorney_review_upsell_shown",
+  attorney_review_checkout_started: "attorney_review_checkout_started",
+  attorney_review_payment_confirmed: "attorney_review_payment_confirmed",
+  generated_locked: "generated_locked",
+  pending_review: "pending_review",
+  under_review: "under_review",
+  needs_changes: "needs_changes",
+  approved: "approved",
+  client_approval_pending: "client_approval_pending",
+  client_revision_requested: "client_revision_requested",
+  client_approved: "client_approved",
+  sent: "sent",
+  rejected: "rejected",
+  client_declined: "client_declined",
+  pipeline_failed: "pipeline_failed",
+} as const;
+
 export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   submitted: ["researching", "pipeline_failed"],
   researching: ["drafting", "submitted", "pipeline_failed"],

@@ -135,7 +135,7 @@ export default function Pricing() {
       url: "https://www.talk-to-my-lawyer.com",
     },
     description:
-      "Professional attorney-reviewed legal letters. Choose from single letter ($299), monthly subscription ($299/month for 4 letters), or yearly plan ($2,400/year for 8 letters).",
+      `Professional attorney-reviewed legal letters. Choose from single letter (${PRICING.singleLetter.priceDisplay}), monthly subscription (${PRICING.monthly.priceDisplay}/month for ${PRICING.monthly.lettersIncluded} letters), or yearly plan (${PRICING.yearly.priceDisplay}/year for ${PRICING.yearly.lettersIncluded} letters).`,
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
@@ -143,7 +143,7 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Single Letter",
-          price: "299",
+          price: String(PRICING.singleLetter.price),
           priceCurrency: "USD",
           description:
             "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
@@ -152,7 +152,7 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Monthly Plan",
-          price: "299",
+          price: String(PRICING.monthly.price),
           priceCurrency: "USD",
           priceSpecification: {
             "@type": "UnitPriceSpecification",
@@ -164,7 +164,7 @@ export default function Pricing() {
         {
           "@type": "Offer",
           name: "Yearly Plan",
-          price: "2400",
+          price: String(PRICING.yearly.price),
           priceCurrency: "USD",
           priceSpecification: {
             "@type": "UnitPriceSpecification",
@@ -187,7 +187,7 @@ export default function Pricing() {
         </title>
         <meta
           name="description"
-          content="Transparent pricing for attorney-reviewed legal letters. Single letter $299, monthly $299/month (4 letters), or yearly $2,400 (8 letters). All plans include attorney review and PDF delivery."
+          content={`Transparent pricing for attorney-reviewed legal letters. Single letter ${PRICING.singleLetter.priceDisplay}, monthly ${PRICING.monthly.priceDisplay}/month (${PRICING.monthly.lettersIncluded} letters), or yearly ${PRICING.yearly.priceDisplay} (${PRICING.yearly.lettersIncluded} letters). All plans include attorney review and PDF delivery.`}
         />
         <link
           rel="canonical"
@@ -199,7 +199,7 @@ export default function Pricing() {
         />
         <meta
           property="og:description"
-          content="Choose the right plan for your legal needs. Single letter $299, monthly $299/month, or yearly $2,400. Attorney review included in every plan."
+          content={`Choose the right plan for your legal needs. Single letter ${PRICING.singleLetter.priceDisplay}, monthly ${PRICING.monthly.priceDisplay}/month, or yearly ${PRICING.yearly.priceDisplay}. Attorney review included in every plan.`}
         />
         <meta property="og:type" content="website" />
         <meta
@@ -235,7 +235,7 @@ export default function Pricing() {
             <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            Structured Drafting + Attorney Review — Starting at $299
+            Structured Drafting + Attorney Review — Starting at {PRICING.singleLetter.priceDisplay}
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
             The only service that combines structured drafting with live

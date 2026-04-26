@@ -86,6 +86,8 @@ import {
   deleteBlogPost,
   getBlogPostSlugById,
   getPipelineAnalytics,
+  insertDocumentAnalysis,
+  listDocumentAnalysesByUser,
 } from "../db";
 import { invalidateBlogPostCache } from "../blogCacheInvalidation";
 import { getCachedBlogPosts, getCachedBlogPost } from "../blogCache";
@@ -466,16 +468,12 @@ ${truncatedText}
         // Persist result to DB (best-effort, non-blocking)
         (async () => {
           try {
-            const db = await (await import("../db")).getDb();
-            if (db) {
-              const { documentAnalyses } = await import("../../drizzle/schema");
-              await db.insert(documentAnalyses).values({
-                documentName: input.fileName,
-                fileType: input.fileType,
-                analysisJson: analysisResult,
-                userId: ctx.user.id,
-              });
-            }
+            await insertDocumentAnalysis({
+              documentName: input.fileName,
+              fileType: input.fileType,
+              analysisJson: analysisResult,
+              userId: ctx.user.id,
+            });
           } catch (dbErr) {
             logger.error({ err: dbErr }, "[DocumentAnalyzer] DB insert failed (non-fatal):");
             captureServerException(dbErr, { tags: { component: "document_analyzer", error_type: "db_insert_failed" } });
@@ -496,29 +494,11 @@ ${truncatedText}
         const limit = input?.limit ?? 20;
         const cursor = input?.cursor;
         try {
-          const db = await (await import("../db")).getDb();
-          if (!db) return { rows: [], nextCursor: undefined };
-          const { documentAnalyses } = await import("../../drizzle/schema");
-          const { eq, desc, lt, and } = await import("drizzle-orm");
-
-          const conditions = cursor
-            ? and(eq(documentAnalyses.userId, ctx.user.id), lt(documentAnalyses.id, cursor))
-            : eq(documentAnalyses.userId, ctx.user.id);
-
-          const fetched = await db
-            .select()
-            .from(documentAnalyses)
-            .where(conditions)
-            .orderBy(desc(documentAnalyses.createdAt), desc(documentAnalyses.id))
-            .limit(limit + 1);
-
-          let nextCursor: number | undefined;
-          if (fetched.length > limit) {
-            nextCursor = fetched[limit].id;
-            fetched.pop();
-          }
-
-          return { rows: fetched, nextCursor };
+          return await listDocumentAnalysesByUser({
+            userId: ctx.user.id,
+            limit,
+            cursor,
+          });
         } catch (err) {
           logger.error({ err: err }, "[DocumentAnalyzer] getMyAnalyses failed:");
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "get_analyses_failed" } });
