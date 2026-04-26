@@ -14,15 +14,16 @@ interface LetterListProps {
   letterVisible: number;
 }
 
-export function LetterList({ letters, isLoading, letterVisible }: LetterListProps) {
+export function LetterList({
+  letters,
+  isLoading,
+  letterVisible,
+}: LetterListProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map(i => (
-          <div
-            key={i}
-            className="h-36 bg-muted animate-pulse rounded-xl"
-          />
+          <div key={i} className="h-36 bg-muted animate-pulse rounded-xl" />
         ))}
       </div>
     );
@@ -37,8 +38,8 @@ export function LetterList({ letters, isLoading, letterVisible }: LetterListProp
             No letters yet
           </h3>
           <p className="text-sm text-muted-foreground mb-6">
-            Submit your first legal matter and our attorneys will research
-            and draft a professional letter for attorney review.
+            Submit your first legal matter and our attorneys will research and
+            draft a professional letter for attorney review.
           </p>
           <Button asChild>
             <Link href="/submit">
@@ -56,20 +57,19 @@ export function LetterList({ letters, isLoading, letterVisible }: LetterListProp
       {letters.map((letter, idx) => {
         const cta = getStatusCTA(letter.status, letter.id);
         const CTAIcon = cta.icon;
-        const isActionRequired = [
-          "generated_locked",
-          "needs_changes",
-        ].includes(letter.status);
+        const isActionRequired = ["generated_locked", "needs_changes"].includes(
+          letter.status
+        );
 
         return (
           <Card
             key={letter.id}
             className={`overflow-hidden transition-all duration-500 ease-out hover:shadow-md ${
-              idx < letterVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+              idx < letterVisible
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4"
             } ${
-              isActionRequired
-                ? "ring-1 ring-amber-300 bg-amber-50/30"
-                : ""
+              isActionRequired ? "ring-1 ring-amber-300 bg-amber-50/30" : ""
             }`}
             style={staggerStyle(idx)}
           >
@@ -96,9 +96,7 @@ export function LetterList({ letters, isLoading, letterVisible }: LetterListProp
                         {LETTER_TYPE_CONFIG[letter.letterType]?.label ??
                           letter.letterType}
                       </span>
-                      <span className="text-muted-foreground/30">
-                        ·
-                      </span>
+                      <span className="text-muted-foreground/30">·</span>
                       <span>
                         {timeAgo(
                           typeof letter.createdAt === "object"
