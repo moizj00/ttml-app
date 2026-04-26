@@ -108,9 +108,9 @@
 5. **Resolution tracking** — Subscribers mark outcomes: "Payment received," "Agreement reached," "No response — escalating," "Going to court." Feeds into recursive learning system for future outcome prediction.
 
 ### Key files
-- `client/src/pages/subscriber/SubscriberDashboard.tsx`
+- `client/src/pages/subscriber/Dashboard.tsx`
 - `client/src/pages/subscriber/LetterDetail.tsx`
-- `server/pipeline/orchestrator.ts`
+- `server/pipeline/orchestrator.ts` (+ `server/pipeline/orchestration/`, `server/pipeline/research/`, `server/pipeline/vetting/`)
 - `server/worker.ts`
 - `server/learning.ts`
 - `drizzle/schema.ts`
