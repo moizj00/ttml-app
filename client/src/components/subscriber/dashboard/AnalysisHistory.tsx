@@ -1,5 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, ArrowRight, ScanSearch, Loader2, Calendar, Scale } from "lucide-react";
+import {
+  FileText,
+  ArrowRight,
+  ScanSearch,
+  Loader2,
+  Calendar,
+  Scale,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -13,7 +20,11 @@ interface AnalysisHistoryProps {
   onUseAnalysis: (analysis: Partial<DocumentAnalysisResult>) => void;
 }
 
-export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: AnalysisHistoryProps) {
+export function AnalysisHistory({
+  isLoading,
+  analyses,
+  onUseAnalysis,
+}: AnalysisHistoryProps) {
   // Safely cast the jsonb field
   const getAnalysisJson = (
     row: DocumentAnalysis
@@ -26,10 +37,17 @@ export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: Analysis
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanSearch className="w-5 h-5 text-blue-600" />
-            <CardTitle className="text-base">Document Analysis History</CardTitle>
+            <CardTitle className="text-base">
+              Document Analysis History
+            </CardTitle>
           </div>
           <Link href="/analyze">
-            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-new-analysis">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              data-testid="button-new-analysis"
+            >
               <ScanSearch className="w-3.5 h-3.5" />
               New Analysis
             </Button>
@@ -41,13 +59,21 @@ export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: Analysis
               <ScanSearch className="w-6 h-6 text-slate-400" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-600">No analyses yet</p>
+              <p className="text-sm font-medium text-slate-600">
+                No analyses yet
+              </p>
               <p className="text-xs text-slate-400 mt-1">
-                Upload a legal document to get an instant analysis and recommended action.
+                Upload a legal document to get an instant analysis and
+                recommended action.
               </p>
             </div>
             <Link href="/analyze">
-              <Button size="sm" variant="outline" className="gap-1.5 mt-1" data-testid="button-start-analysis-empty">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 mt-1"
+                data-testid="button-start-analysis-empty"
+              >
                 <ScanSearch className="w-3.5 h-3.5" />
                 Analyze a Document
               </Button>
@@ -66,7 +92,12 @@ export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: Analysis
           <CardTitle className="text-base">Document Analysis History</CardTitle>
         </div>
         <Link href="/analyze">
-          <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-new-analysis">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            data-testid="button-new-analysis"
+          >
             <ScanSearch className="w-3.5 h-3.5" />
             New Analysis
           </Button>
@@ -87,7 +118,9 @@ export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: Analysis
                 ? (LETTER_TYPE_CONFIG[letterType]?.label ?? letterType)
                 : null;
               const createdAt = row.createdAt ? new Date(row.createdAt) : null;
-              const hasUsefulPrefill = !!(letterType || analysis.recommendedResponseSummary);
+              const hasUsefulPrefill = !!(
+                letterType || analysis.recommendedResponseSummary
+              );
 
               return (
                 <div
@@ -118,13 +151,19 @@ export function AnalysisHistory({ isLoading, analyses, onUseAnalysis }: Analysis
                           </span>
                         )}
                         {letterLabel && (
-                          <Badge variant="secondary" className="text-xs flex items-center gap-1" data-testid={`badge-analysis-type-${row.id}`}>
+                          <Badge
+                            variant="secondary"
+                            className="text-xs flex items-center gap-1"
+                            data-testid={`badge-analysis-type-${row.id}`}
+                          >
                             <Scale className="w-3 h-3" />
                             {letterLabel}
                           </Badge>
                         )}
                         {analysis.urgencyLevel === "high" && (
-                          <Badge variant="destructive" className="text-xs">High Urgency</Badge>
+                          <Badge variant="destructive" className="text-xs">
+                            High Urgency
+                          </Badge>
                         )}
                         {analysis.detectedDeadline && (
                           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
