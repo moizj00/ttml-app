@@ -21,6 +21,7 @@ import { getDb } from "./db/core";
 import { letterRequests } from "../drizzle/schema";
 import { and, inArray, isNotNull, lt } from "drizzle-orm";
 import { updateLetterStatus, logReviewAction } from "./db";
+import { LETTER_STATUS } from "../shared/types/letter";
 import { enqueuePipelineJob } from "./queue";
 import { captureServerException } from "./sentry";
 import { createLogger } from "./logger";
@@ -63,7 +64,7 @@ export async function recoverStalePipelineLocks(): Promise<StaleLockRecoveryResu
     .from(letterRequests)
     .where(
       and(
-        inArray(letterRequests.status, ["researching", "drafting"]),
+        inArray(letterRequests.status, [LETTER_STATUS.researching, LETTER_STATUS.drafting]),
         isNotNull(letterRequests.pipelineLockedAt),
         lt(letterRequests.pipelineLockedAt, staleThreshold)
       )
@@ -94,7 +95,7 @@ export async function recoverStalePipelineLocks(): Promise<StaleLockRecoveryResu
         ));
 
       // 2. Reset status to submitted (force=true bypasses state machine guard)
-      await updateLetterStatus(letter.id, "submitted", { force: true });
+      await updateLetterStatus(letter.id, LETTER_STATUS.submitted, { force: true });
 
       // 3. Log the recovery action for the audit trail
       await logReviewAction({
@@ -102,10 +103,10 @@ export async function recoverStalePipelineLocks(): Promise<StaleLockRecoveryResu
         reviewerId: null as any,
         actorType: "system",
         action: "admin_repair_letter_state",
-        noteText: `Auto-recovery: stale pipeline lock detected (locked since ${letter.pipelineLockedAt?.toISOString()}). Status reset from "${previousStatus}" to "submitted" for re-processing.`,
+        noteText: `Auto-recovery: stale pipeline lock detected (locked since ${letter.pipelineLockedAt?.toISOString()}). Status reset from "${previousStatus}" to "${LETTER_STATUS.submitted}" for re-processing.`,
         noteVisibility: "internal",
         fromStatus: previousStatus,
-        toStatus: "submitted",
+        toStatus: LETTER_STATUS.submitted,
       });
 
       // 4. Re-enqueue for a fresh pipeline run

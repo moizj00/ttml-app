@@ -1,5 +1,44 @@
 import { z } from "zod";
 
+/**
+ * Named-key access to every letter status referenced by this module's
+ * `ALLOWED_TRANSITIONS` and `STATUS_CONFIG`, plus the active state-machine
+ * statuses from `drizzle/schema/constants.ts`.
+ *
+ * Use `LETTER_STATUS.submitted` instead of the literal `"submitted"`.
+ * The canonical TS tuple `LETTER_STATUSES` and union type `LetterStatus`
+ * live in `drizzle/schema/constants.ts` — use those for type checks.
+ *
+ * `generated_unlocked` is included because the in-file `ALLOWED_TRANSITIONS`
+ * map and `STATUS_CONFIG` still reference it. The pgEnum-only legacy values
+ * (`assembling`, `vetting`, `upsell_dismissed`) are NOT included — they are
+ * never produced by the current state machine and never compared against
+ * in TS code.
+ */
+export const LETTER_STATUS = {
+  submitted: "submitted",
+  researching: "researching",
+  drafting: "drafting",
+  ai_generation_completed_hidden: "ai_generation_completed_hidden",
+  letter_released_to_subscriber: "letter_released_to_subscriber",
+  attorney_review_upsell_shown: "attorney_review_upsell_shown",
+  attorney_review_checkout_started: "attorney_review_checkout_started",
+  attorney_review_payment_confirmed: "attorney_review_payment_confirmed",
+  generated_locked: "generated_locked",
+  generated_unlocked: "generated_unlocked",
+  pending_review: "pending_review",
+  under_review: "under_review",
+  needs_changes: "needs_changes",
+  approved: "approved",
+  client_approval_pending: "client_approval_pending",
+  client_revision_requested: "client_revision_requested",
+  client_approved: "client_approved",
+  sent: "sent",
+  rejected: "rejected",
+  client_declined: "client_declined",
+  pipeline_failed: "pipeline_failed",
+} as const;
+
 export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   submitted: ["researching", "pipeline_failed"],
   researching: ["drafting", "submitted", "pipeline_failed"],

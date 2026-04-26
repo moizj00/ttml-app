@@ -22,18 +22,19 @@ import { generateDraftPdfBuffer } from "./pdfGenerator";
 import { checkTrpcRateLimit } from "./rateLimiter";
 import { logger } from "./logger";
 import { isFreePreviewUnlocked } from "../shared/utils/free-preview";
+import { LETTER_STATUS } from "../shared/types/letter";
 
 // Free-preview PDF downloads are only allowed after the letter enters the
 // paid attorney-review pipeline (or later).
-const FREE_PREVIEW_PDF_ALLOWED_STATUSES = new Set([
-  "pending_review",
-  "under_review",
-  "needs_changes",
-  "client_revision_requested",
-  "client_approval_pending",
-  "approved",
-  "client_approved",
-  "sent",
+const FREE_PREVIEW_PDF_ALLOWED_STATUSES = new Set<string>([
+  LETTER_STATUS.pending_review,
+  LETTER_STATUS.under_review,
+  LETTER_STATUS.needs_changes,
+  LETTER_STATUS.client_revision_requested,
+  LETTER_STATUS.client_approval_pending,
+  LETTER_STATUS.approved,
+  LETTER_STATUS.client_approved,
+  LETTER_STATUS.sent,
 ]);
 
 export function registerDraftPdfRoute(app: Express) {
@@ -77,11 +78,16 @@ export function registerDraftPdfRoute(app: Express) {
       // ── Status gate: only allow after letter has been generated and locked ──
       // generated_locked = AI draft complete, subscriber has paid to unlock attorney review
       // All downstream statuses (pending_review → approved → sent) also grant access
-      const allowedStatuses = [
-        "generated_locked",
-        "pending_review", "under_review", "needs_changes",
-        "client_approval_pending", "client_revision_requested",
-        "approved", "client_approved", "sent",
+      const allowedStatuses: string[] = [
+        LETTER_STATUS.generated_locked,
+        LETTER_STATUS.pending_review,
+        LETTER_STATUS.under_review,
+        LETTER_STATUS.needs_changes,
+        LETTER_STATUS.client_approval_pending,
+        LETTER_STATUS.client_revision_requested,
+        LETTER_STATUS.approved,
+        LETTER_STATUS.client_approved,
+        LETTER_STATUS.sent,
       ];
       if (!allowedStatuses.includes(letter.status)) {
         res.status(403).json({

@@ -9,6 +9,7 @@
  */
 
 import { getAllLetterRequests, updateLetterStatus, logReviewAction, getUserById, createNotification } from "./db";
+import { LETTER_STATUS } from "../shared/types/letter";
 import { sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { createLogger } from "./logger";
@@ -27,7 +28,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
   let released = 0;
   let errors = 0;
 
-  const underReviewLetters = await getAllLetterRequests({ status: "under_review" });
+  const underReviewLetters = await getAllLetterRequests({ status: LETTER_STATUS.under_review });
 
   const now = Date.now();
 
@@ -43,7 +44,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
       const idleHours = Math.round(idleMs / (1000 * 60 * 60));
       staleLogger.info({ letterId: letter.id, idleHours }, "[StaleReview] Letter has been under_review — releasing back to queue");
 
-      await updateLetterStatus(letter.id, "pending_review", {
+      await updateLetterStatus(letter.id, LETTER_STATUS.pending_review, {
         assignedReviewerId: null,
         force: true,
       });
@@ -54,8 +55,8 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
         action: "auto_released_stale_review",
         noteText: `Letter auto-released after ${idleHours}h of idle under_review status (threshold: ${STALE_THRESHOLD_HOURS}h)`,
         noteVisibility: "internal",
-        fromStatus: "under_review",
-        toStatus: "pending_review",
+        fromStatus: LETTER_STATUS.under_review,
+        toStatus: LETTER_STATUS.pending_review,
       });
 
       // Notify the previously assigned attorney
@@ -68,7 +69,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
               name: attorney.name ?? "Attorney",
               subject: letter.subject,
               letterId: letter.id,
-              newStatus: "pending_review",
+              newStatus: LETTER_STATUS.pending_review,
               appUrl: process.env.APP_URL ?? "",
             });
           }
@@ -95,7 +96,7 @@ export async function releaseStaleReviews(): Promise<StaleReleaseResult> {
               name: subscriber.name ?? "Subscriber",
               subject: letter.subject,
               letterId: letter.id,
-              newStatus: "pending_review",
+              newStatus: LETTER_STATUS.pending_review,
               appUrl: process.env.APP_URL ?? "",
             });
           }

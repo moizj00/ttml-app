@@ -40,6 +40,7 @@ import {
   decrementLettersUsed,
   refundFreeTrialSlot,
 } from "./db";
+import { LETTER_STATUS } from "../shared/types/letter";
 import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
 import { captureServerException } from "./sentry";
 import { getDb } from "./db";
@@ -72,7 +73,7 @@ export async function processRunPipeline(
     const msg = `[Worker] API key preflight failed for letter #${letterId}: ${apiCheck.missing.join("; ")}`;
     logger.error(msg);
     try {
-      await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+      await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
     } catch {
       /* ignore */
     }
@@ -127,7 +128,7 @@ export async function processRunPipeline(
       logger.warn(
         `[Worker] Could not re-acquire lock for letter #${letterId} after LangGraph fallback — marking pipeline_failed`
       );
-      await updateLetterStatus(letterId, "pipeline_failed", {
+      await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, {
         force: true,
       }).catch(e =>
         logger.error(
@@ -154,11 +155,11 @@ export async function processRunPipeline(
         }
         {
           const current = await getLetterRequestById(letterId);
-          const retryableStatuses = [
-            "submitted",
-            "researching",
-            "drafting",
-            "pipeline_failed",
+          const retryableStatuses: string[] = [
+            LETTER_STATUS.submitted,
+            LETTER_STATUS.researching,
+            LETTER_STATUS.drafting,
+            LETTER_STATUS.pipeline_failed,
           ];
           if (
             attempt > 0 &&
@@ -172,8 +173,8 @@ export async function processRunPipeline(
           }
           if (attempt === 0) {
             // First attempt: ensure status is submitted before starting
-            if (!current || current.status !== "submitted") {
-              await updateLetterStatus(letterId, "submitted", { force: true });
+            if (!current || current.status !== LETTER_STATUS.submitted) {
+              await updateLetterStatus(letterId, LETTER_STATUS.submitted, { force: true });
             }
           }
           // On retries, skip resetting to submitted — the letter is already in researching/drafting
@@ -357,7 +358,7 @@ export async function processRunPipeline(
             name: subscriber.name ?? "Subscriber",
             subject: failedLetter.subject,
             letterId,
-            newStatus: "pipeline_failed",
+            newStatus: LETTER_STATUS.pipeline_failed,
             appUrl,
           }).catch(e =>
             logger.error(
@@ -381,7 +382,7 @@ export async function processRunPipeline(
     }
 
     try {
-      await updateLetterStatus(letterId, "pipeline_failed", { force: true });
+      await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
     } catch (statusErr) {
       logger.error(
         { err: statusErr },
@@ -500,7 +501,7 @@ export async function processReleaseDraftPreview(
   }
 
   if (!letter.currentAiDraftVersionId) {
-    if (letter.status === "pipeline_failed") {
+    if (letter.status === LETTER_STATUS.pipeline_failed) {
       logger.warn(
         `[Worker] Draft preview release skipped for letter #${data.letterId} — pipeline failed before draft was saved`
       );
