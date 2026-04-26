@@ -25,6 +25,25 @@ function readServer(file: string) {
   return readFileSync(join(SERVER_DIR, file), "utf-8");
 }
 
+// db/letters was refactored from a single file into a folder of submodules.
+// Read all `.ts` files under db/letters/ (plus the barrel if still present)
+// so source-shape assertions still find the symbols they care about.
+function readDbLetters(): string {
+  const dir = join(SERVER_DIR, "db", "letters");
+  const file = join(SERVER_DIR, "db", "letters.ts");
+  const parts: string[] = [];
+  if (existsSync(dir) && statSync(dir).isDirectory()) {
+    for (const entry of readdirSync(dir)) {
+      if (!entry.endsWith(".ts") || entry.endsWith(".test.ts")) continue;
+      try { parts.push(readFileSync(join(dir, entry), "utf-8")); } catch {}
+    }
+  }
+  if (existsSync(file)) {
+    try { parts.push(readFileSync(file, "utf-8")); } catch {}
+  }
+  return parts.join("\n");
+}
+
 function readRouterModule(routersDir: string, name: string): string {
   const dirPath = join(routersDir, name);
   try {
@@ -113,7 +132,7 @@ describe("Letter Claiming Flow — Claim Mutation", () => {
   });
 
   it("claimLetterForReview DB function uses atomic update (WHERE clause)", () => {
-    const dbFile = readServer("db/letters.ts");
+    const dbFile = readDbLetters();
     // The function uses isNull(letterRequests.assignedReviewerId) in the WHERE clause
     expect(dbFile).toContain("claimLetterForReview");
     expect(dbFile).toContain("isNull(letterRequests.assignedReviewerId)");
@@ -211,7 +230,7 @@ describe("Letter Claiming Flow — Request Changes Mutation", () => {
 // ─── 6. State Machine Integrity — DB Functions ──────────────────────────────
 
 describe("Letter Claiming Flow — State Machine Integrity", () => {
-  const dbFile = readServer("db/letters.ts");
+  const dbFile = readDbLetters();
   const routersFile = readAllRouters();
 
   it("claimLetterForReview transitions to under_review status", () => {

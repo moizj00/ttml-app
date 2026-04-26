@@ -331,8 +331,9 @@ describe("Attorney Review Pipeline — Claim Mutation (Source Code)", () => {
   const routersFile = readRouterModule(join(SERVER_DIR, "routers"), "review");
 
   it("claim mutation checks for pending_review or under_review status", () => {
+    // Match across newlines — the validation list spans multiple lines.
     expect(routersFile).toMatch(
-      /claim[\s\S]{0,300}pending_review.*under_review|pending_review.*under_review[\s\S]{0,300}claim/
+      /claim[\s\S]{0,500}pending_review[\s\S]*?under_review|pending_review[\s\S]*?under_review[\s\S]{0,500}claim/
     );
   });
 

@@ -36,19 +36,32 @@ function readAllRouters() {
   const routersDir = path.join(SERVER_DIR, "routers");
   return subRouters.map(r => readRouterModule(routersDir, r)).join("\n");
 }
+
+// Recursively concat all `.ts` source files (excluding tests) under a dir.
+// Used so source-shape assertions still find symbols after a refactor splits
+// a single .ts module into a folder of files (e.g. db/letters.ts -> db/letters/*.ts).
+function readDirRecursive(dir: string): string {
+  if (!fs.existsSync(dir)) return "";
+  if (!fs.statSync(dir).isDirectory()) {
+    return fs.readFileSync(dir, "utf-8");
+  }
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) {
+      out.push(readDirRecursive(full));
+    } else if (entry.endsWith(".ts") && !entry.endsWith(".test.ts")) {
+      try { out.push(fs.readFileSync(full, "utf-8")); } catch {}
+    }
+  }
+  return out.join("\n");
+}
 function readAllDb() {
-  const files = ["core", "letters", "letter-versions", "users", "admin", "affiliates", "analytics", "auth-tokens", "lessons", "notifications", "pipeline-records", "quality", "review-actions"];
-  return files.map(f => {
-    const p = path.join(SERVER_DIR, "db", `${f}.ts`);
-    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
-  }).join("\n");
+  return readDirRecursive(path.join(SERVER_DIR, "db"));
 }
 function readAllPipeline() {
-  const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
-  return files.map(f => {
-    const p = path.join(SERVER_DIR, "pipeline", `${f}.ts`);
-    return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
-  }).join("\n");
+  return readDirRecursive(path.join(SERVER_DIR, "pipeline"));
 }
 
 describe("Phase 38: Pipeline Sync + PDF Generation", () => {
@@ -270,10 +283,10 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
 
     it("getLetterRequestSafeForSubscriber returns pdfUrl field", () => {
       const content = readAllDb();
-      const fnSection = content.substring(
-        content.indexOf("getLetterRequestSafeForSubscriber"),
-        content.indexOf("export async function getAllLetterRequests")
-      );
+      const startIdx = content.indexOf("getLetterRequestSafeForSubscriber");
+      // Extract a fixed-size window starting at the function so this works
+      // regardless of how the db sources are ordered after recursive walk.
+      const fnSection = startIdx >= 0 ? content.substring(startIdx, startIdx + 3000) : "";
       expect(fnSection).toContain("pdfUrl: letterRequests.pdfUrl");
     });
   });
