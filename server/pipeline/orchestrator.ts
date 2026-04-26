@@ -27,7 +27,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode } from "./shared";
 import { calculateCost } from "./providers";
-import { addValidationResult } from "./validators";
+import { addValidationResult, validateIntakeCompleteness } from "./validators";
 import { autoAdvanceIfPreviouslyUnlocked } from "./fallback";
 import { runResearchStage } from "./research/index";
 import { runDraftingStage } from "./drafting";

@@ -387,6 +387,7 @@ export default function MyLetters() {
               <SelectItem value="researching">Researching</SelectItem>
               <SelectItem value="drafting">Drafting</SelectItem>
               <SelectItem value="generated_locked">Draft Ready</SelectItem>
+              <SelectItem value="generated_unlocked">AI Draft Ready</SelectItem>
               <SelectItem value="pending_review">Pending Review</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="needs_changes">Needs Changes</SelectItem>

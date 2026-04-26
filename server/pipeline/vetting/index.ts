@@ -14,7 +14,7 @@ import {
   getUserById,
   createNotification,
   setLetterQualityDegraded,
-} from "../db";
+} from "../../db";
 import type {
   IntakeJson,
   ResearchPacket,
@@ -25,24 +25,24 @@ import type {
   TokenUsage,
   PipelineErrorCode,
   StructuredPipelineError,
-} from "../../shared/types";
-import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
+} from "../../../shared/types";
+import { PIPELINE_ERROR_CODES, PipelineError } from "../../../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
-} from "../intake-normalizer";
+} from "../../intake-normalizer";
 import {
   sendNewReviewNeededEmail,
   sendAdminAlertEmail,
   sendLetterReadyEmail,
-} from "../email";
-import { captureServerException } from "../sentry";
+} from "../../email";
+import { captureServerException } from "../../sentry";
 import {
   formatStructuredError,
   classifyErrorCode,
   buildLessonsPromptBlock,
   withModelFailover,
-} from "./shared";
+} from "../shared";
 import {
   getAnthropicClient,
   getVettingModelFallback,
@@ -50,21 +50,21 @@ import {
   accumulateTokens,
   calculateCost,
   MODEL_PRICING,
-} from "./providers";
+} from "../providers";
 import {
   validateFinalLetter,
   validateContentConsistency,
   retryOnValidationFailure,
   addValidationResult,
-} from "./validators";
+} from "../validators";
 import {
   runCitationAudit,
   replaceUnverifiedCitations,
   buildCitationRegistry,
-} from "./citations";
-import { runAssemblyStage } from "./assembly";
-import { parseVettingResponse, runPostVetChecks } from "./vetting-parser";
-import { resolveDraftPreviewFinalStatus } from "./preview-gate";
+} from "../citations";
+import { runAssemblyStage } from "../assembly";
+import { parseVettingResponse, runPostVetChecks } from "../vetting-parser";
+import { resolveDraftPreviewFinalStatus } from "../preview-gate";
 
 // ═══════════════════════════════════════════════════════
 // STAGE 4: CLAUDE VETTING PASS
@@ -76,21 +76,21 @@ export {
   buildVettingSystemPrompt,
   buildVettingUserPrompt,
   validateVettingOutput,
-} from "./vetting-prompts";
-export type { VettingReport } from "./vetting-prompts";
-export { parseVettingResponse, runPostVetChecks } from "./vetting-parser";
-export type { PostVetCheckParams } from "./vetting-parser";
+} from "../vetting-prompts";
+export type { VettingReport } from "../vetting-prompts";
+export { parseVettingResponse, runPostVetChecks } from "../vetting-parser";
+export type { PostVetCheckParams } from "../vetting-parser";
 import {
   detectBloatPhrases,
   buildVettingSystemPrompt,
   buildVettingUserPrompt,
   validateVettingOutput,
-} from "./vetting-prompts";
+} from "../vetting-prompts";
 import type {
   VettingReport,
   PostVetDeterministicContext,
-} from "./vetting-prompts";
-import { logger } from "../logger";
+} from "../vetting-prompts";
+import { logger } from "../../logger";
 import { notifyAdminsOfDegradedDraft } from "./notifications";
 
 const VETTING_TIMEOUT_MS = 120_000;

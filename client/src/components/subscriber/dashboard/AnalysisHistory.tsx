@@ -10,9 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
-import type { DocumentAnalysis } from "../../../../drizzle/schema";
-import type { DocumentAnalysisResult } from "../../../../shared/types";
+import { LETTER_TYPE_CONFIG } from "@shared/types";
+import type { DocumentAnalysis } from "../../../../../drizzle/schema";
+import type { DocumentAnalysisResult } from "@shared/types";
 
 interface AnalysisHistoryProps {
   isLoading: boolean;

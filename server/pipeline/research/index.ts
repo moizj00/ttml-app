@@ -6,7 +6,7 @@ import {
   updateWorkflowJob,
   updateLetterStatus,
   logReviewAction,
-} from "../db";
+} from "../../db";
 import type {
   IntakeJson,
   ResearchPacket,
@@ -14,23 +14,23 @@ import type {
   TokenUsage,
   PipelineErrorCode,
   ValidationResult,
-} from "../../shared/types";
-import { PIPELINE_ERROR_CODES, PipelineError } from "../../shared/types";
+} from "../../../shared/types";
+import { PIPELINE_ERROR_CODES, PipelineError } from "../../../shared/types";
 import {
   buildNormalizedPromptInput,
   type NormalizedPromptInput,
-} from "../intake-normalizer";
-import { captureServerException } from "../sentry";
+} from "../../intake-normalizer";
+import { captureServerException } from "../../sentry";
 import {
   buildCacheKey,
   getCachedResearch,
   setCachedResearch,
-} from "../kvCache";
+} from "../../kvCache";
 import {
   formatStructuredError,
   classifyErrorCode,
   withModelFailover,
-} from "./shared";
+} from "../shared";
 import {
   getResearchModel,
   getResearchModelFallback,
@@ -41,18 +41,18 @@ import {
   calculateCost,
   runOpenAIStoredPromptResearch,
   isOpenAIFailoverAvailable,
-} from "./providers";
+} from "../providers";
 import {
   validateResearchPacket,
   retryOnValidationFailure,
   addValidationResult,
-} from "./validators";
+} from "../validators";
 import {
   buildCitationRegistry,
   revalidateCitationsWithOpenAI,
-} from "./citations";
-import { buildResearchSystemPrompt, buildResearchUserPrompt } from "./prompts";
-import { logger } from "../logger";
+} from "../citations";
+import { buildResearchSystemPrompt, buildResearchUserPrompt } from "../prompts";
+import { logger } from "../../logger";
 import { synthesizeResearchFromIntake } from "./synthetic";
 
 export { synthesizeResearchFromIntake };
@@ -107,7 +107,7 @@ export async function runResearchStage(
     )
   );
   try {
-    const { notifyAdmins } = await import("../db");
+    const { notifyAdmins } = await import("../../db");
     await notifyAdmins({
       category: "letters",
       type: "pipeline_researching",
