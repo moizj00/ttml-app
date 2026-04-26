@@ -5,7 +5,11 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite && esbuild server/instrument.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --out-extension:.js=.js && esbuild server/migrate.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/worker.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "vite build && pnpm run -s _build:server && pnpm run -s _build:instrument && pnpm run -s _build:migrate && pnpm run -s _build:worker",
+    "_build:server":     "esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite",
+    "_build:worker":     "esbuild server/worker.ts     --platform=node --packages=external --bundle --format=esm --outdir=dist --external:@tailwindcss/vite --external:@vitejs/plugin-react --external:vite",
+    "_build:migrate":    "esbuild server/migrate.ts    --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "_build:instrument": "esbuild server/instrument.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --out-extension:.js=.js",
     "start": "NODE_ENV=production node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js",
     "db:migrate": "node dist/migrate.js",
     "start:migrate": "node --dns-result-order=ipv4first dist/migrate.js && NODE_ENV=production node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js",

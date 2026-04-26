@@ -53,7 +53,7 @@ export function DashboardStats({
         <Card
           key={card.label}
           className={`transition-all duration-500 ease-out ${statCardVisible[i] ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
-          style={staggerStyle(i, statCardVisible[i] ?? false)}
+          style={staggerStyle(i, !!statCardVisible[i])}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">

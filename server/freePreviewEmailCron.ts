@@ -201,6 +201,30 @@ export async function dispatchFreePreviewIfReady(
       jurisdictionState: letter.jurisdictionState ?? undefined,
     });
 
+    // v2.1: Preview unlock = transition ai_generation_completed_hidden ->
+    // letter_released_to_subscriber. This is the "AI generation is now
+    // shown" moment per the canonical flow. We do NOT auto-transition to
+    // pending_review here — that requires the subscriber to explicitly
+    // submit for attorney review (separate business event).
+    if (letter.status === "ai_generation_completed_hidden") {
+      try {
+        const { updateLetterStatus } = await import("./db");
+        await updateLetterStatus(letter.id, "letter_released_to_subscriber");
+        freePreviewLogger.info(
+          { letterId, fromStatus: letter.status },
+          "[FreePreviewEmails] Released to subscriber: ai_generation_completed_hidden -> letter_released_to_subscriber"
+        );
+      } catch (statusErr) {
+        // Non-fatal — email was sent. Status mismatch will be visible to
+        // admin via the letter detail view; the cron will not retry the
+        // status change since the email-sent stamp is already locked in.
+        freePreviewLogger.warn(
+          { letterId, err: statusErr instanceof Error ? statusErr.message : String(statusErr) },
+          "[FreePreviewEmails] Email sent but status transition failed (non-fatal)"
+        );
+      }
+    }
+
     freePreviewLogger.info(
       { letterId, to: subscriber.email },
       "[FreePreviewEmails] Free-preview-ready email dispatched"

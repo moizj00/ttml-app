@@ -19,7 +19,7 @@
  *     → subscribes / pays → pending_review → under_review → approved
  */
 
-import { and, lt, eq } from "drizzle-orm";
+import { and, lt, eq, inArray } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
@@ -95,7 +95,10 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
     .from(letterRequests)
     .where(
       and(
-        eq(letterRequests.status, "generated_locked"),
+        // v2.1: cron filter matches both legacy generated_locked AND the new
+        // ai_generation_completed_hidden default so the 24h reminder fires
+        // regardless of the PAYWALL_LEGACY env-var setting.
+        inArray(letterRequests.status, ["generated_locked", "ai_generation_completed_hidden"] as unknown as any[]),
         eq(letterRequests.draftReadyEmailSent, false),
         eq(letterRequests.submittedByAdmin, false),
         eq(letterRequests.isFreePreview, false),

@@ -34,6 +34,11 @@ import {
   hasLetterBeenPreviouslyUnlocked,
 } from "./db";
 import { runAssemblyStage, autoAdvanceIfPreviouslyUnlocked } from "./pipeline";
+import {
+  finalizeDraftPreviewStatus,
+  isLetterPreviewGated,
+  resolveDraftPreviewFinalStatus,
+} from "./pipeline/preview-gate";
 import type { IntakeJson, ResearchPacket, DraftOutput } from "../shared/types";
 import { captureServerException } from "./sentry";
 import { logger } from "./logger";
@@ -255,14 +260,16 @@ export function registerN8nCallbackRoute(app: Express): void {
           logger.info(
             `[n8n Callback] Aligned ${stageLabel} complete for letter #${letterId}. Skipping local assembly.`
           );
-          await updateLetterStatus(letterId, "generated_locked");
+          const alignedIsPreviewGated = await isLetterPreviewGated(letterId);
+          const alignedFinalStatus = resolveDraftPreviewFinalStatus(alignedIsPreviewGated);
+          await finalizeDraftPreviewStatus(letterId, alignedIsPreviewGated);
           await logReviewAction({
             letterRequestId: letterId,
             actorType: "system",
             action: "ai_pipeline_completed",
             noteText: `n8n aligned ${stageLabel} pipeline complete (${(stages ?? []).join(" → ")}). ${hasVetting ? `Vetting: risk=${vettingReport!.riskLevel}, bloat_removed=${vettingReport!.bloatPhrasesRemoved?.length ?? 0}, citations_flagged=${vettingReport!.citationsFlagged?.length ?? 0}. ` : ""}Draft ready — awaiting subscriber payment for attorney review.`,
             fromStatus: "drafting",
-            toStatus: "generated_locked",
+            toStatus: alignedFinalStatus,
           });
         } else {
           logger.info(
@@ -330,25 +337,29 @@ export function registerN8nCallbackRoute(app: Express): void {
                 `[n8n Callback] Local assembly failed for letter #${letterId}: ${assemblyMsg}. Using n8n draft as final.`
               );
 
-              await updateLetterStatus(letterId, "generated_locked");
+              const fallbackIsPreviewGated = await isLetterPreviewGated(letterId);
+              const fallbackFinalStatus = resolveDraftPreviewFinalStatus(fallbackIsPreviewGated);
+              await finalizeDraftPreviewStatus(letterId, fallbackIsPreviewGated);
               await logReviewAction({
                 letterRequestId: letterId,
                 actorType: "system",
                 action: "ai_pipeline_completed",
                 noteText: `n8n pipeline complete (${providerTag}). Local assembly skipped. Draft ready — awaiting subscriber payment for attorney review.`,
                 fromStatus: "drafting",
-                toStatus: "generated_locked",
+                toStatus: fallbackFinalStatus,
               });
             }
           } else {
-            await updateLetterStatus(letterId, "generated_locked");
+            const noIntakeIsPreviewGated = await isLetterPreviewGated(letterId);
+            const noIntakeFinalStatus = resolveDraftPreviewFinalStatus(noIntakeIsPreviewGated);
+            await finalizeDraftPreviewStatus(letterId, noIntakeIsPreviewGated);
             await logReviewAction({
               letterRequestId: letterId,
               actorType: "system",
               action: "ai_pipeline_completed",
               noteText: `n8n pipeline complete (${providerTag}). Draft ready — awaiting subscriber payment for attorney review.`,
               fromStatus: "drafting",
-              toStatus: "generated_locked",
+              toStatus: noIntakeFinalStatus,
             });
           }
         }

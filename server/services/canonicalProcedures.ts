@@ -26,7 +26,7 @@ import {
 // ─── Constants and Types ───────────────────────────────────────────────────
 
 const LETTER_HOLD_HOURS = 24;
-const DEFAULT_MODEL = "claude-3-5-sonnet-20240620"; // Swappable to any Claude variant
+const DEFAULT_MODEL = "claude-sonnet-4-20250514"; // Aligned with pipeline/providers.ts SONNET_PRICING
 
 export type LetterGenerationMethod =
   | "INTAKE_AUTO_GENERATION"

@@ -230,16 +230,23 @@ describe("useAuth Sentry user context sync", () => {
 describe("Pipeline Sentry instrumentation", () => {
   function readAllPipeline() {
     const dir = path.join(__dirname, "pipeline");
-    const files = ["shared", "research", "drafting", "assembly", "vetting", "citations", "validators", "providers", "prompts", "orchestrator"];
-    return files
-      .map(f => {
-        const flat = path.join(dir, `${f}.ts`);
-        const indexed = path.join(dir, f, "index.ts");
-        if (fs.existsSync(flat)) return fs.readFileSync(flat, "utf-8");
-        if (fs.existsSync(indexed)) return fs.readFileSync(indexed, "utf-8");
-        return "";
-      })
-      .join("\n");
+    // research and vetting were modularized into subdirectories (research/index.ts, vetting/index.ts)
+    // and full-pipeline error tagging moved into orchestration/errors.ts.
+    const files = [
+      "shared.ts",
+      "research/index.ts",
+      "drafting.ts",
+      "assembly.ts",
+      "vetting/index.ts",
+      "citations.ts",
+      "validators.ts",
+      "providers.ts",
+      "prompts.ts",
+      "orchestration/errors.ts",
+    ];
+    const fromPipeline = files.map(f => fs.readFileSync(path.join(dir, f), "utf-8"));
+    const orchestrator = fs.readFileSync(path.join(dir, "orchestrator.ts"), "utf-8");
+    return [...fromPipeline, orchestrator].join("\n");
   }
 
   it("pipeline.ts imports captureServerException", () => {

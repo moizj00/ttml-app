@@ -139,7 +139,7 @@ describe("Phase 94 — forceFreePreviewUnlock: status guard", () => {
 // ─── 5. vetting.ts — skip letter-ready email for free-preview ────────────
 
 describe("Phase 94 — vetting.ts: skip letter-ready email for free-preview", () => {
-  const source = readServer("pipeline", "vetting.ts");
+  const source = readServer("pipeline", "vetting", "index.ts");
 
   it("guards sendLetterReadyEmail on !letterForPaywall.isFreePreview", () => {
     expect(source).toMatch(/!letterForPaywall\.isFreePreview/);
@@ -196,7 +196,7 @@ describe("Phase 94 — test-suite sanity", () => {
   it("all referenced server files exist", () => {
     expect(existsSync(join(SERVER, "freePreviewEmailCron.ts"))).toBe(true);
     expect(existsSync(join(SERVER, "paywallEmailCron.ts"))).toBe(true);
-    expect(existsSync(join(SERVER, "pipeline", "vetting.ts"))).toBe(true);
+    expect(existsSync(join(SERVER, "pipeline", "vetting", "index.ts"))).toBe(true);
     expect(existsSync(join(SERVER, "pipeline", "fallback.ts"))).toBe(true);
     expect(existsSync(join(SERVER, "routers", "admin", "letters.ts"))).toBe(
       true

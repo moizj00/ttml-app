@@ -127,6 +127,27 @@ Express is configured with `express.json({ limit: "12mb" })` to accommodate larg
 
 **GOTCHA:** Do not reintroduce monolithic page/router files unless explicitly requested by the user.
 
+### 1.14 Module Move Checklist (Read Before Splitting a File Into a Subdirectory)
+
+Whenever you move `pipeline/foo.ts` → `pipeline/foo/index.ts` (or any equivalent file → folder/index.ts move), every relative import inside the moved file shifts one level deeper. Skipping this step has historically broken whole test suites that load via `import`, because ESM module resolution errors out on the first bad path before any test in the file runs.
+
+Before declaring the move complete:
+
+1. **Repath every relative import inside the moved file:**
+   - Sibling becomes parent: `from "./shared"` → `from "../shared"`, `from "./providers"` → `from "../providers"`, etc.
+   - Parent becomes grandparent: `from "../db"` → `from "../../db"`, `from "../sentry"` → `from "../../sentry"`.
+   - Re-exports (`export { X } from "./Y"`) follow the same rule.
+   - Don't forget dynamic imports (`await import("../db")`).
+2. **Repath the children too** if you also extracted helpers (e.g. `synthetic.ts`, `notifications.ts`) — they live at the new depth and need imports correct from day one.
+3. **Update any test that reads the file via `fs`:** grep for the old relative path (`pipeline/foo.ts`) in `server/**/*.test.ts` and switch to `pipeline/foo/index.ts`. Tests like `phase84-sentry`, `phase94-free-preview-guards`, and `free-preview-delay-ux` source-grep pipeline files to validate Sentry/email guards.
+4. **Re-export shared types from the moved module** rather than from `shared/types` if they're pipeline-internal (`VettingResult` lives in `server/pipeline/vetting/index.ts`, consumed by `server/pipeline/orchestration/status.ts`).
+5. **Run `pnpm check` *before* `pnpm test`.** `tsc --noEmit` will surface stale paths instantly; vitest will surface them as confusing whole-suite failures.
+
+When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` → `components/.../Bar/*.tsx`), the same idea applies plus two extras:
+
+- **Pick one canonical subtree** — never end up with the same logical area split across `pages/<name>/...` AND `components/<name>/...`. Per the Refactor Map above, `components/subscriber/<name>/` is canonical.
+- **Match the existing hook contracts.** `useStaggerReveal(itemCount, staggerMs?)` returns `boolean[]`; `staggerStyle(index, visible)` requires both args. Sub-components that retype these as `number` will silently invert the animation logic and TypeScript will catch the prop mismatch at the call site, not the definition.
+
 ---
 
 ## 2. STYLING CONVENTIONS

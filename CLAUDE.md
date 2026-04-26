@@ -59,9 +59,11 @@ Before making any changes, check:
 ### Refactor Landmarks
 
 - `client/src/pages/subscriber/Dashboard.tsx` is a composition shell; keep feature UI in `client/src/components/subscriber/dashboard/`.
-- `client/src/pages/subscriber/LetterDetail.tsx` is a composition shell; keep status-specific UI in `client/src/components/subscriber/letter-detail/`.
+- `client/src/pages/subscriber/LetterDetail.tsx` is a composition shell; keep status-specific UI in `client/src/components/subscriber/letter-detail/` (the single canonical subtree — do not recreate `pages/subscriber/letter-detail/`).
 - Admin router is modularized via `server/routers/admin/index.ts` and composed from `server/routers/admin/{letters,users,jobs,learning}.ts`.
+- Pipeline stages live in subdirectories: `server/pipeline/research/`, `server/pipeline/vetting/`, and `server/pipeline/orchestration/`. `VettingResult` is exported from `server/pipeline/vetting/index.ts` (not `shared/types`).
 - Avoid reintroducing monolithic route/page files unless explicitly requested.
+- **Before splitting a `*.ts` file into a `*/index.ts` subdirectory, read the Module Move Checklist in [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) §1.14** — every relative import inside the moved file shifts one level deeper, and tests that source-grep the old path break silently.
 
 ---
 
