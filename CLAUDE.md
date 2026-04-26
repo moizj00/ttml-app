@@ -51,10 +51,17 @@ Before making any changes, check:
 | Schema | `drizzle/schema.ts` |
 | Status transitions | `shared/types/letter.ts` → `ALLOWED_TRANSITIONS` |
 | tRPC procedure guards | `server/routers/` |
-| AI pipeline | `server/pipeline/orchestrator.ts` |
+| AI pipeline | `server/pipeline/orchestrator.ts` + `server/pipeline/orchestration/` + `server/pipeline/research/` + `server/pipeline/vetting/` |
 | Audit trail | `logReviewAction` → `review_actions` table |
 | Pricing | `shared/pricing.ts` (never hardcode: $299/letter, $299/mo, $2,400/yr) |
 | Env vars | `server/_core/env.ts` → `ENV` object |
+
+### Refactor Landmarks
+
+- `client/src/pages/subscriber/Dashboard.tsx` is a composition shell; keep feature UI in `client/src/components/subscriber/dashboard/`.
+- `client/src/pages/subscriber/LetterDetail.tsx` is a composition shell; keep status-specific UI in `client/src/components/subscriber/letter-detail/`.
+- Admin router is modularized via `server/routers/admin/index.ts` and composed from `server/routers/admin/{letters,users,jobs,learning}.ts`.
+- Avoid reintroducing monolithic route/page files unless explicitly requested.
 
 ---
 

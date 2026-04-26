@@ -117,6 +117,16 @@ If Upstash credentials are missing, rate limiting silently degrades (no crash).
 ### 1.12 Body Size Limit
 Express is configured with `express.json({ limit: "12mb" })` to accommodate large legal document uploads.
 
+### 1.13 Current Refactor Map (Important for Future Agents)
+- Subscriber dashboard page is intentionally thin: `client/src/pages/subscriber/Dashboard.tsx`.
+- Dashboard UI logic belongs in `client/src/components/subscriber/dashboard/*`.
+- Subscriber letter detail page is intentionally thin: `client/src/pages/subscriber/LetterDetail.tsx`.
+- Letter detail UI logic belongs in `client/src/components/subscriber/letter-detail/*`.
+- Admin tRPC router is modularized at `server/routers/admin/index.ts` and composed from `server/routers/admin/{letters,users,jobs,learning}.ts`.
+- Pipeline entry is `server/pipeline/orchestrator.ts`; stage-specific orchestration logic is split into `server/pipeline/orchestration/`, `server/pipeline/research/`, and `server/pipeline/vetting/`.
+
+**GOTCHA:** Do not reintroduce monolithic page/router files unless explicitly requested by the user.
+
 ---
 
 ## 2. STYLING CONVENTIONS
