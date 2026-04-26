@@ -9,7 +9,7 @@
 
 ## Orchestration & Side-Effect Optimizations
 
-The pipeline orchestrator (`server/pipeline/orchestrator.ts`) and individual stages are optimized for high throughput:
+The pipeline orchestrator (`server/pipeline/orchestrator.ts`) and modular stage handlers (`server/pipeline/orchestration/`, `server/pipeline/research/`, `server/pipeline/vetting/`) are optimized for high throughput:
 
 - **Parallel DB Writes:** Independent database writes (e.g., updating workflow job status, updating letter status, and logging review actions) are executed in parallel using `Promise.allSettled()` instead of sequentially.
 - **Batched Notifications:** Admin and attorney notifications are fanned out in parallel.
