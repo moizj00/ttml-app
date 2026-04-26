@@ -88,11 +88,20 @@ export const adminLettersProcedures = {
     .input(
       z.object({
         letterId: z.number(),
+        // v2.1: full canonical status enum so the admin force-status dropdown
+        // can target every status the state machine recognises (including the
+        // new attorney-review funnel statuses).
         newStatus: z.enum([
           "submitted",
           "researching",
           "drafting",
+          "ai_generation_completed_hidden",
+          "letter_released_to_subscriber",
+          "attorney_review_upsell_shown",
+          "attorney_review_checkout_started",
+          "attorney_review_payment_confirmed",
           "generated_locked",
+          "generated_unlocked",
           "pending_review",
           "under_review",
           "needs_changes",
