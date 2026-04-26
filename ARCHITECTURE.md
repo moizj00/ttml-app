@@ -25,7 +25,7 @@
 | AI — Drafting/Assembly | Anthropic Claude Opus                                                                    |
 | AI — Vetting           | Anthropic Claude Sonnet                                                                  |
 | AI — Doc Analysis      | OpenAI GPT-4o                                                                            |
-| Payments               | Stripe (subscriptions + one-time $200 per-letter unlock)                                 |
+| Payments               | Stripe (subscriptions + one-time $299 per-letter unlock)                                 |
 | Email                  | Resend (17 transactional templates)                                                      |
 | Background Jobs        | pg-boss (PostgreSQL-native queue)                                                        |
 | Rate Limiting          | Upstash Redis via @upstash/ratelimit (fail-open for general; fail-closed for auth)       |
@@ -153,7 +153,7 @@ Implementation notes for maintainability:
 
 ```
 ├── types/                     # Status machine (letter.ts), Zod schemas
-├── pricing.ts                 # Pricing constants (single source of truth — $200/letter, $200/mo, $2000/yr)
+├── pricing.ts                 # Pricing constants (single source of truth — $299/letter, $299/mo, $2,400/yr)
 └── const.ts                   # Error messages
 ```
 
