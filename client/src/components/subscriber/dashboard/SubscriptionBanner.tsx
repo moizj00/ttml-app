@@ -8,7 +8,7 @@ interface SubscriptionBannerProps {
     plan: string;
     lettersAllowed: number;
     lettersUsed: number;
-    currentPeriodEnd: Date | number | string | null;
+    currentPeriodEnd: number | string | Date | null;
     cancelAtPeriodEnd: boolean;
   };
 }

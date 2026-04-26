@@ -18,12 +18,12 @@ import { toast } from "sonner";
 import { useLetterRealtime } from "@/hooks/useLetterRealtime";
 import { SubscriberReviewBar } from "@/components/shared/SubscriberReviewBar";
 import { SubscriberLetterPreviewModal } from "@/components/shared/SubscriberLetterPreviewModal";
-import { ClientApprovalBlock } from "./letter-detail/ClientApprovalBlock";
-import { RejectionRetryBlock } from "./letter-detail/RejectionRetryBlock";
-import { LetterStatusDisplay } from "./letter-detail/LetterStatusDisplay";
-import { NeedsChangesPanel } from "./letter-detail/NeedsChangesPanel";
-import { ApprovedLetterPanel } from "./letter-detail/ApprovedLetterPanel";
-import { LetterContentRenderer } from "./letter-detail/LetterContentRenderer";
+import { ClientApprovalBlock } from "@/components/subscriber/letter-detail/ClientApprovalBlock";
+import { RejectionRetryBlock } from "@/components/subscriber/letter-detail/RejectionRetryBlock";
+import { LetterStatusDisplay } from "@/components/subscriber/letter-detail/LetterStatusDisplay";
+import { NeedsChangesPanel } from "@/components/subscriber/letter-detail/NeedsChangesPanel";
+import { ApprovedLetterPanel } from "@/components/subscriber/letter-detail/ApprovedLetterPanel";
+import { LetterContentRenderer } from "@/components/subscriber/letter-detail/LetterContentRenderer";
 
 // Sub-components
 import { TransitionBanner } from "@/components/subscriber/letter-detail/TransitionBanner";

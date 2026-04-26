@@ -1,13 +1,7 @@
 import { updateWorkflowJob } from "../../db";
 import { calculateCost } from "../providers";
 import type { PipelineContext } from "../../../shared/types";
-import type { VettingReport } from "../vetting-prompts";
-
-type VettingResult = {
-  vettedLetter: string;
-  vettingReport: VettingReport;
-  critical: boolean;
-};
+import type { VettingResult } from "../vetting";
 
 export async function updatePipelineJobStatus(
   pipelineJobId: number,

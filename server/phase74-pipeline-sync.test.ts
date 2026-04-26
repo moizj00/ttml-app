@@ -59,7 +59,8 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
 
   describe("n8n callback — status transitions match direct pipeline", () => {
     it("aligned 4-stage callback transitions: researching → drafting → generated_locked", async () => {
-      vi.setConfig({ testTimeout: 15000 });
+      // Cold-import of the n8n callback now pulls in the modularized pipeline tree
+      // (pipeline/research/, pipeline/vetting/, etc.), which exceeds the 5s default.
       // Import the route registration
       const { registerN8nCallbackRoute } = await import("./n8nCallback");
 
@@ -124,7 +125,7 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
       
       // Verify auto-advance was called
       expect(mockAutoAdvanceIfPreviouslyUnlocked).toHaveBeenCalledWith(42);
-    });
+    }, 30000);
 
     it("legacy callback also transitions through drafting before generated_locked", async () => {
       const { registerN8nCallbackRoute } = await import("./n8nCallback");
@@ -171,7 +172,7 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
       
       // Verify auto-advance was called
       expect(mockAutoAdvanceIfPreviouslyUnlocked).toHaveBeenCalledWith(99);
-    });
+    }, 30000);
 
     it("failed callback reverts to submitted (same as direct pipeline)", async () => {
       const { registerN8nCallbackRoute } = await import("./n8nCallback");
@@ -203,7 +204,7 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
 
       // Should revert to submitted
       expect(mockUpdateLetterStatus).toHaveBeenCalledWith(55, "submitted");
-    });
+    }, 30000);
   });
 
   describe("Status flow comparison: direct vs n8n", () => {

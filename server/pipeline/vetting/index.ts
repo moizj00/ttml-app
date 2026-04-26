@@ -96,17 +96,19 @@ import { notifyAdminsOfDegradedDraft } from "./notifications";
 const VETTING_TIMEOUT_MS = 120_000;
 
 
+export type VettingResult = {
+  vettedLetter: string;
+  vettingReport: VettingReport;
+  critical: boolean;
+};
+
 export async function runVettingStage(
   letterId: number,
   assembledLetter: string,
   intake: IntakeJson,
   research: ResearchPacket,
   pipelineCtx?: PipelineContext
-): Promise<{
-  vettedLetter: string;
-  vettingReport: VettingReport;
-  critical: boolean;
-}> {
+): Promise<VettingResult> {
   let jobId = 0;
   try {
     const job = await createWorkflowJob({

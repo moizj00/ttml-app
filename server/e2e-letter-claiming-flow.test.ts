@@ -281,6 +281,21 @@ describe("Letter Claiming Flow — Subscriber Delivery (My Letters Area)", () =>
     "subscriber",
     "LetterDetail.tsx"
   );
+  // After modularization, the action buttons and approved-letter UI live in sub-components.
+  const actionButtonsFile = readClient(
+    "components",
+    "subscriber",
+    "letter-detail",
+    "ActionButtons.tsx"
+  );
+  const approvedPanelFile = readClient(
+    "components",
+    "subscriber",
+    "letter-detail",
+    "ApprovedLetterPanel.tsx"
+  );
+  const subscriberDetailCombined =
+    subscriberDetailFile + actionButtonsFile + approvedPanelFile;
 
   it("subscriber LetterDetail page exists", () => {
     expect(
@@ -291,12 +306,12 @@ describe("Letter Claiming Flow — Subscriber Delivery (My Letters Area)", () =>
   });
 
   it("subscriber LetterDetail shows a Download PDF button for approved letters", () => {
-    expect(subscriberDetailFile).toContain("Download PDF");
-    expect(subscriberDetailFile).toContain("approved");
+    expect(subscriberDetailCombined).toContain("Download PDF");
+    expect(subscriberDetailCombined).toContain("approved");
   });
 
   it("subscriber LetterDetail shows a Copy button for approved letters", () => {
-    expect(subscriberDetailFile).toContain("Copy");
+    expect(subscriberDetailCombined).toContain("Copy");
   });
 
   it("subscriber LetterDetail allows archiving approved and rejected letters", () => {

@@ -71,7 +71,7 @@ export function LetterList({
             } ${
               isActionRequired ? "ring-1 ring-amber-300 bg-amber-50/30" : ""
             }`}
-            style={staggerStyle(idx, letterVisible[idx] ?? false)}
+            style={staggerStyle(idx, !!letterVisible[idx])}
           >
             <CardContent className="p-0">
               {/* Top section: letter info + status badge */}
