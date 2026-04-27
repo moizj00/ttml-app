@@ -72,7 +72,7 @@ export async function draftNode(
 
   const llm = new ChatAnthropic({
     apiKey,
-    model: "claude-opus-4-5",
+    model: "claude-sonnet-4-5-20250929",
     maxTokens: 4000,
     streaming: true,
   });
@@ -172,7 +172,7 @@ ${ctx.additionalContext ? `Additional context: ${ctx.additionalContext}` : ""}`;
     currentStage: "assembly",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("draft", "anthropic", promptTokens, completionTokens, "claude-opus-4-5"),
+        recordTokenUsage("draft", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-5-20250929"),
       ],
       breadcrumbs: [
         breadcrumb(
