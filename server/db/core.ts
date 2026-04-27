@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
+import { normalizeSupabaseUrlForPooler } from "../_core/supabase-url";
 
 const dbLogger = createLogger({ module: "Database" });
 
@@ -21,10 +22,14 @@ function needsSsl(url: string): boolean {
 }
 
 export async function getDb() {
-  const dbUrl =
+  const rawUrl =
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
     process.env.DATABASE_URL;
+  // Defensive: if Railway/Supabase auto-syncs reverted the URL to the
+  // IPv6-only direct host, rewrite it to the pooler form at connect time.
+  // See server/_core/supabase-url.ts for context.
+  const dbUrl = rawUrl ? normalizeSupabaseUrlForPooler(rawUrl) : rawUrl;
   if (!_db && dbUrl) {
     try {
       const client = postgres(dbUrl, {
@@ -50,10 +55,13 @@ export async function getDb() {
 export async function getReadDb() {
   if (_readDb) return _readDb;
 
-  const replicaUrl = process.env.SUPABASE_READ_REPLICA_URL;
-  if (!replicaUrl || _readDbFailed) {
+  const rawReplicaUrl = process.env.SUPABASE_READ_REPLICA_URL;
+  if (!rawReplicaUrl || _readDbFailed) {
     return getDb();
   }
+  // Apply the same defensive normalization to the read replica URL in case
+  // Railway syncs revert it to the direct host.
+  const replicaUrl = normalizeSupabaseUrlForPooler(rawReplicaUrl);
 
   try {
     const client = postgres(replicaUrl, {
