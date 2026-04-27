@@ -200,6 +200,24 @@ async function resolveConnectionToIPv4(
       return connectionString;
     }
 
+    // Skip Supabase pooler URLs — the pooler uses the hostname (via SNI) to
+    // route to the right project, and the username `postgres.<PROJECT_REF>`
+    // is interpreted in the context of that routing. Replacing the hostname
+    // with a raw IPv4 address breaks the SNI handshake; pgbouncer then tries
+    // to authenticate the literal user `postgres.<PROJECT_REF>` against the
+    // shared `postgres` role, which fails with `password authentication
+    // failed for user "postgres"`. We rely on `dns.setDefaultResultOrder(
+    // "ipv4first")` (set in worker.ts) to prefer A records at connect time
+    // — which keeps the hostname intact while still avoiding the IPv6
+    // ENETUNREACH on Railway.
+    if (hostname.endsWith(".pooler.supabase.com")) {
+      logger.info(
+        { hostname },
+        "[Queue] Preserving Supabase pooler hostname for SNI-based project routing"
+      );
+      return connectionString;
+    }
+
     const addresses = await dns.promises.resolve4(hostname);
     if (addresses.length > 0) {
       const ipv4 = addresses[0];
