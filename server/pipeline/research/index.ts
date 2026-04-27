@@ -220,7 +220,7 @@ export async function runResearchStage(
   let researchModelKey =
     researchConfig.provider === "openai"
       ? "gpt-4o-search-preview"
-      : "claude-sonnet-4-20250514";
+      : "claude-sonnet-4-5-20250929";
 
   try {
     logger.info(

@@ -149,7 +149,7 @@ export async function runDraftingStage(
 
   const draftTokens = createTokenAccumulator();
   let draftProvider = "anthropic";
-  let draftModelKey = "claude-sonnet-4-20250514";
+  let draftModelKey = "claude-sonnet-4-5-20250929";
 
   const callGenerateText = async (prompt: string) => {
     const result = await generateText({

@@ -26,7 +26,7 @@ import {
 // ─── Constants and Types ───────────────────────────────────────────────────
 
 const LETTER_HOLD_HOURS = 24;
-const DEFAULT_MODEL = "claude-sonnet-4-20250514"; // Aligned with pipeline/providers.ts SONNET_PRICING
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929"; // Aligned with pipeline/providers.ts SONNET_PRICING. Predecessor "claude-sonnet-4-20250514" deprecated by Anthropic, EOL 2026-06-15.
 
 export type LetterGenerationMethod =
   | "INTAKE_AUTO_GENERATION"

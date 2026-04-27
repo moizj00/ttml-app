@@ -37,7 +37,7 @@ export async function vettingNode(
 
   const llm = new ChatAnthropic({
     apiKey,
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-5-20250929",
     maxTokens: 2000,
   });
 
@@ -142,7 +142,7 @@ Context:
     currentStage: qualityDegraded && retryCount < 2 ? "draft" : "finalize",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("vetting", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-20250514"),
+        recordTokenUsage("vetting", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-5-20250929"),
       ],
       breadcrumbs: [
         breadcrumb(

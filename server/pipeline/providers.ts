@@ -46,7 +46,7 @@ export function getResearchModel() {
     );
     const anthropic = getAnthropicClient();
     return {
-      model: anthropic("claude-sonnet-4-20250514"),
+      model: anthropic("claude-sonnet-4-5-20250929"),
       provider: "anthropic-fallback",
       tools: undefined as ToolSet | undefined,
     };
@@ -85,10 +85,10 @@ export function getResearchModelFallback(): {
   return null;
 }
 
-/** Stage 2: Anthropic claude-sonnet-4 — initial legal draft (direct Anthropic API) */
+/** Stage 2: Anthropic claude-sonnet-4-5 — initial legal draft (direct Anthropic API) */
 export function getDraftModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-20250514");
+  return anthropic("claude-sonnet-4-5-20250929");
 }
 
 /** Stage 2 failover: OpenAI gpt-4o-mini */
@@ -97,10 +97,10 @@ export function getDraftModelFallback() {
   return openai("gpt-4o-mini");
 }
 
-/** Stage 3: Anthropic claude-sonnet-4 — final polished letter assembly (direct Anthropic API) */
+/** Stage 3: Anthropic claude-sonnet-4-5 — final polished letter assembly (direct Anthropic API) */
 export function getAssemblyModel() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-20250514");
+  return anthropic("claude-sonnet-4-5-20250929");
 }
 
 /** Stage 3 failover: OpenAI gpt-4o-mini */
@@ -148,10 +148,13 @@ export const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerM
   "sonar-pro": { inputPerMillion: 3, outputPerMillion: 15 },
   "sonar": { inputPerMillion: 1, outputPerMillion: 1 },
   "claude-opus-4-5": { inputPerMillion: 15, outputPerMillion: 75 },
-  // Support both full and short model IDs for both Sonnet 4 and Sonnet 4.6,
-  // to avoid pricing drift when model IDs change across pipeline stages.
-  // All four variants are active in server/pipeline/{drafting,assembly,research,vetting}.ts
-  // and server/learning/{categories,dedup,quality}.ts as of 2026-04-16.
+  // Support multiple Sonnet model IDs side by side so historical token-usage
+  // entries don't break when we roll forward. As of 2026-04-27 the active
+  // model is claude-sonnet-4-5-20250929; the older claude-sonnet-4-20250514
+  // (deprecated, EOL 2026-06-15) is kept here so any pre-rollover rows can
+  // still resolve a price.
+  "claude-sonnet-4-5-20250929": SONNET_PRICING,
+  "claude-sonnet-4-5": SONNET_PRICING,
   "claude-sonnet-4-20250514": SONNET_PRICING,
   "claude-sonnet-4": SONNET_PRICING,
   "claude-sonnet-4-6-20250514": SONNET_PRICING,

@@ -75,7 +75,7 @@ export async function runAssemblyStage(
 
   const assemblyTokens = createTokenAccumulator();
   let assemblyProvider = "anthropic";
-  let assemblyModelKey = "claude-sonnet-4-20250514";
+  let assemblyModelKey = "claude-sonnet-4-5-20250929";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback

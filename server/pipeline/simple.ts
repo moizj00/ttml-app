@@ -110,7 +110,7 @@ export async function runSimplePipeline(
 
     // Call Claude
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 4096,
       messages: [
         {
@@ -146,7 +146,7 @@ export async function runSimplePipeline(
       createdByType: "system",
       createdByUserId: userId,
       metadataJson: {
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         provider: "anthropic",
         mode: "simple",
         promptTokens: message.usage?.input_tokens,
