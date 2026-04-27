@@ -403,7 +403,11 @@ export function useSubmitLetterForm() {
                 jurisdictionState: form.jurisdictionState,
                 jurisdictionCity: form.jurisdictionCity || undefined,
                 intakeJson,
-                ...(activeTemplateId ? { templateId: activeTemplateId } : {}),
+                ...(activeIntakeFormTemplateId
+                    ? { templateId: activeIntakeFormTemplateId }
+                    : activeTemplateId
+                        ? { templateId: activeTemplateId }
+                        : {}),
             });
 
             const letterId = result.letterId;
