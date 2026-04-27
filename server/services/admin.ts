@@ -607,6 +607,44 @@ export async function forceStatusTransition(
     }
   }
 
+  // ── Bug 2 fix: Collapse the free-preview 24h window when forcing to a
+  // subscriber-visible status. The subscriber UI gates visibility on
+  // `letter.visibilityStatus === "hidden"` (resolved server-side from
+  // `freePreviewUnlockAt > NOW`), NOT on `status`. So force-flipping the
+  // status alone leaves the subscriber stuck on the "free_preview_waiting"
+  // screen until the natural 24h elapses. Pre-visibility statuses are
+  // excluded — those are AI-generation phases where subscriber visibility
+  // doesn't apply yet.
+  const PRE_VISIBILITY_STATUSES = new Set([
+    "submitted",
+    "researching",
+    "drafting",
+    "ai_generation_completed_hidden",
+    "pipeline_failed",
+  ]);
+  if (
+    letter.isFreePreview === true &&
+    letter.freePreviewUnlockAt &&
+    new Date(letter.freePreviewUnlockAt).getTime() > Date.now() &&
+    !PRE_VISIBILITY_STATUSES.has(input.newStatus)
+  ) {
+    const db = await getDb();
+    if (db) {
+      await db
+        .update(letterRequests)
+        .set({ freePreviewUnlockAt: new Date() })
+        .where(eq(letterRequests.id, input.letterId));
+      logger.info(
+        {
+          letterId: input.letterId,
+          newStatus: input.newStatus,
+          previousUnlockAt: letter.freePreviewUnlockAt,
+        },
+        "[forceStatusTransition] Collapsed freePreviewUnlockAt to NOW for visibility-affecting status"
+      );
+    }
+  }
+
   await updateLetterStatus(input.letterId, input.newStatus, {
     force: true,
     approvedByRole: input.newStatus === "approved" ? "admin" : undefined,
@@ -641,6 +679,112 @@ export async function forceStatusTransition(
       // Non-fatal: email failure should not block the status transition
     }
   }
+
+  // ── Bug 1 fix: Auto-enqueue a pipeline job when admin forces back into a
+  // generation status. Without this, force-transitioning to
+  // submitted / researching / drafting flips the status but no pg-boss job
+  // is created — the worker has nothing to consume and the Pipeline Jobs
+  // panel stays empty. Mirrors the lock + preflight checks `retryPipelineJob`
+  // performs.
+  //
+  // Best-effort: if anything fails (no intake, lock held, missing API keys,
+  // queue unreachable) we DO NOT undo the status change — the admin may be
+  // intentionally re-pointing without re-running. We log a review_action so
+  // the failure is auditable and the admin can fall back to "Retry Job".
+  const PIPELINE_RESTART_TARGETS: Record<string, "research" | "drafting"> = {
+    submitted: "research",
+    researching: "research",
+    drafting: "drafting",
+  };
+  const restartStage = PIPELINE_RESTART_TARGETS[input.newStatus];
+  if (restartStage) {
+    const STALE_LOCK_MS = 30 * 60 * 1000; // matches retryPipelineJob
+    const lockHeldRecently =
+      letter.pipelineLockedAt &&
+      Date.now() - new Date(letter.pipelineLockedAt).getTime() < STALE_LOCK_MS;
+
+    let skipReason: string | null = null;
+    if (!letter.intakeJson) {
+      skipReason = "no intake_json on letter (cannot drive a pipeline run)";
+    } else if (lockHeldRecently) {
+      skipReason = `pipeline lock still held since ${new Date(letter.pipelineLockedAt!).toISOString()} (skipped to avoid duplicate run)`;
+    } else {
+      const { preflightApiKeyCheck } = await import("../pipeline");
+      const apiCheck = preflightApiKeyCheck(restartStage);
+      if (!apiCheck.ok) {
+        skipReason = `API key preflight failed: ${apiCheck.missing.join("; ")}`;
+      }
+    }
+
+    if (skipReason) {
+      logger.warn(
+        { letterId: input.letterId, newStatus: input.newStatus, skipReason },
+        "[forceStatusTransition] Skipped pipeline auto-enqueue"
+      );
+      try {
+        await logReviewAction({
+          letterRequestId: input.letterId,
+          reviewerId: ctx.userId,
+          actorType: "system",
+          action: "admin_force_status_transition",
+          noteText: `Pipeline auto-enqueue skipped: ${skipReason}. Use "Retry Job" to start AI generation manually.`,
+          noteVisibility: "internal",
+          fromStatus: input.newStatus,
+          toStatus: input.newStatus,
+        });
+      } catch {
+        // Non-fatal: audit log failure should not break the status update
+      }
+    } else {
+      try {
+        const jobId = await enqueueRetryFromStageJob({
+          type: "retryPipelineFromStage",
+          letterId: input.letterId,
+          intake: letter.intakeJson as object,
+          stage: restartStage,
+          userId: letter.userId ?? undefined,
+        });
+        logger.info(
+          { letterId: input.letterId, jobId, stage: restartStage },
+          "[forceStatusTransition] Auto-enqueued pipeline job after force-transition"
+        );
+        try {
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.userId,
+            actorType: "system",
+            action: "admin_force_status_transition",
+            noteText: `Auto-enqueued pipeline job ${jobId} (stage=${restartStage}) after admin force-transitioned to "${input.newStatus}".`,
+            noteVisibility: "internal",
+            fromStatus: input.newStatus,
+            toStatus: input.newStatus,
+          });
+        } catch {
+          // Non-fatal
+        }
+      } catch (err) {
+        logger.error(
+          { err, letterId: input.letterId, newStatus: input.newStatus },
+          "[forceStatusTransition] Pipeline auto-enqueue failed"
+        );
+        try {
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.userId,
+            actorType: "system",
+            action: "admin_force_status_transition",
+            noteText: `Pipeline auto-enqueue failed: ${err instanceof Error ? err.message : String(err)}. Use "Retry Job" to start AI generation manually.`,
+            noteVisibility: "internal",
+            fromStatus: input.newStatus,
+            toStatus: input.newStatus,
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+    }
+  }
+
   return { success: true };
 }
 

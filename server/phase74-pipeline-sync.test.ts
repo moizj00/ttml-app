@@ -120,14 +120,16 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
       // First call: researching → drafting
       expect(statusCalls[0]).toEqual([42, "drafting"]);
 
-      // Second call: drafting → generated_locked
-      expect(statusCalls[1]).toEqual([42, "generated_locked"]);
-      
+      // Second call: drafting → ai_generation_completed_hidden
+      // (post-#75 default: paywall funnel routes the letter to the 24h hidden window
+      // via finalizeDraftPreviewStatus, which forwards an undefined options arg)
+      expect(statusCalls[1]).toEqual([42, "ai_generation_completed_hidden", undefined]);
+
       // Verify auto-advance was called
       expect(mockAutoAdvanceIfPreviouslyUnlocked).toHaveBeenCalledWith(42);
     }, 30000);
 
-    it("legacy callback also transitions through drafting before generated_locked", async () => {
+    it("legacy callback also transitions through drafting before ai_generation_completed_hidden", async () => {
       const { registerN8nCallbackRoute } = await import("./n8nCallback");
 
       let handler: (req: any, res: any) => Promise<void>;
@@ -167,9 +169,11 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
       // First: researching → drafting
       expect(statusCalls[0]).toEqual([99, "drafting"]);
 
-      // Second: drafting → generated_locked
-      expect(statusCalls[1]).toEqual([99, "generated_locked"]);
-      
+      // Second: drafting → ai_generation_completed_hidden
+      // (post-#75 default: paywall funnel routes the letter to the 24h hidden window
+      // via finalizeDraftPreviewStatus, which forwards an undefined options arg)
+      expect(statusCalls[1]).toEqual([99, "ai_generation_completed_hidden", undefined]);
+
       // Verify auto-advance was called
       expect(mockAutoAdvanceIfPreviouslyUnlocked).toHaveBeenCalledWith(99);
     }, 30000);

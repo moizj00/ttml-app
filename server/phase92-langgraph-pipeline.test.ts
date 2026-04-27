@@ -445,10 +445,12 @@ describe("runLangGraphPipeline — happy path (full 4-stage pipeline)", () => {
     });
 
     // Status transitions happen in the expected order.
+    // Post-#75 default: paywall funnel routes letters to ai_generation_completed_hidden
+    // (the 24h hidden window) instead of generated_locked.
     const statuses = mocks.dbCalls.updateLetterStatus.map((c) => c.status);
     expect(statuses).toContain("researching");
     expect(statuses).toContain("drafting");
-    expect(statuses).toContain("generated_locked");
+    expect(statuses).toContain("ai_generation_completed_hidden");
 
     // Every stage was invoked exactly once.
     expect(mocks.fetchCalls).toBe(1); // Perplexity
