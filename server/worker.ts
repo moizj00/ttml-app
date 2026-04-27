@@ -663,13 +663,27 @@ async function startWorker() {
 
   const boss = await getBoss();
 
-  // Register the job handler — pg-boss calls this with an array of jobs
+  // Register the job handler. pg-boss v12 always invokes the callback with an
+  // ARRAY of jobs (verified at pg-boss/dist/manager.js:201 — `callback(jobs)`),
+  // even when localConcurrency=1 fetches them one at a time. The pg-boss
+  // TypeScript types are out of sync with this runtime behavior — they declare
+  // `(job: Job<unknown>) => Promise<void>` but the runtime passes an array.
+  //
+  // The previous handler `(job) => processJob(job)` treated the array as a
+  // single Job, so every submission failed at the first `job.data.type`
+  // access with `TypeError: Cannot read properties of undefined (reading
+  // 'type')` — arrays have no `.data`. That silently broke every letter
+  // submission since the worker moved to pg-boss v12, producing zero rows in
+  // `letter_versions`. We iterate the batch and forward each job individually.
+  // Cast to suppress the upstream type mismatch.
   await boss.work(
     QUEUE_NAME,
     { localConcurrency: 1 },
-    async (job: Job<PipelineJobData>) => {
-      await processJob(job);
-    }
+    (async (jobs: Job<PipelineJobData>[]) => {
+      for (const job of jobs) {
+        await processJob(job);
+      }
+    }) as unknown as (job: Job<unknown>) => Promise<void>
   );
 
   boss.on("error", (err: unknown) => {
