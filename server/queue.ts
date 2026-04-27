@@ -145,6 +145,55 @@ export function isQueueConnectionConfigured(): boolean {
   );
 }
 
+/**
+ * If a Supabase connection string points to the IPv6-only direct host
+ * (`db.<PROJECT_REF>.supabase.co`), rewrite it to the session pooler
+ * (`<region>.pooler.supabase.com:5432`) so it works on Railway's IPv4-only
+ * network. The session pooler supports LISTEN/NOTIFY, which pg-boss needs.
+ *
+ * This exists because Railway's Supabase integration / reference-variable
+ * sync intermittently overwrites pooler URLs back to direct URLs on deploy
+ * (e.g. after a Supabase password rotation). Normalizing in code makes the
+ * worker robust regardless of which form the env var lands in.
+ *
+ * Region is inferred from `SUPABASE_POOLER_HOST` env var; if unset, defaults
+ * to `aws-1-us-west-2.pooler.supabase.com` (matches this project's region).
+ */
+function normalizeSupabaseUrlForPooler(rawUrl: string): string {
+  const POOLER_HOST =
+    process.env.SUPABASE_POOLER_HOST ||
+    "aws-1-us-west-2.pooler.supabase.com";
+
+  try {
+    const url = new URL(rawUrl);
+    const directMatch = url.hostname.match(
+      /^db\.([a-z0-9]+)\.supabase\.co$/i
+    );
+    // Only rewrite when:
+    //   1. hostname matches the IPv6-only direct host pattern, AND
+    //   2. username is the bare `postgres` (no project-ref prefix).
+    // If the username is already `postgres.<PROJECT_REF>`, the URL is
+    // pooler-form already and we leave it alone.
+    if (directMatch && url.username === "postgres") {
+      const projectRef = directMatch[1];
+      url.hostname = POOLER_HOST;
+      url.username = `postgres.${projectRef}`;
+      // Strip ?sslmode=require — Node treats it as 'verify-full' which fails
+      // on Supabase's CA chain. pg-boss config sets rejectUnauthorized=false.
+      url.searchParams.delete("sslmode");
+      const masked = url.toString().replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
+      logger.warn(
+        { rewrittenTo: masked, projectRef },
+        "[Queue] Auto-rewriting direct Supabase URL (db.*.supabase.co) to pooler form. Railway is IPv4-only; the direct host is IPv6-only and unreachable. Set SUPABASE_POOLER_HOST to override the default region."
+      );
+      return url.toString();
+    }
+  } catch (err) {
+    logger.warn({ err }, "[Queue] Failed to parse connection string for pooler rewrite — using as-is");
+  }
+  return rawUrl;
+}
+
 function getConnectionString(): string {
   const envSource = process.env.SUPABASE_DIRECT_URL
     ? "SUPABASE_DIRECT_URL"
@@ -154,29 +203,32 @@ function getConnectionString(): string {
         ? "DATABASE_URL"
         : null;
 
-  const url =
+  const rawUrl =
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
     process.env.DATABASE_URL;
 
-  if (!url || !envSource) {
+  if (!rawUrl || !envSource) {
     throw new Error(
-      "[Queue] No database URL found. Set SUPABASE_DIRECT_URL (direct connection, not pooler) for pg-boss."
+      "[Queue] No database URL found. Set SUPABASE_DIRECT_URL or DATABASE_URL for pg-boss."
     );
   }
+
+  // Normalize direct → pooler so the worker stays connected even when
+  // Railway/Supabase auto-syncs revert env vars to direct form.
+  const url = normalizeSupabaseUrlForPooler(rawUrl);
 
   const masked = url.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
   logger.info(`[Queue] Using ${envSource} for pg-boss connection: ${masked}`);
 
-  if (
-    url.includes(":6543") ||
-    url.includes("pooler.supabase.com") ||
-    url.includes("pgbouncer=true")
-  ) {
+  // Note: the SESSION pooler (port 5432 on .pooler.supabase.com) supports
+  // LISTEN/NOTIFY which pg-boss requires. Only the TRANSACTION pooler
+  // (port 6543) lacks LISTEN/NOTIFY support. Warn only on port 6543.
+  if (url.includes(":6543") || url.includes("pgbouncer=true")) {
     logger.warn(
-      `[Queue] WARNING: ${envSource} appears to be a connection pooler URL. ` +
-      `pg-boss requires a DIRECT connection (port 5432, not 6543) for LISTEN/NOTIFY. ` +
-      `Set SUPABASE_DIRECT_URL to the direct connection string.`
+      `[Queue] WARNING: ${envSource} points at the TRANSACTION pooler (:6543). ` +
+      `pg-boss requires LISTEN/NOTIFY which is only supported on the session pooler ` +
+      `(:5432) or a direct connection. Switch to port 5432 on .pooler.supabase.com.`
     );
   }
 
