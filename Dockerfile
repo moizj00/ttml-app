@@ -28,6 +28,11 @@ COPY client/ ./client/
 COPY server/ ./server/
 COPY shared/ ./shared/
 COPY drizzle/ ./drizzle/
+# attached_assets/ holds the approved- and draft-letter HTML templates that
+# server/letterTemplates.ts loads at runtime via __dirname/../attached_assets.
+# These ship as plain HTML (not bundled by esbuild), so they must be COPYed
+# into both the builder and production stages.
+COPY attached_assets/ ./attached_assets/
 COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
 
 # Build: vite builds client → dist/public, esbuild bundles server → dist/index.js
@@ -61,6 +66,12 @@ COPY --from=builder /app/dist/ ./dist/
 # SQL files in the drizzle/ root (e.g. drizzle/0000_nervous_james_howlett.sql).
 # migrate.ts resolves the path as __dirname/../drizzle (i.e. dist/../drizzle).
 COPY --from=builder /app/drizzle/ ./drizzle/
+
+# Copy the HTML letter templates loaded at runtime by server/letterTemplates.ts
+# (resolves to __dirname/../attached_assets/Template-*.html). Without these the
+# PDF generation path silently fails with ENOENT, leaving letters at status
+# `approved` with pdf_url=NULL — observed in production for letter #6.
+COPY --from=builder /app/attached_assets/ ./attached_assets/
 
 # package.json must live next to dist/index.js because vite.config.ts
 # (bundled into dist/index.js) reads it via fs.readFileSync at startup.
