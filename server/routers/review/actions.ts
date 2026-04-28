@@ -353,6 +353,49 @@ export const reviewActionsRouter = router({
         );
         // Non-blocking: approval still succeeds even if PDF generation fails
       }
+      // ── Auto-advance to client_approval_pending so the subscriber can act ──
+      // Without this the letter is stuck at `approved` and the subscriber's
+      // /letters/<id> page shows the approved-letter panel but no
+      // ClientApprovalBlock / SubscriberReviewBar (those gate on status =
+      // client_approval_pending). The subscriber has nothing to click.
+      // Per the canonical flow in CLAUDE.md:
+      //   approved → client_approval_pending → client_approved → sent
+      // The transition is in `ALLOWED_TRANSITIONS` so it doesn't need force=true.
+      // Skip this branch when the attorney is sending directly to recipient —
+      // that path advances to `sent` below.
+      if (!input.recipientEmail) {
+        try {
+          await updateLetterStatus(input.letterId, "client_approval_pending");
+          await logReviewAction({
+            letterRequestId: input.letterId,
+            reviewerId: ctx.user.id,
+            actorType: "system",
+            action: "auto_advance_to_client_approval",
+            noteText:
+              "Auto-advanced from approved → client_approval_pending so the subscriber can approve for delivery or request edits.",
+            noteVisibility: "internal",
+            fromStatus: "approved",
+            toStatus: "client_approval_pending",
+          });
+          logger.info(
+            `[Approve] Letter #${input.letterId} auto-advanced approved → client_approval_pending`
+          );
+        } catch (err) {
+          captureServerException(err, {
+            tags: {
+              component: "review",
+              error_type: "auto_client_approval_failed",
+            },
+            extra: { letterId: input.letterId },
+          });
+          logger.error(
+            { err, letterId: input.letterId },
+            "[Approve] Auto-advance to client_approval_pending failed (non-fatal)"
+          );
+          // Non-fatal: approval still succeeds; admin can manually advance
+          // via force-status-transition if this auto-advance ever fails.
+        }
+      }
       // ── Optionally send letter directly to recipient in one step ──
       let recipientSent = false;
       let recipientSendError: string | undefined;
