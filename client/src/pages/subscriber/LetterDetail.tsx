@@ -368,6 +368,32 @@ export default function LetterDetail() {
     letter.status === "sent";
   const pdfUrl = (letter as any).pdfUrl as string | null | undefined;
 
+  // Free-preview UI (FreePreviewViewer / FreePreviewWaiting) is a pre-payment
+  // lead magnet — it only makes sense BEFORE the letter has been submitted for
+  // attorney review. Once the letter advances to `attorney_review_payment_
+  // confirmed` or beyond (pending_review, under_review, approved, client_*,
+  // sent, etc.), the upsell card and the watermarked draft become irrelevant
+  // — the letter is already in / past the paid review pipeline. Without this
+  // gate, the FreePreviewViewer keeps rendering on top of the
+  // ApprovedLetterPanel because `aiDraftVersion.freePreview` is still `true`
+  // (the server never clears the flag — the draft itself doesn't change).
+  // Reproduced when admin force-transitions a free-preview letter through the
+  // payment statuses + attorney approves: subscriber sees the upsell stacked
+  // on top of the approved letter view.
+  const FREE_PREVIEW_VISIBLE_STATUSES = new Set([
+    "free_preview_waiting",
+    "ai_generation_completed_hidden",
+    "letter_released_to_subscriber",
+    "attorney_review_upsell_shown",
+    "attorney_review_checkout_started",
+    "generated_locked",
+    "generated_unlocked",
+    "pipeline_failed",
+  ]);
+  const isFreePreviewPhase =
+    letter.isFreePreview === true &&
+    FREE_PREVIEW_VISIBLE_STATUSES.has(displayStatus as string);
+
   return (
     <AppLayout
       breadcrumb={[
@@ -437,10 +463,11 @@ export default function LetterDetail() {
           freePreviewUnlocked={freePreviewUnlocked}
         />
 
-        {letter.isFreePreview === true &&
+        {isFreePreviewPhase &&
         (aiDraftVersion as any)?.freePreview !== true ? (
           <FreePreviewWaiting subject={letter.subject} />
-        ) : (aiDraftVersion as any)?.freePreview === true ? (
+        ) : isFreePreviewPhase &&
+          (aiDraftVersion as any)?.freePreview === true ? (
           <FreePreviewViewer
             letterId={letterId}
             subject={letter.subject}
@@ -531,6 +558,7 @@ export default function LetterDetail() {
             letterSubject={letter.subject}
             pdfUrl={pdfUrl}
             content={finalVersion.content}
+            status={letter.status}
             onInvalidate={invalidate}
             onCopy={handleCopy}
           />

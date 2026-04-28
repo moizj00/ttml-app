@@ -13,11 +13,23 @@ interface ApprovedLetterPanelProps {
   letterSubject: string;
   pdfUrl: string | null | undefined;
   content: string;
+  /**
+   * Current letter status — used to phrase the PDF button correctly.
+   * - `approved` (attorney approved, awaiting subscriber click): PDF doesn't
+   *   exist yet AND nothing is generating. Per CLAUDE.md, PDF generation is
+   *   triggered on subscriber `clientApprove` — not when the attorney submits.
+   *   Showing "Generating PDF..." here is misleading; the user has to click
+   *   "Approve for delivery" first.
+   * - `client_approved` / `sent`: PDF SHOULD exist; if pdfUrl is null, it's
+   *   actually mid-generation, so "Generating PDF..." is accurate.
+   * - `pdfUrl` populated: ready, show "Download PDF".
+   */
+  status?: string;
   onInvalidate: () => void;
   onCopy: () => void;
 }
 
-export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, onInvalidate, onCopy }: ApprovedLetterPanelProps) {
+export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, status, onInvalidate, onCopy }: ApprovedLetterPanelProps) {
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [sendSubjectOverride, setSendSubjectOverride] = useState("");
@@ -104,7 +116,11 @@ export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, 
                 disabled={!pdfUrl}
               >
                 <Download className="w-4 h-4 mr-1.5" />
-                {pdfUrl ? "Download PDF" : "Generating PDF..."}
+                {pdfUrl
+                  ? "Download PDF"
+                  : status === "approved"
+                    ? "PDF available after you approve"
+                    : "Generating PDF..."}
               </Button>
               <Button
                 onClick={onCopy}
