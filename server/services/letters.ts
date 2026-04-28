@@ -26,7 +26,11 @@ import {
   decrementLettersUsed,
   getLetterRequestById,
   getLetterVersionsByRequestId,
+  updateLetterPdfUrl,
+  updateLetterStoragePath,
 } from "../db";
+import { storageGet } from "../storage";
+import { generateAndUploadApprovedPdf } from "../pdfGenerator";
 import {
   sendLetterSubmissionEmail,
   sendStatusUpdateEmail,
@@ -229,16 +233,95 @@ export async function sendLetterToRecipientFlow(
   if (!letter || letter.userId !== ctx.userId)
     throw new TRPCError({ code: "NOT_FOUND" });
 
+  // Resolve a current PDF URL so the recipient receives the polished
+  // attorney-signed PDF (not just inline HTML). Three cases:
+  //
+  //   1. PDF already in R2 → mint a fresh URL via storageGet.
+  //   2. No PDF in R2 yet (e.g. attorney-side generation failed silently)
+  //      → render+upload via generateAndUploadApprovedPdf, persist key+url.
+  //   3. PDF generation fails entirely → fall back to htmlContent only so
+  //      the recipient at least gets the letter inline. Surfaced in the
+  //      response payload so the client can warn the subscriber.
+  //
+  // Previously this function passed `pdfUrl: undefined` with a TODO
+  // comment ("will be fetched by sender if needed") — but the email
+  // worker never actually fetched it, so recipients got the email body
+  // only and no PDF attachment.
+  let resolvedPdfUrl: string | undefined;
+  let pdfAttached = false;
+
+  const versions = await getLetterVersionsByRequestId(input.letterId, false);
+  const finalVer = versions.find(v => v.versionType === "final_approved");
+  const htmlContent = finalVer?.content;
+
+  const existingKey = (letter as any).pdfStoragePath as
+    | string
+    | null
+    | undefined;
+  if (existingKey) {
+    try {
+      const { url } = await storageGet(existingKey);
+      resolvedPdfUrl = url;
+      pdfAttached = true;
+    } catch (err) {
+      logger.warn(
+        { err, letterId: input.letterId },
+        "[sendLetterToRecipientFlow] storageGet failed — generating fresh PDF"
+      );
+    }
+  }
+
+  if (!resolvedPdfUrl && finalVer?.content) {
+    try {
+      const approvalMeta = (finalVer.metadataJson ?? {}) as {
+        approvedBy?: string;
+        approvedAt?: string;
+      };
+      const { pdfKey, pdfUrl } = await generateAndUploadApprovedPdf({
+        letterId: input.letterId,
+        letterType: letter.letterType,
+        subject: letter.subject,
+        content: finalVer.content,
+        approvedBy: approvalMeta.approvedBy,
+        approvedAt: approvalMeta.approvedAt ?? new Date().toISOString(),
+        jurisdictionState: letter.jurisdictionState,
+        jurisdictionCountry: letter.jurisdictionCountry,
+        intakeJson: letter.intakeJson as Record<string, unknown> | null,
+      });
+      await updateLetterStoragePath(input.letterId, pdfKey);
+      await updateLetterPdfUrl(input.letterId, pdfUrl);
+      resolvedPdfUrl = pdfUrl;
+      pdfAttached = true;
+      logger.info(
+        { letterId: input.letterId, pdfKey },
+        "[sendLetterToRecipientFlow] On-demand PDF generation succeeded"
+      );
+    } catch (err) {
+      captureServerException(err as Error, {
+        tags: {
+          component: "letters",
+          error_type: "send_pdf_generation_failed",
+        },
+        extra: { letterId: input.letterId },
+      });
+      logger.error(
+        { err, letterId: input.letterId },
+        "[sendLetterToRecipientFlow] On-demand PDF generation failed; sending with htmlContent only"
+      );
+    }
+  }
+
   await sendLetterToRecipient({
     recipientEmail: input.recipientEmail,
     letterSubject: `Legal Letter: ${letter.subject}`,
     subjectOverride: input.subjectOverride,
-    pdfUrl: undefined, // Will be fetched by sender if needed or already supplied in versions
+    pdfUrl: resolvedPdfUrl,
+    htmlContent,
     note: input.note,
   });
 
   await updateLetterStatus(input.letterId, "sent");
-  return { success: true };
+  return { success: true, pdfAttached };
 }
 
 async function _refundUsage(

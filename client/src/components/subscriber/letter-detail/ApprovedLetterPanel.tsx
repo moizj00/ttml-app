@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Download, Copy, Mail, RotateCcw } from "lucide-react";
+import { CheckCircle, Download, Copy, Mail, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LetterContentRenderer } from "./LetterContentRenderer";
 import { SendLetterDialog } from "./SendLetterDialog";
@@ -38,14 +38,39 @@ export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, 
   const [requestEditNotes, setRequestEditNotes] = useState("");
 
   const sendToRecipientMutation = trpc.letters.sendToRecipient.useMutation({
-    onSuccess: () => {
-      toast.success("Letter sent", { description: `The approved letter has been sent to ${recipientEmail}.` });
+    onSuccess: (data: any) => {
+      const pdfAttached = data?.pdfAttached !== false;
+      toast.success("Letter sent", {
+        description: pdfAttached
+          ? `The approved letter has been sent to ${recipientEmail} with the PDF attached.`
+          : `Sent to ${recipientEmail}, but PDF generation failed — the letter content was included inline. You can retry "Send" to attach the PDF.`,
+      });
       setSendDialogOpen(false);
       setRecipientEmail("");
       setSendSubjectOverride("");
       setSendNote("");
+      onInvalidate();
     },
     onError: (err) => toast.error("Failed to send letter", { description: err.message }),
+  });
+
+  // On-demand PDF: lets the subscriber retrieve a PDF even when upstream
+  // attorney-approve generation failed silently or the URL has expired.
+  // Returns a fresh presigned URL; we trigger the browser download right away.
+  const generateOrFetchPdfMutation = trpc.letters.generateOrFetchPdf.useMutation({
+    onSuccess: (data: any) => {
+      const url = data?.pdfUrl as string | undefined;
+      if (url) {
+        window.open(url, "_blank");
+        if (data?.regenerated) {
+          toast.success("PDF generated", { description: "Your PDF is opening in a new tab." });
+        }
+        onInvalidate();
+      } else {
+        toast.error("PDF unavailable", { description: "Server didn't return a URL. Please retry." });
+      }
+    },
+    onError: (err) => toast.error("PDF generation failed", { description: err.message }),
   });
 
   const requestEditMutation = trpc.letters.clientRequestRevision.useMutation({
@@ -69,7 +94,13 @@ export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, 
   });
 
   const handleDownload = () => {
-    if (pdfUrl) window.open(pdfUrl, "_blank");
+    // Fast path — already-stored URL: open immediately.
+    if (pdfUrl) {
+      window.open(pdfUrl, "_blank");
+      return;
+    }
+    // Slow path — ask the server to (re)mint or render the PDF.
+    generateOrFetchPdfMutation.mutate({ letterId });
   };
 
   const closeSendDialog = () => {
@@ -113,14 +144,19 @@ export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, 
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 data-testid="button-download-letter"
-                disabled={!pdfUrl}
+                disabled={generateOrFetchPdfMutation.isPending}
               >
-                <Download className="w-4 h-4 mr-1.5" />
-                {pdfUrl
-                  ? "Download PDF"
-                  : status === "approved"
-                    ? "PDF available after you approve"
-                    : "Generating PDF..."}
+                {generateOrFetchPdfMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    Generating PDF…
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-1.5" />
+                    {pdfUrl ? "Download PDF" : "Generate PDF"}
+                  </>
+                )}
               </Button>
               <Button
                 onClick={onCopy}
@@ -138,7 +174,6 @@ export function ApprovedLetterPanel({ letterId, letterSubject, pdfUrl, content, 
                 variant="outline"
                 className="bg-background border-green-300 text-green-700 hover:bg-green-50"
                 data-testid="button-send-via-lawyer-email"
-                disabled={!pdfUrl}
               >
                 <Mail className="w-3.5 h-3.5 mr-1.5" />
                 Send Via Lawyer's Email

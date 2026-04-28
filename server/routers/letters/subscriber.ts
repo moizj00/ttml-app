@@ -13,14 +13,19 @@ import {
   getReviewActions,
   archiveLetterRequest,
   getDeliveryLogByLetterId,
+  updateLetterPdfUrl,
+  updateLetterStoragePath,
 } from "../../db";
-import { storagePut } from "../../storage";
+import { storagePut, storageGet } from "../../storage";
 import {
   processSubscriberFeedback,
   retryFromRejected,
   sendLetterToRecipientFlow,
   getSubscriberReleasedLetterProcedure,
 } from "../../services/letters";
+import { generateAndUploadApprovedPdf } from "../../pdfGenerator";
+import { captureServerException } from "../../sentry";
+import { logger } from "../../logger";
 
 export const subscriberProcedures = {
   myLetters: subscriberProcedure.query(async ({ ctx }) => {
@@ -152,6 +157,128 @@ export const subscriberProcedures = {
         appUrl: getAppUrl(ctx.req),
       })
     ),
+
+  /**
+   * Generate-on-demand or refresh-URL for an approved letter's PDF.
+   *
+   * The attorney `approve` mutation calls `generateAndUploadApprovedPdf`
+   * inside a non-blocking try/catch — if R2 / Puppeteer hiccups there, the
+   * letter still gets approved but `pdf_storage_path` / `pdf_url` stay NULL
+   * forever. This mutation lets the subscriber recover from that state by
+   * regenerating the PDF themselves. It also handles the "presigned URL
+   * expired" case by re-presigning from the stored R2 key.
+   *
+   * Two paths:
+   *   1. `pdf_storage_path` is set → `storageGet` to mint a fresh URL,
+   *      persist it back to `pdf_url`, return.
+   *   2. Not set → fetch the `final_approved` letter version, render and
+   *      upload via the same `generateAndUploadApprovedPdf` the attorney
+   *      flow uses, persist the new key + URL, return.
+   *
+   * Idempotent: re-running for the same letter overwrites the same R2 key
+   * (the function builds the key from `letterId`).
+   */
+  generateOrFetchPdf: subscriberProcedure
+    .input(z.object({ letterId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      // PDF rendering is expensive (worker / Puppeteer). Reuse the existing
+      // "payment" rate-limit bucket — same caller-frequency guard the
+      // draft-pdf streaming endpoint uses.
+      await checkTrpcRateLimit("payment", `generate-pdf:${ctx.user.id}`);
+
+      const letter = await getLetterRequestById(input.letterId);
+      if (!letter || letter.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const ALLOWED = new Set([
+        "approved",
+        "client_approval_pending",
+        "client_approved",
+        "sent",
+      ]);
+      if (!ALLOWED.has(letter.status)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "PDF is only available after attorney review. Your letter is not yet ready.",
+        });
+      }
+
+      // Fast path — PDF already in R2, just mint a fresh URL.
+      const existingKey = (letter as any).pdfStoragePath as
+        | string
+        | null
+        | undefined;
+      if (existingKey) {
+        try {
+          const { url } = await storageGet(existingKey);
+          // Persist freshest URL so anywhere else in the app that reads
+          // `letter.pdfUrl` keeps a valid link.
+          await updateLetterPdfUrl(input.letterId, url);
+          return { pdfUrl: url, regenerated: false };
+        } catch (err) {
+          logger.warn(
+            { err, letterId: input.letterId, key: existingKey },
+            "[generateOrFetchPdf] storageGet failed for stored key — falling through to regenerate"
+          );
+        }
+      }
+
+      // Slow path — render and upload from scratch.
+      const versions = await getLetterVersionsByRequestId(input.letterId, false);
+      const finalVer = versions.find(v => v.versionType === "final_approved");
+      if (!finalVer?.content) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "No approved letter content found for this letter. The attorney has not produced a final version yet.",
+        });
+      }
+
+      const approvalMeta = (finalVer.metadataJson ?? {}) as {
+        approvedBy?: string;
+        approvedAt?: string;
+      };
+
+      try {
+        const { pdfKey, pdfUrl } = await generateAndUploadApprovedPdf({
+          letterId: input.letterId,
+          letterType: letter.letterType,
+          subject: letter.subject,
+          content: finalVer.content,
+          approvedBy: approvalMeta.approvedBy,
+          approvedAt: approvalMeta.approvedAt ?? new Date().toISOString(),
+          jurisdictionState: letter.jurisdictionState,
+          jurisdictionCountry: letter.jurisdictionCountry,
+          intakeJson: letter.intakeJson as Record<string, unknown> | null,
+        });
+        await updateLetterStoragePath(input.letterId, pdfKey);
+        await updateLetterPdfUrl(input.letterId, pdfUrl);
+        logger.info(
+          { letterId: input.letterId, pdfKey, userId: ctx.user.id },
+          "[generateOrFetchPdf] Subscriber-triggered PDF generation succeeded"
+        );
+        return { pdfUrl, regenerated: true };
+      } catch (err) {
+        captureServerException(err as Error, {
+          tags: {
+            component: "letters",
+            error_type: "subscriber_pdf_generation_failed",
+          },
+          extra: { letterId: input.letterId },
+        });
+        logger.error(
+          { err, letterId: input.letterId },
+          "[generateOrFetchPdf] PDF generation failed"
+        );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            "PDF generation failed. Please try again in a moment, or contact support if the problem persists.",
+        });
+      }
+    }),
 
   uploadAttachment: subscriberProcedure
     .input(
