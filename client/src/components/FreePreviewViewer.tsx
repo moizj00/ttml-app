@@ -20,9 +20,7 @@ import { trpc } from "@/lib/trpc";
  *     preview isn't a one-click action and to make it clear to the
  *     subscriber that this is a preview, not a deliverable.
  *   - Large diagonal "DRAFTED" watermark overlays the letter.
- *   - Single CTA: "Submit For Attorney Review" → navigates to /pricing
- *     so the subscriber can start a subscription. Once subscribed they
- *     can submit the same letter for actual attorney review.
+ *   - Single CTA: subscribe to unlock attorney review → /pricing.
  *
  * Security note: the full draft is supplied by the server only after
  * freePreviewUnlockAt <= NOW() (enforced in server/routers/versions.ts).
@@ -36,9 +34,12 @@ import {
   FileText,
   Gavel,
   Shield,
-  CheckCircle,
-  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
   Loader2,
+  Sparkles,
+  Award,
+  Clock,
 } from "lucide-react";
 import {
   Dialog,
@@ -139,60 +140,63 @@ export function FreePreviewViewer({
 
   return (
     <div className="space-y-5" data-testid="free-preview-viewer">
-      {/* ── Header card: what this is and what it isn't ── */}
-      <Card className="border-amber-200 bg-amber-50/70">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-700 mt-0.5" />
-            <div>
-              <h2 className="text-base font-bold text-amber-900">
-                Draft Preview — Not Attorney Reviewed
-              </h2>
-              <p className="text-sm text-amber-800 mt-1">
-                This is your complimentary preview of the draft generated from
-                your intake. It has not been reviewed, edited, or approved by a
-                licensed attorney. Do not rely on it as legal advice or send it
-                anywhere until attorney review is complete.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-amber-900">
-                <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                  <span className="font-semibold">Letter:</span> {subject}
-                </span>
-                {letterTypeLabel && (
-                  <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                    <span className="font-semibold">Type:</span>{" "}
-                    {letterTypeLabel}
-                  </span>
-                )}
-                {jurisdictionState && (
-                  <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                    <span className="font-semibold">Jurisdiction:</span>{" "}
-                    {jurisdictionState}
-                  </span>
-                )}
-                <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5">
-                  <span className="font-semibold">Letter ID:</span> #{letterId}
-                </span>
-              </div>
-            </div>
+      {/* ── Slim status header: one-line meta strip + soft warning row ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* Meta strip — letter identity */}
+        <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-slate-400" />
+            <span
+              className="text-sm font-semibold text-slate-900 truncate max-w-[36ch]"
+              title={subject}
+            >
+              {subject}
+            </span>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+            {letterTypeLabel && (
+              <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 font-medium">
+                {letterTypeLabel}
+              </span>
+            )}
+            {jurisdictionState && (
+              <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 font-medium">
+                {jurisdictionState}
+              </span>
+            )}
+            <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 font-mono">
+              #{letterId}
+            </span>
+          </div>
+        </div>
+
+        {/* Warning row — slim, color-tinted, NOT a big alert box */}
+        <div className="px-5 py-2.5 bg-amber-50/60 border-l-4 border-amber-400 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-900 leading-relaxed">
+            <span className="font-semibold">Preview only — not attorney reviewed.</span>{" "}
+            This draft has not been reviewed, edited, or approved by a licensed
+            attorney. Don't rely on it as legal advice or send it anywhere
+            until attorney review is complete.
+          </p>
+        </div>
+      </div>
 
       {/* ── The draft itself — full content, non-selectable, watermarked ── */}
-      <Card className="border-amber-200 overflow-hidden">
-        <div className="bg-amber-50 border-b border-amber-200 px-5 py-3 flex items-center justify-between">
+      <Card className="border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-800">
+            <FileText className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-900">
               Full Draft Preview
             </span>
           </div>
           <span
-            className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded px-2 py-0.5 tracking-wider"
+            className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-1 tracking-wider uppercase"
             data-testid="draft-preview-unreviewed-badge"
           >
-            DRAFTED — Unreviewed
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 align-middle" />
+            Unreviewed
           </span>
         </div>
         <CardContent className="p-0">
@@ -203,7 +207,7 @@ export function FreePreviewViewer({
             onCut={noCopyHandler}
             onDragStart={noCopyHandler}
             onContextMenu={noCopyHandler}
-            className="relative"
+            className="relative bg-slate-50/30"
             style={{
               // Best-effort copy protection — non-authoritative.
               userSelect: "none",
@@ -215,7 +219,7 @@ export function FreePreviewViewer({
           >
             {/* The draft text itself */}
             <pre
-              className="text-sm text-foreground whitespace-pre-wrap font-mono leading-relaxed p-5 pr-6"
+              className="text-sm text-slate-800 whitespace-pre-wrap font-mono leading-relaxed p-6 pr-7"
               aria-label="Draft letter preview — not selectable"
             >
               {draftContent}
@@ -227,7 +231,7 @@ export function FreePreviewViewer({
               aria-hidden="true"
             >
               <span
-                className="text-[8rem] font-black text-amber-700/15 rotate-[-30deg] tracking-[0.3em] select-none whitespace-nowrap"
+                className="text-[8rem] font-black text-amber-700/12 rotate-[-30deg] tracking-[0.3em] select-none whitespace-nowrap"
                 style={{ userSelect: "none" }}
               >
                 DRAFTED
@@ -237,76 +241,127 @@ export function FreePreviewViewer({
         </CardContent>
       </Card>
 
-      {/* ── Call to action: subscribe to unlock attorney review ── */}
-      <div className="bg-gradient-to-r from-[#1e3a8a] to-[#2563eb] rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-start gap-4 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-            <Gavel className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold leading-tight">
-              Ready to Send It? Submit For Attorney Review
-            </h2>
-            <p className="text-sm text-white/80 mt-1">
-              Subscribe to unlock licensed attorney review — a real attorney
-              will read your draft, make any necessary edits, approve it, and
-              deliver a professionally formatted PDF to your account.
-            </p>
-          </div>
-        </div>
+      {/* ── Modern, sleek upsell card ── */}
+      <div className="relative rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-lg">
+        {/* Decorative gradient accent — subtle, not overwhelming */}
+        <div
+          className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 bg-gradient-to-br from-indigo-100/60 to-purple-100/40 rounded-full blur-3xl"
+          aria-hidden="true"
+        />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-          {[
-            { icon: Shield, text: "Licensed attorney review" },
-            { icon: CheckCircle, text: "Edits & approval included" },
-            { icon: FileText, text: "Professional PDF delivered" },
-          ].map(({ icon: Icon, text }) => (
-            <div
-              key={text}
-              className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2"
-            >
-              <Icon className="w-4 h-4 text-white/80 flex-shrink-0" />
-              <span className="text-xs text-white/90">{text}</span>
+        <div className="relative p-7">
+          {/* Heading row */}
+          <div className="flex items-start gap-4 mb-5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center flex-shrink-0 ring-1 ring-indigo-100">
+              <Gavel className="w-6 h-6 text-indigo-600" />
             </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <span className="text-3xl font-extrabold text-white">
-              {isSubscribed ? "$0" : `From ${PRICING.monthly.priceDisplay}`}
-              {!isSubscribed && (
-                <span className="text-base font-normal text-white/60">/mo</span>
-              )}
-            </span>
-            <p className="text-xs text-white/60 mt-0.5">
-              {isSubscribed
-                ? "Included in your active subscription"
-                : `${PRICING.monthly.lettersIncluded} letters/month · cancel anytime`}
-            </p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
+                  Optional next step
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">
+                Have a licensed attorney review this letter
+              </h2>
+              <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+                A real attorney reads your draft, makes substantive edits,
+                signs it on letterhead, and delivers a polished PDF —
+                typically within 24 hours.
+              </p>
+            </div>
           </div>
-          <Button
-            onClick={handleSubmitReview}
-            disabled={isPending}
-            size="lg"
-            className="bg-white text-blue-800 hover:bg-white/90 font-bold shadow-md w-full sm:w-auto"
-            data-testid="button-free-preview-subscribe"
-          >
-            {isPending ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Submitting...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Gavel className="w-4 h-4" />
+
+          {/* Three-up benefit row — clean, bordered cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6">
+            {[
+              {
+                icon: Shield,
+                title: "Licensed review",
+                sub: "Real attorney signature",
+              },
+              {
+                icon: Award,
+                title: "Substantive edits",
+                sub: "Not just a rubber stamp",
+              },
+              {
+                icon: Clock,
+                title: "~24h turnaround",
+                sub: "PDF delivered to you",
+              },
+            ].map(({ icon: Icon, title, sub }) => (
+              <div
+                key={title}
+                className="rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-3 flex items-start gap-2.5"
+              >
+                <Icon className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 leading-tight">
+                    {title}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Price + CTA row — two-column on desktop, stacked on mobile */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pt-5 border-t border-slate-100">
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                {isSubscribed ? (
+                  <span className="text-3xl font-extrabold text-emerald-600">
+                    Included
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
+                      From
+                    </span>
+                    <span className="text-3xl font-extrabold text-slate-900 leading-none">
+                      {PRICING.monthly.priceDisplay}
+                    </span>
+                    <span className="text-base text-slate-500 font-medium">
+                      /mo
+                    </span>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
                 {isSubscribed
-                  ? "Submit For Attorney Review"
-                  : "Subscribe to Submit"}
-                <ArrowRight className="w-4 h-4" />
-              </span>
-            )}
-          </Button>
+                  ? "Active subscription — no extra charge"
+                  : `${PRICING.monthly.lettersIncluded} letters/month · cancel anytime`}
+              </p>
+            </div>
+            <Button
+              onClick={handleSubmitReview}
+              disabled={isPending}
+              size="lg"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-md hover:shadow-lg transition-all w-full sm:w-auto group"
+              data-testid="button-free-preview-subscribe"
+            >
+              {isPending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Submitting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Gavel className="w-4 h-4" />
+                  {isSubscribed
+                    ? "Submit for attorney review"
+                    : "Unlock attorney review"}
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -314,33 +369,55 @@ export function FreePreviewViewer({
         open={showSubscriptionModal}
         onOpenChange={setShowSubscriptionModal}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-blue-700">
-              <Shield className="w-5 h-5" />
-              Subscription Required
-            </DialogTitle>
-            <DialogDescription className="text-slate-600 pt-2">
-              Attorney review is included with all subscription plans. Please
-              subscribe to a plan to have this letter professionally reviewed,
-              edited, and delivered by a licensed attorney.
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 text-white">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
+                <Shield className="w-5 h-5" />
+              </div>
+              <DialogHeader className="space-y-0 text-left">
+                <DialogTitle className="text-white text-lg font-bold">
+                  Subscription required
+                </DialogTitle>
+              </DialogHeader>
+            </div>
+            <DialogDescription className="text-white/90 text-sm leading-relaxed">
+              Attorney review is included with all subscription plans. Pick a
+              plan to have this letter reviewed, edited, and signed by a real
+              attorney.
             </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 pt-4">
+          </div>
+          <div className="p-6 space-y-3">
+            <ul className="space-y-2 mb-2">
+              {[
+                "Licensed attorney signature",
+                "Substantive legal edits",
+                "Professional letterhead",
+                "Cancel anytime",
+              ].map(item => (
+                <li
+                  key={item}
+                  className="flex items-center gap-2.5 text-sm text-slate-700"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold h-11 shadow-md"
               size="lg"
               onClick={() => navigate("/pricing")}
             >
-              Choose a Plan
+              See plans
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button
               variant="ghost"
-              className="w-full text-slate-500 hover:text-slate-700"
+              className="w-full text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               onClick={() => setShowSubscriptionModal(false)}
             >
-              Back to Preview
+              Back to preview
             </Button>
           </div>
         </DialogContent>

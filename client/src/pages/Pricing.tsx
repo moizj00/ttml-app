@@ -2,20 +2,21 @@ import { useState, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   DiscountCodeInput,
   type DiscountCodeResult,
 } from "@/components/DiscountCodeInput";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, Loader2, Scale, Shield, Zap } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  Scale,
+  Shield,
+  Zap,
+  Sparkles,
+  ArrowRight,
+  Star,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
 import PublicNav from "@/components/shared/PublicNav";
@@ -33,8 +34,9 @@ const PLANS = [
     description: PRICING.singleLetter.description,
     badge: null as string | null,
     features: PRICING.singleLetter.features as readonly string[],
-    cta: "Get This Letter",
+    cta: "Get this letter",
     highlight: false,
+    accent: "from-slate-600 to-slate-800",
   },
   {
     id: PRICING.monthly.id,
@@ -44,10 +46,11 @@ const PLANS = [
     period: PRICING.monthly.period,
     priceSub: null as string | null,
     description: PRICING.monthly.description,
-    badge: "Most Popular" as string | null,
+    badge: "Most popular" as string | null,
     features: PRICING.monthly.features as readonly string[],
-    cta: "Subscribe Monthly",
+    cta: "Subscribe monthly",
     highlight: true,
+    accent: "from-indigo-600 to-purple-600",
   },
   {
     id: PRICING.yearly.id,
@@ -57,10 +60,11 @@ const PLANS = [
     period: PRICING.yearly.period,
     priceSub: null as string | null,
     description: PRICING.yearly.description,
-    badge: "Best Value" as string | null,
+    badge: "Best value" as string | null,
     features: PRICING.yearly.features as readonly string[],
-    cta: "Subscribe Yearly",
+    cta: "Subscribe yearly",
     highlight: false,
+    accent: "from-emerald-600 to-teal-600",
   },
 ];
 
@@ -134,8 +138,7 @@ export default function Pricing() {
       name: "Talk to My Lawyer",
       url: "https://www.talk-to-my-lawyer.com",
     },
-    description:
-      `Professional attorney-reviewed legal letters. Choose from single letter (${PRICING.singleLetter.priceDisplay}), monthly subscription (${PRICING.monthly.priceDisplay}/month for ${PRICING.monthly.lettersIncluded} letters), or yearly plan (${PRICING.yearly.priceDisplay}/year for ${PRICING.yearly.lettersIncluded} letters).`,
+    description: `Professional attorney-reviewed legal letters. Choose from single letter (${PRICING.singleLetter.priceDisplay}), monthly subscription (${PRICING.monthly.priceDisplay}/month for ${PRICING.monthly.lettersIncluded} letters), or yearly plan (${PRICING.yearly.priceDisplay}/year for ${PRICING.yearly.lettersIncluded} letters).`,
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
@@ -177,12 +180,12 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
       <PublicNav activeLink="/pricing" />
       <PublicBreadcrumb items={[{ label: "Pricing" }]} />
       <Helmet>
         <title>
-          Legal Letter Pricing — Single, Monthly & Yearly Plans | Talk to My
+          Legal Letter Pricing — Single, Monthly &amp; Yearly Plans | Talk to My
           Lawyer
         </title>
         <meta
@@ -228,114 +231,192 @@ export default function Pricing() {
         </script>
       </Helmet>
 
-      {/* Header */}
-      <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="flex justify-center mb-4">
-            <Scale className="w-12 h-12 text-blue-500" aria-hidden="true" />
+      {/* ── Hero ── */}
+      <header className="relative overflow-hidden">
+        {/* Decorative gradient blobs */}
+        <div
+          className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute top-20 right-1/4 w-96 h-96 bg-purple-200/30 rounded-full blur-3xl"
+          aria-hidden="true"
+        />
+
+        <div className="relative max-w-5xl mx-auto px-4 pt-20 pb-12 text-center">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white border border-slate-200 px-3 py-1 mb-5 shadow-sm">
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-xs font-semibold text-slate-700 tracking-wide">
+              Attorney review included in every plan
+            </span>
           </div>
-          <h1 className="text-4xl font-bold mb-4">
-            Structured Drafting + Attorney Review — Starting at {PRICING.singleLetter.priceDisplay}
+
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 leading-[1.05] tracking-tight">
+            Pick the plan that fits.
+            <br />
+            <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600 bg-clip-text text-transparent">
+              Get a real letter, signed by a real attorney.
+            </span>
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            The only service that combines structured drafting with live
-            attorney review and web-grounded legal research — delivered in
-            hours, not weeks.
+
+          <p className="mt-5 text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
+            Structured drafting, web-grounded research, and live attorney
+            review — delivered in hours, not weeks. Starting at{" "}
+            <span className="font-bold text-slate-900">
+              {PRICING.singleLetter.priceDisplay}
+            </span>
+            .
           </p>
+
+          <div className="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-600">
+            {[
+              { icon: Shield, text: "Licensed attorney review" },
+              { icon: Zap, text: "Hours, not weeks" },
+              { icon: Scale, text: "California-focused" },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-1.5">
+                <Icon className="w-4 h-4 text-indigo-500" />
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* Plans */}
-      <main className="max-w-6xl mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PLANS.map(plan => (
-            <Card
-              key={plan.id}
-              data-testid={`card-plan-${plan.id}`}
-              className={`relative flex flex-col ${
-                plan.highlight
-                  ? "border-blue-500 shadow-lg shadow-blue-500/20 scale-105"
-                  : "border-border"
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge
-                    className={
-                      plan.highlight
-                        ? "bg-[#3b82f6] text-white"
-                        : "bg-amber-500 text-white"
-                    }
-                  >
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-                <div className="mt-4">
-                  {appliedDiscount ? (
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-4xl font-bold text-foreground">
-                        ${getDiscountedPrice(plan.priceNumeric)}
-                      </span>
-                      <span className="text-lg text-muted-foreground line-through">
-                        {plan.priceDisplay}
-                      </span>
-                      <span className="text-xs text-emerald-600 font-semibold">
-                        {appliedDiscount.discountPercent}% off
-                      </span>
+      {/* ── Plan cards ── */}
+      <main className="max-w-6xl mx-auto px-4 pb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 lg:gap-6">
+          {PLANS.map(plan => {
+            const isPending =
+              checkoutMutation.isPending &&
+              checkoutMutation.variables?.planId === plan.id;
+            const discountedPrice = getDiscountedPrice(plan.priceNumeric);
+
+            return (
+              <div
+                key={plan.id}
+                data-testid={`card-plan-${plan.id}`}
+                className={`relative flex flex-col rounded-2xl bg-white transition-all duration-300 group ${
+                  plan.highlight
+                    ? "border-2 border-indigo-500 shadow-2xl shadow-indigo-500/20 md:scale-[1.03] md:-translate-y-1"
+                    : "border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                }`}
+              >
+                {/* Top accent bar — only for highlight card */}
+                {plan.highlight && (
+                  <div
+                    className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500"
+                    aria-hidden="true"
+                  />
+                )}
+
+                {/* Badge */}
+                {plan.badge && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                    <div
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white shadow-md ${
+                        plan.highlight
+                          ? "bg-gradient-to-r from-indigo-600 to-purple-600"
+                          : "bg-gradient-to-r from-emerald-600 to-teal-600"
+                      }`}
+                    >
+                      {plan.highlight && (
+                        <Star className="w-3 h-3 fill-current" />
+                      )}
+                      {plan.badge}
                     </div>
-                  ) : (
-                    <span className="text-4xl font-bold text-foreground">
-                      {plan.priceDisplay}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground ml-1">
-                    {plan.period}
-                  </span>
-                  {plan.priceSub && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {plan.priceSub}
+                  </div>
+                )}
+
+                <div className="p-6 md:p-7 flex-1 flex flex-col">
+                  {/* Plan name + tagline */}
+                  <div className="mb-5">
+                    <h3 className="text-lg font-bold text-slate-900">
+                      {plan.name}
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-1 leading-snug">
+                      {plan.description}
                     </p>
-                  )}
+                  </div>
+
+                  {/* Price block */}
+                  <div className="mb-6 pb-6 border-b border-slate-100">
+                    {discountedPrice !== null ? (
+                      <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1">
+                        <span className="text-4xl font-black text-slate-900 leading-none">
+                          ${discountedPrice}
+                        </span>
+                        <span className="text-base text-slate-400 line-through">
+                          {plan.priceDisplay}
+                        </span>
+                        <span className="text-sm text-slate-500 font-medium">
+                          {plan.period}
+                        </span>
+                        <span className="ml-auto inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                          {appliedDiscount?.discountPercent}% off
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl md:text-5xl font-black text-slate-900 leading-none">
+                          {plan.priceDisplay}
+                        </span>
+                        <span className="text-base text-slate-500 font-medium ml-1">
+                          {plan.period}
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Attorney review included
+                    </div>
+                  </div>
+
+                  {/* Features list */}
+                  <ul className="space-y-2.5 flex-1 mb-6">
+                    {plan.features.map(feature => (
+                      <li
+                        key={feature}
+                        className="flex items-start gap-2.5 text-sm text-slate-700"
+                      >
+                        <span
+                          className={`flex-shrink-0 w-4 h-4 rounded-full bg-gradient-to-br ${plan.accent} flex items-center justify-center mt-0.5`}
+                          aria-hidden="true"
+                        >
+                          <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                        </span>
+                        <span className="leading-snug">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* CTA */}
+                  <Button
+                    data-testid={`button-select-plan-${plan.id}`}
+                    onClick={() => handleSelectPlan(plan.id)}
+                    disabled={checkoutMutation.isPending}
+                    className={`w-full h-11 font-semibold rounded-xl transition-all group/btn ${
+                      plan.highlight
+                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md hover:shadow-lg"
+                        : "bg-slate-900 hover:bg-slate-800 text-white"
+                    }`}
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Processing…
+                      </>
+                    ) : (
+                      <>
+                        {plan.cta}
+                        <ArrowRight className="w-4 h-4 ml-1.5 group-hover/btn:translate-x-0.5 transition-transform" />
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <p className="text-xs mt-1 font-medium text-emerald-600">
-                  Attorney review included
-                </p>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <ul className="space-y-3 flex-1 mb-6">
-                  {plan.features.map(feature => (
-                    <li key={feature} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                      <span className="text-sm text-muted-foreground">
-                        {feature}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  data-testid={`button-select-plan-${plan.id}`}
-                  className={`w-full ${plan.highlight ? "bg-[#3b82f6] hover:bg-[#2563eb] text-white" : ""}`}
-                  variant={plan.highlight ? "default" : "outline"}
-                  onClick={() => handleSelectPlan(plan.id)}
-                  disabled={checkoutMutation.isPending}
-                >
-                  {checkoutMutation.isPending &&
-                  checkoutMutation.variables?.planId === plan.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />{" "}
-                      Processing...
-                    </>
-                  ) : (
-                    plan.cta
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* Discount Code Section */}
@@ -347,53 +428,130 @@ export default function Pricing() {
             label="Have a promo or referral code?"
           />
           {appliedDiscount && (
-            <p className="text-center text-sm text-emerald-600 font-medium mt-2">
-              {appliedDiscount.discountPercent}% discount will be applied to all
-              plans.
+            <p className="text-center text-sm text-emerald-600 font-semibold mt-3">
+              {appliedDiscount.discountPercent}% discount applied to all plans.
             </p>
           )}
         </div>
 
-        {/* How it works note */}
-        <div className="mt-10 p-5 bg-muted/30 border border-border rounded-xl max-w-2xl mx-auto text-center">
-          <h3 className="font-semibold text-foreground mb-2">How It Works</h3>
-          <p className="text-sm text-muted-foreground">
-            Choose a plan and complete checkout to get started. Pay{" "}
-            <strong>${PRICING.singleLetter.price}</strong> for a single draft,
-            or subscribe for <strong>${PRICING.monthly.price}/month</strong> (4
-            drafts) or <strong>${PRICING.yearly.price}/year</strong> (8 drafts
-            total). All plans include California-focused drafting and PDF
-            delivery.
+        {/* ── How it works strip ── */}
+        <section className="mt-16 mx-auto max-w-4xl">
+          <h2 className="text-center text-2xl font-bold text-slate-900 mb-2">
+            How it works
+          </h2>
+          <p className="text-center text-sm text-slate-500 mb-8">
+            From submission to signed letter in under 24 hours.
           </p>
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                step: "01",
+                title: "Submit your matter",
+                desc: "Tell us the situation — sender, recipient, jurisdiction, what you want. Takes 3 minutes.",
+              },
+              {
+                step: "02",
+                title: "AI drafts the letter",
+                desc: "Our pipeline researches the relevant law and drafts a structured, jurisdiction-aware letter.",
+              },
+              {
+                step: "03",
+                title: "Attorney reviews & signs",
+                desc: "A licensed attorney reviews, edits, and signs. You get a polished PDF — typically within hours.",
+              },
+            ].map(({ step, title, desc }) => (
+              <div
+                key={step}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="text-xs font-black text-indigo-500 tracking-widest mb-2">
+                  {step}
+                </div>
+                <h3 className="text-base font-bold text-slate-900 mb-1.5">
+                  {title}
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        {/* Trust badges */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-          <div className="flex flex-col items-center gap-2">
-            <Shield className="w-8 h-8 text-[#3b82f6]" />
-            <h3 className="font-semibold">Built for Attorney Review</h3>
-            <p className="text-sm text-muted-foreground">
-              Every draft is structured for licensed attorney review before
-              delivery — review-friendly outputs every time
-            </p>
+        {/* ── Trust strip ── */}
+        <section className="mt-16 mx-auto max-w-5xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              {
+                icon: Shield,
+                title: "Built for attorney review",
+                desc: "Every draft is structured for licensed attorney review before delivery.",
+                color: "text-indigo-600 bg-indigo-50 ring-indigo-100",
+              },
+              {
+                icon: Zap,
+                title: "California-focused drafting",
+                desc: "Curated legal-letter patterns built for California legal language.",
+                color: "text-amber-600 bg-amber-50 ring-amber-100",
+              },
+              {
+                icon: Scale,
+                title: "Secure & confidential",
+                desc: "Your matters are handled with strict confidentiality and 256-bit SSL.",
+                color: "text-emerald-600 bg-emerald-50 ring-emerald-100",
+              },
+            ].map(({ icon: Icon, title, desc, color }) => (
+              <div
+                key={title}
+                className="rounded-2xl border border-slate-200 bg-white p-5 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ${color}`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1">
+                    {title}
+                  </h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {desc}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Zap className="w-8 h-8 text-amber-500" />
-            <h3 className="font-semibold">California-Focused Drafting</h3>
-            <p className="text-sm text-muted-foreground">
-              Built from curated legal-letter patterns designed around
-              California legal language and repeatable workflows
-            </p>
+        </section>
+
+        {/* ── FAQ-style note ── */}
+        <section className="mt-12 mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 md:p-8">
+            <h2 className="text-lg font-bold text-slate-900 mb-3">
+              What you actually pay for
+            </h2>
+            <div className="space-y-3 text-sm text-slate-600 leading-relaxed">
+              <p>
+                <span className="font-semibold text-slate-900">Single letter</span> —
+                pay <strong>${PRICING.singleLetter.price}</strong> once for one
+                attorney-reviewed draft. No recurring charge. No commitment.
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Monthly</span> —{" "}
+                <strong>${PRICING.monthly.price}/month</strong> for{" "}
+                {PRICING.monthly.lettersIncluded} attorney-reviewed letters per
+                month. Cancel anytime.
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Yearly</span> —{" "}
+                <strong>${PRICING.yearly.price}/year</strong> for{" "}
+                {PRICING.yearly.lettersIncluded} attorney-reviewed letters total.
+                Best per-letter rate.
+              </p>
+              <p className="text-xs text-slate-500 pt-2 border-t border-slate-100">
+                All plans include California-focused drafting, web-grounded
+                research, attorney review, and PDF delivery. No hidden fees.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Scale className="w-8 h-8 text-green-500" />
-            <h3 className="font-semibold">Secure & Confidential</h3>
-            <p className="text-sm text-muted-foreground">
-              Your legal matters are handled with strict confidentiality and
-              256-bit SSL
-            </p>
-          </div>
-        </div>
+        </section>
       </main>
     </div>
   );
