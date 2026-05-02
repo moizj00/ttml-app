@@ -118,3 +118,40 @@ export const fineTuneRuns = pgTable("fine_tune_runs", {
 
 export type FineTuneRun = typeof fineTuneRuns.$inferSelect;
 export type InsertFineTuneRun = typeof fineTuneRuns.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: pipeline_stream_chunks
+// Ephemeral token-by-token stream from the LangGraph draft node
+// to the frontend (Supabase Realtime postgres_changes).
+//
+// Retention is 1 hour, enforced by cleanup_old_stream_chunks()
+// (see supabase/migrations/20260502000001_pipeline_stream_chunks_retention.sql).
+//
+// Schema mirrors supabase/migrations/20260414000001_pipeline_stream_chunks.sql.
+// Added to Drizzle so server-side queries can be type-safe.
+// ═══════════════════════════════════════════════════════
+export const pipelineStreamChunks = pgTable(
+  "pipeline_stream_chunks",
+  {
+    id: bigint("id", { mode: "bigint" }).primaryKey(),
+    letterId: integer("letter_id")
+      .notNull()
+      .references(() => letterRequests.id, { onDelete: "cascade" }),
+    chunkText: text("chunk_text").notNull(),
+    stage: varchar("stage", { length: 50 }).default("draft").notNull(),
+    sequenceNumber: integer("sequence_number").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  t => ({
+    letterIdx: index("idx_pipeline_stream_chunks_letter_id").on(t.letterId),
+    letterSeqIdx: index("idx_pipeline_stream_chunks_letter_sequence").on(
+      t.letterId,
+      t.sequenceNumber
+    ),
+  })
+);
+
+export type PipelineStreamChunk = typeof pipelineStreamChunks.$inferSelect;
+export type InsertPipelineStreamChunk = typeof pipelineStreamChunks.$inferInsert;

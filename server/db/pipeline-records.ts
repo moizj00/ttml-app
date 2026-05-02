@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { captureServerException } from "../sentry";
 import {
   adminVerificationCodes,
@@ -13,6 +13,7 @@ import {
   notifications,
   payoutRequests,
   pipelineLessons,
+  pipelineStreamChunks,
   researchRuns,
   reviewActions,
   subscriptions,
@@ -225,4 +226,46 @@ export async function getAttachmentsByLetterId(letterRequestId: number) {
     .from(attachments)
     .where(eq(attachments.letterRequestId, letterRequestId))
     .orderBy(attachments.createdAt);
+}
+
+// ═══════════════════════════════════════════════════════
+// STREAM CHUNK HELPERS
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Return all pipeline_stream_chunks for a letter with sequence_number > afterSeq,
+ * ordered ascending. Validates ownership — only returns rows when the requesting
+ * user owns the letter.
+ *
+ * Used by the server-authenticated tRPC `letters.streamChunksAfter` endpoint so
+ * the frontend can backfill missed chunks without relying on the unauthenticated
+ * Supabase browser client (which would silently return 0 rows under RLS).
+ */
+export async function getStreamChunksAfter(
+  letterId: number,
+  userId: number,
+  afterSeq: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Ownership check — only serve chunks for letters that belong to this user.
+  const [letter] = await db
+    .select({ userId: letterRequests.userId })
+    .from(letterRequests)
+    .where(eq(letterRequests.id, letterId))
+    .limit(1);
+
+  if (!letter || letter.userId !== userId) return [];
+
+  return db
+    .select()
+    .from(pipelineStreamChunks)
+    .where(
+      and(
+        eq(pipelineStreamChunks.letterId, letterId),
+        gt(pipelineStreamChunks.sequenceNumber, afterSeq)
+      )
+    )
+    .orderBy(asc(pipelineStreamChunks.sequenceNumber));
 }

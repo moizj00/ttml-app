@@ -7,6 +7,11 @@ import { draftNode } from "./nodes/draft";
 import { assemblyNode } from "./nodes/assembly";
 import { vettingNode } from "./nodes/vetting";
 import { finalizeNode, failNode } from "./nodes/finalize";
+import {
+  PIPELINE_ERROR_CATEGORY,
+  PIPELINE_ERROR_CODES,
+  type PipelineErrorCode,
+} from "../../../shared/types/pipeline";
 
 const log = createLogger({ module: "LangGraph:Graph" });
 
@@ -14,22 +19,75 @@ const log = createLogger({ module: "LangGraph:Graph" });
 // CONDITIONAL ROUTING
 // ═══════════════════════════════════════════════════════
 
-/** After vetting: loop back to draft (max 2 retries), fail on errors, or finalize */
-function routeAfterVetting(state: PipelineStateType): string {
-  const { qualityDegraded, retryCount, errorRetryCount, assembledLetter } =
-    state;
+/**
+ * Strict union of route keys returned by routeAfterVetting().
+ *
+ * Keep this in sync with VETTING_ROUTE_MAP — the addConditionalEdges call
+ * below relies on it being exhaustive. A misspelled key here would make
+ * LangGraph throw at compile-time of the graph rather than at runtime.
+ */
+export type VettingRouteResult = "draft" | "finalize" | "finalize_degraded" | "fail";
 
-  // If too many node errors or no draft content was ever produced → fail fast
-  if (errorRetryCount >= 3 || !assembledLetter) {
+/**
+ * Exhaustive map of route keys → target node names. Exported so tests can
+ * assert that every VettingRouteResult variant has a destination node.
+ *
+ * Typed with `as const satisfies` so the values are literal string types
+ * (required by addConditionalEdges) while still enforcing all keys are present.
+ */
+export const VETTING_ROUTE_MAP = {
+  draft: "draft",
+  finalize: "finalize",
+  finalize_degraded: "finalize",
+  fail: "fail",
+} as const satisfies Record<VettingRouteResult, string>;
+
+/**
+ * After vetting:
+ *   - permanent error (API_KEY_MISSING / INTAKE_INCOMPLETE / …) → fail
+ *   - too many transient node errors AND no draft → fail
+ *   - too many transient node errors AND we have a draft → finalize_degraded
+ *     (best-effort: surface qualityWarnings and still hand the attorney
+ *     something to review rather than stranding the letter)
+ *   - quality degraded but retries left → loop back to draft
+ *   - everything else → finalize
+ */
+export function routeAfterVetting(state: PipelineStateType): VettingRouteResult {
+  const {
+    qualityDegraded,
+    retryCount,
+    errorRetryCount,
+    assembledLetter,
+    lastErrorCode,
+  } = state;
+
+  // Permanent error codes short-circuit retries — no point in re-running.
+  if (lastErrorCode && lastErrorCode in PIPELINE_ERROR_CATEGORY) {
+    if (PIPELINE_ERROR_CATEGORY[lastErrorCode as PipelineErrorCode] === "permanent") {
+      log.error(
+        { letterId: state.letterId, lastErrorCode },
+        "[Graph] Permanent pipeline error — routing to fail"
+      );
+      return "fail";
+    }
+  }
+
+  // No draft content was ever produced → hard fail.
+  if (!assembledLetter) {
     log.error(
-      {
-        letterId: state.letterId,
-        errorRetryCount,
-        hasContent: !!assembledLetter,
-      },
-      "[Graph] Too many errors or empty draft — routing to fail"
+      { letterId: state.letterId, errorRetryCount, hasContent: false },
+      "[Graph] Empty draft — routing to fail"
     );
     return "fail";
+  }
+
+  // Too many node errors but we DO have a draft → best-effort degraded finalize.
+  if (errorRetryCount >= 3) {
+    log.warn(
+      { letterId: state.letterId, errorRetryCount },
+      "[Graph] Error budget exhausted but assembledLetter exists — routing to finalize_degraded"
+    );
+    return "finalize_degraded";
   }
 
   if (qualityDegraded && retryCount < 2) {
@@ -60,6 +118,52 @@ async function vettingRouterNode(
 
 // ─── Error recovery wrapper ───
 
+/**
+ * Map raw Errors thrown from a node into a typed PipelineErrorCode so the
+ * router can distinguish permanent (API_KEY_MISSING, INTAKE_INCOMPLETE,
+ * CONTENT_POLICY_VIOLATION, …) from transient (rate limits, timeouts, …)
+ * failures. We intentionally read PipelineError.code when present and
+ * otherwise sniff the message for well-known signals — same heuristic
+ * used by isTransientError() in shared/types/pipeline.ts.
+ */
+function classifyNodeError(err: unknown): PipelineErrorCode {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && code in PIPELINE_ERROR_CATEGORY) {
+      return code as PipelineErrorCode;
+    }
+  }
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes("api key") ||
+    lower.includes("api_key") ||
+    lower.includes("apikey") ||
+    lower.includes("anthropic_api_key not set") ||
+    lower.includes("openai_api_key not set") ||
+    lower.includes("perplexity_api_key not set")
+  ) {
+    return PIPELINE_ERROR_CODES.API_KEY_MISSING;
+  }
+  if (lower.includes("content policy") || lower.includes("content filter")) {
+    return PIPELINE_ERROR_CODES.CONTENT_POLICY_VIOLATION;
+  }
+  if (
+    lower.includes("intake validation failed") ||
+    lower.includes("intake pre-flight") ||
+    lower.includes("intake incomplete")
+  ) {
+    return PIPELINE_ERROR_CODES.INTAKE_INCOMPLETE;
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("aborted")) {
+    return PIPELINE_ERROR_CODES.API_TIMEOUT;
+  }
+  if (lower.includes("rate limit")) {
+    return PIPELINE_ERROR_CODES.RATE_LIMITED;
+  }
+  return PIPELINE_ERROR_CODES.UNKNOWN_ERROR;
+}
+
 function withErrorRecovery(
   nodeName: string,
   nodeFn: (state: PipelineStateType) => Promise<Partial<PipelineStateType>>
@@ -71,13 +175,26 @@ function withErrorRecovery(
       return await nodeFn(state);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      const errCode = classifyNodeError(err);
+      const isPermanent =
+        PIPELINE_ERROR_CATEGORY[errCode] === "permanent";
       log.error(
-        { letterId: state.letterId, node: nodeName, err: errMsg },
+        {
+          letterId: state.letterId,
+          node: nodeName,
+          err: errMsg,
+          errCode,
+          permanent: isPermanent,
+        },
         "[Graph] Node error"
       );
       return {
         lastErrorStage: nodeName,
-        errorRetryCount: state.errorRetryCount + 1,
+        lastErrorCode: errCode,
+        lastErrorMessage: errMsg,
+        // Permanent errors burn the entire retry budget so the router
+        // routes straight to fail without retrying identical work.
+        errorRetryCount: isPermanent ? 3 : state.errorRetryCount + 1,
         currentStage: "error",
       };
     }
@@ -113,11 +230,10 @@ function buildPipelineGraph() {
     .addEdge("assembly", "vetting")
 
     // ─── Conditional: after vetting → redraft, finalize, or fail ──
-    .addConditionalEdges("vetting", routeAfterVetting, {
-      draft: "draft",
-      finalize: "finalize",
-      fail: "fail",
-    })
+    // VETTING_ROUTE_MAP is the single source of truth — any new
+    // VettingRouteResult variant must also appear here, or LangGraph
+    // will throw at compile time. Tests assert exhaustiveness.
+    .addConditionalEdges("vetting", routeAfterVetting, VETTING_ROUTE_MAP)
 
     // ─── Terminal edges ────────────────────────────────────
     .addEdge("finalize", END)
