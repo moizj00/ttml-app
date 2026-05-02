@@ -3,7 +3,7 @@ import { execSync } from "child_process";
 
 const BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL ||
-  `http://localhost:${process.env.PORT || "5000"}`;
+  `http://localhost:${process.env.PORT || "3000"}`;
 
 function detectChromiumPath(): string | undefined {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
@@ -56,7 +56,7 @@ export default defineConfig({
         url: BASE_URL,
         reuseExistingServer: false,
         // GitHub-hosted runners can be slow to compile/boot on cold cache.
-        timeout: 120000,
+        timeout: 180000,
       }
     : undefined,
 });
