@@ -12,6 +12,10 @@
 -- pg_cron schedule keeps firing without needing to be re-registered.
 -- ═══════════════════════════
 
+-- Index to make the TTL cleanup DELETE efficient (sequential scan otherwise)
+CREATE INDEX IF NOT EXISTS idx_pipeline_stream_chunks_created_at
+  ON pipeline_stream_chunks(created_at);
+
 CREATE OR REPLACE PROCEDURE cleanup_old_stream_chunks()
 LANGUAGE plpgsql AS $$
 BEGIN

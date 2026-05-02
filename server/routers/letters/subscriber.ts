@@ -15,6 +15,7 @@ import {
   getDeliveryLogByLetterId,
   updateLetterPdfUrl,
   updateLetterStoragePath,
+  getStreamChunksAfter,
 } from "../../db";
 import { storagePut, storageGet } from "../../storage";
 import {
@@ -326,5 +327,38 @@ export const subscriberProcedures = {
       if (!letter || letter.userId !== ctx.user.id)
         throw new TRPCError({ code: "NOT_FOUND" });
       return getDeliveryLogByLetterId(input.letterId);
+    }),
+
+  /**
+   * Fetch pipeline_stream_chunks for a letter with sequence_number > afterSeq,
+   * ordered ascending. Used by useLetterStream to backfill missed chunks after
+   * a reconnect — routes through server auth so RLS-protected data is accessible
+   * via the httpOnly sb_session cookie rather than the unauthenticated browser
+   * Supabase client.
+   */
+  streamChunksAfter: subscriberProcedure
+    .input(
+      z.object({
+        letterId: z.number().int().positive(),
+        afterSeq: z.number().int().default(-1),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const chunks = await getStreamChunksAfter(
+        input.letterId,
+        ctx.user.id,
+        input.afterSeq
+      );
+      // Serialize bigint id as string to avoid JSON number precision loss
+      // for values > Number.MAX_SAFE_INTEGER. sequence_number (used for
+      // deduplication in the hook) is a plain integer and is unaffected.
+      return chunks.map(c => ({
+        id: c.id.toString(),
+        letterId: c.letterId,
+        chunkText: c.chunkText,
+        stage: c.stage,
+        sequenceNumber: c.sequenceNumber,
+        createdAt: c.createdAt,
+      }));
     }),
 };

@@ -95,16 +95,18 @@ export async function processRunPipeline(
   // ── LangGraph pipeline route — mode-aware ──────────────────────────────────
   // LANGGRAPH_PIPELINE supports four values, parsed by parseLangGraphMode():
   //   off / unset → skip LangGraph entirely (n8n + standard pipeline only)
-  //   true / tier3 → run LangGraph as a tier-3 alternative (n8n still primary
-  //                  if N8N_PRIMARY=true; LangGraph failure falls through)
-  //   primary     → run LangGraph first; n8n is the fallback
+  //   true / tier3 → n8n + standard pipeline runs FIRST (tier3 semantics);
+  //                  LangGraph is reserved as a last-resort fallback after all
+  //                  standard-pipeline retries AND bestEffortFallback exhaust.
+  //                  n8n remains primary if N8N_PRIMARY=true.
+  //   primary     → run LangGraph first; n8n + standard pipeline are the fallbacks
   //   canary      → route a fraction of letters (LANGGRAPH_CANARY_FRACTION,
-  //                 default 0.1) to LangGraph; the rest go to standard
+  //                 default 0.1) to LangGraph primary path; the rest go to standard
   //
   // Backwards-compat: LANGGRAPH_PIPELINE=true continues to mean "tier3" so
   // existing deployments are unaffected. The literal string check
   // `process.env.LANGGRAPH_PIPELINE === "true"` is preserved by the mode
-  // parser (true → tier3 → useLangGraphForLetter returns true).
+  // parser (true → tier3 → tier-3 fallback at bottom of this function).
   const langGraphMode: LangGraphMode = parseLangGraphMode(
     process.env.LANGGRAPH_PIPELINE
   );
@@ -116,9 +118,11 @@ export async function processRunPipeline(
       canaryFraction: getCanaryFractionFromEnv(),
     });
 
-  if (process.env.LANGGRAPH_PIPELINE === "true" || langGraphEligible) {
+  // ── Primary/canary path: LangGraph runs BEFORE the standard pipeline ───────
+  // "tier3" intentionally does NOT enter this block — n8n must run first.
+  if (langGraphMode === "primary" || (langGraphMode === "canary" && langGraphEligible)) {
     logger.info(
-      `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph`
+      `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph (primary path)`
     );
     try {
       await runLangGraphPipeline({
@@ -287,6 +291,39 @@ export async function processRunPipeline(
           `[Worker] Degraded draft delivered for letter #${letterId} — skipping pipeline_failed`
         );
         return; // successfully delivered (degraded) — don't refund or notify failure
+      }
+    }
+
+    // ── Tier-3 LangGraph fallback ───────────────────────────────────────────
+    // Runs ONLY after all standard-pipeline retries AND bestEffortFallback
+    // are exhausted. n8n (via runFullPipeline) always gets priority.
+    //
+    // LANGGRAPH_PIPELINE=true (legacy) maps to mode "tier3" via
+    // parseLangGraphMode — process.env.LANGGRAPH_PIPELINE === "true" is
+    // preserved here for back-compat observability; the mode variable is
+    // authoritative.
+    if (langGraphMode === "tier3" && langGraphEligible) {
+      logger.info(
+        `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}, legacy=${process.env.LANGGRAPH_PIPELINE === "true"}) — tier-3 LangGraph fallback for letter #${letterId}`
+      );
+      try {
+        await runLangGraphPipeline({
+          letterId,
+          userId,
+          intake: intake as Record<string, any>,
+          isFreePreview: isPreviewGatedSubmission,
+        });
+        logger.info(
+          `[Worker] Tier-3 LangGraph fallback succeeded for letter #${letterId}`
+        );
+        return;
+      } catch (lgTier3Err) {
+        const lgMsg =
+          lgTier3Err instanceof Error ? lgTier3Err.message : String(lgTier3Err);
+        logger.warn(
+          { err: lgMsg },
+          `[Worker] Tier-3 LangGraph fallback also failed for letter #${letterId} — proceeding to pipeline_failed`
+        );
       }
     }
 

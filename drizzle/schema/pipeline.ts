@@ -133,7 +133,7 @@ export type InsertFineTuneRun = typeof fineTuneRuns.$inferInsert;
 export const pipelineStreamChunks = pgTable(
   "pipeline_stream_chunks",
   {
-    id: bigint("id", { mode: "number" }).primaryKey(),
+    id: bigint("id", { mode: "bigint" }).primaryKey(),
     letterId: integer("letter_id")
       .notNull()
       .references(() => letterRequests.id, { onDelete: "cascade" }),

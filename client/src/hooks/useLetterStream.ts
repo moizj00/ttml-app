@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import { getOrCreateChannel, getSupabaseClient, removeChannel } from "@/lib/supabase";
+import { getOrCreateChannel, removeChannel } from "@/lib/supabase";
+import { trpc } from "@/lib/trpc";
 
 // ═══════════════════════════════════════════════════════
 // useLetterStream
@@ -58,30 +59,10 @@ type UseLetterStreamResult = {
 
 /**
  * Fetch any chunks for letterId with sequence_number > afterSeq, sorted
- * ascending. Used both on initial mount (afterSeq = -1) and after a
- * realtime reconnect to backfill the gap.
+ * ascending. Calls the server-authenticated tRPC endpoint so RLS-protected
+ * data is accessible via the httpOnly sb_session cookie rather than the
+ * unauthenticated browser Supabase client.
  */
-async function fetchChunksAfter(
-  letterId: number,
-  afterSeq: number
-): Promise<StreamChunk[]> {
-  const client = getSupabaseClient();
-  if (!client) return [];
-  const { data, error } = await client
-    .from("pipeline_stream_chunks")
-    .select("id,letter_id,chunk_text,stage,sequence_number,created_at")
-    .eq("letter_id", letterId)
-    .gt("sequence_number", afterSeq)
-    .order("sequence_number", { ascending: true });
-  if (error) {
-    // Surface to console but don't throw — realtime updates will eventually
-    // fill the gap if the REST fetch was temporarily blocked (e.g. token
-    // refresh in progress).
-    console.warn("[useLetterStream] resync fetch failed:", error.message);
-    return [];
-  }
-  return (data ?? []) as StreamChunk[];
-}
 
 export function useLetterStream({
   letterId,
@@ -89,6 +70,7 @@ export function useLetterStream({
   onChunk,
   onComplete,
 }: UseLetterStreamOptions): UseLetterStreamResult {
+  const utils = trpc.useUtils();
   const [streamedText, setStreamedText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
@@ -182,14 +164,41 @@ export function useLetterStream({
     const channelKey = `letter-stream-${letterId}`;
     setIsStreaming(true);
 
+    /**
+     * Backfill chunks from the server via tRPC. Uses the server-authenticated
+     * endpoint (sb_session cookie) instead of the Supabase browser client,
+     * which has no session and would return 0 rows under RLS.
+     */
+    const fetchAndIngest = async (afterSeq: number) => {
+      try {
+        const chunks = await utils.letters.streamChunksAfter.fetch({
+          letterId,
+          afterSeq,
+        });
+        if (cancelled) return;
+        for (const chunk of chunks) {
+          ingestChunk({
+            id: Number(chunk.id), // bigint serialized as string → number (safe for display)
+            letter_id: chunk.letterId,
+            chunk_text: chunk.chunkText,
+            stage: chunk.stage,
+            sequence_number: chunk.sequenceNumber,
+            created_at:
+              chunk.createdAt instanceof Date
+                ? chunk.createdAt.toISOString()
+                : String(chunk.createdAt),
+          });
+        }
+      } catch (err) {
+        // Non-fatal — realtime events will fill future gaps; log and continue.
+        console.warn("[useLetterStream] resync fetch failed:", err);
+      }
+    };
+
     // ─── Initial hydration (replay anything we missed before mount) ───
     // Important when the LangGraph draft node started streaming before the
     // user navigated to the letter view.
-    void (async () => {
-      const initial = await fetchChunksAfter(letterId, -1);
-      if (cancelled) return;
-      for (const chunk of initial) ingestChunk(chunk);
-    })();
+    void fetchAndIngest(-1);
 
     const channel = getOrCreateChannel(channelKey, client =>
       client
@@ -212,14 +221,9 @@ export function useLetterStream({
         // this single hook covers both cases. We fetch every chunk with
         // sequence_number > lastSeen and ingest in order; ingestChunk
         // dedupes against seenSeqsRef so we never double-count.
-        .subscribe(async (status) => {
+        .subscribe(status => {
           if (status === "SUBSCRIBED" && letterId && !cancelled) {
-            const missed = await fetchChunksAfter(
-              letterId,
-              lastSeenSeqRef.current
-            );
-            if (cancelled) return;
-            for (const chunk of missed) ingestChunk(chunk);
+            void fetchAndIngest(lastSeenSeqRef.current);
           }
         })
     );
@@ -234,7 +238,7 @@ export function useLetterStream({
       }
       removeChannel(channelKey);
     };
-  }, [letterId, enabled, ingestChunk]);
+  }, [letterId, enabled, ingestChunk, utils.letters.streamChunksAfter]);
 
   return { streamedText, isStreaming, stage, chunkCount, reset };
 }
