@@ -138,6 +138,8 @@ Context:
     vettedLetter: assembledLetter, // letter text stays the same; vetting just evaluates
     qualityDegraded,
     vettingReport,
+    // Append-only history; the convenience pointer above is the latest pass.
+    vettingReports: [vettingReport],
     qualityWarnings: newWarnings,
     currentStage: qualityDegraded && retryCount < 2 ? "draft" : "finalize",
     sharedContext: {

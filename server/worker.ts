@@ -27,6 +27,12 @@ import {
   preflightApiKeyCheck,
 } from "./pipeline";
 import { runLangGraphPipeline } from "./pipeline/graph";
+import {
+  parseLangGraphMode,
+  useLangGraphForLetter,
+  getCanaryFractionFromEnv,
+  type LangGraphMode,
+} from "./pipeline/graph/mode";
 import { PipelineError } from "../shared/types";
 import {
   acquirePipelineLock,
@@ -86,13 +92,33 @@ export async function processRunPipeline(
     );
   }
 
-  // ── LangGraph pipeline route (opt-in via LANGGRAPH_PIPELINE=true) ──────────
-  // When enabled, the LangGraph StateGraph handles the full 4-stage pipeline
-  // with streaming tokens to pipeline_stream_chunks for real-time frontend display.
-  // The existing runFullPipeline() remains the default for stability.
-  if (process.env.LANGGRAPH_PIPELINE === "true") {
+  // ── LangGraph pipeline route — mode-aware ──────────────────────────────────
+  // LANGGRAPH_PIPELINE supports four values, parsed by parseLangGraphMode():
+  //   off / unset → skip LangGraph entirely (n8n + standard pipeline only)
+  //   true / tier3 → run LangGraph as a tier-3 alternative (n8n still primary
+  //                  if N8N_PRIMARY=true; LangGraph failure falls through)
+  //   primary     → run LangGraph first; n8n is the fallback
+  //   canary      → route a fraction of letters (LANGGRAPH_CANARY_FRACTION,
+  //                 default 0.1) to LangGraph; the rest go to standard
+  //
+  // Backwards-compat: LANGGRAPH_PIPELINE=true continues to mean "tier3" so
+  // existing deployments are unaffected. The literal string check
+  // `process.env.LANGGRAPH_PIPELINE === "true"` is preserved by the mode
+  // parser (true → tier3 → useLangGraphForLetter returns true).
+  const langGraphMode: LangGraphMode = parseLangGraphMode(
+    process.env.LANGGRAPH_PIPELINE
+  );
+  const langGraphEligible =
+    langGraphMode !== "off" &&
+    useLangGraphForLetter({
+      mode: langGraphMode,
+      letterId,
+      canaryFraction: getCanaryFractionFromEnv(),
+    });
+
+  if (process.env.LANGGRAPH_PIPELINE === "true" || langGraphEligible) {
     logger.info(
-      `[Worker] LANGGRAPH_PIPELINE=true — routing letter #${letterId} through LangGraph StateGraph`
+      `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph`
     );
     try {
       await runLangGraphPipeline({

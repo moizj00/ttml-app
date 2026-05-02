@@ -5,6 +5,7 @@ import {
   mergeSharedContext,
   type SharedContext,
 } from "./memory";
+import type { IntakeJson, PipelineErrorCode } from "../../../shared/types/pipeline";
 
 // ═══════════════════════════════════════════════════════
 // TTML LangGraph Pipeline State
@@ -37,10 +38,15 @@ export const PipelineState = Annotation.Root({
     default: () => 0,
   }),
 
-  /** Raw intake JSON from letter_requests.intake_json */
-  intake: Annotation<Record<string, any>>({
+  /**
+   * Intake JSON from letter_requests.intake_json. Typed as a Partial of
+   * IntakeJson so structured fields can be relied on while remaining
+   * tolerant of the incomplete intakes some legacy paths still produce.
+   * Untyped extras (e.g. legacy keys) flow through via the index signature.
+   */
+  intake: Annotation<Partial<IntakeJson> & Record<string, any>>({
     reducer: (_, update) => update,
-    default: () => ({}),
+    default: () => ({} as Partial<IntakeJson> & Record<string, any>),
   }),
 
   /** Conversation messages — append-only reducer so nodes can add messages */
@@ -116,16 +122,47 @@ export const PipelineState = Annotation.Root({
     default: () => "",
   }),
 
+  /**
+   * Typed pipeline error code from the last node failure.
+   *
+   * Permanent codes (API_KEY_MISSING, INTAKE_INCOMPLETE, etc.) short-circuit
+   * the retry budget — the graph routes straight to fail rather than burning
+   * identical retries.
+   */
+  lastErrorCode: Annotation<PipelineErrorCode | "">({
+    reducer: (_, update) => update,
+    default: () => "" as const,
+  }),
+
+  /** Human-readable message for the last node failure (mirrors lastErrorCode). */
+  lastErrorMessage: Annotation<string>({
+    reducer: (_, update) => update,
+    default: () => "",
+  }),
+
   /** Accumulated quality warnings from vetting */
   qualityWarnings: Annotation<string[]>({
     reducer: (current, update) => [...current, ...update],
     default: () => [],
   }),
 
-  /** Vetting report JSON from the vetting stage */
+  /** Vetting report JSON from the latest vetting pass (convenience pointer) */
   vettingReport: Annotation<Record<string, any> | null>({
     reducer: (_, update) => update,
     default: () => null,
+  }),
+
+  /**
+   * Append-only history of vetting reports, one per vetting pass.
+   *
+   * Used for degraded-finalization auditing and debugging — the vetting
+   * router can run more than once when retryCount < 2 and qualityDegraded
+   * is true, and we want to keep every pass for the admin UI / training
+   * capture rather than overwriting.
+   */
+  vettingReports: Annotation<Array<Record<string, any>>>({
+    reducer: (current, update) => [...current, ...update],
+    default: () => [],
   }),
 
   /**
