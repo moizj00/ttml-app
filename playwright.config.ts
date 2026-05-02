@@ -51,10 +51,12 @@ export default defineConfig({
 
   webServer: process.env.CI
     ? {
-        command: "npm run dev",
+        // Use pnpm in CI to match the repo's package manager.
+        command: "pnpm dev",
         url: BASE_URL,
         reuseExistingServer: false,
-        timeout: 60000,
+        // GitHub-hosted runners can be slow to compile/boot on cold cache.
+        timeout: 120000,
       }
     : undefined,
 });
