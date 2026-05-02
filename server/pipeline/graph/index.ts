@@ -31,13 +31,16 @@ export type VettingRouteResult = "draft" | "finalize" | "finalize_degraded" | "f
 /**
  * Exhaustive map of route keys → target node names. Exported so tests can
  * assert that every VettingRouteResult variant has a destination node.
+ *
+ * Typed with `as const satisfies` so the values are literal string types
+ * (required by addConditionalEdges) while still enforcing all keys are present.
  */
-export const VETTING_ROUTE_MAP: Record<VettingRouteResult, string> = {
+export const VETTING_ROUTE_MAP = {
   draft: "draft",
   finalize: "finalize",
   finalize_degraded: "finalize",
   fail: "fail",
-};
+} as const satisfies Record<VettingRouteResult, string>;
 
 /**
  * After vetting:
