@@ -25,7 +25,7 @@ import { trpc } from "@/lib/trpc";
 // ═══════════════════════════════════════════════════════
 
 export type StreamChunk = {
-  id: number;
+  id: number | string;
   letter_id: number;
   chunk_text: string;
   stage: string;
@@ -178,7 +178,7 @@ export function useLetterStream({
         if (cancelled) return;
         for (const chunk of chunks) {
           ingestChunk({
-            id: Number(chunk.id), // bigint serialized as string → number (safe for display)
+            id: chunk.id, // string-serialized bigint from tRPC — keep as string to preserve precision
             letter_id: chunk.letterId,
             chunk_text: chunk.chunkText,
             stage: chunk.stage,

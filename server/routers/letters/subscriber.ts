@@ -343,6 +343,18 @@ export const subscriberProcedures = {
         afterSeq: z.number().int().default(-1),
       })
     )
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          letterId: z.number(),
+          chunkText: z.string(),
+          stage: z.string(),
+          sequenceNumber: z.number(),
+          createdAt: z.date(),
+        })
+      )
+    )
     .query(async ({ ctx, input }) => {
       const chunks = await getStreamChunksAfter(
         input.letterId,
