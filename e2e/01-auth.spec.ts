@@ -164,19 +164,15 @@ authTest.describe("Authenticated auth flow", () => {
   });
 
   authTest("subscriber can log out after login", async ({ subscriberPage: page }) => {
-    const logoutButton = page.getByRole("button", { name: /log\s*out|sign\s*out/i }).first();
-    const logoutLink = page.getByRole("link", { name: /log\s*out|sign\s*out/i }).first();
-    const menuButton = page.getByRole("button", { name: /menu|profile|avatar/i }).first();
-
-    if (await menuButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await menuButton.click();
+    // Open sidebar on mobile if needed
+    const openSidebarButton = page.getByTestId("button-open-sidebar");
+    if (await openSidebarButton.isVisible()) {
+      await openSidebarButton.click();
     }
 
-    const logoutEl = (await logoutButton.isVisible({ timeout: 3000 }).catch(() => false))
-      ? logoutButton
-      : logoutLink;
-
-    await logoutEl.click();
+    const logoutButton = page.getByTestId("button-logout");
+    await expect(logoutButton).toBeVisible();
+    await logoutButton.click();
     await page.waitForURL(/\/(login|$)/, { timeout: 10000 });
   });
 });
