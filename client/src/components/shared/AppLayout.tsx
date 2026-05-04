@@ -403,6 +403,7 @@ export default function AppLayout({
             });
             logout();
           }}
+          data-testid="button-logout"
           className="sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent w-full"
         >
           <span className="sidebar-nav-icon inline-flex">

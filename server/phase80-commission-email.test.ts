@@ -71,6 +71,7 @@ vi.mock("./db", () => ({
   incrementDiscountCodeUsage: vi.fn().mockResolvedValue(undefined),
   createCommission: vi.fn().mockResolvedValue(undefined),
   notifyAdmins: vi.fn().mockResolvedValue(undefined),
+  notifyAllAttorneys: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./email", () => ({

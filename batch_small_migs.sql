@@ -1,0 +1,153 @@
+-- Migration 0004: Finite letter allowances + explicit free-trial tracking
+--
+-- 1. Normalize any existing -1 (unlimited) rows to their correct per-plan finite value.
+-- 2. Add CHECK constraint so letters_allowed can never be written as -1 again.
+-- 3. Add free_review_used_at column to users so the free-trial-used state is
+--    explicit and no longer derived from letter-count queries.
+
+-- ── Step 1: Normalise legacy -1 rows ─────────────────────────────────────────
+UPDATE subscriptions
+SET letters_allowed = CASE plan
+  WHEN 'free_trial'         THEN 1
+  WHEN 'free_trial_review'  THEN 1
+  WHEN 'per_letter'         THEN 1
+  WHEN 'monthly_basic'      THEN 4
+  WHEN 'starter'            THEN 4
+  WHEN 'monthly'            THEN 4
+  WHEN 'monthly_pro'        THEN 8
+  WHEN 'professional'       THEN 8
+  WHEN 'annual'             THEN 8
+  ELSE 1
+END
+WHERE letters_allowed = -1;
+
+-- ── Step 2: Add non-negative constraint ───────────────────────────────────────
+ALTER TABLE subscriptions
+  ADD CONSTRAINT check_letters_allowed_non_negative
+  CHECK (letters_allowed >= 0);
+
+-- ── Step 3: Explicit free-trial tracking column ───────────────────────────────
+-- NULL means the free trial has not been used.
+-- Non-NULL timestamp means it was used at that point in time.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS free_review_used_at TIMESTAMPTZ;
+ALTER TABLE letter_requests ADD COLUMN IF NOT EXISTS research_unverified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category varchar(50) NOT NULL DEFAULT 'general';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'notifications_category_check'
+  ) THEN
+    ALTER TABLE notifications ADD CONSTRAINT notifications_category_check
+      CHECK (category IN ('users', 'letters', 'employee', 'general'));
+  END IF;
+END $$;
+ALTER TYPE "job_type" ADD VALUE IF NOT EXISTS 'vetting';
+CREATE TABLE IF NOT EXISTS "document_analyses" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "document_name" varchar(500) NOT NULL,
+  "file_type" varchar(20) NOT NULL,
+  "analysis_json" jsonb NOT NULL,
+  "user_id" integer,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_document_analyses_user_id" ON "document_analyses" ("user_id");
+CREATE INDEX IF NOT EXISTS "idx_document_analyses_created_at" ON "document_analyses" ("created_at");
+ALTER TYPE "lesson_source" ADD VALUE IF NOT EXISTS 'subscriber_update';
+ALTER TYPE "lesson_source" ADD VALUE IF NOT EXISTS 'subscriber_retry';
+ALTER TYPE "letter_status" ADD VALUE IF NOT EXISTS 'pipeline_failed';
+ALTER TYPE "letter_status" ADD VALUE IF NOT EXISTS 'sent';
+-- Migration 0011: Add role-specific human-readable IDs and letter tracking
+
+-- 1. Add role-specific human-readable IDs to users table
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS subscriber_id VARCHAR(16) UNIQUE,
+  ADD COLUMN IF NOT EXISTS employee_id VARCHAR(16) UNIQUE,
+  ADD COLUMN IF NOT EXISTS attorney_id VARCHAR(16) UNIQUE;
+
+-- Backfill subscriber IDs (safe for re-run: starts from current max + 1)
+WITH max_existing AS (
+  SELECT COALESCE(MAX(CAST(SPLIT_PART(subscriber_id, '-', 2) AS INTEGER)), 0) AS max_num
+  FROM users WHERE subscriber_id LIKE 'SUB-%'
+),
+ranked AS (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) + me.max_num AS rn
+  FROM users, max_existing me
+  WHERE role = 'subscriber' AND subscriber_id IS NULL
+)
+UPDATE users
+SET subscriber_id = 'SUB-' || LPAD(ranked.rn::text, 4, '0')
+FROM ranked
+WHERE users.id = ranked.id;
+
+-- Backfill employee IDs (safe for re-run)
+WITH max_existing AS (
+  SELECT COALESCE(MAX(CAST(SPLIT_PART(employee_id, '-', 2) AS INTEGER)), 0) AS max_num
+  FROM users WHERE employee_id LIKE 'EMP-%'
+),
+ranked AS (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) + me.max_num AS rn
+  FROM users, max_existing me
+  WHERE role = 'employee' AND employee_id IS NULL
+)
+UPDATE users
+SET employee_id = 'EMP-' || LPAD(ranked.rn::text, 4, '0')
+FROM ranked
+WHERE users.id = ranked.id;
+
+-- Backfill attorney IDs (safe for re-run)
+WITH max_existing AS (
+  SELECT COALESCE(MAX(CAST(SPLIT_PART(attorney_id, '-', 2) AS INTEGER)), 0) AS max_num
+  FROM users WHERE attorney_id LIKE 'ATT-%'
+),
+ranked AS (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) + me.max_num AS rn
+  FROM users, max_existing me
+  WHERE role = 'attorney' AND attorney_id IS NULL
+)
+UPDATE users
+SET attorney_id = 'ATT-' || LPAD(ranked.rn::text, 4, '0')
+FROM ranked
+WHERE users.id = ranked.id;
+
+-- 2. Add submitter and reviewer role IDs to letter_requests for tracking
+ALTER TABLE letter_requests
+  ADD COLUMN IF NOT EXISTS submitter_role_id VARCHAR(16),
+  ADD COLUMN IF NOT EXISTS reviewer_role_id VARCHAR(16);
+
+-- Backfill submitter_role_id for existing letters
+UPDATE letter_requests lr
+SET submitter_role_id = u.subscriber_id
+FROM users u
+WHERE lr.user_id = u.id AND u.subscriber_id IS NOT NULL AND lr.submitter_role_id IS NULL;
+
+-- Backfill reviewer_role_id for existing letters that have an assigned reviewer
+UPDATE letter_requests lr
+SET reviewer_role_id = u.attorney_id
+FROM users u
+WHERE lr.assigned_reviewer_id = u.id AND u.attorney_id IS NOT NULL AND lr.reviewer_role_id IS NULL;
+-- Migration 0012: Add admin verification codes table for 2FA
+
+CREATE TABLE IF NOT EXISTS admin_verification_codes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  code VARCHAR(8) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_verification_codes_user_id ON admin_verification_codes(user_id);
+-- Migration 0013: Add pipeline_locked_at column for DB-level pipeline execution locking
+-- Prevents concurrent pipeline runs for the same letter across restarts or horizontal scaling.
+
+ALTER TABLE letter_requests
+  ADD COLUMN IF NOT EXISTS pipeline_locked_at TIMESTAMPTZ;
+-- Migration 0014: Add cacheHit and cacheKey fields to research_runs
+-- Supports Cloudflare KV-based research result caching.
+
+ALTER TABLE research_runs
+  ADD COLUMN IF NOT EXISTS cache_hit BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS cache_key VARCHAR(256);

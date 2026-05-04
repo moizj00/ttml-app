@@ -1,0 +1,174 @@
+════════════════════════════════════════════════════════════════════════
+
+-- ── 1. Add embedding column ──────────────────────────────────────────────────
+ALTER TABLE pipeline_lessons
+  ADD COLUMN IF NOT EXISTS embedding vector(1536);
+
+-- ── 2. HNSW index for approximate nearest-neighbour search ───────────────────
+-- cosine distance (<=>), same as letter_versions uses implicitly.
+-- Created concurrently so it doesn't lock the table.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pipeline_lessons_embedding
+  ON pipeline_lessons
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+
+-- ── 3. match_lessons() — semantic similarity function ────────────────────────
+-- Returns active lessons ordered by cosine similarity to a query embedding.
+-- Falls back gracefully to an empty result if pgvector isn't available.
+CREATE OR REPLACE FUNCTION match_lessons(
+  query_embedding  vector(1536),
+  match_threshold  float   DEFAULT 0.70,
+  match_count      int     DEFAULT 10,
+  p_letter_type    text    DEFAULT NULL,
+  p_jurisdiction   text    DEFAULT NULL,
+  p_pipeline_stage text    DEFAULT NULL
+)
+RETURNS TABLE (
+  id                        int,
+  letter_type               text,
+  jurisdiction              text,
+  pipeline_stage            text,
+  category                  text,
+  lesson_text               text,
+  weight                    int,
+  hit_count                 int,
+  times_injected            int,
+  letters_before_avg_score  int,
+  letters_after_avg_score   int,
+  similarity                float
+)
+LANGUAGE sql STABLE
+SET search_path = ''
+AS $$
+  SELECT
+    pl.id,
+    pl.letter_type::text,
+    pl.jurisdiction,
+    pl.pipeline_stage::text,
+    pl.category::text,
+    pl.lesson_text,
+    pl.weight,
+    pl.hit_count,
+    pl.times_injected,
+    pl.letters_before_avg_score,
+    pl.letters_after_avg_score,
+    1 - (pl.embedding <=> query_embedding) AS similarity
+  FROM public.pipeline_lessons pl
+  WHERE pl.is_active = true
+    AND pl.embedding IS NOT NULL
+    AND 1 - (pl.embedding <=> query_embedding) >= match_threshold
+    AND (p_letter_type   IS NULL OR pl.letter_type    = p_letter_type::public.letter_type_enum   OR pl.letter_type IS NULL)
+    AND (p_jurisdiction  IS NULL OR pl.jurisdiction   = p_jurisdiction                            OR pl.jurisdiction IS NULL)
+    AND (p_pipeline_stage IS NULL OR pl.pipeline_stage = p_pipeline_stage::public.pipeline_stage_enum OR pl.pipeline_stage IS NULL)
+  ORDER BY pl.embedding <=> query_embedding
+  LIMIT match_count;
+$$;
+-- Migration: 0017_initial_paywall_email_sent_at
+-- Adds initial_paywall_email_sent_at column to letter_requests table.
+-- This column tracks when the first timed paywall notification email was sent
+-- to the subscriber (10-15 minutes after the letter reaches generated_locked status).
+-- NULL means the email has not been sent yet.
+-- Idempotency: the cron job only sends the email once per letter.
+
+ALTER TABLE "letter_requests" ADD COLUMN IF NOT EXISTS "initial_paywall_email_sent_at" timestamp with time zone;
+ALTER TABLE "letter_requests" ADD COLUMN "submitted_by_admin" boolean DEFAULT false NOT NULL;CREATE TABLE IF NOT EXISTS "intake_form_templates" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "owner_user_id" integer NOT NULL,
+  "title" varchar(200) NOT NULL,
+  "base_letter_type" "letter_type" NOT NULL,
+  "field_config" jsonb NOT NULL,
+  "active" boolean DEFAULT true NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "idx_intake_form_templates_owner" ON "intake_form_templates" ("owner_user_id");
+CREATE INDEX IF NOT EXISTS "idx_intake_form_templates_letter_type" ON "intake_form_templates" ("base_letter_type");
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Migration 0020: RLS Insert Policy Hardening (Supabase Security Advisor fixes)
+-- Talk-to-My-Lawyer — Supabase PostgreSQL
+--
+-- Problem:
+--   Four tables had P0 "WITH CHECK (true)" INSERT policies that effectively
+--   allowed any client (anon or authenticated) to insert arbitrary rows,
+--   bypassing business invariants:
+--
+--     1. commission_ledger        — affiliate/employee commissions (money)
+--     2. email_verification_tokens — auth tokens (account takeover risk)
+--     3. newsletter_subscribers   — mailing list (spam/abuse risk)
+--     4. users                    — account creation (privilege escalation)
+--
+-- Resolution (per product owner):
+--   - commission_ledger      → service_role / admin only (backend-only inserts
+--                              after successful Stripe checkout + affiliate code)
+--   - email_verification_tokens → service_role only (only auth flows issue tokens)
+--   - users                  → service_role only (only backend creates users
+--                              via Supabase Auth → local users sync)
+--   - newsletter_subscribers → anon + authenticated allowed (public signup form)
+--
+-- Backend context:
+--   Our Drizzle connection (server/db/core.ts) uses postgres-js with the
+--   Supabase DB-owner role, which bypasses RLS. These policies apply to
+--   clients hitting Supabase REST/PostgREST directly (anon/authenticated key)
+--   or the Supabase Dashboard Data tab. They are defense-in-depth.
+--
+-- Mirrors the policies applied ad-hoc via Supabase SQL editor on 2026-04-22.
+-- Idempotent (DROP POLICY IF EXISTS ... CREATE POLICY ...).
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- ─── Ensure RLS is enabled on all four tables ────────────────────────────────
+
+ALTER TABLE public.commission_ledger         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_verification_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.newsletter_subscribers    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users                     ENABLE ROW LEVEL SECURITY;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 1. commission_ledger — service_role / admin only
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Rows are created automatically by the Stripe webhook handler
+-- (server/stripeWebhook/handlers/checkout.ts → trackCommission() →
+--  server/db/affiliates.ts → createCommission()) when a subscriber
+-- successfully pays with an affiliate-tied discount code.
+-- No client should ever write to this table directly.
+
+DROP POLICY IF EXISTS commission_ledger_insert            ON public.commission_ledger;
+DROP POLICY IF EXISTS commission_ledger_insert_system     ON public.commission_ledger;
+DROP POLICY IF EXISTS commission_ledger_service_insert    ON public.commission_ledger;
+
+CREATE POLICY commission_ledger_service_insert
+  ON public.commission_ledger
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    public.is_app_admin()
+    OR (current_setting('role'::text, true) = 'service_role'::text)
+  );
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 2. email_verification_tokens — service_role only
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Rows are issued by the backend during signup / email-change / resend flows
+-- (server/supabaseAuth/routes/verification.ts, signup-login.ts,
+--  server/routers/profile.ts).
+-- Clients must never mint their own verification tokens.
+
+DROP POLICY IF EXISTS email_verification_tokens_insert         ON public.email_verification_tokens;
+DROP POLICY IF EXISTS email_verification_tokens_insert_system  ON public.email_verification_tokens;
+DROP POLICY IF EXISTS email_verification_tokens_service_insert ON public.email_verification_tokens;
+DROP POLICY IF EXISTS evt_insert                               ON public.email_verification_tokens;
+DROP POLICY IF EXISTS evt_service_role_insert                  ON public.email_verification_tokens;
+
+CREATE POLICY evt_service_role_insert
+  ON public.email_verification_tokens
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    is_app_admin()
+    OR (current_setting('role'::text, true) = 'service_role'::text)
+  );
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 3. users — service_role only
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- The pu

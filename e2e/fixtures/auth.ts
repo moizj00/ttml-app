@@ -16,7 +16,7 @@ export const ADMIN_PASSWORD =
   process.env.E2E_ADMIN_PASSWORD || "TestAdmin123!";
 
 export function isCredentialConfigured(email: string, defaultEmail: string): boolean {
-  return email !== defaultEmail && email.length > 0;
+  return email.length > 0;
 }
 
 export const isSubscriberConfigured = isCredentialConfigured(SUBSCRIBER_EMAIL, "test.subscriber@e2e.ttml.test");
