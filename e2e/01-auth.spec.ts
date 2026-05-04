@@ -170,6 +170,15 @@ authTest.describe("Authenticated auth flow", () => {
       await openSidebarButton.click();
     }
 
+    // DIMISS ONBOARDING MODAL IF PRESENT
+    // The OnboardingModal uses Dialog which creates an overlay that blocks the sidebar buttons.
+    const skipButton = page.getByRole("button", { name: /skip|dismiss/i });
+    if (await skipButton.isVisible()) {
+      await skipButton.click();
+      // Wait for it to disappear
+      await expect(skipButton).not.toBeVisible();
+    }
+
     const logoutButton = page.getByTestId("button-logout");
     await expect(logoutButton).toBeVisible();
     await logoutButton.click();
