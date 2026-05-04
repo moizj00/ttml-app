@@ -165,7 +165,7 @@ importers:
         version: 17.3.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.1(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9)
       express:
         specifier: ^4.21.2
         version: 4.22.1
@@ -182,8 +182,8 @@ importers:
         specifier: ^1.12.0
         version: 1.12.0
       mysql2:
-        specifier: ^3.22.1
-        version: 3.22.1(@types/node@24.12.0)
+        specifier: ^3.22.3
+        version: 3.22.3(@types/node@24.12.0)
       nanoid:
         specifier: ^5.1.11
         version: 5.1.11
@@ -3707,8 +3707,8 @@ packages:
     resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
     hasBin: true
 
-  mysql2@3.22.1:
-    resolution: {integrity: sha512-48+9UXehKyxxiP2pqCxUq+MSFvX+v41jwsSpFDQO/jAoFuAELutBGJUhWJnDbe82/OBlIhSBMC82WeonmznT/Q==}
+  mysql2@3.22.3:
+    resolution: {integrity: sha512-uWWxvZSRvRhtBdh2CdcuK83YcOfPdmEeEYB069bAmPnV93QApDGVPuvCQOLjlh7tYHEWdgQPrn6kosDxHBVLkA==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -7688,12 +7688,12 @@ snapshots:
       esbuild: 0.27.5
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.1(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       '@types/pg': 8.15.6
       '@upstash/redis': 1.37.0
-      mysql2: 3.22.1(@types/node@24.12.0)
+      mysql2: 3.22.3(@types/node@24.12.0)
       pg: 8.20.0
       postgres: 3.4.9
 
@@ -8414,7 +8414,7 @@ snapshots:
 
   mustache@4.2.0: {}
 
-  mysql2@3.22.1(@types/node@24.12.0):
+  mysql2@3.22.3(@types/node@24.12.0):
     dependencies:
       '@types/node': 24.12.0
       aws-ssl-profiles: 1.1.2
