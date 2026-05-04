@@ -126,7 +126,7 @@ async function vettingRouterNode(
  * otherwise sniff the message for well-known signals — same heuristic
  * used by isTransientError() in shared/types/pipeline.ts.
  */
-function classifyNodeError(err: unknown): PipelineErrorCode {
+export function classifyNodeError(err: unknown): PipelineErrorCode {
   if (err && typeof err === "object" && "code" in err) {
     const code = (err as { code?: unknown }).code;
     if (typeof code === "string" && code in PIPELINE_ERROR_CATEGORY) {
@@ -164,7 +164,7 @@ function classifyNodeError(err: unknown): PipelineErrorCode {
   return PIPELINE_ERROR_CODES.UNKNOWN_ERROR;
 }
 
-function withErrorRecovery(
+export function withErrorRecovery(
   nodeName: string,
   nodeFn: (state: PipelineStateType) => Promise<Partial<PipelineStateType>>
 ) {
@@ -188,6 +188,21 @@ function withErrorRecovery(
         },
         "[Graph] Node error"
       );
+      // A permanent error burns the full retry budget in a single shot —
+      // this is distinct from gradual transient exhaustion and typically
+      // indicates an upstream data / configuration problem rather than
+      // system instability. Log it separately so monitors can alert on it.
+      if (isPermanent) {
+        log.warn(
+          {
+            letterId: state.letterId,
+            node: nodeName,
+            errCode,
+            event: "instant_budget_exhaustion",
+          },
+          "[Graph] Permanent error — instant retry budget exhaustion"
+        );
+      }
       return {
         lastErrorStage: nodeName,
         lastErrorCode: errCode,

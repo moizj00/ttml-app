@@ -24,6 +24,29 @@ import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from 
 import { getDb } from "./core";
 
 // ═══════════════════════════════════════════════════════
+// DOMAIN ERRORS — stream chunk ownership
+// ═══════════════════════════════════════════════════════
+
+/** Thrown by getStreamChunksAfter when the requested letter does not exist. */
+export class LetterNotFoundError extends Error {
+  constructor(letterId: number) {
+    super(`Letter ${letterId} not found`);
+    this.name = "LetterNotFoundError";
+  }
+}
+
+/** Thrown by getStreamChunksAfter when the letter exists but is owned by a
+ *  different user.  Callers (e.g. the tRPC procedure) should translate this
+ *  to a FORBIDDEN response so the UI can distinguish "no data yet" from
+ *  "you do not have access". */
+export class LetterAccessDeniedError extends Error {
+  constructor(letterId: number) {
+    super(`Access denied to letter ${letterId}`);
+    this.name = "LetterAccessDeniedError";
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // WORKFLOW JOB HELPERS
 // ═══════════════════════════════════════════════════════
 
@@ -256,7 +279,8 @@ export async function getStreamChunksAfter(
     .where(eq(letterRequests.id, letterId))
     .limit(1);
 
-  if (!letter || letter.userId !== userId) return [];
+  if (!letter) throw new LetterNotFoundError(letterId);
+  if (letter.userId !== userId) throw new LetterAccessDeniedError(letterId);
 
   return db
     .select()

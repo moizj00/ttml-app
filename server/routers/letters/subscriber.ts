@@ -17,6 +17,10 @@ import {
   updateLetterStoragePath,
   getStreamChunksAfter,
 } from "../../db";
+import {
+  LetterNotFoundError,
+  LetterAccessDeniedError,
+} from "../../db/pipeline-records";
 import { storagePut, storageGet } from "../../storage";
 import {
   processSubscriberFeedback,
@@ -356,11 +360,28 @@ export const subscriberProcedures = {
       )
     )
     .query(async ({ ctx, input }) => {
-      const chunks = await getStreamChunksAfter(
-        input.letterId,
-        ctx.user.id,
-        input.afterSeq
-      );
+      let chunks: Awaited<ReturnType<typeof getStreamChunksAfter>>;
+      try {
+        chunks = await getStreamChunksAfter(
+          input.letterId,
+          ctx.user.id,
+          input.afterSeq
+        );
+      } catch (err) {
+        if (err instanceof LetterNotFoundError) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Letter ${input.letterId} not found`,
+          });
+        }
+        if (err instanceof LetterAccessDeniedError) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `You do not have access to letter ${input.letterId}`,
+          });
+        }
+        throw err;
+      }
       // Serialize bigint id as string to avoid JSON number precision loss
       // for values > Number.MAX_SAFE_INTEGER. sequence_number (used for
       // deduplication in the hook) is a plain integer and is unaffected.

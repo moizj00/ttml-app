@@ -25,7 +25,10 @@ import { trpc } from "@/lib/trpc";
 // ═══════════════════════════════════════════════════════
 
 export type StreamChunk = {
-  id: number | string;
+  /** Always a string — the DB column is bigint and the tRPC procedure
+   *  serialises it via .toString() to avoid JS number precision loss.
+   *  Never cast this to Number; use it only for identity comparison. */
+  id: string;
   letter_id: number;
   chunk_text: string;
   stage: string;
@@ -53,6 +56,11 @@ type UseLetterStreamResult = {
   stage: string | null;
   /** Number of chunks received */
   chunkCount: number;
+  /** True when the server returned FORBIDDEN (letter exists but belongs to
+   *  a different user). Distinct from an empty stream that just hasn't
+   *  started yet — callers should render "Access Denied" rather than
+   *  "Loading…" when this is true. */
+  accessDenied: boolean;
   /** Reset stream state (e.g. when starting a new letter) */
   reset: () => void;
 };
@@ -75,6 +83,7 @@ export function useLetterStream({
   const [isStreaming, setIsStreaming] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [chunkCount, setChunkCount] = useState(0);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Buffer for ordered chunk assembly
   const chunksRef = useRef<Map<number, string>>(new Map());
@@ -88,6 +97,7 @@ export function useLetterStream({
     setIsStreaming(false);
     setStage(null);
     setChunkCount(0);
+    setAccessDenied(false);
     chunksRef.current = new Map();
     nextExpectedRef.current = 0;
     lastSeenSeqRef.current = -1;
@@ -189,8 +199,22 @@ export function useLetterStream({
                 : String(chunk.createdAt),
           });
         }
-      } catch (err) {
-        // Non-fatal — realtime events will fill future gaps; log and continue.
+      } catch (err: unknown) {
+        if (cancelled) return;
+        // FORBIDDEN means the letter exists but belongs to a different user.
+        // Surface this so the UI can render "Access Denied" instead of an
+        // empty loading state.
+        const code =
+          err &&
+          typeof err === "object" &&
+          "data" in err &&
+          (err as { data?: { code?: string } }).data?.code;
+        if (code === "FORBIDDEN") {
+          setAccessDenied(true);
+          setIsStreaming(false);
+          return;
+        }
+        // All other failures are non-fatal — realtime events will fill gaps.
         console.warn("[useLetterStream] resync fetch failed:", err);
       }
     };
@@ -240,5 +264,5 @@ export function useLetterStream({
     };
   }, [letterId, enabled, ingestChunk, utils.letters.streamChunksAfter]);
 
-  return { streamedText, isStreaming, stage, chunkCount, reset };
+  return { streamedText, isStreaming, stage, chunkCount, accessDenied, reset };
 }

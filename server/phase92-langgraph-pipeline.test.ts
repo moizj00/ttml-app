@@ -383,7 +383,9 @@ vi.mock("./db", () => {
     }),
     getDb: vi.fn().mockImplementation(async () => {
       // Chainable Drizzle-like fake for letterVersions insert + letterRequests update
-      return {
+      // The hardening PR wraps these two writes in a db.transaction(), so the mock
+      // must expose transaction() that receives and runs the callback synchronously.
+      const db: Record<string, any> = {
         insert: (_table: any) => ({
           values: (values: any) => ({
             returning: async () => {
@@ -399,7 +401,13 @@ vi.mock("./db", () => {
             },
           }),
         }),
+        transaction: async (fn: (tx: unknown) => Promise<void>) => {
+          // Run the callback with the same mock db as the tx object so
+          // insert/update calls inside the transaction are captured.
+          await fn(db);
+        },
       };
+      return db;
     }),
   };
 });
