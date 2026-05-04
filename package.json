@@ -49,7 +49,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/node": "^10.40.0",
     "@sentry/react": "^10.40.0",
-    "@supabase/supabase-js": "^2.97.0",
+    "@supabase/supabase-js": "^2.105.1",
     "@tanstack/react-query": "^5.96.1",
     "@tiptap/extension-highlight": "^3.20.0",
     "@tiptap/extension-placeholder": "^3.20.0",
