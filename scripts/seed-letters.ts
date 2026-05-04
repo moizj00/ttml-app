@@ -51,8 +51,8 @@ if (!DATABASE_URL) {
 const pgClient = postgres(DATABASE_URL, { ssl: "require", max: 3 });
 const db = drizzle(pgClient);
 
-const SUBSCRIBER_USER_ID = 1612;
-const ATTORNEY_USER_ID = 1614;
+const SUBSCRIBER_USER_ID = 1;
+const ATTORNEY_USER_ID = 3;
 
 interface LetterSeed {
   letterType: InsertLetterRequest["letterType"];
