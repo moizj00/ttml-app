@@ -461,6 +461,7 @@ export default function AppLayout({
               onClick={() => setSidebarOpen(true)}
               className="shrink-0 text-muted-foreground hover:text-foreground lg:hidden"
               aria-label="Open menu"
+              data-testid="button-open-sidebar"
             >
               <Menu className="w-5 h-5" />
             </button>
