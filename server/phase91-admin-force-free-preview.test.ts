@@ -41,8 +41,13 @@ const emailMocks = vi.hoisted(() => ({
   sendFreePreviewReadyEmail: (null as any),
 }));
 
+const notificationMocks = vi.hoisted(() => ({
+  createNotification: (null as any),
+}));
+
 vi.mock("./db", async () => {
   const { vi: v } = await import("vitest");
+  notificationMocks.createNotification = v.fn().mockResolvedValue(undefined);
   return {
     getDb: v.fn().mockImplementation(async () => ({
       update: v.fn().mockImplementation(() => {
@@ -66,6 +71,7 @@ vi.mock("./db", async () => {
       }
       return undefined;
     }),
+    createNotification: notificationMocks.createNotification,
     // Unused helpers referenced in the module graph — stubs must exist or the
     // `from "./db"` barrel import fails.
     getAllLetterRequests: v.fn(),
@@ -115,6 +121,7 @@ beforeEach(() => {
   state.mockClaimReturns = [];
   state.updateCalls = [];
   emailMocks.sendFreePreviewReadyEmail.mockClear();
+  notificationMocks.createNotification.mockClear();
 });
 
 // ─── Export / Signature Tests ────────────────────────────────────────────────
@@ -153,6 +160,22 @@ describe("dispatchFreePreviewIfReady — eligibility gating", () => {
         to: "sub@example.com",
         letterId: 101,
         subject: "Demand Letter — Unpaid Invoice",
+      })
+    );
+  });
+
+  it("creates an in-app notification for the subscriber when the preview-ready email is sent", async () => {
+    state.mockClaimReturns = [eligibleLetterRow()];
+
+    const result = await dispatchFreePreviewIfReady(101);
+
+    expect(result.status).toBe("sent");
+    expect(notificationMocks.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 42,
+        type: "free_preview_ready",
+        category: "letters",
+        link: "/letters/101?preview=1",
       })
     );
   });

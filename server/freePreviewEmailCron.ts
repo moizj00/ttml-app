@@ -37,7 +37,7 @@ import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
-import { getUserById } from "./db";
+import { createNotification, getUserById } from "./db";
 import { sendFreePreviewReadyEmail } from "./email";
 import { createLogger } from "./logger";
 
@@ -200,6 +200,33 @@ export async function dispatchFreePreviewIfReady(
       letterType: letter.letterType ?? undefined,
       jurisdictionState: letter.jurisdictionState ?? undefined,
     });
+
+    try {
+      await createNotification({
+        userId: subscriber.id,
+        type: "free_preview_ready",
+        category: "letters",
+        title: "Your draft is ready to preview",
+        body: `"${letter.subject}" is ready. You can now review your draft and decide whether to submit it for attorney review.`,
+        link: `/letters/${letter.id}?preview=1`,
+        metadataJson: {
+          letterId: letter.id,
+          source: "free_preview_release",
+        },
+      });
+    } catch (notificationErr) {
+      freePreviewLogger.error(
+        {
+          letterId,
+          userId: subscriber.id,
+          err:
+            notificationErr instanceof Error
+              ? notificationErr.message
+              : String(notificationErr),
+        },
+        "[FreePreviewEmails] In-app notification failed after preview-ready email"
+      );
+    }
 
     // v2.1: Preview unlock = transition ai_generation_completed_hidden ->
     // letter_released_to_subscriber. This is the "AI generation is now

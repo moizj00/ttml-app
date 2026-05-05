@@ -41,6 +41,7 @@ import { hasEverSubscribed } from "../stripe";
 import { cancelPipelineJobForLetter } from "../queue";
 import { enqueueRetryFromStageJob } from "../queue";
 import { logger } from "../logger";
+import { dispatchFreePreviewIfReady } from "../freePreviewEmailCron";
 
 // ─── Role Transition ────────────────────────────────────────────────────────
 
@@ -659,6 +660,34 @@ export async function forceStatusTransition(
     fromStatus: letter.status,
     toStatus: input.newStatus,
   });
+
+  const FREE_PREVIEW_RELEASE_NOTIFICATION_STATUSES = new Set([
+    "letter_released_to_subscriber",
+    "attorney_review_upsell_shown",
+  ]);
+  if (
+    letter.isFreePreview === true &&
+    FREE_PREVIEW_RELEASE_NOTIFICATION_STATUSES.has(input.newStatus)
+  ) {
+    try {
+      const dispatchResult = await dispatchFreePreviewIfReady(input.letterId);
+      logger.info(
+        {
+          letterId: input.letterId,
+          newStatus: input.newStatus,
+          dispatchStatus: dispatchResult.status,
+          dispatchReason: dispatchResult.reason ?? null,
+        },
+        "[forceStatusTransition] Reused free-preview release dispatcher after admin force-transition"
+      );
+    } catch (err) {
+      logger.error(
+        { err, letterId: input.letterId, newStatus: input.newStatus },
+        "[forceStatusTransition] Free-preview release dispatcher failed after admin force-transition"
+      );
+    }
+  }
+
   if (input.newStatus === "pending_review") {
     try {
       if (letter.assignedReviewerId) {
