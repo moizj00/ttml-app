@@ -111,7 +111,7 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.27.5",
     "pnpm": "^10.15.1",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.14",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.2.4",
     "tsx": "^4.21.0",
