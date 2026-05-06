@@ -2,7 +2,6 @@ import AppLayout from "@/components/shared/AppLayout";
 import { LetterPaywall } from "@/components/LetterPaywall";
 import { FreePreviewViewer } from "@/components/FreePreviewViewer";
 import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
-import { FreePreviewUpsellBanner } from "@/components/FreePreviewUpsellBanner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,19 +76,6 @@ export default function LetterDetail() {
   const [updateText, setUpdateText] = useState("");
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewModalDismissed, setPreviewModalDismissed] = useState(false);
-  // Upsell banner: persists dismissal in sessionStorage so it doesn't re-pop on
-  // every status refresh during the same session. The previous Dialog re-popped
-  // every 5 minutes which felt like a paywall — the new banner appears once,
-  // can be dismissed, and stays dismissed.
-  const upsellDismissKey = `ttml.upsell-dismissed.letter-${letterId}`;
-  const [upsellBannerOpen, setUpsellBannerOpen] = useState(false);
-  const [upsellDismissed, setUpsellDismissed] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(upsellDismissKey) === "1";
-    } catch {
-      return false;
-    }
-  });
 
   const { data, isLoading, error } = trpc.letters.detail.useQuery(
     { id: letterId },
@@ -102,60 +88,6 @@ export default function LetterDetail() {
       },
     }
   );
-
-  // Show the attorney-review upsell banner only when:
-  //   1. Letter is on the free-preview path AND draft is unlocked
-  //   2. Status is in a PRE-PAYMENT state (subscriber hasn't moved past the
-  //      upsell point yet). Once the letter is in pending_review/under_review/
-  //      approved/sent (paid path) or in client_approval flow, the upsell is
-  //      irrelevant and would feel out of place.
-  //   3. User hasn't already dismissed it this session.
-  // The banner appears once with a soft 1.5s delay (lets the page settle).
-  const UPSELL_ELIGIBLE_STATUSES = new Set([
-    "letter_released_to_subscriber",
-    "attorney_review_upsell_shown",
-    "attorney_review_checkout_started",
-    "generated_locked",
-    "generated_unlocked",
-  ]);
-  useEffect(() => {
-    if (upsellDismissed) return;
-    if (upsellBannerOpen) return;
-
-    const aiDraftVersion = data?.versions?.find(
-      (v: any) => v.versionType === "ai_draft"
-    );
-    const freePreviewUnlocked =
-      data?.letter?.isFreePreview === true &&
-      (aiDraftVersion as any)?.freePreview === true &&
-      Boolean(aiDraftVersion?.content);
-    if (!freePreviewUnlocked) return;
-
-    const status = data?.letter?.status as string | undefined;
-    if (!status || !UPSELL_ELIGIBLE_STATUSES.has(status)) return;
-
-    const timer = setTimeout(() => {
-      setUpsellBannerOpen(true);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [
-    data?.letter?.isFreePreview,
-    data?.letter?.status,
-    data?.versions,
-    upsellDismissed,
-    upsellBannerOpen,
-  ]);
-
-  const dismissUpsellBanner = () => {
-    setUpsellBannerOpen(false);
-    setUpsellDismissed(true);
-    try {
-      sessionStorage.setItem(upsellDismissKey, "1");
-    } catch {
-      // sessionStorage may be unavailable (private browsing, etc.) — fine,
-      // dismissal still holds for the React-state lifetime of this page.
-    }
-  };
 
   useEffect(() => {
     if (
@@ -411,11 +343,6 @@ export default function LetterDetail() {
             invalidate();
           }
         }}
-      />
-
-      <FreePreviewUpsellBanner
-        open={upsellBannerOpen}
-        onDismiss={dismissUpsellBanner}
       />
 
       <div

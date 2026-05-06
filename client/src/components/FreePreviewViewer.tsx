@@ -37,7 +37,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Sparkles,
   Award,
   Clock,
 } from "lucide-react";
@@ -260,12 +259,6 @@ export function FreePreviewViewer({
               <Gavel className="w-6 h-6 text-indigo-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
-                  Optional next step
-                </span>
-              </div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">
                 Have a licensed attorney review this letter
               </h2>

@@ -495,8 +495,9 @@ export const reviewActionsRouter = router({
       }
       extractLessonFromApproval(
         input.letterId,
-        input.internalNote,
-        ctx.user.id
+        input.finalContent,
+        ctx.user.id,
+        input.internalNote
       ).catch(e => logger.error({ err: e }, "fire-and-forget error"));
       computeAndStoreQualityScore(
         input.letterId,

@@ -70,7 +70,8 @@ export function registerBlogInternalRoutes(app: Express): void {
    */
   app.get("/api/blog-internal/post/:slug", blogInternalAuth, async (req, res) => {
     try {
-      const { slug } = req.params;
+      const slugParam = req.params.slug;
+      const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
       if (!slug) {
         res.status(400).json({ error: "Missing slug" });
         return;

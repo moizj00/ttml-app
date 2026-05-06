@@ -77,7 +77,7 @@ export function getStripe(): Stripe {
       throw new Error("STRIPE_SECRET_KEY is not configured");
     }
     _stripe = new Stripe(ENV.stripeSecretKey, {
-      apiVersion: "2026-02-25.clover",
+      apiVersion: "2026-04-22.dahlia",
     });
   }
   return _stripe;
@@ -122,8 +122,10 @@ export async function createCheckoutSession(params: {
   planId: string;
   origin: string;
   discountCode?: string;
+  returnTo?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  const { userId, email, name, planId, origin, discountCode } = params;
+  const { userId, email, name, planId, origin, discountCode, returnTo } =
+    params;
   const plan = getPlanConfig(planId);
   if (!plan) throw new Error(`Invalid plan: ${planId}`);
 
@@ -160,8 +162,12 @@ export async function createCheckoutSession(params: {
           }
         : {}),
     },
-    success_url: `${origin}/subscriber/billing?success=true&plan=${planId}`,
-    cancel_url: `${origin}/pricing?canceled=true`,
+    success_url: returnTo
+      ? `${origin}${returnTo}?success=true&plan=${planId}`
+      : `${origin}/subscriber/billing?success=true&plan=${planId}`,
+    cancel_url: returnTo
+      ? `${origin}/pricing?returnTo=${encodeURIComponent(returnTo)}&canceled=true`
+      : `${origin}/pricing?canceled=true`,
   };
 
   if (plan.interval === "one_time") {
@@ -279,6 +285,8 @@ export async function activateSubscription(params: {
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
+  /** Pass true on billing period renewals (invoice.paid) to reset lettersUsed to 0 */
+  resetLettersUsed?: boolean;
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -317,6 +325,7 @@ export async function activateSubscription(params: {
         plan: params.planId as any,
         status: params.status,
         lettersAllowed,
+        ...(params.resetLettersUsed ? { lettersUsed: 0 } : {}),
         currentPeriodStart: params.currentPeriodStart ?? null,
         currentPeriodEnd: params.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: params.cancelAtPeriodEnd ?? false,

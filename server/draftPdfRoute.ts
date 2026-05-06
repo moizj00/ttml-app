@@ -62,7 +62,11 @@ export function registerDraftPdfRoute(app: Express) {
       }
 
       // ── Validate letterId ─────────────────────────────────────────────────
-      const letterId = parseInt(req.params.letterId, 10);
+      const letterIdParam = req.params.letterId;
+      const letterId = parseInt(
+        Array.isArray(letterIdParam) ? letterIdParam[0] : letterIdParam,
+        10
+      );
       if (isNaN(letterId) || letterId <= 0) {
         res.status(400).json({ error: "Invalid letter ID" });
         return;
