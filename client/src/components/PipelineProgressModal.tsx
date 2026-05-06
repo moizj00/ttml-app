@@ -15,7 +15,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface PipelineProgressModalProps {
   open: boolean;
@@ -40,9 +40,9 @@ const PIPELINE_STAGES = [
     description: "Our drafting systems are composing your legal letter",
   },
   {
-    key: "generated_locked",
+    key: "ai_generation_completed_hidden",
     label: "Draft Complete",
-    description: "Your letter draft is ready for review",
+    description: "Your letter draft is ready and will be released after review",
   },
 ] as const;
 
@@ -60,13 +60,14 @@ function getStageStatus(currentStatus: string, stageKey: string): StageStatus {
   const currentIdx = order.indexOf(currentStatus);
 
   // If status is ai_generation_completed_hidden or letter_released_to_subscriber,
-  // we count drafting as completed and generated_locked as the next/active state.
+  // we count drafting as completed and the final stage as completed.
   if (
     currentStatus === "ai_generation_completed_hidden" ||
-    currentStatus === "letter_released_to_subscriber"
+    currentStatus === "letter_released_to_subscriber" ||
+    currentStatus === "generated_locked"
   ) {
     if (stageKey === "drafting") return "completed";
-    if (stageKey === "generated_locked") return "completed";
+    if (stageKey === "ai_generation_completed_hidden") return "completed";
   }
 
   const stageIdx = order.indexOf(stageKey);
@@ -96,6 +97,7 @@ export default function PipelineProgressModal({
   letterId,
 }: PipelineProgressModalProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [, navigate] = useLocation();
 
   const { data } = trpc.letters.detail.useQuery(
     { id: letterId! },
@@ -106,14 +108,23 @@ export default function PipelineProgressModal({
   );
 
   const currentStatus = data?.letter?.status ?? "submitted";
+  const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
+  
   const isComplete = [
     "generated_locked",
     "ai_generation_completed_hidden",
     "letter_released_to_subscriber",
   ].includes(currentStatus);
+  
   const isPipelineActive = ["submitted", "researching", "drafting"].includes(
     currentStatus
   );
+
+  // Estimated total duration for pipeline: ~120 seconds
+  const ESTIMATED_DURATION_SECONDS = 120;
+  const progressPercent = isComplete 
+    ? 100 
+    : Math.min(100, Math.round((elapsedSeconds / ESTIMATED_DURATION_SECONDS) * 100));
 
   // Elapsed time counter
   useEffect(() => {
@@ -122,6 +133,17 @@ export default function PipelineProgressModal({
     const interval = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
     return () => clearInterval(interval);
   }, [open, isPipelineActive]);
+
+  // Auto-navigate to letter detail when pipeline is complete and letter is released
+  useEffect(() => {
+    if (open && isComplete && letterId && currentStatus === "letter_released_to_subscriber") {
+      const timer = setTimeout(() => {
+        navigate(`/letters/${letterId}`);
+        onClose();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [open, isComplete, letterId, currentStatus, navigate, onClose]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -136,7 +158,7 @@ export default function PipelineProgressModal({
         if (!isOpen) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onEscapeKeyDown={e => e.preventDefault()} onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
@@ -144,10 +166,22 @@ export default function PipelineProgressModal({
           </DialogTitle>
           <DialogDescription>
             {isComplete
-              ? "Your professional letter draft is complete. View details for the next steps."
-              : `A professional draft is being prepared based on thorough research. This typically takes 1-2 minutes.`}
+              ? currentStatus === "ai_generation_completed_hidden"
+                ? "Your professional letter draft is complete. It will be available for review within 24 hours."
+                : "Your professional letter draft is complete. View details for the next steps."
+              : `A professional draft is being prepared based on thorough research. This typically takes 1-2 minutes (${formatTime(ESTIMATED_DURATION_SECONDS)}).`}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Progress bar */}
+        {isPipelineActive && (
+          <div className="w-full bg-muted rounded-full h-2.5 mb-2">
+            <div 
+              className="bg-primary h-2.5 rounded-full transition-all duration-1000 ease-linear" 
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
 
         {/* Progress stages */}
         <div className="space-y-1 py-4">
@@ -191,16 +225,22 @@ export default function PipelineProgressModal({
         {/* Timer */}
         {isPipelineActive && (
           <div className="text-center text-xs text-muted-foreground">
-            Elapsed: {formatTime(elapsedSeconds)}
+            Elapsed: {formatTime(elapsedSeconds)} / ~{formatTime(ESTIMATED_DURATION_SECONDS)}
           </div>
         )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2">
           {isComplete && letterId ? (
-            <Button asChild>
-              <Link href={`/letters/${letterId}`}>View Letter Draft</Link>
-            </Button>
+            currentStatus === "letter_released_to_subscriber" ? (
+              <Button asChild>
+                <Link href={`/letters/${letterId}`}>View Letter Draft</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={onClose}>
+                Continue in Background
+              </Button>
+            )
           ) : (
             <Button variant="outline" onClick={onClose}>
               Continue in Background

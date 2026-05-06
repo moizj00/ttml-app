@@ -431,8 +431,7 @@ export default function AdminLetterDetail() {
             {showForceForm && (
               <div className="space-y-3 pt-2 border-t border-amber-200">
                 <p className="text-sm text-amber-700 font-medium">
-                  ⚠️ Force transition bypasses normal workflow. Use only for
-                  admin corrections.
+                  ⚠️ Super-admin only. This bypasses normal workflow and directly changes letter state. Use only for platform corrections.
                 </p>
                 <div className="flex gap-3">
                   <Select value={forceStatus} onValueChange={setForceStatus}>

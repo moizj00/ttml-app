@@ -430,11 +430,7 @@ export function useSubmitLetterForm() {
 
             localStorage.removeItem(DRAFT_KEY);
             setSubmittedLetterId(letterId);
-            if ((result as any).isFreePreview === true) {
-                setProgressModalOpen(true);
-            } else {
-                navigate(`/letters/${letterId}`);
-            }
+            setProgressModalOpen(true);
         } catch (err: any) {
             toast.error("Submission failed");
         } finally {

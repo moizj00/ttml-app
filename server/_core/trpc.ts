@@ -73,3 +73,47 @@ export const adminProcedure = t.procedure.use(
     });
   }),
 );
+
+/**
+ * Super Admin Procedure — platform-owner only.
+ *
+ * In addition to adminProcedure checks (role === 'admin' + 2FA), this
+ * enforces a hard-coded whitelist of owner emails. Use for destructive /
+ * bypass operations (force status transition, force free preview unlock)
+ * that should only be available to the platform owner, not employee admins.
+ */
+export const superAdminProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    // Reuse admin checks
+    if (!ctx.user || ctx.user.role !== 'admin') {
+      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+
+    const cookies = parseCookieHeader(ctx.req.headers.cookie);
+    const tfaCookie = cookies.get(ADMIN_2FA_COOKIE);
+    if (!tfaCookie || !verifyAdmin2FAToken(tfaCookie, ctx.user.id)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "ADMIN_2FA_REQUIRED" });
+    }
+
+    // Hard-coded owner whitelist
+    const HARDCODED_OWNER_EMAILS = [
+      "moizj00@gmail.com",
+      "moizj00@yahoo.com",
+    ];
+    if (!HARDCODED_OWNER_EMAILS.includes(ctx.user.email)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This operation is restricted to platform owners only",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    });
+  }),
+);

@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { adminProcedure } from "../../_core/trpc";
+import { adminProcedure, superAdminProcedure } from "../../_core/trpc";
 import { getAppUrl } from "../_shared";
 import {
   claimLetterForReview,
@@ -84,7 +84,7 @@ export const adminLettersProcedures = {
     .input(z.object({ letterId: z.number() }))
     .query(async ({ input }) => getWorkflowJobsByLetterId(input.letterId)),
 
-  forceStatusTransition: adminProcedure
+  forceStatusTransition: superAdminProcedure
     .input(
       z.object({
         letterId: z.number(),

@@ -23,7 +23,7 @@ import { Step3Parties } from "./intake-steps/Step3Parties";
 import { Step4Details } from "./intake-steps/Step4Details";
 import { Step5Outcome } from "./intake-steps/Step5Outcome";
 import { Step6Exhibits } from "./intake-steps/Step6Exhibits";
-import { LetterSubmitProgressModal } from "@/components/LetterSubmitProgressModal";
+import PipelineProgressModal from "@/components/PipelineProgressModal";
 import { useSubmitLetterForm } from "./useSubmitLetterForm";
 
 const STEPS = [
@@ -116,11 +116,11 @@ export default function SubmitLetter() {
         { label: "Submit Letter" },
       ]}
     >
-      {/* Post-submit progress modal: quiet 24h draft-preview confirmation.
+      {/* Post-submit progress modal: real-time pipeline progress tracking.
           Rendered as a sibling so it overlays the whole intake flow. */}
-      <LetterSubmitProgressModal
+      <PipelineProgressModal
         open={progressModalOpen}
-        letterId={submittedLetterId}
+        letterId={submittedLetterId ?? null}
         onClose={handleProgressModalClose}
       />
 

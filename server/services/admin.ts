@@ -650,6 +650,43 @@ export async function forceStatusTransition(
     force: true,
     approvedByRole: input.newStatus === "approved" ? "admin" : undefined,
   });
+
+  // ── v2.2: When admin forces to a subscriber-visible status (review / delivery),
+  // fully remove the letter from the free-preview path so the subscriber sees
+  // the exact state the admin set. Without this, isFreePreview stays true and
+  // some subscriber UI paths may still show free-preview banners or gating.
+  const POST_REVIEW_STATUSES = new Set([
+    "pending_review",
+    "under_review",
+    "needs_changes",
+    "approved",
+    "client_approval_pending",
+    "client_revision_requested",
+    "client_declined",
+    "client_approved",
+    "sent",
+    "rejected",
+  ]);
+  if (letter.isFreePreview === true && POST_REVIEW_STATUSES.has(input.newStatus)) {
+    const db = await getDb();
+    if (db) {
+      await db
+        .update(letterRequests)
+        .set({
+          isFreePreview: false,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(letterRequests.id, input.letterId));
+      logger.info(
+        {
+          letterId: input.letterId,
+          newStatus: input.newStatus,
+        },
+        "[forceStatusTransition] Cleared isFreePreview flag for post-review status transition"
+      );
+    }
+  }
+
   await logReviewAction({
     letterRequestId: input.letterId,
     reviewerId: ctx.userId,
@@ -660,6 +697,28 @@ export async function forceStatusTransition(
     fromStatus: letter.status,
     toStatus: input.newStatus,
   });
+
+  // ── v2.2: Send status update email to subscriber for ALL force transitions
+  // (not just the under_review bypass path), so the subscriber is always
+  // notified when their letter state changes via admin action.
+  try {
+    const userId = letter.userId ? Number(letter.userId) : null;
+    if (userId) {
+      const subscriber = await getUserById(userId);
+      if (subscriber?.email) {
+        await sendStatusUpdateEmail({
+          to: subscriber.email,
+          name: subscriber.name ?? "Subscriber",
+          subject: letter.subject,
+          letterId: input.letterId,
+          newStatus: input.newStatus,
+          appUrl: ctx.appUrl,
+        });
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, "[forceStatusTransition] Subscriber status email failed");
+  }
 
   const FREE_PREVIEW_RELEASE_NOTIFICATION_STATUSES = new Set([
     "letter_released_to_subscriber",
