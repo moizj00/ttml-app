@@ -35,6 +35,22 @@ COPY drizzle/ ./drizzle/
 COPY attached_assets/ ./attached_assets/
 COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
 
+# Public frontend config baked into the Vite build. Keep this list limited to
+# VITE_* values because these become visible in the browser bundle.
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_GOOGLE_API_KEY
+ARG VITE_SENTRY_DSN
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY \
+    VITE_GOOGLE_API_KEY=$VITE_GOOGLE_API_KEY \
+    VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
+    VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY
+
 # Build: vite builds client → dist/public, esbuild bundles server → dist/index.js
 RUN pnpm run build
 
