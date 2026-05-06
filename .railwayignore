@@ -1,5 +1,4 @@
 # Large directories not needed for Docker build
-attached_assets/
 artifacts/
 references/
 e2e/
