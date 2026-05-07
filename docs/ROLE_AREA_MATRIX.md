@@ -2,6 +2,9 @@
 
 Which role can reach which area — at a glance.
 
+> **For auth system details:** See [`AGENTS.md`](../AGENTS.md) §7  
+> **For deployment & env vars:** See [`PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md)
+
 | Role | DB enum | Dashboard |
 |------|---------|-----------|
 | **Subscriber** | `subscriber` | `/dashboard` |

@@ -3,7 +3,8 @@
 > **Last updated:** April 26, 2026  
 > **Status:** Canonical — production-verified
 > **Authoritative file for:** AI pipeline deep-dive — stages, RAG, resilience, n8n, and model configuration.
-> For the high-level architecture overview, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+> **For tech stack & conventions:** See [`AGENTS.md`](../AGENTS.md)  
+> **For high-level architecture:** See [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ---
 

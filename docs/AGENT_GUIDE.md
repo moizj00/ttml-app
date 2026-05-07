@@ -1,9 +1,8 @@
 # TTML Agent Guide — Developer Workflow & Gotchas
 
-> **Last updated:** April 26, 2026  
-> **Status:** Canonical — authoritative reference for all agents and developers
-
-> **Purpose:** This document covers developer workflow, conventions, gotchas, and common pitfalls when working on the TTML codebase. For architecture, tech stack, module map, and status machine, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+> **Last updated:** May 7, 2026
+> **Status:** Canonical — authoritative reference for developer workflows
+> **For project overview / tech stack / env vars:** See [`AGENTS.md`](../AGENTS.md)
 
 ---
 
@@ -16,38 +15,41 @@
 - `drizzle.config.ts` — pre-configured for Supabase PostgreSQL.
 - `tsconfig.json` — path aliases are set.
 
-### 1.2 Path Aliases (must be consistent across all config)
+> Full list of protected files: [`AGENTS.md` §16](../AGENTS.md#16-critical-gotchas-for-agents)
+
+### 1.2 Path Aliases
+
 | Alias | Resolves to | Where defined |
 |-------|------------|---------------|
 | `@/*` | `client/src/*` | vite.config.ts, tsconfig.json, components.json |
 | `@shared/*` | `shared/*` | vite.config.ts, tsconfig.json |
 | `@assets/*` | `attached_assets/*` | vite.config.ts |
 
+> Full path alias docs: [`AGENTS.md` §6](../AGENTS.md#6-path-aliases)
+
 ### 1.3 Tailwind CSS v4 — NOT v3
 - There is NO `tailwind.config.js`. Configuration lives in `client/src/index.css` using `@theme inline` blocks.
 - Colors use OKLCH format, NOT hex/HSL.
-- The index.css has `red` placeholder comments — every instance must be replaced with real colors.
 - Custom CSS properties for Tailwind must use `H S% L%` format (space-separated, percentages on S and L), WITHOUT wrapping in `hsl()`.
+
+> Full Tailwind conventions: [`AGENTS.md` §5.3](../AGENTS.md#53-tailwind-css-v4)
 
 ### 1.4 Status Machine
 
-See `ARCHITECTURE.md` for the full status machine diagram. The source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
+The source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
 
 **GOTCHA:** Current flow uses a 24h hold before subscriber visibility: `drafting` usually transitions to `ai_generation_completed_hidden`, then to `letter_released_to_subscriber` / upsell statuses, then to `pending_review` after checkout/payment. `generated_locked` remains as a compatibility status and can still appear in legacy paths.
 
+> Full status machine: [`AGENTS.md` §11.4](../AGENTS.md#114-letter-status-machine)
+
 ### 1.5 tRPC — NOT REST
-The app uses tRPC v11 for almost all client-server communication. REST is only used for:
-- `POST /api/auth/signup` and `/api/auth/login` — manual auth flows
-- `POST /api/stripe/webhook` or `/api/webhooks/stripe` — Stripe webhooks
-- `POST /api/pipeline/n8n-callback` — n8n pipeline completion
-- `GET /api/letters/:id/draft-pdf` — PDF streaming
-- `GET /api/system/health` — health checks
+The app uses tRPC v11 for almost all client-server communication. REST is only used for webhooks, streaming, and health checks.
 
 **GOTCHA:** TanStack Query v5 ONLY allows object form: `useQuery({ queryKey: ['key'] })` — NOT `useQuery(['key'])`.
 
-**GOTCHA:** tRPC queries through TanStack Query should NOT define their own `queryFn` — the default fetcher is already configured.
+**GOTCHA:** After mutations, ALWAYS invalidate cache by `queryKey`. Import `queryClient` from `@/lib/queryClient`.
 
-**GOTCHA:** After mutations, ALWAYS invalidate cache by `queryKey`. Import `queryClient` from `@/lib/queryClient`. For variable keys, use arrays: `queryKey: ['/api/recipes', id]` NOT template strings.
+> Full tRPC patterns: [`AGENTS.md` §9](../AGENTS.md#9-api-patterns-trpc)
 
 ### 1.6 Authentication Flow
 Auth is a HYBRID system:
@@ -56,20 +58,21 @@ Auth is a HYBRID system:
 3. A 30-second in-memory cache prevents excessive DB lookups
 4. JWTs are read from the `Authorization` header OR `sb_session` cookie
 
-**Admin 2FA:** Admins must verify a code sent via email. The code sets a signed `admin_2fa` cookie (handled in `server/_core/admin2fa.ts`). The `adminProcedure` middleware checks this cookie.
+**GOTCHA:** The `useAuth` hook lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` directory).
 
-**GOTCHA:** The `useAuth` hook lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` directory — unusual path).
+> Full auth docs: [`AGENTS.md` §7](../AGENTS.md#7-authentication--authorization)
 
 ### 1.7 Drizzle ORM Patterns
 - Schema is at `drizzle/schema.ts`, relations at `drizzle/relations.ts`
 - Use `text().array()` for array columns — NOT `array(text())`
-- Types are inferred: `typeof users.$inferSelect` for select types, `$inferInsert` for inserts
-- Insert schemas use `createInsertSchema` from `drizzle-zod` with `.omit` for auto-generated fields
-- The data access layer is `server/db/` — all DB operations go through semantic functions here, not raw queries in routers
-- Drizzle config reads `SUPABASE_DATABASE_URL` or `DATABASE_URL`
+- Types are inferred: `typeof users.$inferSelect`
+- The data access layer is `server/db/` — all DB operations go through semantic functions here
+
+> Full Drizzle conventions: [`AGENTS.md` §8](../AGENTS.md#8-database--orm-patterns)
 
 ### 1.8 Pricing — Single Source of Truth
 All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
+
 - Single Letter: $299 one-time (1 letter)
 - Monthly: $299/month (4 letters)
 - Yearly: $2,400/year (8 letters total)
@@ -78,34 +81,21 @@ All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
 - Stripe amounts are in CENTS (multiply by 100)
 
 ### 1.9 Environment Variables
-All env vars are accessed through `server/_core/env.ts` → `ENV` object. Required vars are validated at startup in production.
+All env vars are accessed through `server/_core/env.ts` → `ENV` object.
 
-**Required:**
-- `DATABASE_URL` — PostgreSQL connection string
-- `SUPABASE_URL` or `VITE_SUPABASE_URL` — Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` — Supabase admin key
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — Stripe
-- `RESEND_API_KEY` — Email
-
-**Optional but used:**
-- `OPENAI_API_KEY` — Document analysis (GPT-4o) and RAG embeddings
-- `ANTHROPIC_API_KEY` — Letter drafting/vetting (Claude)
-- `PERPLEXITY_API_KEY` — Legal research
-- `N8N_WEBHOOK_URL`, `N8N_CALLBACK_SECRET` — External pipeline
-- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Rate limiting
-- `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Error tracking
-- `VITE_STRIPE_PUBLISHABLE_KEY` — Frontend Stripe key
-
-**GOTCHA:** Frontend env vars MUST be prefixed with `VITE_` and accessed via `import.meta.env.VITE_*` — NOT `process.env`.
+> Full env var matrix: [`docs/PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md) §4  
+> Quick dev template: [`.env.example`](../.env.example)
 
 ### 1.10 Frontend Gotchas
 - Do NOT explicitly `import React` — Vite's JSX transformer handles it automatically.
-- `useToast` is exported from `@/hooks/use-toast` (check this path if toast isn't working).
+- `useToast` is exported from `@/hooks/use-toast`.
 - `<SelectItem>` will throw if it has no `value` prop — always provide one.
-- If a form fails to submit silently, log `form.formState.errors` — there may be validation errors on fields without visible form controls.
+- If a form fails to submit silently, log `form.formState.errors`.
 - Pages use `React.lazy` with a `lazyRetry` wrapper for code splitting.
-- The app uses `wouter` (not React Router). Use `Link` component or `useLocation` hook.
-- Every interactive element needs a `data-testid` attribute following the pattern `{action}-{target}` or `{type}-{content}-{id}`.
+- The app uses `wouter` (not React Router).
+- Every interactive element needs a `data-testid` attribute.
+
+> Full frontend patterns: [`AGENTS.md` §10](../AGENTS.md#10-frontend-patterns)
 
 ### 1.11 Rate Limiting
 Two layers:
@@ -113,6 +103,8 @@ Two layers:
 2. **tRPC-level** (`checkTrpcRateLimit`): Sensitive actions like letter submission = 5/hour
 
 If Upstash credentials are missing, rate limiting silently degrades (no crash).
+
+> Full rate limiting docs: [`AGENTS.md` §15.2](../AGENTS.md#152-rate-limiting)
 
 ### 1.12 Body Size Limit
 Express is configured with `express.json({ limit: "12mb" })` to accommodate large legal document uploads.
@@ -127,26 +119,25 @@ Express is configured with `express.json({ limit: "12mb" })` to accommodate larg
 
 **GOTCHA:** Do not reintroduce monolithic page/router files unless explicitly requested by the user.
 
-### 1.14 Module Move Checklist (Read Before Splitting a File Into a Subdirectory)
+### 1.14 Module Move Checklist
 
-Whenever you move `pipeline/foo.ts` → `pipeline/foo/index.ts` (or any equivalent file → folder/index.ts move), every relative import inside the moved file shifts one level deeper. Skipping this step has historically broken whole test suites that load via `import`, because ESM module resolution errors out on the first bad path before any test in the file runs.
+Whenever you move `pipeline/foo.ts` → `pipeline/foo/index.ts` (or any equivalent file → folder/index.ts move), every relative import inside the moved file shifts one level deeper. Skipping this step has historically broken whole test suites.
 
 Before declaring the move complete:
 
 1. **Repath every relative import inside the moved file:**
-   - Sibling becomes parent: `from "./shared"` → `from "../shared"`, `from "./providers"` → `from "../providers"`, etc.
-   - Parent becomes grandparent: `from "../db"` → `from "../../db"`, `from "../sentry"` → `from "../../sentry"`.
-   - Re-exports (`export { X } from "./Y"`) follow the same rule.
-   - Don't forget dynamic imports (`await import("../db")`).
-2. **Repath the children too** if you also extracted helpers (e.g. `synthetic.ts`, `notifications.ts`) — they live at the new depth and need imports correct from day one.
-3. **Update any test that reads the file via `fs`:** grep for the old relative path (`pipeline/foo.ts`) in `server/**/*.test.ts` and switch to `pipeline/foo/index.ts`. Tests like `phase84-sentry`, `phase94-free-preview-guards`, and `free-preview-delay-ux` source-grep pipeline files to validate Sentry/email guards.
-4. **Re-export shared types from the moved module** rather than from `shared/types` if they're pipeline-internal (`VettingResult` lives in `server/pipeline/vetting/index.ts`, consumed by `server/pipeline/orchestration/status.ts`).
-5. **Run `pnpm check` *before* `pnpm test`.** `tsc --noEmit` will surface stale paths instantly; vitest will surface them as confusing whole-suite failures.
+   - Sibling becomes parent: `from "./shared"` → `from "../shared"`
+   - Parent becomes grandparent: `from "../db"` → `from "../../db"`
+   - Re-exports and dynamic imports follow the same rule.
+2. **Repath the children too** if you also extracted helpers.
+3. **Update any test that reads the file via `fs`:** grep for the old relative path in `server/**/*.test.ts`.
+4. **Re-export shared types from the moved module** rather than from `shared/types` if they're pipeline-internal.
+5. **Run `pnpm check` *before* `pnpm test`.** `tsc --noEmit` will surface stale paths instantly.
 
 When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` → `components/.../Bar/*.tsx`), the same idea applies plus two extras:
 
 - **Pick one canonical subtree** — never end up with the same logical area split across `pages/<name>/...` AND `components/<name>/...`. Per the Refactor Map above, `components/subscriber/<name>/` is canonical.
-- **Match the existing hook contracts.** `useStaggerReveal(itemCount, staggerMs?)` returns `boolean[]`; `staggerStyle(index, visible)` requires both args. Sub-components that retype these as `number` will silently invert the animation logic and TypeScript will catch the prop mismatch at the call site, not the definition.
+- **Match the existing hook contracts.** `useStaggerReveal(itemCount, staggerMs?)` returns `boolean[]`; `staggerStyle(index, visible)` requires both args.
 
 ---
 
@@ -166,7 +157,7 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 
 ### Letter Submission Flow
 1. Subscriber fills multi-step intake form (`/submit`)
-2. Server validates and normalizes intake data
+2. Server validates and normalizes intake data (`server/intake-normalizer.ts`)
 3. Pipeline starts (4 stages) — subscriber sees real-time progress
 4. On completion, letter typically enters `ai_generation_completed_hidden` (24h visibility hold)
 5. After hold expiry, subscriber-visible statuses proceed through `letter_released_to_subscriber` and upsell/payment statuses
@@ -177,6 +168,8 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 10. Subscriber reviews, approves → `client_approved` (PDF generated) → `sent`
 11. OR subscriber requests revision (first free, then $20 each) → `client_revision_requested` → `pending_review`
 12. Server generates branded PDF and sends delivery email
+
+> Full pipeline architecture: [`docs/PIPELINE_ARCHITECTURE.md`](PIPELINE_ARCHITECTURE.md)
 
 ### Recursive Learning System
 - When attorneys edit AI drafts, the system extracts "lessons" (`server/learning/`)
@@ -247,10 +240,10 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 
 | Role | Email | Password |
 |------|-------|----------|
-| subscriber | test-subscriber@ttml.dev | TestPass123! |
-| employee | test-employee@ttml.dev | TestPass123! |
-| attorney | test-attorney@ttml.dev | TestPass123! |
-| admin | test-admin@ttml.dev | TestPass123! |
+| subscriber | `test-subscriber@ttml.dev` | `TestPass123!` |
+| employee | `test-employee@ttml.dev` | `TestPass123!` |
+| attorney | `test-attorney@ttml.dev` | `TestPass123!` |
+| admin | `test-admin@ttml.dev` | `TestPass123!` |
 
 The seed script is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
 
@@ -264,18 +257,7 @@ The `ProtectedRoute` component enforces RBAC on all protected routes:
 
 ---
 
-## 6. DEPLOYMENT
-
-- **Platform:** Railway with Docker multi-stage builds
-- **Config:** `railway.toml` defines health checks, env vars, restart policies
-- **Health endpoint:** `/api/health` or `/api/system/health`
-- **Build:** `npm run build` → Vite builds frontend → esbuild bundles backend
-- **Start:** `node --import ./dist/sentry-init.js dist/index.js`
-- **Also has:** k8s configs in `k8s/` directory (alternative deployment path)
-
----
-
-## 7. SECURITY NOTES
+## 6. SECURITY NOTES
 
 - Stripe webhooks verified via `stripe.webhooks.constructEvent` with the webhook secret
 - n8n callbacks verified via `timingSafeEqual` with `N8N_CALLBACK_SECRET`
@@ -284,5 +266,9 @@ The `ProtectedRoute` component enforces RBAC on all protected routes:
 - Express body limit is 12MB
 - CORS, CSP, HSTS, XSS protection headers set in server middleware
 - Supabase RLS policies protect database-level access
+
+> Full security docs: [`AGENTS.md` §15](../AGENTS.md#15-security-considerations)
+
+---
 
 For the full file structure and module map, see [`ARCHITECTURE.md`](../ARCHITECTURE.md).

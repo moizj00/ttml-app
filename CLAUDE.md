@@ -2,8 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **For architecture, tech stack, module map, and status machine details, see [`ARCHITECTURE.md`](ARCHITECTURE.md).**  
-> **For day-to-day developer workflow, conventions, and pitfalls, see [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md).**
+> **For the canonical agent reference (tech stack, conventions, gotchas, env vars), see [`AGENTS.md`](AGENTS.md).**  
+> **For architecture, module map, and status machine, see [`ARCHITECTURE.md`](ARCHITECTURE.md).**  
+> **For developer workflow and pitfalls, see [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md).**
 
 ---
 

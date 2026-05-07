@@ -1,8 +1,26 @@
+<!-- From: /workspaces/ttml-app/AGENTS.md -->
 # AGENTS.md — Talk to My Lawyer (TTML)
 
 > **Purpose:** Canonical reference for AI coding agents working on this codebase. Read this first before making any changes.
 > **Language:** All code, comments, and documentation are in English.
 > **Last updated:** 2026-05-07
+
+---
+
+## Documentation Index
+
+| Document | Purpose | When to read |
+|----------|---------|-------------|
+| **`AGENTS.md`** (this file) | Canonical agent reference — tech stack, conventions, gotchas, env vars | **Always read first** |
+| [`README.md`](README.md) | Human onboarding — quick start, deploy overview | When you need human-facing context |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Full architecture — schema, routes, status machine, module map | When implementing features |
+| [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Developer workflow, conventions, common pitfalls | When writing code |
+| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive — stages, RAG, resilience, n8n | When working on pipeline code |
+| [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) | Pre-deployment checklist, account provisioning, env matrix | When deploying |
+| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–110+) | When scoping features |
+| [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md) | Full access matrix by role | When changing auth/routes |
+| [`shared/pricing.ts`](shared/pricing.ts) | Single source of truth for all pricing | Never hardcode prices |
+| [`shared/types/letter.ts`](shared/types/letter.ts) | Letter status machine — `ALLOWED_TRANSITIONS` | Never hardcode status strings |
 
 ---
 
@@ -357,13 +375,16 @@ Key statuses:
 
 All env vars are accessed through `server/_core/env.ts` → `ENV` object. Required vars are validated at startup in production via `validateRequiredEnv()`.
 
+> **Canonical env var reference:** See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) §4 for the full matrix, sources, and notes.  
+> **Quick dev template:** See [`.env.example`](.env.example).
+
 ### Required (production boot fails if missing)
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SUPABASE_URL` / `VITE_SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin key (server only) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (frontend build-time) |
+| `VITE_SUPABASE_ANON_KEY` / `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon key (frontend build-time) |
 | `STRIPE_SECRET_KEY` | Stripe API secret |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `ANTHROPIC_API_KEY` | Claude API (drafting, assembly, vetting) |
@@ -424,6 +445,8 @@ pnpm build
   ├── esbuild migrate     → dist/migrate.js (migration runner)
   └── esbuild instrument  → dist/instrument.js (Sentry init)
 ```
+
+> **Full deployment instructions:** See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md).
 
 ---
 

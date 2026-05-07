@@ -1,6 +1,8 @@
 # ARCHITECTURE.md — Talk to My Lawyer
 
-> **Single source of truth** for the system's architecture, tech stack, module boundaries, and ownership map.
+> **Single source of truth** for the system's architecture, module boundaries, and ownership map.
+> **For agent conventions & gotchas:** See [`AGENTS.md`](AGENTS.md)  
+> **For deployment & env vars:** See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md)  
 > Last verified: April 2026.
 
 ---
