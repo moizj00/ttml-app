@@ -15,7 +15,7 @@
 | [`README.md`](README.md) | Human onboarding — quick start, deploy overview | When you need human-facing context |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Full architecture — schema, routes, status machine, module map | When implementing features |
 | [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Developer workflow, conventions, common pitfalls | When writing code |
-| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive — stages, RAG, resilience, n8n | When working on pipeline code |
+| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive — stages, RAG, resilience, n8n, LangGraph | When working on pipeline code |
 | [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) | Pre-deployment checklist, account provisioning, env matrix | When deploying |
 | [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Comprehensive feature inventory (Phases 1–110+) | When scoping features |
 | [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md) | Full access matrix by role | When changing auth/routes |
@@ -42,7 +42,7 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 | **Backend** | Node.js 22, Express 4.21, tRPC 11.6, TypeScript |
 | **Database** | PostgreSQL (Supabase), Drizzle ORM 0.45, pg-boss (PostgreSQL-native job queue) |
 | **Auth** | Supabase Auth (JWT), Row-Level Security (RLS) |
-| **AI / LLM** | OpenAI `gpt-4o-search-preview` (research), Anthropic Claude Opus (draft/assembly), Anthropic Claude Sonnet (vetting) |
+| **AI / LLM** | OpenAI `gpt-4o-search-preview` (research), Anthropic Claude Sonnet 4.5 (draft/assembly), Anthropic Claude Sonnet 4.6 (vetting), LangGraph (optional pipeline path) |
 | **Payments** | Stripe (subscriptions + per-letter checkout) |
 | **Email** | Resend (transactional), optional Cloudflare Email Worker fallback |
 | **Rate Limiting** | Upstash Redis (`@upstash/ratelimit`) |
@@ -68,7 +68,17 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 │   ├── _core/            # Server entry, env, context, tRPC setup, CORS, cookies
 │   ├── routers/          # tRPC routers (auth, documents, letters, admin, etc.)
 │   ├── db/               # Data access layer — ALL DB queries go here
-│   ├── pipeline/         # 4-stage AI pipeline (orchestrator, prompts, RAG, vetting)
+│   ├── pipeline/         # 4-stage AI pipeline + LangGraph alternative path
+│   │   ├── orchestrator.ts
+│   │   ├── orchestration/
+│   │   ├── research/
+│   │   ├── vetting/
+│   │   ├── graph/        # LangGraph StateGraph implementation
+│   │   │   ├── nodes/    # research, draft, assembly, vetting, finalize, init
+│   │   │   ├── memory.ts
+│   │   │   ├── mode.ts   # LangGraph mode parser
+│   │   │   └── state.ts
+│   │   └── prompts.ts
 │   ├── email/            # Email template helpers
 │   ├── supabaseAuth/     # Supabase auth integration, JWT verification
 │   ├── stripe/           # Stripe integration helpers
@@ -80,8 +90,9 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 │   ├── pricing.ts        # Single source of truth for all pricing
 │   └── utils/            # Shared utility functions
 ├── drizzle/              # Drizzle schema, relations, migration SQL files
-│   ├── schema.ts         # Database schema definition
-│   └── schema/           # Modular schema files (letters, billing, users, etc.)
+│   ├── schema.ts         # Database schema definition (re-exports schema/)
+│   ├── schema/           # Modular schema files (letters, billing, users, etc.)
+│   └── relations.ts
 ├── e2e/                  # Playwright end-to-end tests
 ├── attached_assets/      # HTML letter templates loaded at runtime (PDF generation)
 ├── docs/                 # Architecture docs, runbooks, feature maps
@@ -149,29 +160,33 @@ Prettier is the sole formatter. Config lives in `.prettierrc`:
 - `printWidth: 80`
 - `tabWidth: 2`, `useTabs: false`
 - `arrowParens: "avoid"`
+- `endOfLine: "lf"`
 
 Run `pnpm format` before committing.
 
-### 5.2 TypeScript
+### 5.2 ESLint
+A flat config lives in `eslint.config.mjs`. It is intentionally lightweight — the project relies on `tsc` for full type checking. The one custom rule enforces **Pino logger calling conventions**: the merge-object must come first (`logger.error({ err }, "message")`), not second.
+
+### 5.3 TypeScript
 - Target: `ESNext`, module resolution: `bundler`, `strict: true`
 - `allowImportingTsExtensions: true` — import `.ts` extensions are allowed
 - No explicit `import React` needed — Vite JSX transform handles it
 - Types are inferred from Drizzle ORM: `typeof users.$inferSelect`
 
-### 5.3 Tailwind CSS v4
+### 5.4 Tailwind CSS v4
 - **NO `tailwind.config.js`**. Theme configuration lives in `client/src/index.css` using `@theme inline` blocks.
 - Colors use **OKLCH format**, NOT hex/HSL.
 - Custom CSS properties must use `H S% L%` format (space-separated, percentages on S and L), **without wrapping in `hsl()`**.
 - Dark mode uses `darkMode: ["class"]` approach via `ThemeContext.tsx`.
 - Always use explicit `dark:` variants when not using utility classes from config.
 
-### 5.4 Component Styling
+### 5.5 Component Styling
 - shadcn/ui components live in `client/src/components/ui/`
 - Variants use `class-variance-authority` (CVA)
 - Icons: `lucide-react` for actions, `react-icons/si` for company logos
 - Animations: custom keyframes in `index.css` (`animate-page-enter`, `hero-card-float`, `skeleton-crossfade`)
 
-### 5.5 File Naming
+### 5.6 File Naming
 - Components: PascalCase (`LetterDetail.tsx`)
 - Utilities/hooks: camelCase (`useAuth.ts`, `rateLimiter.ts`)
 - Tests: co-located with source, suffix `.test.ts` (e.g., `server/pipeline/stages.test.ts`)
@@ -188,7 +203,7 @@ These aliases are configured in `vite.config.ts`, `tsconfig.json`, and `vitest.c
 | `@shared/*` | `shared/*` |
 | `@assets/*` | `attached_assets/*` |
 
-**Do not modify `vite.config.ts`, `tsconfig.json`, or `drizzle.config.ts` without explicit user approval.**
+**Do not modify `vite.config.ts`, `tsconfig.json`, or `drizzle.config.ts`** without explicit user approval.
 
 ---
 
@@ -302,24 +317,44 @@ The local 4-stage pipeline is the sole active production path. n8n is dormant.
 | Stage | Provider | Model | Purpose | Timeout |
 |-------|----------|-------|---------|---------|
 | 1. Research | OpenAI | `gpt-4o-search-preview` | Web-grounded legal research | 90s |
-| 2. Draft | Anthropic | `claude-opus-4-5` | Initial legal draft | 120s |
-| 3. Assembly | Anthropic | `claude-opus-4-5` | Final polished letter | 120s |
-| 4. Vetting | Anthropic | `claude-sonnet` | Jurisdiction accuracy, anti-hallucination | 120s |
+| 2. Draft | Anthropic | `claude-sonnet-4-5-20250929` | Initial legal draft | 90s |
+| 3. Assembly | Anthropic | `claude-sonnet-4-5-20250929` | Final polished letter | 90s |
+| 4. Vetting | Anthropic | `claude-sonnet-4-6-20250514` | Jurisdiction accuracy, anti-hallucination | 120s |
 
 ### 11.2 Stage 1 Failover Chain
 If OpenAI research fails: Perplexity `sonar-pro` → OpenAI stored prompt → Groq Llama 3.3 70B → **synthetic fallback**. Synthetic fallback sets `researchUnverified = true`.
 
-### 11.3 Key Pipeline Files
+### 11.3 LangGraph Alternative Path
+An optional **LangGraph** StateGraph pipeline lives in `server/pipeline/graph/`. It is controlled by the `LANGGRAPH_PIPELINE` environment variable:
+
+| Mode | `LANGGRAPH_PIPELINE` value | Behavior |
+|------|---------------------------|----------|
+| `off` | unset / `false` / `off` | Skip LangGraph; use standard 4-stage pipeline |
+| `tier3` | `true` / `tier3` | Standard pipeline runs first; LangGraph is last-resort fallback |
+| `primary` | `primary` | LangGraph runs first; standard pipeline is fallback |
+| `canary` | `canary` | A fraction of letters (default 10%, set via `LANGGRAPH_CANARY_FRACTION`) routes to LangGraph primary; rest use standard |
+
+Key LangGraph files:
+- `server/pipeline/graph/index.ts` — StateGraph compiler and runner
+- `server/pipeline/graph/nodes/` — Stage nodes (init, research, draft, assembly, vetting, finalize)
+- `server/pipeline/graph/mode.ts` — Mode parser and canary routing logic
+- `server/pipeline/graph/memory.ts` — Checkpoint memory for graph state
+
+### 11.4 Simple Pipeline Mode
+Setting `PIPELINE_MODE=simple` disables pg-boss queueing and runs the pipeline inline within the HTTP request. This is useful for local development or debugging but is **not recommended for production** because it blocks the request and bypasses retries.
+
+### 11.5 Key Pipeline Files
 - `server/pipeline/orchestrator.ts` — Main orchestrator
 - `server/pipeline/orchestration/` — Stage-specific orchestration logic
 - `server/pipeline/research/` — Research stage implementations
 - `server/pipeline/vetting/` — Vetting stage implementations
 - `server/pipeline/prompts.ts` — Prompt builders
 - `server/pipeline/shared.ts` — Shared utilities, sanitization
+- `server/pipeline/providers.ts` — Model provider factories, timeouts, pricing
 - `server/queue.ts` — pg-boss job enqueueing
 - `server/worker.ts` — pg-boss worker entrypoint
 
-### 11.4 Letter Status Machine
+### 11.6 Letter Status Machine
 The single source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
 
 Key statuses:
@@ -333,10 +368,11 @@ Key statuses:
 
 **Do not hardcode status strings.** Import from `shared/types/letter.ts`.
 
-### 11.5 RAG + Recursive Learning
+### 11.7 RAG + Recursive Learning
 - On attorney approval, the final letter is embedded (OpenAI `text-embedding-3-small`) and stored in `letter_versions.embedding`.
 - During Stage 2 drafting, the top 3 similar approved letters (similarity ≥ 0.70) are injected into the system prompt as style examples.
 - Training data is captured to GCS for Vertex AI fine-tuning when 50+ examples accumulate.
+- The worker polls fine-tune statuses every 30 minutes when GCP is configured.
 
 ---
 
@@ -395,13 +431,13 @@ All env vars are accessed through `server/_core/env.ts` → `ENV` object. Requir
 | Variable | Purpose |
 |----------|---------|
 | `JWT_SECRET` | Cookie signing |
-| `OPENAI_API_KEY` | Research + embeddings |
-| `PERPLEXITY_API_KEY` | Research failover |
+| `OPENAI_API_KEY` | Research + embeddings + OpenAI failover |
+| `PERPLEXITY_API_KEY` | Research failover (Perplexity `sonar-pro`) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Rate limiting |
 | `SUPABASE_DIRECT_URL` | Direct PostgreSQL for pg-boss (port 5432) |
 
 ### Optional (graceful degradation when absent)
-`SENTRY_DSN`, `EMAIL_WORKER_URL/SECRET`, `PDF_WORKER_URL/SECRET`, `KV_WORKER_URL/AUTH_TOKEN`, `AFFILIATE_WORKER_URL/SECRET`, `CF_BLOG_CACHE_WORKER_URL/INVALIDATION_SECRET`, `GCP_PROJECT_ID`, `GCS_TRAINING_BUCKET`, `N8N_WEBHOOK_URL/CALLBACK_SECRET`, `R2_PUBLIC_URL`.
+`SENTRY_DSN`, `EMAIL_WORKER_URL/SECRET`, `PDF_WORKER_URL/SECRET`, `KV_WORKER_URL/AUTH_TOKEN`, `AFFILIATE_WORKER_URL/SECRET`, `CF_BLOG_CACHE_WORKER_URL/INVALIDATION_SECRET`, `GCP_PROJECT_ID`, `GCS_TRAINING_BUCKET`, `N8N_WEBHOOK_URL/CALLBACK_SECRET`, `R2_PUBLIC_URL`, `LANGGRAPH_PIPELINE`, `LANGGRAPH_CANARY_FRACTION`, `GROQ_API_KEY`.
 
 ### Frontend Env Vars
 Must be prefixed with `VITE_` to be available via `import.meta.env.VITE_*`:
@@ -421,6 +457,8 @@ One Docker image supports three runtime roles via `PROCESS_TYPE` env var (dispat
 | Web | `web` (default) | `node --import ./dist/instrument.js dist/index.js` | Express + tRPC + static client |
 | Worker | `worker` | `node --import ./dist/instrument.js dist/worker.js` | pg-boss pipeline job consumer |
 | Migrate | `migrate` | `node dist/migrate.js` | One-shot Drizzle migration |
+
+A legacy `all` mode also exists for single-container local runs (runs migrate, then worker in background, then web).
 
 ### 14.2 Railway (Production)
 - Create **three services** from the same repo.
@@ -502,6 +540,7 @@ Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-la
 15. **Pricing is in `shared/pricing.ts`** — never hardcode prices elsewhere.
 16. **All intake data passes through `server/intake-normalizer.ts`** before entering the pipeline.
 17. **n8n is dormant** — do NOT set `N8N_PRIMARY=true` in production without full testing.
+18. **Pino logger calling convention** — merge-object first: `logger.error({ err }, "message")`. The ESLint flat config enforces this.
 
 ---
 
@@ -512,9 +551,9 @@ Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-la
 | `README.md` | Quick start, deploy instructions |
 | `ARCHITECTURE.md` | Full architecture reference — schema, routes, status machine, module map |
 | `docs/AGENT_GUIDE.md` | Developer workflow, conventions, common pitfalls |
-| `docs/PIPELINE_ARCHITECTURE.md` | AI pipeline deep-dive — stages, RAG, resilience, n8n |
+| `docs/PIPELINE_ARCHITECTURE.md` | AI pipeline deep-dive — stages, RAG, resilience, n8n, LangGraph |
 | `docs/PRODUCTION_RUNBOOK.md` | Pre-deployment checklist, account provisioning, env matrix |
-| `docs/FEATURE_MAP.md` | Comprehensive feature inventory (Phases 1–86+) |
+| `docs/FEATURE_MAP.md` | Comprehensive feature inventory (Phases 1–110+) |
 | `docs/ROLE_AREA_MATRIX.md` | Full access matrix by role |
 | `SPEC_COMPLIANCE.md` | Spec compliance tracking |
 | `CONTENT-STRATEGY.md` | SEO content strategy, blog calendar |
