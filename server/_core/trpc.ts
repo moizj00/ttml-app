@@ -102,7 +102,7 @@ export const superAdminProcedure = t.procedure.use(
       "moizj00@gmail.com",
       "moizj00@yahoo.com",
     ];
-    if (!HARDCODED_OWNER_EMAILS.includes(ctx.user.email)) {
+    if (!HARDCODED_OWNER_EMAILS.includes(ctx.user.email ?? "")) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "This operation is restricted to platform owners only",

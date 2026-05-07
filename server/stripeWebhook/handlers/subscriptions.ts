@@ -9,7 +9,8 @@
  */
 
 import Stripe from "stripe";
-import { activateSubscription, getStripe } from "../../stripe";
+import { getStripe } from "../../stripe";
+import { activateSubscription } from "../../stripe/subscriptions";
 import {
   getDb, updateLetterStatus, logReviewAction, getUserById,
   createNotification, notifyAllAttorneys,

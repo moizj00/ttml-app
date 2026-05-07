@@ -15,12 +15,12 @@ import { checkTrpcRateLimit } from "../../rateLimiter";
 import {
   getUserSubscription,
   checkLetterSubmissionAllowed,
-  createCheckoutSession,
   createBillingPortalSession,
   hasActiveRecurringSubscription,
   getStripe,
   getOrCreateStripeCustomer,
 } from "../../stripe";
+import { createCheckoutSession } from "../../stripe/checkouts";
 import { subscriberProcedure, getAppUrl } from "../_shared";
 
 export const billingSubscriptionsRouter = router({

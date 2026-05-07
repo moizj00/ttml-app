@@ -36,6 +36,8 @@ import { generateAndUploadApprovedPdf } from "../../pdfGenerator";
 import { captureServerException } from "../../sentry";
 import {
   extractLessonFromApproval,
+} from "../../learning/extraction";
+import {
   extractLessonFromRejection,
   extractLessonFromChangesRequest,
   extractLessonFromEdit,
