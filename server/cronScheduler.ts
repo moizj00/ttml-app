@@ -373,7 +373,7 @@ export function startCronScheduler(): void {
   });
 
   logger.info(
-    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-job-cleanup (daily 04:00 + startup)"
+    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), free-preview-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-lock-recovery (every 15 min), stale-pipeline-job-cleanup (daily 04:00 + startup)"
   );
 }
 
