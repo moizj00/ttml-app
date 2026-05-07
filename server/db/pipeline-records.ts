@@ -13,6 +13,7 @@ import {
   notifications,
   payoutRequests,
   pipelineLessons,
+  pipelineRecords,
   pipelineStreamChunks,
   researchRuns,
   reviewActions,
@@ -22,6 +23,105 @@ import {
 } from "../../drizzle/schema";
 import type { InsertUser, InsertPipelineLesson, InsertLetterQualityScore } from "../../drizzle/schema";
 import { getDb } from "./core";
+
+export type PipelineRecordStatus =
+  | "pending"
+  | "running"
+  | "researching"
+  | "drafting"
+  | "assembling"
+  | "vetting"
+  | "completed"
+  | "failed";
+
+export async function upsertPipelineRecord(data: {
+  pipelineId: number;
+  status?: PipelineRecordStatus;
+  currentStep?: string;
+  progress?: number;
+  payloadJson?: unknown;
+  stateJson?: unknown;
+  finalLetter?: string | null;
+  errorMessage?: string | null;
+  startedAt?: Date | null;
+  completedAt?: Date | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const now = new Date();
+  const values = {
+    pipelineId: data.pipelineId,
+    status: data.status ?? "pending",
+    currentStep: data.currentStep ?? data.status ?? "pending",
+    progress: data.progress ?? 0,
+    payloadJson: data.payloadJson as any,
+    stateJson: data.stateJson as any,
+    finalLetter: data.finalLetter ?? null,
+    errorMessage: data.errorMessage ?? null,
+    startedAt: data.startedAt ?? null,
+    completedAt: data.completedAt ?? null,
+    updatedAt: now,
+  };
+
+  const result = await db
+    .insert(pipelineRecords)
+    .values(values as any)
+    .onConflictDoUpdate({
+      target: pipelineRecords.pipelineId,
+      set: values as any,
+    })
+    .returning({ id: pipelineRecords.id, pipelineId: pipelineRecords.pipelineId });
+  return result[0];
+}
+
+export async function updatePipelineRecord(
+  pipelineId: number,
+  data: {
+    status?: PipelineRecordStatus;
+    currentStep?: string;
+    progress?: number;
+    payloadJson?: unknown;
+    stateJson?: unknown;
+    finalLetter?: string | null;
+    errorMessage?: string | null;
+    startedAt?: Date | null;
+    completedAt?: Date | null;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date(),
+  };
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.currentStep !== undefined) updateData.currentStep = data.currentStep;
+  if (data.progress !== undefined) updateData.progress = data.progress;
+  if (data.payloadJson !== undefined) updateData.payloadJson = data.payloadJson as any;
+  if (data.stateJson !== undefined) updateData.stateJson = data.stateJson as any;
+  if (data.finalLetter !== undefined) updateData.finalLetter = data.finalLetter;
+  if (data.errorMessage !== undefined) updateData.errorMessage = data.errorMessage;
+  if (data.startedAt !== undefined) updateData.startedAt = data.startedAt;
+  if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
+
+  const result = await db
+    .update(pipelineRecords)
+    .set(updateData as any)
+    .where(eq(pipelineRecords.pipelineId, pipelineId))
+    .returning({ id: pipelineRecords.id });
+
+  if (result.length === 0) {
+    return upsertPipelineRecord({
+      pipelineId,
+      ...data,
+      status: data.status ?? "pending",
+      currentStep: data.currentStep ?? data.status ?? "pending",
+    });
+  }
+
+  return result[0];
+}
 
 // ═══════════════════════════════════════════════════════
 // DOMAIN ERRORS — stream chunk ownership

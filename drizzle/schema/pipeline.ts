@@ -5,6 +5,7 @@ import {
   timestamp,
   varchar,
   boolean,
+  jsonb,
   serial,
   index,
   uniqueIndex,
@@ -118,6 +119,44 @@ export const fineTuneRuns = pgTable("fine_tune_runs", {
 
 export type FineTuneRun = typeof fineTuneRuns.$inferSelect;
 export type InsertFineTuneRun = typeof fineTuneRuns.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: pipeline_records
+// Durable progress record for the background multi-agent pipeline.
+//
+// The frontend subscribes to this table over Supabase Realtime using
+// pipeline_id. The current pipeline_id is the letter_requests.id returned by
+// the submit API, which keeps the public API stable while still isolating
+// pipeline progress from letter status transitions.
+// ═══════════════════════════════════════════════════════
+export const pipelineRecords = pgTable(
+  "pipeline_records",
+  {
+    id: serial("id").primaryKey(),
+    pipelineId: integer("pipeline_id")
+      .notNull()
+      .references(() => letterRequests.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 50 }).default("pending").notNull(),
+    currentStep: varchar("current_step", { length: 50 }).default("pending").notNull(),
+    progress: integer("progress").default(0).notNull(),
+    finalLetter: text("final_letter"),
+    errorMessage: text("error_message"),
+    payloadJson: jsonb("payload_json"),
+    stateJson: jsonb("state_json"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  t => ({
+    pipelineIdIdx: uniqueIndex("uq_pipeline_records_pipeline_id").on(t.pipelineId),
+    statusIdx: index("idx_pipeline_records_status").on(t.status),
+    currentStepIdx: index("idx_pipeline_records_current_step").on(t.currentStep),
+  })
+);
+
+export type PipelineRecord = typeof pipelineRecords.$inferSelect;
+export type InsertPipelineRecord = typeof pipelineRecords.$inferInsert;
 
 // ═══════════════════════════════════════════════════════
 // TABLE: pipeline_stream_chunks

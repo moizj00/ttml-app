@@ -257,14 +257,10 @@ function buildPipelineGraph() {
   return graph.compile();
 }
 
-// Compiled graph singleton (lazy)
-let _compiledGraph: ReturnType<typeof buildPipelineGraph> | null = null;
+export const appGraph = buildPipelineGraph();
 
 function getCompiledGraph() {
-  if (!_compiledGraph) {
-    _compiledGraph = buildPipelineGraph();
-  }
-  return _compiledGraph;
+  return appGraph;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -295,6 +291,7 @@ export async function runLangGraphPipeline(
   const graph = getCompiledGraph();
 
   const initialState: Partial<PipelineStateType> = {
+    pipelineId: String(letterId),
     letterId,
     userId,
     intake,
@@ -337,6 +334,7 @@ export async function* streamLangGraphPipeline(
   const graph = getCompiledGraph();
 
   const initialState: Partial<PipelineStateType> = {
+    pipelineId: String(letterId),
     letterId,
     userId,
     intake,

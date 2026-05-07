@@ -93,7 +93,7 @@ import { logger } from "./logger";
 // Supabase pooler hostnames to IPv6 which is unreachable from Railway's network
 dns.setDefaultResultOrder("ipv4first");
 
-export const QUEUE_NAME = "pipeline";
+export const QUEUE_NAME = "multi-agent-pipeline";
 
 // ─── Job Data Types ────────────────────────────────────────────────────────
 
@@ -367,9 +367,53 @@ export async function getBoss(): Promise<PgBossClient> {
 // ─── Enqueue Functions ─────────────────────────────────────────────────────
 
 export async function enqueuePipelineJob(
+  pipelineId: string,
+  payload: any,
+  options?: { startAfter?: number | string | Date }
+): Promise<string>;
+export async function enqueuePipelineJob(
   data: RunPipelineJobData,
   options?: { startAfter?: number | string | Date }
+): Promise<string>;
+export async function enqueuePipelineJob(
+  data: RunPipelineJobData | string,
+  payloadOrOptions?:
+    | (Partial<RunPipelineJobData> & Record<string, any>)
+    | { startAfter?: number | string | Date },
+  maybeOptions?: { startAfter?: number | string | Date }
 ): Promise<string> {
+  return enqueuePipelineJobImpl(data, payloadOrOptions, maybeOptions);
+}
+
+export async function enqueuePipelineJobImpl(
+  data: RunPipelineJobData | string,
+  payloadOrOptions?:
+    | (Partial<RunPipelineJobData> & Record<string, any>)
+    | { startAfter?: number | string | Date },
+  maybeOptions?: { startAfter?: number | string | Date }
+): Promise<string> {
+  const normalizedData: RunPipelineJobData =
+    typeof data === "string"
+      ? (() => {
+          const payload = (payloadOrOptions ?? {}) as Partial<RunPipelineJobData> &
+            Record<string, any>;
+          const letterId = payload.letterId ?? Number(data);
+          return {
+            ...payload,
+            type: "runPipeline",
+            letterId,
+            intake: payload.intake ?? payload.payload ?? payload.formData ?? payload,
+            userId: payload.userId,
+            appUrl: payload.appUrl ?? process.env.APP_URL ?? "",
+            label: payload.label ?? `pipeline-${letterId}`,
+          } as RunPipelineJobData;
+        })()
+      : data;
+  const options =
+    typeof data === "string"
+      ? maybeOptions
+      : (payloadOrOptions as { startAfter?: number | string | Date } | undefined);
+
   let boss: PgBossClient;
   try {
     boss = await getBoss();
@@ -385,10 +429,10 @@ export async function enqueuePipelineJob(
   // With 'standard' policy, pg-boss does NOT block on failed jobs with the same key.
   // Actual deduplication is enforced by the pipeline lock (acquirePipelineLock).
   logger.info(
-    `[Queue] Sending pipeline job for letter #${data.letterId} (${data.label})...`
+    `[Queue] Sending pipeline job for letter #${normalizedData.letterId} (${normalizedData.label})...`
   );
-  const id = await boss.send(QUEUE_NAME, data as unknown as object, {
-    singletonKey: `letter-${data.letterId}`,
+  const id = await boss.send(QUEUE_NAME, normalizedData as unknown as object, {
+    singletonKey: `letter-${normalizedData.letterId}`,
 
     // No retries at queue level — worker handles its own retry logic with backoff
     retryLimit: 0,
@@ -398,12 +442,12 @@ export async function enqueuePipelineJob(
   if (id === null) {
     // Duplicate suppressed — a job for this letter is already active or queued.
     logger.warn(
-      `[Queue] Duplicate pipeline job suppressed for letter #${data.letterId} (${data.label}) — already active/queued`
+      `[Queue] Duplicate pipeline job suppressed for letter #${normalizedData.letterId} (${normalizedData.label}) — already active/queued`
     );
-    return `pipeline-${data.letterId}-deduplicated`;
+    return `pipeline-${normalizedData.letterId}-deduplicated`;
   }
   logger.info(
-    `[Queue] Enqueued pipeline job ${id} for letter #${data.letterId} (${data.label})`
+    `[Queue] Enqueued pipeline job ${id} for letter #${normalizedData.letterId} (${normalizedData.label})`
   );
   return id!;
 }

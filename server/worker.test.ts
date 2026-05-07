@@ -7,7 +7,7 @@ import type {
 import type { Job } from "pg-boss";
 
 vi.mock("./queue", () => ({
-  QUEUE_NAME: "pipeline",
+  QUEUE_NAME: "multi-agent-pipeline",
   getPipelineQueue: vi.fn().mockReturnValue({
     getWaitingCount: vi.fn().mockResolvedValue(0),
     getActiveCount: vi.fn().mockResolvedValue(0),
@@ -57,6 +57,12 @@ vi.mock("./pipeline", () => ({
     }),
 }));
 
+vi.mock("./pipeline/graph", () => ({
+  appGraph: {
+    streamEvents: vi.fn(),
+  },
+}));
+
 vi.mock("./db", () => ({
   acquirePipelineLock: vi.fn().mockResolvedValue(true),
   releasePipelineLock: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +76,7 @@ vi.mock("./db", () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
   decrementLettersUsed: vi.fn().mockResolvedValue(undefined),
   refundFreeTrialSlot: vi.fn().mockResolvedValue(undefined),
+  updatePipelineRecord: vi.fn().mockResolvedValue(undefined),
   getDb: vi.fn().mockResolvedValue({}),
 }));
 

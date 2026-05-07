@@ -26,7 +26,8 @@ import {
   consumeIntermediateContent,
   preflightApiKeyCheck,
 } from "./pipeline";
-import { runLangGraphPipeline } from "./pipeline/graph";
+import { appGraph } from "./pipeline/graph";
+import type { PipelineStateType } from "./pipeline/graph/state";
 import {
   parseLangGraphMode,
   useLangGraphForLetter,
@@ -45,6 +46,7 @@ import {
   createNotification,
   decrementLettersUsed,
   refundFreeTrialSlot,
+  updatePipelineRecord,
 } from "./db";
 import { LETTER_STATUS } from "../shared/types/letter";
 import { sendJobFailedAlertEmail, sendStatusUpdateEmail } from "./email";
@@ -56,6 +58,129 @@ import { logger } from "./logger";
 const PIPELINE_MAX_RETRIES = 3;
 const PIPELINE_BASE_DELAY_MS = 10_000;
 const DRAFT_PREVIEW_RELEASE_RETRY_MS = 10 * 60 * 1000;
+
+const GRAPH_STEP_PROGRESS: Record<string, number> = {
+  init: 5,
+  research: 20,
+  draft: 45,
+  assembly: 70,
+  vetting: 85,
+  finalize: 95,
+  fail: 100,
+};
+
+const GRAPH_STEP_STATUS: Record<string, Parameters<typeof updatePipelineRecord>[1]["status"]> = {
+  init: "running",
+  research: "researching",
+  draft: "drafting",
+  assembly: "assembling",
+  vetting: "vetting",
+  finalize: "running",
+  fail: "failed",
+};
+
+function getGraphNodeName(eventName: unknown): string | null {
+  if (typeof eventName !== "string") return null;
+  return eventName in GRAPH_STEP_PROGRESS ? eventName : null;
+}
+
+async function runQueuedLangGraphPipeline(
+  data: RunPipelineJobData,
+  isFreePreview: boolean
+): Promise<PipelineStateType> {
+  const pipelineId = data.letterId;
+  await updatePipelineRecord(pipelineId, {
+    status: "running",
+    currentStep: "init",
+    progress: GRAPH_STEP_PROGRESS.init,
+    payloadJson: data.intake,
+    startedAt: new Date(),
+    errorMessage: null,
+  });
+
+  const initialState: Partial<PipelineStateType> = {
+    pipelineId: String(pipelineId),
+    letterId: data.letterId,
+    userId: data.userId ?? 0,
+    intake: data.intake as Record<string, any>,
+    isFreePreview,
+    messages: [],
+    retryCount: 0,
+    errorRetryCount: 0,
+    qualityWarnings: [],
+    currentStage: "init",
+  };
+
+  let finalState: PipelineStateType | null = null;
+
+  try {
+    for await (const event of await appGraph.streamEvents(initialState, {
+      version: "v2",
+    })) {
+      const eventName = getGraphNodeName(event.name);
+      if (event.event === "on_chain_start" && eventName) {
+        await updatePipelineRecord(pipelineId, {
+          status: GRAPH_STEP_STATUS[eventName],
+          currentStep: eventName,
+          progress: GRAPH_STEP_PROGRESS[eventName],
+        });
+      }
+
+      if (event.event === "on_chain_end") {
+        if (event.name === "LangGraph" && event.data?.output) {
+          finalState = event.data.output as PipelineStateType;
+        } else if (eventName) {
+          const output = event.data?.output as Partial<PipelineStateType> | undefined;
+          await updatePipelineRecord(pipelineId, {
+            status: GRAPH_STEP_STATUS[eventName],
+            currentStep: output?.currentStage ?? eventName,
+            progress: GRAPH_STEP_PROGRESS[eventName],
+            stateJson: output,
+          });
+        }
+      }
+    }
+
+    if (!finalState) {
+      throw new Error(`LangGraph stream ended without a final state for letter #${data.letterId}`);
+    }
+
+    const finalLetter = finalState.vettedLetter || finalState.assembledLetter || "";
+    const failed = finalState.currentStage === "failed";
+    await updatePipelineRecord(pipelineId, {
+      status: failed ? "failed" : "completed",
+      currentStep: failed ? "failed" : "completed",
+      progress: 100,
+      finalLetter,
+      stateJson: finalState,
+      errorMessage: failed
+        ? finalState.lastErrorMessage || `LangGraph pipeline failed for letter #${data.letterId}`
+        : null,
+      completedAt: new Date(),
+    });
+
+    if (failed) {
+      throw new Error(`LangGraph pipeline failed for letter #${data.letterId}`);
+    }
+
+    return finalState;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await updatePipelineRecord(pipelineId, {
+      status: "failed",
+      currentStep: "failed",
+      progress: 100,
+      errorMessage: message,
+      completedAt: new Date(),
+    }).catch(updateErr =>
+      logger.error(
+        { err: updateErr, letterId: data.letterId },
+        "[Worker] Failed to mark pipeline_records row failed"
+      )
+    );
+    throw err;
+  }
+}
 
 export async function processRunPipeline(
   data: RunPipelineJobData
@@ -125,12 +250,7 @@ export async function processRunPipeline(
       `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph (primary path)`
     );
     try {
-      await runLangGraphPipeline({
-        letterId,
-        userId,
-        intake: intake as Record<string, any>,
-        isFreePreview: isPreviewGatedSubmission,
-      });
+      await runQueuedLangGraphPipeline(data, isPreviewGatedSubmission);
       logger.info(
         `[Worker] LangGraph pipeline completed for letter #${letterId}`
       );
@@ -307,12 +427,7 @@ export async function processRunPipeline(
         `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}, legacy=${process.env.LANGGRAPH_PIPELINE === "true"}) — tier-3 LangGraph fallback for letter #${letterId}`
       );
       try {
-        await runLangGraphPipeline({
-          letterId,
-          userId,
-          intake: intake as Record<string, any>,
-          isFreePreview: isPreviewGatedSubmission,
-        });
+        await runQueuedLangGraphPipeline(data, isPreviewGatedSubmission);
         logger.info(
           `[Worker] Tier-3 LangGraph fallback succeeded for letter #${letterId}`
         );

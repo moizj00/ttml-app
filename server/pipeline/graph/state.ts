@@ -26,6 +26,17 @@ import type { IntakeJson, PipelineErrorCode } from "../../../shared/types/pipeli
 // ═══════════════════════════════════════════════════════
 
 export const PipelineState = Annotation.Root({
+  /**
+   * Public pipeline identifier returned to the frontend.
+   *
+   * In this app it currently maps 1:1 to letter_requests.id so existing
+   * letter routes and dashboards can keep using the same numeric ID.
+   */
+  pipelineId: Annotation<string>({
+    reducer: (_, update) => update,
+    default: () => "",
+  }),
+
   /** The letter_requests.id being processed */
   letterId: Annotation<number>({
     reducer: (_, update) => update,

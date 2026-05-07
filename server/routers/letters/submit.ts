@@ -10,6 +10,7 @@ import {
 import {
   createLetterRequest,
   logReviewAction,
+  upsertPipelineRecord,
 } from "../../db";
 import { captureServerException } from "../../sentry";
 import { enqueuePipelineJob } from "../../queue";
@@ -129,6 +130,13 @@ export const submitProcedures = {
 
       const appUrl = getAppUrl(ctx.req);
       try {
+        await upsertPipelineRecord({
+          pipelineId: letterId,
+          status: "pending",
+          currentStep: "pending",
+          progress: 0,
+          payloadJson: input.intakeJson,
+        });
         await enqueuePipelineJob({
           type: "runPipeline",
           letterId,
@@ -146,6 +154,6 @@ export const submitProcedures = {
         });
       }
 
-      return { letterId, status: "submitted" };
+      return { letterId, pipelineId: letterId, status: "submitted" };
     }),
 };

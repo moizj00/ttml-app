@@ -79,7 +79,7 @@ export interface SubmitLetterContext {
 export async function submitLetter(
   input: SubmitLetterInput,
   ctx: SubmitLetterContext
-): Promise<{ letterId: number; status: string; isFreePreview: boolean }> {
+): Promise<{ letterId: number; pipelineId: number; status: string; isFreePreview: boolean }> {
   const result = await submitSubscriberIntakeProcedure(
     ctx.userId,
     input.intakeJson,
@@ -90,6 +90,7 @@ export async function submitLetter(
 
   return {
     letterId: result.requestId,
+    pipelineId: result.requestId,
     status: result.status,
     isFreePreview: letter?.isFreePreview === true,
   };

@@ -10,6 +10,7 @@ import {
   getDb,
   getUserById,
   notifyAdmins,
+  upsertPipelineRecord,
 } from "../db";
 import { enqueueDraftPreviewReleaseJob, enqueuePipelineJob } from "../queue";
 import { letterRequests } from "../../drizzle/schema";
@@ -99,7 +100,15 @@ export async function submitSubscriberIntakeProcedure(
   });
 
   // Start generation immediately (24h delay is now only a visibility gate)
-  enqueuePipelineJob({
+  await upsertPipelineRecord({
+    pipelineId: requestId,
+    status: "pending",
+    currentStep: "pending",
+    progress: 0,
+    payloadJson: intakePayload,
+  });
+
+  await enqueuePipelineJob(String(requestId), {
     type: "runPipeline",
     letterId: requestId,
     intake: intakePayload,
@@ -122,6 +131,7 @@ export async function submitSubscriberIntakeProcedure(
 
   return {
     requestId,
+    pipelineId: requestId,
     status: "submitted",
     subscriberVisibleAt,
     isFreePreview: true,

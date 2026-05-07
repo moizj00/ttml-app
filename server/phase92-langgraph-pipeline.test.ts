@@ -648,14 +648,15 @@ describe("runLangGraphPipeline — failure path", () => {
 // ══════════════════════════════════════════════════════════════════
 
 describe("worker.ts — LANGGRAPH_PIPELINE env gate", () => {
-  it("worker.ts imports runLangGraphPipeline and checks process.env.LANGGRAPH_PIPELINE", async () => {
+  it("worker.ts imports appGraph and checks process.env.LANGGRAPH_PIPELINE", async () => {
     const fs = await import("fs/promises");
     const path = await import("path");
     const src = await fs.readFile(
       path.join(process.cwd(), "server/worker.ts"),
       "utf8",
     );
-    expect(src).toContain("runLangGraphPipeline");
+    expect(src).toContain("appGraph");
+    expect(src).toContain("streamEvents");
     expect(src).toContain('process.env.LANGGRAPH_PIPELINE === "true"');
   });
 

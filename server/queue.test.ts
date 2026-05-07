@@ -75,8 +75,8 @@ beforeEach(() => {
 });
 
 describe("QUEUE_NAME constant", () => {
-  it("equals 'pipeline'", () => {
-    expect(QUEUE_NAME).toBe("pipeline");
+  it("equals 'multi-agent-pipeline'", () => {
+    expect(QUEUE_NAME).toBe("multi-agent-pipeline");
   });
 });
 
@@ -86,10 +86,26 @@ describe("enqueuePipelineJob", () => {
     expect(mockBoss.send).toHaveBeenCalledOnce();
   });
 
-  it("sends to the 'pipeline' queue", async () => {
+  it("sends to the 'multi-agent-pipeline' queue", async () => {
     await enqueuePipelineJob(baseRunData);
     const [queueName] = vi.mocked(mockBoss.send).mock.calls[0];
-    expect(queueName).toBe("pipeline");
+    expect(queueName).toBe("multi-agent-pipeline");
+  });
+
+  it("supports the pipelineId + payload signature", async () => {
+    await enqueuePipelineJob(String(LETTER_ID), {
+      intake: baseRunData.intake,
+      userId: USER_ID,
+      appUrl: "https://test.example.com",
+      label: "test-label",
+    });
+    const [queueName, jobData] = vi.mocked(mockBoss.send).mock.calls[0];
+    expect(queueName).toBe("multi-agent-pipeline");
+    expect(jobData).toMatchObject({
+      type: "runPipeline",
+      letterId: LETTER_ID,
+      userId: USER_ID,
+    });
   });
 
   it("passes correct type, letterId, and userId in job data", async () => {
@@ -125,10 +141,10 @@ describe("enqueueRetryFromStageJob", () => {
     expect(mockBoss.send).toHaveBeenCalledOnce();
   });
 
-  it("sends to the 'pipeline' queue", async () => {
+  it("sends to the 'multi-agent-pipeline' queue", async () => {
     await enqueueRetryFromStageJob(baseRetryData);
     const [queueName] = vi.mocked(mockBoss.send).mock.calls[0];
-    expect(queueName).toBe("pipeline");
+    expect(queueName).toBe("multi-agent-pipeline");
   });
 
   it("passes type='retryPipelineFromStage', correct stage and letterId in data", async () => {
@@ -169,13 +185,13 @@ describe("enqueueRetryFromStageJob", () => {
 });
 
 describe("enqueueDraftPreviewReleaseJob", () => {
-  it("sends a delayed release job to the pipeline queue", async () => {
+  it("sends a delayed release job to the multi-agent pipeline queue", async () => {
     const startAfter = new Date("2026-04-26T12:00:00.000Z");
     await enqueueDraftPreviewReleaseJob(LETTER_ID, startAfter);
 
     const [queueName, jobData, jobOpts] = vi.mocked(mockBoss.send).mock
       .calls[0];
-    expect(queueName).toBe("pipeline");
+    expect(queueName).toBe("multi-agent-pipeline");
     expect(jobData).toMatchObject({
       type: "releaseDraftPreview",
       letterId: LETTER_ID,

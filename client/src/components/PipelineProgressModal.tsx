@@ -8,6 +8,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
+  getOrCreateChannel,
+  getSupabaseClient,
+  removeChannel,
+} from "@/lib/supabase";
+import {
   CheckCircle,
   Loader2,
   Circle,
@@ -25,52 +30,87 @@ interface PipelineProgressModalProps {
 
 const PIPELINE_STAGES = [
   {
-    key: "submitted",
+    key: "pending",
     label: "Request Submitted",
     description: "Your letter request has been received",
   },
   {
-    key: "researching",
+    key: "research",
     label: "Legal Research",
     description: "Analyzing relevant laws and precedents",
   },
   {
-    key: "drafting",
+    key: "draft",
     label: "Professional Drafting",
     description: "Our drafting systems are composing your legal letter",
   },
   {
-    key: "ai_generation_completed_hidden",
+    key: "assembly",
+    label: "Assembly",
+    description: "Refining structure, citations, and tone",
+  },
+  {
+    key: "vetting",
+    label: "Quality Review",
+    description: "Checking legal accuracy and factual consistency",
+  },
+  {
+    key: "completed",
     label: "Draft Complete",
     description: "Your letter draft is ready and will be released after review",
   },
 ] as const;
 
 type StageStatus = "completed" | "active" | "pending" | "error";
+type PipelineRecord = {
+  pipeline_id: number;
+  status: string;
+  current_step: string;
+  progress: number;
+  error_message?: string | null;
+  updated_at?: string;
+};
 
-function getStageStatus(currentStatus: string, stageKey: string): StageStatus {
-  const order = [
-    "submitted",
-    "researching",
-    "drafting",
-    "ai_generation_completed_hidden",
-    "letter_released_to_subscriber",
-    "generated_locked",
-  ];
-  const currentIdx = order.indexOf(currentStatus);
-
-  // If status is ai_generation_completed_hidden or letter_released_to_subscriber,
-  // we count drafting as completed and the final stage as completed.
+function normalizeStep(status: string, currentStep?: string): string {
+  if (currentStep && currentStep !== "pending") return currentStep;
+  if (status === "submitted") return "pending";
+  if (status === "researching") return "research";
+  if (status === "drafting") return "draft";
   if (
-    currentStatus === "ai_generation_completed_hidden" ||
-    currentStatus === "letter_released_to_subscriber" ||
-    currentStatus === "generated_locked"
+    status === "ai_generation_completed_hidden" ||
+    status === "letter_released_to_subscriber" ||
+    status === "generated_locked"
   ) {
-    if (stageKey === "drafting") return "completed";
-    if (stageKey === "ai_generation_completed_hidden") return "completed";
+    return "completed";
+  }
+  return currentStep || status || "pending";
+}
+
+function getStageStatus(currentStep: string, pipelineStatus: string, stageKey: string): StageStatus {
+  if (pipelineStatus === "completed") return "completed";
+  if (pipelineStatus === "failed") {
+    return stageKey === currentStep || (currentStep === "failed" && stageKey === "completed")
+      ? "error"
+      : "pending";
   }
 
-  const stageIdx = order.indexOf(stageKey);
+  const order = [
+    "pending",
+    "init",
+    "research",
+    "draft",
+    "assembly",
+    "vetting",
+    "finalize",
+    "completed",
+  ];
+  const normalizedCurrent = currentStep === "init" ? "pending" : currentStep;
+  const normalizedStage = stageKey === "completed" && currentStep === "finalize"
+    ? "finalize"
+    : stageKey;
+  const currentIdx = order.indexOf(normalizedCurrent);
+
+  const stageIdx = order.indexOf(normalizedStage);
 
   if (currentIdx < 0) return "pending";
   if (stageIdx < currentIdx) return "completed";
@@ -97,34 +137,85 @@ export default function PipelineProgressModal({
   letterId,
 }: PipelineProgressModalProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [pipelineRecord, setPipelineRecord] = useState<PipelineRecord | null>(null);
   const [, navigate] = useLocation();
 
   const { data } = trpc.letters.detail.useQuery(
     { id: letterId! },
     {
       enabled: open && !!letterId,
-      refetchInterval: 3000, // Poll every 3 seconds during generation
+      refetchInterval: 3000, // Fallback when Supabase Realtime is unavailable
     }
   );
 
+  useEffect(() => {
+    if (!open || !letterId) {
+      setPipelineRecord(null);
+      return;
+    }
+
+    const channelKey = `pipeline-record-${letterId}`;
+    const client = getSupabaseClient();
+
+    client
+      ?.from("pipeline_records")
+      .select("pipeline_id,status,current_step,progress,error_message,updated_at")
+      .eq("pipeline_id", letterId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setPipelineRecord(data as PipelineRecord);
+      });
+
+    const channel = getOrCreateChannel(channelKey, realtimeClient =>
+      realtimeClient
+        .channel(channelKey)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "pipeline_records",
+            filter: `pipeline_id=eq.${letterId}`,
+          },
+          payload => {
+            setPipelineRecord(payload.new as PipelineRecord);
+          }
+        )
+        .subscribe()
+    );
+
+    if (!channel) return;
+
+    return () => {
+      removeChannel(channelKey);
+    };
+  }, [open, letterId]);
+
   const currentStatus = data?.letter?.status ?? "submitted";
+  const pipelineStatus = pipelineRecord?.status ?? currentStatus;
+  const currentStep = normalizeStep(currentStatus, pipelineRecord?.current_step);
   const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
   
   const isComplete = [
     "generated_locked",
     "ai_generation_completed_hidden",
     "letter_released_to_subscriber",
-  ].includes(currentStatus);
+  ].includes(currentStatus) || pipelineStatus === "completed";
+
+  const isFailed = pipelineStatus === "failed" || currentStatus === "pipeline_failed";
   
-  const isPipelineActive = ["submitted", "researching", "drafting"].includes(
-    currentStatus
-  );
+  const isPipelineActive =
+    !isComplete &&
+    !isFailed &&
+    ["pending", "running", "researching", "drafting", "assembling", "vetting", "submitted", "researching", "drafting"].includes(
+      pipelineStatus
+    );
 
   // Estimated total duration for pipeline: ~120 seconds
   const ESTIMATED_DURATION_SECONDS = 120;
   const progressPercent = isComplete 
     ? 100 
-    : Math.min(100, Math.round((elapsedSeconds / ESTIMATED_DURATION_SECONDS) * 100));
+    : pipelineRecord?.progress ?? Math.min(100, Math.round((elapsedSeconds / ESTIMATED_DURATION_SECONDS) * 100));
 
   // Elapsed time counter
   useEffect(() => {
@@ -162,10 +253,12 @@ export default function PipelineProgressModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            {isComplete ? "Letter Draft Ready!" : "Preparing Your Letter"}
+            {isFailed ? "Letter Processing Failed" : isComplete ? "Letter Draft Ready!" : "Preparing Your Letter"}
           </DialogTitle>
           <DialogDescription>
-            {isComplete
+            {isFailed
+              ? pipelineRecord?.error_message ?? "The background pipeline could not complete. The team has been notified."
+              : isComplete
               ? currentStatus === "ai_generation_completed_hidden"
                 ? "Your professional letter draft is complete. It will be available for review within 24 hours."
                 : "Your professional letter draft is complete. View details for the next steps."
@@ -186,7 +279,7 @@ export default function PipelineProgressModal({
         {/* Progress stages */}
         <div className="space-y-1 py-4">
           {PIPELINE_STAGES.map((stage, idx) => {
-            const status = getStageStatus(currentStatus, stage.key);
+            const status = getStageStatus(currentStep, pipelineStatus, stage.key);
             return (
               <div key={stage.key} className="flex items-start gap-3">
                 <div className="flex flex-col items-center">
@@ -231,7 +324,7 @@ export default function PipelineProgressModal({
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2">
-          {isComplete && letterId ? (
+          {(isComplete || isFailed) && letterId ? (
             currentStatus === "letter_released_to_subscriber" ? (
               <Button asChild>
                 <Link href={`/letters/${letterId}`}>View Letter Draft</Link>
