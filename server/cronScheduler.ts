@@ -29,6 +29,7 @@ import {
 } from "./subscriptionSync";
 import { captureServerException } from "./sentry";
 import { releaseStaleReviews } from "./staleReviewReleaser";
+import { recoverStalePipelineLocks } from "./stalePipelineLockRecovery";
 import { processPaywallEmails } from "./paywallEmailCron";
 import { processFreePreviewEmails } from "./freePreviewEmailCron";
 import {
@@ -321,6 +322,29 @@ export function startCronScheduler(): void {
       logger.error(`[Cron] Lesson auto-archival failed: ${msg}`);
       captureServerException(err, {
         tags: { component: "cron", job: "lesson_archival" },
+      });
+    }
+  });
+
+  // Stale pipeline lock recovery: runs every 15 minutes
+  // Detects letters stuck in researching/drafting with a stale pipeline lock
+  // and resets them to submitted for a fresh pipeline run.
+  cron.schedule("*/15 * * * *", async () => {
+    const startTime = Date.now();
+    logger.info(
+      `[Cron] [${new Date().toISOString()}] Running stale pipeline lock recovery...`
+    );
+    try {
+      const result = await recoverStalePipelineLocks();
+      const elapsed = Date.now() - startTime;
+      logger.info(
+        `[Cron] Stale pipeline lock recovery done in ${elapsed}ms — recovered: ${result.recovered}, errors: ${result.errors}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Cron] Stale pipeline lock recovery failed: ${msg}`);
+      captureServerException(err, {
+        tags: { component: "cron", job: "stale_pipeline_lock_recovery" },
       });
     }
   });
