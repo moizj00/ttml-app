@@ -5,6 +5,7 @@ import { getR2HealthStatus, checkR2Connectivity } from "./storage";
 import { ENV } from "./_core/env";
 import { captureServerException } from "./sentry";
 import { logger } from "./logger";
+import { getBoss, QUEUE_NAME, isQueueConnectionConfigured } from "./queue";
 
 export type ServiceStatus = "ok" | "error" | "unconfigured";
 
@@ -148,6 +149,21 @@ async function checkR2(): Promise<ServiceCheckResult> {
   });
 }
 
+async function checkQueue(): Promise<ServiceCheckResult> {
+  if (!isQueueConnectionConfigured()) {
+    return { status: "unconfigured", responseTimeMs: 0 };
+  }
+  return checkService("queue", async () => {
+    const boss = await getBoss();
+    const stats = await boss.getQueueStats(QUEUE_NAME);
+    const queuedCount = (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
+    const activeCount = stats?.activeCount ?? 0;
+    if (queuedCount > 50) {
+      throw new Error(`${queuedCount} jobs queued, ${activeCount} active — backlog critical`);
+    }
+  });
+}
+
 const startedAt = Date.now();
 
 function deriveStatus(services: Record<string, ServiceCheckResult>): HealthCheckResult["status"] {
@@ -164,7 +180,7 @@ function getUptime(): number {
 }
 
 async function executeFullChecks(): Promise<HealthCheckResult> {
-  const [database, redis, stripe, resend, anthropic, openai, r2] =
+  const [database, redis, stripe, resend, anthropic, openai, r2, queue] =
     await Promise.all([
       checkDatabase(),
       checkRedis(),
@@ -173,6 +189,7 @@ async function executeFullChecks(): Promise<HealthCheckResult> {
       checkAnthropic(),
       checkOpenAI(),
       checkR2(),
+      checkQueue(),
     ]);
 
   const services: Record<string, ServiceCheckResult> = {
@@ -183,6 +200,7 @@ async function executeFullChecks(): Promise<HealthCheckResult> {
     anthropic,
     openai,
     r2,
+    queue,
   };
 
   return {

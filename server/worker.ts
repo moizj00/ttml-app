@@ -859,7 +859,25 @@ async function startWorker() {
     { localConcurrency: 1 },
     (async (jobs: Job<PipelineJobData>[]) => {
       for (const job of jobs) {
-        await processJob(job);
+        try {
+          await processJob(job);
+        } catch (err) {
+          // Individual job errors are caught here so the worker process
+          // NEVER crashes. pg-boss will mark the job as failed via the
+          // re-throw below. We log + capture before re-throwing so the
+          // error is visible in Sentry even if pg-boss swallows it.
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error(
+            { err: msg, jobId: job.id, letterId: job.data.letterId, jobType: job.data.type },
+            `[Worker] processJob error contained for job ${job.id} — worker continuing, job will be marked failed`
+          );
+          captureServerException(err instanceof Error ? err : new Error(msg), {
+            tags: { component: "pipeline-worker", error_type: "processJob_error_contained" },
+            extra: { jobId: job.id, letterId: job.data.letterId, jobType: job.data.type },
+          });
+          // Re-throw so pg-boss marks the job as failed and moves on
+          throw err;
+        }
       }
     }) as unknown as (job: Job<unknown>) => Promise<void>
   );

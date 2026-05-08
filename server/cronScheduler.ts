@@ -39,7 +39,8 @@ import {
 import { logger } from "./logger";
 import { getBoss, QUEUE_NAME, isQueueConnectionConfigured } from "./queue";
 import type { PipelineJobData } from "./queue";
-import { getLetterRequestById } from "./db";
+import { getLetterRequestById, getAllUsers, createNotification } from "./db";
+import { sendJobFailedAlertEmail } from "./email";
 
 /** Whether the scheduler has been started (prevents double-registration) */
 let started = false;
@@ -372,8 +373,88 @@ export function startCronScheduler(): void {
     }
   });
 
+  // Queue backlog alerting: runs every 5 minutes
+  // Alerts admins if pipeline queue depth exceeds threshold.
+  const QUEUE_BACKLOG_THRESHOLD = parseInt(
+    process.env.QUEUE_BACKLOG_THRESHOLD ?? "10",
+    10
+  );
+  cron.schedule("*/5 * * * *", async () => {
+    const startTime = Date.now();
+    logger.info(
+      `[Cron] [${new Date().toISOString()}] Checking queue backlog...`
+    );
+    try {
+      if (!isQueueConnectionConfigured()) {
+        logger.info("[Cron] Queue check skipped (not configured)");
+        return;
+      }
+      const boss = await getBoss();
+      const stats = await boss.getQueueStats(QUEUE_NAME);
+      const queuedCount =
+        (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
+      const activeCount = stats?.activeCount ?? 0;
+
+      logger.info(
+        `[Cron] Queue depth: ${queuedCount} queued, ${activeCount} active`
+      );
+
+      if (queuedCount >= QUEUE_BACKLOG_THRESHOLD) {
+        logger.warn(
+          `[Cron] Queue backlog alert: ${queuedCount} queued (threshold: ${QUEUE_BACKLOG_THRESHOLD})`
+        );
+        const admins = await getAllUsers("admin");
+        for (const admin of admins) {
+          if (admin.email) {
+            try {
+              await sendJobFailedAlertEmail({
+                to: admin.email,
+                name: admin.name ?? "Admin",
+                letterId: 0,
+                jobType: "queue_backlog_alert",
+                errorMessage: `${queuedCount} pipeline jobs are backlogged (${activeCount} active). Threshold: ${QUEUE_BACKLOG_THRESHOLD}. Consider increasing WORKER_CONCURRENCY or scaling the service.`,
+                appUrl: process.env.APP_URL ?? "",
+              });
+            } catch (emailErr) {
+              logger.error(
+                { err: emailErr },
+                "[Cron] Failed to send queue backlog alert email"
+              );
+            }
+          }
+          try {
+            await createNotification({
+              userId: admin.id,
+              type: "job_failed",
+              category: "system",
+              title: `Queue backlog alert: ${queuedCount} jobs pending`,
+              body: `Pipeline queue has ${queuedCount} queued jobs (${activeCount} active). Consider increasing WORKER_CONCURRENCY or scaling the service.`,
+              link: "/admin/letters",
+            });
+          } catch (notifErr) {
+            logger.error(
+              { err: notifErr },
+              "[Cron] Failed to create queue backlog notification"
+            );
+          }
+        }
+      }
+
+      const elapsed = Date.now() - startTime;
+      logger.info(
+        `[Cron] Queue backlog check done in ${elapsed}ms — queued: ${queuedCount}, active: ${activeCount}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Cron] Queue backlog check failed: ${msg}`);
+      captureServerException(err, {
+        tags: { component: "cron", job: "queue_backlog_alert" },
+      });
+    }
+  });
+
   logger.info(
-    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), free-preview-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-lock-recovery (every 15 min), stale-pipeline-job-cleanup (daily 04:00 + startup)"
+    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), free-preview-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-lock-recovery (every 15 min), stale-pipeline-job-cleanup (daily 04:00 + startup), queue-backlog-alert (every 5 min)"
   );
 }
 
