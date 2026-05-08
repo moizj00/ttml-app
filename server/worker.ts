@@ -854,9 +854,14 @@ async function startWorker() {
   // submission since the worker moved to pg-boss v12, producing zero rows in
   // `letter_versions`. We iterate the batch and forward each job individually.
   // Cast to suppress the upstream type mismatch.
+  const WORKER_CONCURRENCY = Math.max(
+    1,
+    Math.min(5, parseInt(process.env.WORKER_CONCURRENCY ?? "2", 10))
+  );
+
   await boss.work(
     QUEUE_NAME,
-    { localConcurrency: 1 },
+    { localConcurrency: WORKER_CONCURRENCY },
     (async (jobs: Job<PipelineJobData>[]) => {
       for (const job of jobs) {
         try {
@@ -897,7 +902,7 @@ async function startWorker() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
   logger.info(
-    `[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=1, backend=pg-boss)`
+    `[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=${WORKER_CONCURRENCY}, max=5, backend=pg-boss)`
   );
 }
 
