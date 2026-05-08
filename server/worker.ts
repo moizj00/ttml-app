@@ -901,6 +901,12 @@ async function startWorker() {
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+  // Start memory leak monitoring
+  const { startMemoryMonitor, stopMemoryMonitor } = await import("./memoryMonitor");
+  startMemoryMonitor();
+  process.on("SIGTERM", () => { stopMemoryMonitor(); });
+  process.on("SIGINT", () => { stopMemoryMonitor(); });
+
   logger.info(
     `[Worker] Pipeline worker started (queue=${QUEUE_NAME}, concurrency=${WORKER_CONCURRENCY}, max=5, backend=pg-boss)`
   );

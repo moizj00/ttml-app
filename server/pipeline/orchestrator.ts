@@ -49,6 +49,7 @@ import {
 import { triggerN8nWorkflow } from "./orchestration/n8n";
 import { handlePipelineError } from "./orchestration/errors";
 import { updatePipelineJobStatus } from "./orchestration/status";
+import { timedStage, recordStageStart, recordStageComplete, recordStageFail } from "./telemetry";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
@@ -235,6 +236,10 @@ export async function runFullPipeline(
     isFreePreview,
   };
 
+  const letterType = dbFields?.letterType ?? "unknown";
+  recordStageStart(letterId, "pipeline", letterType);
+  const pipelineStart = Date.now();
+
   try {
     // Stage 1: Perplexity Research
     pipelineCtx.validationResults = [];
@@ -243,7 +248,10 @@ export async function runFullPipeline(
       await withStageTimeout(
         "research",
         STAGE_TIMEOUTS.research,
-        () => runResearchStage(letterId, intake, pipelineCtx)
+        () =>
+          timedStage(letterId, "research", "perplexity", letterType, () =>
+            runResearchStage(letterId, intake, pipelineCtx)
+          )
       );
 
     addValidationResult(pipelineCtx, {
@@ -266,7 +274,10 @@ export async function runFullPipeline(
     const draft = await withStageTimeout(
       "drafting",
       STAGE_TIMEOUTS.drafting,
-      () => runDraftingStage(letterId, intake, research, pipelineCtx)
+      () =>
+        timedStage(letterId, "drafting", "openai", letterType, () =>
+          runDraftingStage(letterId, intake, research, pipelineCtx)
+        )
     );
     // Capture the initial draft for best-effort fallback
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
@@ -280,7 +291,10 @@ export async function runFullPipeline(
     const { vettingResult, assemblyRetries } = await withStageTimeout(
       "assembly",
       STAGE_TIMEOUTS.assembly,
-      () => runAssemblyVettingLoop(letterId, intake, research, draft, pipelineCtx)
+      () =>
+        timedStage(letterId, "assembly", "anthropic", letterType, () =>
+          runAssemblyVettingLoop(letterId, intake, research, draft, pipelineCtx)
+        )
     );
     // Assembly/vetting produced a higher-quality version — prefer it
     pipelineCtx._intermediateDraftContent = vettingResult.vettedLetter;
@@ -326,7 +340,27 @@ export async function runFullPipeline(
         "[Pipeline] Auto-unlock check failed"
       );
     }
+
+    recordStageComplete(
+      letterId,
+      "pipeline",
+      Date.now() - pipelineStart,
+      "multi-provider",
+      letterType
+    );
   } catch (err) {
+    const errorCode =
+      err && typeof err === "object" && "code" in err
+        ? String((err as any).code)
+        : undefined;
+    recordStageFail(
+      letterId,
+      "pipeline",
+      Date.now() - pipelineStart,
+      errorCode,
+      undefined,
+      letterType
+    );
     await handlePipelineError(letterId, pipelineJobId, err);
   }
 }

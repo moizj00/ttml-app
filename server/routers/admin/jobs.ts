@@ -9,6 +9,9 @@ import { getPipelineQueue, getBoss, QUEUE_NAME } from "../../queue";
 import type { PipelineJobData } from "../../queue";
 import { retryPipelineJob } from "../../services/admin";
 import { logger } from "../../logger";
+import { getCircuitStatus, resetCircuit, resetAllCircuits } from "../../pipeline/circuitBreaker";
+import { getMemoryHistory } from "../../memoryMonitor";
+import { getTelemetry } from "../../pipeline/telemetry";
 
 export const jobsProcedures = {
   failedJobs: adminProcedure.query(async () => getFailedJobs(100)),
@@ -112,4 +115,22 @@ export const jobsProcedures = {
       };
     }
   }),
+
+  circuitStatus: adminProcedure.query(() => getCircuitStatus()),
+
+  resetCircuit: adminProcedure
+    .input(z.object({ provider: z.string() }))
+    .mutation(({ input }) => {
+      resetCircuit(input.provider);
+      return { success: true };
+    }),
+
+  resetAllCircuits: adminProcedure.mutation(() => {
+    resetAllCircuits();
+    return { success: true };
+  }),
+
+  memoryHistory: adminProcedure.query(() => getMemoryHistory()),
+
+  pipelineTelemetry: adminProcedure.query(() => getTelemetry()),
 };

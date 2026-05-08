@@ -326,10 +326,24 @@ export async function withModelFailover<T>(
   fallbackFn: () => Promise<T>,
   ossLastResortFn?: () => Promise<T>
 ): Promise<FailoverResult<T>> {
+  // Circuit breaker integration: check primary provider before calling
+  const { isCircuitOpen } = await import("./circuitBreaker");
   try {
+    if (isCircuitOpen("primary")) {
+      throw new Error("[CircuitBreaker] Primary provider circuit is OPEN");
+    }
     const result = await primaryFn();
     return { result, provider: "primary", failoverTriggered: false };
   } catch (primaryErr) {
+    if (String(primaryErr).includes("[CircuitBreaker]")) {
+      // Circuit open — proceed directly to failover
+      logger.warn(`[Pipeline] ${stage} for letter #${letterId}: primary circuit open — skipping to failover`);
+    } else if (!isFailoverCandidate(primaryErr)) {
+      throw primaryErr;
+    }
+    // Report failure to circuit breaker
+    const { reportFailure } = await import("./circuitBreaker");
+    reportFailure("primary", primaryErr);
     if (!isFailoverCandidate(primaryErr)) {
       throw primaryErr;
     }
