@@ -28,8 +28,8 @@ import { createLogger } from "./logger";
 
 const recoveryLogger = createLogger({ module: "StaleLockRecovery" });
 
-/** 30 minutes — matches PIPELINE_LOCK_STALE_MS in db/users.ts */
-const STALE_LOCK_THRESHOLD_MS = 30 * 60 * 1000;
+/** 60 minutes — matches queue job expiry (expireInSeconds in queue.ts) */
+const STALE_LOCK_THRESHOLD_MS = 60 * 60 * 1000;
 
 export interface StaleLockRecoveryResult {
   recovered: number;
