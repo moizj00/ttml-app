@@ -7,9 +7,7 @@ import pg from "pg";
 const connectionString =
   process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 if (!connectionString) {
-  console.error(
-    "Error: SUPABASE_DATABASE_URL or DATABASE_URL must be set."
-  );
+  console.error("Error: SUPABASE_DATABASE_URL or DATABASE_URL must be set.");
   process.exit(1);
 }
 
@@ -24,9 +22,8 @@ const client = new pg.Client({
 await client.connect();
 
 try {
-  await client.query(`CREATE SCHEMA IF NOT EXISTS drizzle`);
   await client.query(`
-    CREATE TABLE IF NOT EXISTS drizzle."__drizzle_migrations" (
+    CREATE TABLE IF NOT EXISTS public."__drizzle_migrations" (
       id SERIAL PRIMARY KEY,
       hash TEXT NOT NULL,
       created_at BIGINT
@@ -34,15 +31,11 @@ try {
   `);
 
   const { rows: existing } = await client.query(
-    `SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at`
+    `SELECT id, hash, created_at FROM public."__drizzle_migrations" ORDER BY created_at`
   );
-  const existingByTimestamp = new Map(
-    existing.map((r) => [String(r.created_at), r])
-  );
-  const existingHashes = new Set(existing.map((r) => r.hash));
+  const existingHashes = new Set(existing.map(r => r.hash));
 
   let inserted = 0;
-  let updated = 0;
 
   for (const entry of journal.entries) {
     const sqlPath = join(drizzleDir, `${entry.tag}.sql`);
@@ -56,46 +49,39 @@ try {
 
     const hash = createHash("sha256").update(content).digest("hex");
 
-    if (existingHashes.has(hash)) {
+    // Production history has used the migration tag in the `hash` column,
+    // while Drizzle-generated rows may use a content hash. Treat either as
+    // already present and only insert missing records.
+    if (existingHashes.has(entry.tag) || existingHashes.has(hash)) {
       continue;
     }
 
-    const existingRow = existingByTimestamp.get(String(entry.when));
-    if (existingRow) {
-      await client.query(
-        `UPDATE drizzle.__drizzle_migrations SET hash = $1 WHERE id = $2`,
-        [hash, existingRow.id]
-      );
-      updated++;
-      console.log(`  ~ Updated hash: ${entry.tag}`);
-    } else {
-      await client.query(
-        `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)`,
-        [hash, entry.when]
-      );
-      inserted++;
-      console.log(`  + Inserted: ${entry.tag}`);
-    }
+    await client.query(
+      `INSERT INTO public."__drizzle_migrations" (hash, created_at) VALUES ($1, $2)`,
+      [entry.tag, entry.when]
+    );
+    existingHashes.add(entry.tag);
+    inserted++;
+    console.log(`  + Inserted: ${entry.tag}`);
   }
 
-  if (inserted === 0 && updated === 0) {
+  if (inserted === 0) {
     console.log("✓ All migration journal entries already present in DB.");
   } else {
     if (inserted > 0) console.log(`  Backfilled ${inserted} missing entries.`);
-    if (updated > 0) console.log(`  Updated ${updated} stale hashes.`);
     console.log("✓ Migration backfill complete.");
   }
 
   const { rows: countRows } = await client.query(
-    `SELECT COUNT(*) as total FROM drizzle.__drizzle_migrations`
+    `SELECT COUNT(*) as total FROM public."__drizzle_migrations"`
   );
   const { rows: maxRows } = await client.query(
-    `SELECT MAX(id) as max_id FROM drizzle.__drizzle_migrations`
+    `SELECT MAX(id) as max_id FROM public."__drizzle_migrations"`
   );
   const maxId = maxRows[0].max_id;
   if (maxId) {
     await client.query(
-      `SELECT setval('drizzle.__drizzle_migrations_id_seq', $1)`,
+      `SELECT setval('public.__drizzle_migrations_id_seq', $1)`,
       [maxId]
     );
   }

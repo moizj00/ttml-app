@@ -37,12 +37,15 @@ vi.mock("./stripe", () => ({
 
 const mockCreateLetterRequest = vi.fn();
 const mockLogReviewAction = vi.fn();
+const mockUpsertPipelineRecord = vi.fn();
 const mockEnqueuePipelineJob = vi.fn();
 
 vi.mock("./db", () => ({
   getDb: vi.fn().mockResolvedValue({}),
   createLetterRequest: (...args: unknown[]) => mockCreateLetterRequest(...args),
   logReviewAction: (...args: unknown[]) => mockLogReviewAction(...args),
+  upsertPipelineRecord: (...args: unknown[]) =>
+    mockUpsertPipelineRecord(...args),
   claimFreeTrialSlot: (...args: unknown[]) => mockClaimFreeTrialSlot(...args),
   refundFreeTrialSlot: (...args: unknown[]) => mockRefundFreeTrialSlot(...args),
   decrementLettersUsed: (...args: unknown[]) =>
@@ -70,7 +73,9 @@ vi.mock("./sentry", () => ({
 
 vi.mock("resend", () => ({
   Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: vi.fn().mockResolvedValue({ id: "email-id", error: null }) },
+    emails: {
+      send: vi.fn().mockResolvedValue({ id: "email-id", error: null }),
+    },
   })),
 }));
 
@@ -87,27 +92,45 @@ describe("annual quota — increment on submission", () => {
     vi.clearAllMocks();
     mockCreateLetterRequest.mockResolvedValue({ insertId: 101 });
     mockLogReviewAction.mockResolvedValue(undefined);
+    mockUpsertPipelineRecord.mockResolvedValue(undefined);
     mockEnqueuePipelineJob.mockResolvedValue("job-id");
   });
 
   it("claims a quota slot and creates the letter when yearly quota has capacity", async () => {
     mockCheckLetterSubmissionAllowed.mockResolvedValue({
       allowed: true,
-      subscription: { id: 1, plan: "yearly", lettersAllowed: 8, lettersUsed: 4 },
+      subscription: {
+        id: 1,
+        plan: "yearly",
+        lettersAllowed: 8,
+        lettersUsed: 4,
+      },
     });
     mockIncrementLettersUsed.mockResolvedValue(true); // slot acquired
 
-    const result = await submitSubscriberIntakeProcedure(42, SAMPLE_INTAKE, "demand-letter");
+    const result = await submitSubscriberIntakeProcedure(
+      42,
+      SAMPLE_INTAKE,
+      "demand-letter"
+    );
 
     expect(mockIncrementLettersUsed).toHaveBeenCalledTimes(1);
     expect(mockIncrementLettersUsed).toHaveBeenCalledWith(42);
+    expect(mockUpsertPipelineRecord).toHaveBeenCalledWith({
+      pipelineId: 101,
+      status: "pending",
+      currentStep: "pending",
+      progress: 0,
+      payloadJson: SAMPLE_INTAKE,
+    });
     expect(result.requestId).toBe(101);
   });
 
   it("throws FORBIDDEN when yearly quota is exhausted (checkLetterSubmissionAllowed returns allowed=false)", async () => {
     mockCheckLetterSubmissionAllowed.mockResolvedValue({
       allowed: false,
-      reason: "You have used all 8 letter(s) in your plan. Please upgrade to continue.",
+      reason:
+        "You have used all 8 letter(s) in your plan. Please upgrade to continue.",
     });
 
     await expect(
@@ -121,7 +144,12 @@ describe("annual quota — increment on submission", () => {
   it("throws FORBIDDEN when incrementLettersUsed returns false (concurrent race lost)", async () => {
     mockCheckLetterSubmissionAllowed.mockResolvedValue({
       allowed: true,
-      subscription: { id: 1, plan: "yearly", lettersAllowed: 8, lettersUsed: 7 },
+      subscription: {
+        id: 1,
+        plan: "yearly",
+        lettersAllowed: 8,
+        lettersUsed: 7,
+      },
     });
     // Race: another request claimed the last slot first
     mockIncrementLettersUsed.mockResolvedValue(false);
@@ -189,7 +217,10 @@ describe("annual quota — decrement on pipeline failure (refund)", () => {
     // `rejected` is an attorney decision, not a pipeline failure.
     // The worker refund path is only triggered on pipeline-level errors,
     // not when a letter is attorney-rejected. This documents the invariant.
-    const usageContext = { shouldRefundOnFailure: false, isFreeTrialSubmission: false };
+    const usageContext = {
+      shouldRefundOnFailure: false,
+      isFreeTrialSubmission: false,
+    };
     expect(usageContext.shouldRefundOnFailure).toBe(false);
   });
 });
