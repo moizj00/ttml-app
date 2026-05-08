@@ -1,0 +1,4 @@
+interface:
+  display_name: "TTML Repo"
+  short_description: "Navigate and modify the TTML codebase safely"
+  default_prompt: "Use $ttml-repo to find the right TTML source files and implementation path."

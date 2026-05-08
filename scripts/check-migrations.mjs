@@ -11,14 +11,14 @@ const journal = JSON.parse(readFileSync(journalPath, "utf-8"));
 const journalEntries = journal.entries;
 
 const sqlFiles = readdirSync(drizzleDir).filter(
-  (f) => f.endsWith(".sql") && /^\d{4}_/.test(f)
+  f => f.endsWith(".sql") && /^\d{4}_/.test(f)
 );
 
-const journalTags = new Set(journalEntries.map((e) => e.tag));
-const fileTags = new Set(sqlFiles.map((f) => f.replace(".sql", "")));
+const journalTags = new Set(journalEntries.map(e => e.tag));
+const fileTags = new Set(sqlFiles.map(f => f.replace(".sql", "")));
 
-const missingFromJournal = [...fileTags].filter((t) => !journalTags.has(t));
-const missingFiles = [...journalTags].filter((t) => !fileTags.has(t));
+const missingFromJournal = [...fileTags].filter(t => !journalTags.has(t));
+const missingFiles = [...journalTags].filter(t => !fileTags.has(t));
 
 console.log(`Journal entries: ${journalEntries.length}`);
 console.log(`SQL migration files: ${sqlFiles.length}`);
@@ -55,38 +55,46 @@ if (connectionString) {
   try {
     await client.connect();
     const { rows: dbRows } = await client.query(
-      `SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at`
+      `SELECT hash, created_at FROM public."__drizzle_migrations" ORDER BY created_at`
     );
-    const dbHashes = new Set(dbRows.map((r) => r.hash));
-    const dbTimestamps = new Set(dbRows.map((r) => String(r.created_at)));
+    const dbHashes = new Set(dbRows.map(r => r.hash));
+    const dbTimestamps = new Set(dbRows.map(r => String(r.created_at)));
 
-    const expectedHashes = [];
+    const expectedMigrations = [];
     for (const entry of journalEntries) {
       const sqlPath = join(drizzleDir, `${entry.tag}.sql`);
       try {
         const content = readFileSync(sqlPath, "utf-8");
-        expectedHashes.push({
+        expectedMigrations.push({
           tag: entry.tag,
           hash: createHash("sha256").update(content).digest("hex"),
           when: String(entry.when),
         });
       } catch {
-        expectedHashes.push({ tag: entry.tag, hash: null, when: String(entry.when) });
+        expectedMigrations.push({
+          tag: entry.tag,
+          hash: null,
+          when: String(entry.when),
+        });
       }
     }
 
-    const missingFromDb = expectedHashes.filter(
-      (e) => e.hash && !dbHashes.has(e.hash)
+    // Historical production backfills recorded the migration tag in the
+    // `hash` column. Drizzle itself records a content hash. Accept either so
+    // the checker matches the actual migration table without forcing a risky
+    // rewrite of existing production history.
+    const missingFromDb = expectedMigrations.filter(
+      e => !dbHashes.has(e.tag) && !(e.hash && dbHashes.has(e.hash))
     );
-    const staleHashes = missingFromDb.filter((e) => dbTimestamps.has(e.when));
-    const trulyMissing = missingFromDb.filter((e) => !dbTimestamps.has(e.when));
+    const staleHashes = missingFromDb.filter(e => dbTimestamps.has(e.when));
+    const trulyMissing = missingFromDb.filter(e => !dbTimestamps.has(e.when));
 
     console.log(`DB migration entries: ${dbRows.length}`);
     console.log(`Expected (from journal): ${journalEntries.length}`);
 
     if (staleHashes.length > 0) {
       console.warn(
-        `\n⚠ Migrations with stale hashes (file edited after recording): ${staleHashes.map((e) => e.tag).join(", ")}`
+        `\n⚠ Migrations with stale hashes (file edited after recording): ${staleHashes.map(e => e.tag).join(", ")}`
       );
       console.warn(
         "  Run: node scripts/backfill-migrations.mjs to update hashes."
@@ -95,11 +103,9 @@ if (connectionString) {
 
     if (trulyMissing.length > 0) {
       console.error(
-        `\n✗ Migrations missing from DB: ${trulyMissing.map((e) => e.tag).join(", ")}`
+        `\n✗ Migrations missing from DB: ${trulyMissing.map(e => e.tag).join(", ")}`
       );
-      console.error(
-        "  Run: node scripts/backfill-migrations.mjs to fix."
-      );
+      console.error("  Run: node scripts/backfill-migrations.mjs to fix.");
       exitCode = 1;
     }
 
@@ -112,9 +118,7 @@ if (connectionString) {
     await client.end();
   }
 } else {
-  console.warn(
-    "\n⚠ No DATABASE_URL set, skipping DB state verification."
-  );
+  console.warn("\n⚠ No DATABASE_URL set, skipping DB state verification.");
 }
 
 process.exit(exitCode);
