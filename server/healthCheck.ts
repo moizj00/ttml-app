@@ -1,3 +1,4 @@
+import os from "node:os";
 import { sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { getRedis } from "./rateLimiter";
@@ -15,11 +16,20 @@ export type ServiceCheckResult = {
   error?: string;
 };
 
+export type ResourceMetrics = {
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  memoryUsedMB: number;
+  memoryTotalMB: number;
+  uptimeSeconds: number;
+};
+
 export type HealthCheckResult = {
   status: "healthy" | "degraded" | "unhealthy";
   timestamp: number;
   uptime: number;
   services: Record<string, ServiceCheckResult>;
+  resources: ResourceMetrics;
 };
 
 const CHECK_TIMEOUT_MS = 3000;
@@ -166,17 +176,43 @@ async function checkQueue(): Promise<ServiceCheckResult> {
 
 const startedAt = Date.now();
 
-function deriveStatus(services: Record<string, ServiceCheckResult>): HealthCheckResult["status"] {
+function deriveStatus(
+  services: Record<string, ServiceCheckResult>,
+  resources: ResourceMetrics
+): HealthCheckResult["status"] {
   const db = services.database;
   const secondary = Object.entries(services).filter(([k]) => k !== "database").map(([, v]) => v);
 
   if (db.status === "error") return "unhealthy";
   if (secondary.some(s => s.status === "error")) return "degraded";
+  // Degrade if resource pressure is high (single-container mode contention)
+  if (resources.memoryUsagePercent > 85) return "degraded";
+  if (resources.cpuUsagePercent > 90) return "degraded";
   return "healthy";
 }
 
 function getUptime(): number {
   return Math.floor((Date.now() - startedAt) / 1000);
+}
+
+function getResourceMetrics(): ResourceMetrics {
+  const memTotal = os.totalmem();
+  const memUsed = process.memoryUsage().rss;
+  const cpuUsage = process.cpuUsage();
+  const uptime = process.uptime();
+  // CPU percentage: user + system time divided by elapsed wall-clock time
+  // normalized to percentage of a single core
+  const cpuPercent = uptime > 0
+    ? ((cpuUsage.user + cpuUsage.system) / 1e6 / uptime) * 100
+    : 0;
+
+  return {
+    cpuUsagePercent: Math.round(cpuPercent * 10) / 10,
+    memoryUsagePercent: Math.round((memUsed / memTotal) * 1000) / 10,
+    memoryUsedMB: Math.round(memUsed / 1024 / 1024),
+    memoryTotalMB: Math.round(memTotal / 1024 / 1024),
+    uptimeSeconds: Math.round(uptime),
+  };
 }
 
 async function executeFullChecks(): Promise<HealthCheckResult> {
@@ -203,11 +239,14 @@ async function executeFullChecks(): Promise<HealthCheckResult> {
     queue,
   };
 
+  const resources = getResourceMetrics();
+
   return {
-    status: deriveStatus(services),
+    status: deriveStatus(services, resources),
     timestamp: Date.now(),
     uptime: getUptime(),
     services,
+    resources,
   };
 }
 
