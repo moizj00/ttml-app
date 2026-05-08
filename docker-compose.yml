@@ -8,14 +8,18 @@
 # This assumes external managed services (Supabase, Stripe, Resend, etc.)
 # configured via .env. No local Postgres or Redis is needed.
 
+x-common-env: &common-env
+  NODE_ENV: production
+  PIPELINE_MODE: ${PIPELINE_MODE:-langgraph}
+
 x-common: &common
   build:
     context: .
     dockerfile: Dockerfile
   image: ttml:latest
-  env_file: .env
-  environment:
-    - NODE_ENV=production
+  env_file:
+    - ${TTML_ENV_FILE:-.env}
+  environment: *common-env
 
 services:
   # ── Migrations (one-shot job) ────────────────────────────────────────────
@@ -23,6 +27,9 @@ services:
   #   docker compose run --rm migrate
   migrate:
     <<: *common
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: migrate
     command: ["node", "--dns-result-order=ipv4first", "dist/migrate.js"]
     profiles: ["ops"]
     restart: "no"
@@ -30,6 +37,9 @@ services:
   # ── Web server (Express + tRPC + static client) ─────────────────────────
   app:
     <<: *common
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: web
     command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
@@ -48,7 +58,20 @@ services:
   # ── Pipeline worker (pg-boss consumer) ──────────────────────────────────
   worker:
     <<: *common
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: worker
     command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/worker.js"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:$${WORKER_HEALTH_PORT:-8080}/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
     depends_on:
       migrate:
