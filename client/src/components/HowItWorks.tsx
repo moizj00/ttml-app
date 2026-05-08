@@ -58,6 +58,45 @@ function IconSearch({ className }: { className?: string }) {
   );
 }
 
+const DRAFT_STAGES = [
+  {
+    id: "facts",
+    label: "Facts",
+    title: "Issue Map",
+    badge: "Intake parsed",
+    metric: "4 key facts",
+    summary: "The engine separates parties, dates, damages, and requested relief so the draft starts from usable legal facts.",
+    lines: ["Client facts normalized", "Timeline ordered", "Missing details flagged"],
+  },
+  {
+    id: "law",
+    label: "CA Law",
+    title: "California Law Applied",
+    badge: "CA Law Applied",
+    metric: "Statutes matched",
+    summary: "Relevant California legal language is matched to the dispute type before the letter is assembled.",
+    lines: ["State-specific claims identified", "Demand language tightened", "Risky overstatements reduced"],
+  },
+  {
+    id: "structure",
+    label: "Structure",
+    title: "Draft Workflow",
+    badge: "Drafting",
+    metric: "Review-ready",
+    summary: "The draft is organized into a professional demand flow: facts, legal position, demand, deadline, and next steps.",
+    lines: ["Opening position drafted", "Demand section strengthened", "Deadline and remedy aligned"],
+  },
+  {
+    id: "review",
+    label: "Checks",
+    title: "Quality Checks",
+    badge: "Ready for review",
+    metric: "Attorney handoff",
+    summary: "The final pass checks tone, consistency, and completeness before the draft moves to attorney review.",
+    lines: ["Tone calibrated", "Contradictions checked", "Attorney review packet prepared"],
+  },
+] as const;
+
 function IconCheckmark({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -364,47 +403,162 @@ function Step1Panel() {
 
 function Step2Panel() {
   const prefersReducedMotion = useReducedMotion();
+  const [activeStage, setActiveStage] = useState(1);
+  const stage = DRAFT_STAGES[activeStage];
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const timer = window.setInterval(() => {
+      setActiveStage((current) => (current + 1) % DRAFT_STAGES.length);
+    }, 2800);
+    return () => window.clearInterval(timer);
+  }, [prefersReducedMotion]);
+
   return (
-    <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-12 lg:px-20 py-4 sm:py-0 overflow-y-auto">
-      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center">
-        <div className="relative order-2 md:order-1">
+    <div className="flex items-center justify-center h-full px-4 sm:px-6 md:px-10 lg:px-16 xl:px-20 py-6 sm:py-8 overflow-y-auto">
+      <div className="max-w-6xl w-full grid lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] gap-6 sm:gap-8 lg:gap-12 items-center">
+        <div className="relative order-2 lg:order-1 min-w-0">
           <div
-            className="relative rounded-2xl overflow-hidden shadow-2xl"
-            style={{ background: "white", border: `1px solid rgba(37,99,235,0.1)`, minHeight: 260, boxShadow: `0 25px 50px -12px rgba(37,99,235,0.1)` }}
+            className="relative overflow-hidden shadow-2xl"
+            style={{ background: "white", border: `1px solid rgba(37,99,235,0.12)`, borderRadius: 16, minHeight: 320, boxShadow: `0 25px 50px -12px rgba(37,99,235,0.12)` }}
           >
-            {!prefersReducedMotion && (
-            <motion.div
-              className="absolute top-0 left-0 right-0 h-24 z-20 pointer-events-none"
-              style={{
-                background: `linear-gradient(to bottom, transparent, rgba(37,99,235,0.08), rgba(37,99,235,0.15))`,
-                borderBottom: `2px solid ${B.primary}`,
-              }}
-              animate={{ y: ["-100%", "300%"] }}
-              transition={{ duration: 2, ease: "linear", repeat: Infinity }}
-            />
-            )}
-            <div className="p-6 space-y-3 pt-8">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-3 rounded-full"
-                  style={{ width: `${95 - i * 5}%`, background: `rgba(37,99,235,${0.08 + i * 0.015})` }} />
-              ))}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-4 border-b" style={{ background: "#f8fafc", borderColor: "rgba(37,99,235,0.1)" }}>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase" style={{ color: B.primary, letterSpacing: "0.08em" }}>Draft Builder</div>
+                <motion.div
+                  key={stage.title}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-base sm:text-lg font-semibold truncate"
+                  style={{ color: B.textPri }}
+                >
+                  {stage.title}
+                </motion.div>
+              </div>
+              <div
+                className="inline-flex w-fit items-center gap-2 px-2.5 py-1.5 text-xs font-bold"
+                style={{ background: B.bgMuted, color: B.primary, border: `1px solid rgba(37,99,235,0.18)`, borderRadius: 8 }}
+              >
+                <IconSparkles className="w-4 h-4" />
+                {stage.badge}
+              </div>
             </div>
-            <div
-              className="absolute top-3 right-3 px-2.5 py-1 rounded-lg text-xs font-bold z-30"
-              style={{ background: B.bgMuted, color: B.primary, border: `1px solid rgba(37,99,235,0.2)` }}
-            >
-              CA Law Applied
+
+            <div className="grid sm:grid-cols-[160px_minmax(0,1fr)]">
+              <div className="flex sm:flex-col gap-2 p-3 sm:p-4 overflow-x-auto sm:overflow-visible border-b sm:border-b-0 sm:border-r" style={{ borderColor: "rgba(37,99,235,0.1)" }}>
+                {DRAFT_STAGES.map((item, i) => {
+                  const active = i === activeStage;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setActiveStage(i)}
+                      onMouseEnter={() => setActiveStage(i)}
+                      className="flex shrink-0 sm:w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold transition-colors"
+                      style={{
+                        borderRadius: 8,
+                        color: active ? B.primary : B.textSec,
+                        background: active ? "rgba(37,99,235,0.1)" : "transparent",
+                        border: `1px solid ${active ? "rgba(37,99,235,0.2)" : "transparent"}`,
+                      }}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: active ? B.primary : "rgba(37,99,235,0.2)" }}
+                      />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="relative min-h-[260px] p-4 sm:p-6">
+                {!prefersReducedMotion && (
+                  <motion.div
+                    className="absolute left-4 right-4 sm:left-6 sm:right-6 h-16 z-20 pointer-events-none"
+                    style={{
+                      background: `linear-gradient(to bottom, transparent, rgba(37,99,235,0.08), rgba(37,99,235,0.18))`,
+                      borderBottom: `2px solid ${B.primary}`,
+                      borderRadius: 8,
+                    }}
+                    animate={{ y: ["-30%", "245%"] }}
+                    transition={{ duration: 2.2, ease: "linear", repeat: Infinity }}
+                  />
+                )}
+
+                <div className="relative z-10 space-y-4">
+                  <motion.div
+                    key={`${stage.id}-metric`}
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.25 }}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3"
+                    style={{ background: "rgba(37,99,235,0.05)", border: "1px solid rgba(37,99,235,0.1)", borderRadius: 8 }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 shrink-0 flex items-center justify-center" style={{ background: B.bgMuted, color: B.primary, borderRadius: 8 }}>
+                        {stage.id === "law" ? <IconScale className="w-5 h-5" /> : stage.id === "review" ? <IconCheckmark className="w-5 h-5" /> : <IconSearch className="w-5 h-5" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate" style={{ color: B.textPri }}>{stage.metric}</div>
+                        <div className="text-xs mt-0.5" style={{ color: B.textSec }}>Live pipeline stage</div>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full sm:w-28 rounded-full overflow-hidden" style={{ background: "rgba(37,99,235,0.12)" }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: `linear-gradient(90deg, ${B.accent}, ${B.primary})` }}
+                        initial={prefersReducedMotion ? false : { width: "18%" }}
+                        animate={{ width: `${35 + activeStage * 20}%` }}
+                        transition={{ duration: 0.35 }}
+                      />
+                    </div>
+                  </motion.div>
+
+                  <div className="space-y-3 pt-1">
+                    {stage.lines.map((line, i) => (
+                      <motion.div
+                        key={`${stage.id}-${line}`}
+                        initial={prefersReducedMotion ? false : { opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.06, duration: 0.22 }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="w-5 h-5 shrink-0 flex items-center justify-center rounded-full" style={{ background: B.bgMuted, color: B.primary }}>
+                          <IconCheckmark className="w-3 h-3" />
+                        </div>
+                        <div className="h-2.5 rounded-full flex-1" style={{ background: `rgba(37,99,235,${0.1 + i * 0.025})` }} />
+                        <span className="hidden md:block w-44 text-xs font-medium truncate" style={{ color: B.textSec }}>{line}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <motion.p
+                    key={`${stage.id}-summary`}
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="text-sm leading-relaxed p-3"
+                    style={{ color: B.textSec, background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.14)", borderRadius: 8 }}
+                  >
+                    {stage.summary}
+                  </motion.p>
+                </div>
+              </div>
             </div>
           </div>
+
           <div
-            className="absolute -right-3 md:-right-6 top-1/3 w-16 h-16 md:w-20 md:h-20 rounded-full shadow-2xl flex items-center justify-center z-30"
+            className="hidden sm:flex absolute -right-3 lg:-right-6 top-1/3 w-14 h-14 lg:w-16 lg:h-16 rounded-full shadow-2xl items-center justify-center z-30"
             style={{ background: B.primary, color: "white", boxShadow: `0 25px 50px -12px rgba(37,99,235,0.3)` }}
           >
-            <IconSearch className="w-7 h-7 md:w-9 md:h-9" />
+            <IconSearch className="w-7 h-7" />
           </div>
         </div>
 
-        <div className="order-1 md:order-2">
+        <div className="order-1 lg:order-2 min-w-0">
           <div className="text-sm font-bold tracking-widest uppercase mb-4" style={{ color: B.primary }}>STEP 02</div>
           <h3 className="font-bold leading-tight mb-4" style={{ fontSize: "clamp(1.5rem, 3vw, 2.5rem)", color: B.textPri }}>
             A Stronger Draft<br />in 10 Minutes
@@ -413,8 +567,8 @@ function Step2Panel() {
             The drafting engine applies California legal language and repeatable letter workflows to generate a structured, review-ready draft fast.
           </p>
           <div
-            className="mt-6 p-4 rounded-xl flex items-center gap-4"
-            style={{ background: B.bgMuted, border: `1px solid rgba(37,99,235,0.15)` }}
+            className="mt-6 p-4 flex items-start gap-4"
+            style={{ background: B.bgMuted, border: `1px solid rgba(37,99,235,0.15)`, borderRadius: 8 }}
           >
             <div className="w-9 h-9 shrink-0" style={{ color: B.primary }}>
               <IconSparkles className="w-9 h-9" />
@@ -423,6 +577,13 @@ function Step2Panel() {
               <div className="font-semibold text-sm" style={{ color: B.textPri }}>California-Specific Language</div>
               <div className="text-xs mt-0.5" style={{ color: B.textSec }}>Cites relevant state statutes & case law</div>
             </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {["Structured demand flow", "Attorney-ready handoff"].map((item) => (
+              <div key={item} className="px-3 py-2 text-xs font-semibold" style={{ color: B.textSec, background: "white", border: `1px solid rgba(37,99,235,0.12)`, borderRadius: 8 }}>
+                {item}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -590,23 +751,19 @@ export default function HowItWorks() {
   const prefersReducedMotion = useReducedMotion();
   const scrollProgress = useScrollProgress(containerRef);
   const smoothProgress = useSpring(scrollProgress, prefersReducedMotion ? { stiffness: 300, damping: 50 } : { stiffness: 80, damping: 30 });
-  const translateX = useTransform(smoothProgress, [0, 1], ["0%", `-${(PANELS.length - 1) * 100}%`]);
+  const translateX = useTransform(smoothProgress, [0, 1], ["0%", `-${((PANELS.length - 1) / PANELS.length) * 100}%`]);
+  const panelComponents = [IntroPanel, Step1Panel, Step2Panel, Step3Panel, OutroPanel];
 
   return (
     <section
-      ref={containerRef}
       data-testid="how-it-works-section"
       className="relative"
       style={{
-        height: `${PANELS.length * 100}vh`,
         borderTop: `1px solid ${B.line}`,
         borderBottom: `1px solid ${B.line}`,
       }}
     >
-      <div
-        className="sticky top-0 h-screen w-full overflow-hidden"
-        style={{ background: B.bg }}
-      >
+      <div className="relative md:hidden overflow-hidden" style={{ background: B.bg }}>
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -615,49 +772,78 @@ export default function HowItWorks() {
           }}
         />
 
-        <motion.div
-          className="absolute pointer-events-none rounded-full hidden sm:block"
-          style={{
-            width: "clamp(300px, 50vw, 800px)",
-            height: "clamp(300px, 50vw, 800px)",
-            filter: "blur(120px)",
-            background: `radial-gradient(circle, rgba(37,99,235,0.1) 0%, transparent 70%)`,
-            x: useTransform(smoothProgress, [0, 0.25, 0.5, 0.75, 1], ["40%", "5%", "30%", "55%", "40%"]),
-            y: useTransform(smoothProgress, [0, 0.25], ["20%", "5%"]),
-          }}
-        />
+        {panelComponents.map((Panel, i) => (
+          <div
+            key={`${PANELS[i].id}-mobile`}
+            className="relative overflow-hidden"
+            style={{ height: "100svh" }}
+          >
+            <Panel />
+          </div>
+        ))}
+      </div>
 
-        <motion.div
-          className="absolute pointer-events-none rounded-full hidden sm:block"
-          style={{
-            width: "clamp(200px, 35vw, 600px)",
-            height: "clamp(200px, 35vw, 600px)",
-            filter: "blur(100px)",
-            background: `radial-gradient(circle, rgba(96,165,250,0.07) 0%, transparent 70%)`,
-            x: useTransform(smoothProgress, [0, 0.5, 0.75, 1], ["65%", "10%", "50%", "65%"]),
-            y: useTransform(smoothProgress, [0, 0.75], ["50%", "30%"]),
-          }}
-        />
-
-        <motion.div
-          className="flex h-full"
-          style={{
-            width: `${PANELS.length * 100}%`,
-            x: translateX,
-          }}
+      <div
+        ref={containerRef}
+        className="relative hidden md:block"
+        style={{ height: `${PANELS.length * 100}vh` }}
+      >
+        <div
+          className="sticky top-0 h-screen w-full overflow-hidden"
+          style={{ background: B.bg }}
         >
-          {[IntroPanel, Step1Panel, Step2Panel, Step3Panel, OutroPanel].map((Panel, i) => (
-            <div
-              key={PANELS[i].id}
-              className="h-full flex-shrink-0"
-              style={{ width: `${100 / PANELS.length}%` }}
-            >
-              <Panel />
-            </div>
-          ))}
-        </motion.div>
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              opacity: 0.06,
+              backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E")',
+            }}
+          />
 
-        <ProgressBar scrollProgress={scrollProgress} />
+          <motion.div
+            className="absolute pointer-events-none rounded-full hidden sm:block"
+            style={{
+              width: "clamp(300px, 50vw, 800px)",
+              height: "clamp(300px, 50vw, 800px)",
+              filter: "blur(120px)",
+              background: `radial-gradient(circle, rgba(37,99,235,0.1) 0%, transparent 70%)`,
+              x: useTransform(smoothProgress, [0, 0.25, 0.5, 0.75, 1], ["40%", "5%", "30%", "55%", "40%"]),
+              y: useTransform(smoothProgress, [0, 0.25], ["20%", "5%"]),
+            }}
+          />
+
+          <motion.div
+            className="absolute pointer-events-none rounded-full hidden sm:block"
+            style={{
+              width: "clamp(200px, 35vw, 600px)",
+              height: "clamp(200px, 35vw, 600px)",
+              filter: "blur(100px)",
+              background: `radial-gradient(circle, rgba(96,165,250,0.07) 0%, transparent 70%)`,
+              x: useTransform(smoothProgress, [0, 0.5, 0.75, 1], ["65%", "10%", "50%", "65%"]),
+              y: useTransform(smoothProgress, [0, 0.75], ["50%", "30%"]),
+            }}
+          />
+
+          <motion.div
+            className="flex h-full"
+            style={{
+              width: `${PANELS.length * 100}%`,
+              x: translateX,
+            }}
+          >
+            {panelComponents.map((Panel, i) => (
+              <div
+                key={PANELS[i].id}
+                className="h-full flex-shrink-0"
+                style={{ width: `${100 / PANELS.length}%` }}
+              >
+                <Panel />
+              </div>
+            ))}
+          </motion.div>
+
+          <ProgressBar scrollProgress={scrollProgress} />
+        </div>
       </div>
     </section>
   );
