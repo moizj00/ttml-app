@@ -195,6 +195,10 @@ export default function PipelineProgressModal({
   const pipelineStatus = pipelineRecord?.status ?? currentStatus;
   const currentStep = normalizeStep(currentStatus, pipelineRecord?.current_step);
   const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
+  const isReleasedToSubscriber = currentStatus === "letter_released_to_subscriber";
+  const isReleasePending =
+    subscriberDisplayStatus === "free_preview_waiting" ||
+    currentStatus === "ai_generation_completed_hidden";
   
   const isComplete = [
     "generated_locked",
@@ -227,14 +231,14 @@ export default function PipelineProgressModal({
 
   // Auto-navigate to letter detail when pipeline is complete and letter is released
   useEffect(() => {
-    if (open && isComplete && letterId && currentStatus === "letter_released_to_subscriber") {
+    if (open && isComplete && letterId && isReleasedToSubscriber) {
       const timer = setTimeout(() => {
         navigate(`/letters/${letterId}`);
         onClose();
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [open, isComplete, letterId, currentStatus, navigate, onClose]);
+  }, [open, isComplete, letterId, isReleasedToSubscriber, navigate, onClose]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -253,15 +257,21 @@ export default function PipelineProgressModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            {isFailed ? "Letter Processing Failed" : isComplete ? "Letter Draft Ready!" : "Preparing Your Letter"}
+            {isFailed
+              ? "Letter Processing Failed"
+              : isReleasePending
+                ? "Draft Generated, Release Pending"
+                : isComplete
+                  ? "Letter Draft Ready!"
+                  : "Preparing Your Letter"}
           </DialogTitle>
           <DialogDescription>
             {isFailed
               ? pipelineRecord?.error_message ?? "The background pipeline could not complete. The team has been notified."
+              : isReleasePending
+                ? "Your draft has been generated and saved, but it will stay hidden until the 24-hour preview window ends or an admin releases it early."
               : isComplete
-              ? currentStatus === "ai_generation_completed_hidden"
-                ? "Your professional letter draft is complete. It will be available for review within 24 hours."
-                : "Your professional letter draft is complete. View details for the next steps."
+              ? "Your professional letter draft is complete. View details for the next steps."
               : `A professional draft is being prepared based on thorough research. This typically takes 1-2 minutes (${formatTime(ESTIMATED_DURATION_SECONDS)}).`}
           </DialogDescription>
         </DialogHeader>
@@ -325,7 +335,7 @@ export default function PipelineProgressModal({
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2">
           {(isComplete || isFailed) && letterId ? (
-            currentStatus === "letter_released_to_subscriber" ? (
+            isReleasedToSubscriber ? (
               <Button asChild>
                 <Link href={`/letters/${letterId}`}>View Letter Draft</Link>
               </Button>

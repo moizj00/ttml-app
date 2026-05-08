@@ -10,6 +10,7 @@ vi.mock("./db", () => ({
   updateLetterVersionPointers: vi.fn(),
   getLetterRequestById: vi.fn(),
   logReviewAction: vi.fn(),
+  upsertPipelineRecord: vi.fn(),
   claimFreeTrialSlot: vi.fn(),
   getDb: vi.fn(),
   getUserById: vi.fn(),
@@ -69,7 +70,15 @@ describe("free preview 24-hour delay UX", () => {
     expect(unlockDiff).toBeGreaterThanOrEqual(23.9 * 60 * 60 * 1000);
     expect(unlockDiff).toBeLessThanOrEqual(24.1 * 60 * 60 * 1000);
 
+    expect(db.upsertPipelineRecord).toHaveBeenCalledWith({
+      pipelineId: 321,
+      status: "pending",
+      currentStep: "pending",
+      progress: 0,
+      payloadJson: intake,
+    });
     expect(queue.enqueuePipelineJob).toHaveBeenCalledWith(
+      "321",
       expect.objectContaining({
         usageContext: {
           shouldRefundOnFailure: true,
