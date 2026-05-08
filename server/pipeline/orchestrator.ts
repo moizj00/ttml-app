@@ -52,6 +52,40 @@ import { updatePipelineJobStatus } from "./orchestration/status";
 
 const orchLogger = createLogger({ module: "PipelineOrchestrator" });
 
+// ── Per-stage timeout configuration ──────────────────────────────────────────
+// Each stage has its own timeout. The overall job expiry (60 min) is a
+// backstop — these catch stuck stages earlier and with better diagnostics.
+const STAGE_TIMEOUTS = {
+  research: parseInt(process.env.PIPELINE_RESEARCH_TIMEOUT_MS ?? "600000", 10),     // 10 min
+  drafting: parseInt(process.env.PIPELINE_DRAFTING_TIMEOUT_MS ?? "900000", 10),     // 15 min
+  assembly: parseInt(process.env.PIPELINE_ASSEMBLY_TIMEOUT_MS ?? "900000", 10),     // 15 min
+  finalization: parseInt(process.env.PIPELINE_FINALIZATION_TIMEOUT_MS ?? "300000", 10), // 5 min
+};
+
+/** Wrap a pipeline stage with a timeout. Throws PipelineError on timeout. */
+async function withStageTimeout<T>(
+  stageName: string,
+  timeoutMs: number,
+  fn: () => Promise<T>
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new PipelineError(
+          PIPELINE_ERROR_CODES.RESEARCH_PROVIDER_FAILED,
+          `Stage "${stageName}" timed out after ${timeoutMs}ms`,
+          "pipeline",
+          `Per-stage timeout exceeded. Consider increasing PIPELINE_${stageName.toUpperCase()}_TIMEOUT_MS.`
+        )
+      );
+    }, timeoutMs);
+
+    fn()
+      .then(resolve)
+      .catch(reject)
+      .finally(() => clearTimeout(timer));
+  });
+}
 
 // Re-export common functions for backward compatibility/external use
 export { preflightApiKeyCheck };
@@ -206,7 +240,11 @@ export async function runFullPipeline(
     pipelineCtx.validationResults = [];
 
     const { packet: research, provider: researchProvider } =
-      await runResearchStage(letterId, intake, pipelineCtx);
+      await withStageTimeout(
+        "research",
+        STAGE_TIMEOUTS.research,
+        () => runResearchStage(letterId, intake, pipelineCtx)
+      );
 
     addValidationResult(pipelineCtx, {
       stage: "intake",
@@ -225,11 +263,10 @@ export async function runFullPipeline(
       pipelineCtx
     );
 
-    const draft = await runDraftingStage(
-      letterId,
-      intake,
-      research,
-      pipelineCtx
+    const draft = await withStageTimeout(
+      "drafting",
+      STAGE_TIMEOUTS.drafting,
+      () => runDraftingStage(letterId, intake, research, pipelineCtx)
     );
     // Capture the initial draft for best-effort fallback
     pipelineCtx._intermediateDraftContent = draft.draftLetter;
@@ -240,12 +277,10 @@ export async function runFullPipeline(
       pipelineCtx.qualityWarnings ?? []
     );
 
-    const { vettingResult, assemblyRetries } = await runAssemblyVettingLoop(
-      letterId,
-      intake,
-      research,
-      draft,
-      pipelineCtx
+    const { vettingResult, assemblyRetries } = await withStageTimeout(
+      "assembly",
+      STAGE_TIMEOUTS.assembly,
+      () => runAssemblyVettingLoop(letterId, intake, research, draft, pipelineCtx)
     );
     // Assembly/vetting produced a higher-quality version — prefer it
     pipelineCtx._intermediateDraftContent = vettingResult.vettedLetter;

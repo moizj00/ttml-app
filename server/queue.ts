@@ -414,7 +414,7 @@ export async function enqueuePipelineJobImpl(
       ? maybeOptions
       : (payloadOrOptions as { startAfter?: number | string | Date } | undefined);
 
-  let boss: PgBossClient;
+  let boss: PgBossClient | undefined;
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

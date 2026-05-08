@@ -5,7 +5,8 @@ import {
   purgeFailedJobs,
   getWorkflowJobsByLetterId,
 } from "../../db";
-import { getPipelineQueue } from "../../queue";
+import { getPipelineQueue, getBoss, QUEUE_NAME } from "../../queue";
+import type { PipelineJobData } from "../../queue";
 import { retryPipelineJob } from "../../services/admin";
 import { logger } from "../../logger";
 
@@ -29,15 +30,27 @@ export const jobsProcedures = {
   queueHealth: adminProcedure.query(async () => {
     try {
       const queue = getPipelineQueue();
-      const [waiting, active, completed, failed, delayed] = await Promise.all([
+      const boss = await getBoss();
+      const stats = await boss.getQueueStats(QUEUE_NAME);
+
+      const [
+        waiting,
+        active,
+        completedTotal,
+        failed,
+        delayed,
+        recentFailed,
+        recentCompleted,
+      ] = await Promise.all([
         queue.getWaitingCount(),
         queue.getActiveCount(),
         queue.getCompletedCount(),
         queue.getFailedCount(),
         queue.getDelayedCount(),
+        queue.getFailed(0, 9),
+        queue.getCompleted(0, 49), // More samples for better avg + throughput
       ]);
 
-      const recentFailed = await queue.getFailed(0, 9);
       const failedJobs = recentFailed.map(j => ({
         id: j.id,
         name: j.name,
@@ -46,21 +59,39 @@ export const jobsProcedures = {
         data: { type: j.data.type, letterId: j.data.letterId },
       }));
 
-      const recentCompleted = await queue.getCompleted(0, 9);
-      const avgProcessingTimeMs = recentCompleted.length > 0
-        ? recentCompleted.reduce((sum, j) => {
-            const processing = (j.finishedOn ?? 0) - (j.processedOn ?? 0);
-            return sum + (processing > 0 ? processing : 0);
-          }, 0) / recentCompleted.length
-        : 0;
+      // Average processing time (last 10 completed)
+      const last10Completed = recentCompleted.slice(0, 10);
+      const avgProcessingTimeMs =
+        last10Completed.length > 0
+          ? last10Completed.reduce((sum, j) => {
+              const processing = (j.finishedOn ?? 0) - (j.processedOn ?? 0);
+              return sum + (processing > 0 ? processing : 0);
+            }, 0) / last10Completed.length
+          : 0;
+
+      // Throughput: jobs completed in last hour
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const throughput1h = recentCompleted.filter(
+        j => (j.finishedOn ?? 0) > oneHourAgo
+      ).length;
+
+      // Throughput: jobs completed in last 24 hours
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const throughput24h = recentCompleted.filter(
+        j => (j.finishedOn ?? 0) > oneDayAgo
+      ).length;
 
       return {
         pending: waiting,
         active,
-        completed,
+        completed: completedTotal,
         failed,
         delayed,
         avgProcessingTimeMs: Math.round(avgProcessingTimeMs),
+        throughput1h,
+        throughput24h,
+        workerConcurrency: parseInt(process.env.WORKER_CONCURRENCY ?? "2", 10),
+        jobExpiryMinutes: 60,
         recentFailedJobs: failedJobs,
       };
     } catch (err) {
@@ -72,6 +103,10 @@ export const jobsProcedures = {
         failed: 0,
         delayed: 0,
         avgProcessingTimeMs: 0,
+        throughput1h: 0,
+        throughput24h: 0,
+        workerConcurrency: parseInt(process.env.WORKER_CONCURRENCY ?? "2", 10),
+        jobExpiryMinutes: 60,
         recentFailedJobs: [],
         error: err instanceof Error ? err.message : "Queue health check failed",
       };
