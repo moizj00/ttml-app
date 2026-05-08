@@ -415,15 +415,27 @@ export async function enqueuePipelineJobImpl(
       : (payloadOrOptions as { startAfter?: number | string | Date } | undefined);
 
   let boss: PgBossClient;
-  try {
-    boss = await getBoss();
-  } catch (firstErr) {
-    logger.warn(
-      { err: firstErr },
-      "[Queue] First getBoss() attempt failed, retrying once..."
-    );
-    _boss = null;
-    boss = await getBoss();
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      boss = await getBoss();
+      break;
+    } catch (err) {
+      lastErr = err;
+      const delayMs = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s (cap 8s)
+      logger.warn(
+        { err, attempt: attempt + 1, delayMs },
+        `[Queue] getBoss() attempt ${attempt + 1}/3 failed, retrying in ${delayMs}ms...`
+      );
+      _boss = null;
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  if (!boss) {
+    const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    throw new Error(`[Queue] getBoss() failed after 3 attempts: ${msg}`);
   }
   // singletonKey provides application-level deduplication hint.
   // With 'standard' policy, pg-boss does NOT block on failed jobs with the same key.
@@ -436,7 +448,7 @@ export async function enqueuePipelineJobImpl(
 
     // No retries at queue level — worker handles its own retry logic with backoff
     retryLimit: 0,
-    expireInSeconds: 30 * 60,
+    expireInSeconds: 60 * 60,
     ...options,
   });
   if (id === null) {
