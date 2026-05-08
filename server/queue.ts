@@ -332,7 +332,7 @@ export async function getBoss(): Promise<PgBossClient> {
     const DESIRED_QUEUE_OPTIONS = {
       policy: "standard" as const,
       retryLimit: 0,
-      expireInSeconds: 30 * 60,
+      expireInSeconds: 60 * 60,
       deleteAfterSeconds: 7 * 24 * 60 * 60,
       retentionSeconds: 30 * 24 * 60 * 60,
     };
