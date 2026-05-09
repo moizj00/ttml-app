@@ -1,87 +1,84 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createLogger } from "../logger";
+import type { ConnectionOptions } from "node:tls";
 
-const logger = createLogger({ module: "PostgresSSL" });
+type VerifiedSslConfig = ConnectionOptions & {
+  ca: string;
+  rejectUnauthorized: true;
+};
 
-const DEFAULT_CA_PATHS = [
-  "certs/prod-ca-2021.crt",
-  "certs/supabase-ca.crt",
-  "certs/rds-global-bundle.pem",
-];
+type UnverifiedEncryptedSslConfig = {
+  rejectUnauthorized: false;
+};
 
-function findCertFile(explicitPath?: string): string | undefined {
-  if (explicitPath) {
-    if (fs.existsSync(explicitPath)) return explicitPath;
-    logger.warn({ path: explicitPath }, "[PostgresSSL] Explicit CA path not found");
-    return undefined;
+export type PostgresJsSslConfig = false | "require" | VerifiedSslConfig;
+export type NodePostgresSslConfig =
+  | false
+  | VerifiedSslConfig
+  | UnverifiedEncryptedSslConfig;
+
+export function needsPostgresSsl(url: string | null | undefined): boolean {
+  if (!url) return false;
+
+  const lowerUrl = url.toLowerCase();
+  if (
+    lowerUrl.includes("supabase.co") ||
+    lowerUrl.includes("supabase.com") ||
+    lowerUrl.includes("amazonaws.com") ||
+    lowerUrl.includes("neon.tech")
+  ) {
+    return true;
   }
 
-  const envPath = process.env.SUPABASE_CA_CERT_PATH || process.env.PGSSLROOTCERT;
-  if (envPath && fs.existsSync(envPath)) return envPath;
-
-  for (const p of DEFAULT_CA_PATHS) {
-    if (fs.existsSync(p)) return p;
+  try {
+    const parsed = new URL(url);
+    const sslMode = parsed.searchParams.get("sslmode");
+    return Boolean(sslMode && sslMode !== "disable");
+  } catch {
+    return lowerUrl.includes("sslmode=require");
   }
-
-  return undefined;
 }
 
-export type PostgresSslConfig =
-  | false
-  | "require"
-  | { ca: string; rejectUnauthorized: boolean };
+export function getSupabaseCaCertPath(): string {
+  return (
+    process.env.SUPABASE_CA_CERT_PATH ||
+    process.env.PGSSLROOTCERT ||
+    path.resolve(process.cwd(), "certs", "prod-ca-2021.crt")
+  );
+}
 
-/**
- * Returns SSL configuration for postgres-js and node-postgres clients.
- *
- * Priority:
- *   1. explicitPath argument
- *   2. SUPABASE_CA_CERT_PATH / PGSSLROOTCERT env vars
- *   3. Built-in defaults (certs/prod-ca-2021.crt, certs/supabase-ca.crt, certs/rds-global-bundle.pem)
- *
- * When a certificate file is found, returns `{ ca, rejectUnauthorized: true }`
- * which enables TLS with full CA verification (verify-full behavior).
- *
- * When no certificate is found and the database URL appears to need SSL
- * (Supabase, Neon, AWS, etc.), falls back to `"require"` (encrypt without
- * verifying the server certificate).
- *
- * For local / non-SSL connections, returns `false`.
- */
-export function getPostgresSsl(
-  dbUrl?: string,
-  explicitCaPath?: string
-): PostgresSslConfig {
-  const certPath = findCertFile(explicitCaPath);
+export function loadSupabaseCaCertificate(): string | null {
+  const certPath = getSupabaseCaCertPath();
+  if (!fs.existsSync(certPath)) return null;
+  return fs.readFileSync(certPath, "utf8");
+}
 
-  if (certPath) {
-    try {
-      const ca = fs.readFileSync(path.resolve(certPath), "utf8");
-      logger.info({ path: certPath }, "[PostgresSSL] Using CA certificate for verify-full");
-      return { ca, rejectUnauthorized: true };
-    } catch (err) {
-      logger.warn({ err, path: certPath }, "[PostgresSSL] Failed to read CA cert");
-    }
+export function buildPostgresSslConfig(
+  url: string | null | undefined
+): PostgresJsSslConfig {
+  if (!needsPostgresSsl(url)) return false;
+
+  const ca = loadSupabaseCaCertificate();
+  if (!ca) return "require";
+
+  return {
+    ca,
+    rejectUnauthorized: true,
+  };
+}
+
+export function buildNodePostgresSslConfig(
+  url: string | null | undefined
+): NodePostgresSslConfig {
+  if (!needsPostgresSsl(url)) return false;
+
+  const ca = loadSupabaseCaCertificate();
+  if (!ca) {
+    return { rejectUnauthorized: false };
   }
 
-  if (!dbUrl) {
-    return false;
-  }
-
-  const needsEncryption =
-    dbUrl.includes("supabase.co") ||
-    dbUrl.includes("supabase.com") ||
-    dbUrl.includes("amazonaws.com") ||
-    dbUrl.includes("neon.tech") ||
-    dbUrl.includes("sslmode=require");
-
-  if (needsEncryption) {
-    logger.warn(
-      "[PostgresSSL] No CA cert found — falling back to ssl=require (encryption without verification)"
-    );
-    return "require";
-  }
-
-  return false;
+  return {
+    ca,
+    rejectUnauthorized: true,
+  };
 }

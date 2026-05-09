@@ -1,87 +1,95 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
-import { getPostgresSsl } from "./postgresSsl";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import {
+  buildNodePostgresSslConfig,
+  buildPostgresSslConfig,
+  getSupabaseCaCertPath,
+} from "./postgresSsl";
 
-vi.mock("../logger", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
+const ORIGINAL_SUPABASE_CA_CERT_PATH = process.env.SUPABASE_CA_CERT_PATH;
+const ORIGINAL_PGSSLROOTCERT = process.env.PGSSLROOTCERT;
 
-describe("getPostgresSsl", () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    process.env = { ...originalEnv };
+afterEach(() => {
+  if (ORIGINAL_SUPABASE_CA_CERT_PATH === undefined) {
     delete process.env.SUPABASE_CA_CERT_PATH;
+  } else {
+    process.env.SUPABASE_CA_CERT_PATH = ORIGINAL_SUPABASE_CA_CERT_PATH;
+  }
+
+  if (ORIGINAL_PGSSLROOTCERT === undefined) {
     delete process.env.PGSSLROOTCERT;
-  });
+  } else {
+    process.env.PGSSLROOTCERT = ORIGINAL_PGSSLROOTCERT;
+  }
+});
 
-  afterEach(() => {
-    process.env = originalEnv;
-    vi.restoreAllMocks();
-  });
+describe("Postgres SSL configuration", () => {
+  it("uses the configured Supabase CA certificate for verified postgres-js SSL", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ttml-supabase-ca-"));
+    const certPath = path.join(dir, "prod-ca-2021.crt");
+    writeFileSync(certPath, "-----BEGIN CERTIFICATE-----\ntest\n");
+    process.env.SUPABASE_CA_CERT_PATH = certPath;
+    delete process.env.PGSSLROOTCERT;
 
-  it("returns verify-full config when cert exists at default path", () => {
-    vi.spyOn(fs, "existsSync").mockImplementation((p) =>
-      String(p).includes("prod-ca-2021.crt")
-    );
-    vi.spyOn(fs, "readFileSync").mockReturnValue("FAKE-CERT-PEM");
-
-    const result = getPostgresSsl("postgresql://db.supabase.co:5432/postgres");
-
-    expect(result).toEqual({ ca: "FAKE-CERT-PEM", rejectUnauthorized: true });
-  });
-
-  it("returns verify-full config when explicit path is provided", () => {
-    vi.spyOn(fs, "existsSync").mockImplementation((p) =>
-      String(p).includes("/custom/ca.crt")
-    );
-    vi.spyOn(fs, "readFileSync").mockReturnValue("CUSTOM-CERT");
-
-    const result = getPostgresSsl(
-      "postgresql://db.supabase.co:5432/postgres",
-      "/custom/ca.crt"
+    const ssl = buildPostgresSslConfig(
+      "postgresql://postgres.example:pass@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
     );
 
-    expect(result).toEqual({ ca: "CUSTOM-CERT", rejectUnauthorized: true });
+    expect(ssl).toEqual({
+      ca: "-----BEGIN CERTIFICATE-----\ntest\n",
+      rejectUnauthorized: true,
+    });
+    rmSync(dir, { recursive: true, force: true });
   });
 
-  it("returns verify-full config from env var when set", () => {
-    process.env.SUPABASE_CA_CERT_PATH = "/env/ca.crt";
-    vi.spyOn(fs, "existsSync").mockImplementation((p) =>
-      String(p).includes("/env/ca.crt")
+  it("uses PGSSLROOTCERT when SUPABASE_CA_CERT_PATH is not set", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ttml-pgsslrootcert-"));
+    const certPath = path.join(dir, "prod-ca-2021.crt");
+    writeFileSync(certPath, "-----BEGIN CERTIFICATE-----\npg\n");
+    delete process.env.SUPABASE_CA_CERT_PATH;
+    process.env.PGSSLROOTCERT = certPath;
+
+    expect(getSupabaseCaCertPath()).toBe(certPath);
+    expect(
+      buildNodePostgresSslConfig(
+        "postgresql://postgres.example:pass@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+      )
+    ).toEqual({
+      ca: "-----BEGIN CERTIFICATE-----\npg\n",
+      rejectUnauthorized: true,
+    });
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("falls back to encrypted SSL when no CA certificate is available", () => {
+    process.env.SUPABASE_CA_CERT_PATH = path.join(
+      tmpdir(),
+      "missing-supabase-ca.crt"
     );
-    vi.spyOn(fs, "readFileSync").mockReturnValue("ENV-CERT");
+    delete process.env.PGSSLROOTCERT;
 
-    const result = getPostgresSsl("postgresql://db.supabase.co:5432/postgres");
-
-    expect(result).toEqual({ ca: "ENV-CERT", rejectUnauthorized: true });
+    expect(
+      buildPostgresSslConfig(
+        "postgresql://postgres.example:pass@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+      )
+    ).toBe("require");
+    expect(
+      buildNodePostgresSslConfig(
+        "postgresql://postgres.example:pass@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+      )
+    ).toEqual({ rejectUnauthorized: false });
   });
 
-  it("falls back to 'require' when no cert and URL needs SSL", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(false);
-
-    const result = getPostgresSsl("postgresql://db.supabase.co:5432/postgres");
-
-    expect(result).toBe("require");
-  });
-
-  it("returns false when no cert and URL does not need SSL", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(false);
-
-    const result = getPostgresSsl("postgresql://localhost:5432/postgres");
-
-    expect(result).toBe(false);
-  });
-
-  it("returns false when no URL and no cert", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(false);
-
-    const result = getPostgresSsl();
-
-    expect(result).toBe(false);
+  it("does not enable SSL for local non-SSL URLs", () => {
+    expect(
+      buildPostgresSslConfig("postgresql://postgres:postgres@localhost:5432/app")
+    ).toBe(false);
+    expect(
+      buildNodePostgresSslConfig(
+        "postgresql://postgres:postgres@localhost:5432/app"
+      )
+    ).toBe(false);
   });
 });
