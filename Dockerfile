@@ -73,6 +73,10 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # `approved` with pdf_url=NULL — observed in production for letter #6.
 COPY --from=builder /app/attached_assets/ ./attached_assets/
 
+# Copy the Supabase CA certificate so getPostgresSsl() can use verify-full.
+# The helper defaults to certs/prod-ca-2021.crt when present.
+COPY --from=builder /app/certs/ ./certs/
+
 # package.json must live next to dist/index.js because vite.config.ts
 # (bundled into dist/index.js) reads it via fs.readFileSync at startup.
 # NOTE: after the vite.ts dynamic-import fix this is no longer strictly

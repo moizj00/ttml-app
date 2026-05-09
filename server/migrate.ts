@@ -29,6 +29,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { logger } from "./logger";
+import { getPostgresSsl } from "./_core/postgresSsl";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +74,7 @@ async function runMigrations() {
   logger.info(`[Migrate] Migrations folder: ${migrationsFolder}`);
 
   const client = postgres(connectionString, {
-    ssl: "require",
+    ssl: getPostgresSsl(connectionString),
     max: 1,
     connect_timeout: 30,
     idle_timeout: 10,
