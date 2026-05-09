@@ -29,10 +29,10 @@ import postgres from "postgres";
  * Run with: PIPELINE_MODE=simple on the dev server
  */
 
-const SUBSCRIBER_EMAIL = process.env.E2E_SUBSCRIBER_EMAIL || "test.subscriber@e2e.ttml.test";
-const SUBSCRIBER_PASSWORD = process.env.E2E_SUBSCRIBER_PASSWORD || "TestPassword123!";
-const ATTORNEY_EMAIL = process.env.E2E_ATTORNEY_EMAIL || "test.attorney@e2e.ttml.test";
-const ATTORNEY_PASSWORD = process.env.E2E_ATTORNEY_PASSWORD || "TestPassword123!";
+const SUBSCRIBER_EMAIL = process.env.E2E_SUBSCRIBER_EMAIL || "test-subscriber@ttml.dev";
+const SUBSCRIBER_PASSWORD = process.env.E2E_SUBSCRIBER_PASSWORD || "TestPass123!";
+const ATTORNEY_EMAIL = process.env.E2E_ATTORNEY_EMAIL || "test-attorney@ttml.dev";
+const ATTORNEY_PASSWORD = process.env.E2E_ATTORNEY_PASSWORD || "TestPass123!";
 
 async function loginAs(page: Page, email: string, password: string): Promise<void> {
   await page.goto("/login");
@@ -118,11 +118,19 @@ base.describe("Full Lifecycle — Submission to Sent", () => {
       await expect(submitButton).toBeVisible({ timeout: 5000 });
       await submitButton.click();
 
-      await page.waitForURL(
-        (url) => url.pathname.includes("/dashboard") || url.pathname.includes("/letters/"),
-        { timeout: 30_000 }
-      );
-      console.log("✓ Letter submitted, redirected to:", page.url());
+      // With PIPELINE_MODE=simple, a progress modal appears. Click "Continue in Background"
+      // to dismiss it and proceed. The pipeline runs inline but the modal blocks the UI.
+      const continueBtn = page.getByRole("button", { name: /continue in background/i });
+      const hasContinue = await continueBtn.isVisible({ timeout: 10_000 }).catch(() => false);
+      if (hasContinue) {
+        await continueBtn.click();
+        await page.waitForTimeout(1000);
+      }
+
+      // Navigate to dashboard manually (modal dismissal may not trigger a redirect)
+      await page.goto("/dashboard");
+      await page.waitForLoadState("networkidle");
+      console.log("✓ Letter submitted, now on:", page.url());
 
       // ════════════════════════════════════════════════════════
       // PHASE 2: AI PIPELINE — Wait for draft generation
@@ -159,7 +167,7 @@ base.describe("Full Lifecycle — Submission to Sent", () => {
       console.log("\n═══ PHASE 3: AI Content Verification ═══");
 
       const versions = await sql`
-        SELECT id, version_type, length(content_html) AS html_length, content_html
+        SELECT id, version_type, length(content) AS content_length, content
         FROM letter_versions
         WHERE letter_request_id = ${letterId} AND version_type = 'ai_draft'
         ORDER BY created_at DESC LIMIT 1
@@ -167,10 +175,10 @@ base.describe("Full Lifecycle — Submission to Sent", () => {
 
       expect(versions.length).toBeGreaterThan(0);
       const draft = versions[0];
-      console.log(`  Draft version #${draft.id}: ${draft.html_length} chars`);
-      expect(Number(draft.html_length)).toBeGreaterThan(100);
+      console.log(`  Draft version #${draft.id}: ${draft.content_length} chars`);
+      expect(Number(draft.content_length)).toBeGreaterThan(100);
 
-      const html = draft.content_html as string;
+      const html = draft.content as string;
       const hasLegalContent =
         html.includes("Dear") || html.includes("Sincerely") || html.includes("demand") || html.includes("pursuant");
       expect(hasLegalContent).toBe(true);
