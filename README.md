@@ -116,3 +116,4 @@ After every implementation:
 2. `pnpm test` — all tests pass
 3. `pnpm build` — production build succeeds
 4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types/letter.ts`
+# Deployment trigger
