@@ -300,13 +300,44 @@ base.describe("Full Lifecycle — Submission to Sent", () => {
       expect(claimed.assigned_reviewer_id).toBeTruthy();
 
       // ════════════════════════════════════════════════════════
-      // PHASE 9: ATTORNEY APPROVAL
+      // PHASE 9: ATTORNEY EDITS & APPROVAL
       // ════════════════════════════════════════════════════════
-      console.log("\n═══ PHASE 9: Attorney Approval ═══");
+      console.log("\n═══ PHASE 9: Attorney Edits & Approval ═══");
 
       // Modal is still open after claim. Wait for the action bar to refresh
-      // (Claim button disappears, Submit/Edit/Changes/Reject appear)
-      const submitBtn = page.getByRole("button", { name: /submit/i }).first();
+      // (Claim button disappears, Edit/Submit/Changes/Reject appear)
+      const editBtn = page.getByRole("button", { name: /edit draft/i }).first();
+      await expect(editBtn).toBeVisible({ timeout: 10_000 });
+      console.log("✓ Edit Draft button visible (editing unlocked after claim)");
+
+      // Click Edit Draft to enter editing mode
+      await editBtn.click();
+      await page.waitForTimeout(1000);
+
+      // Find the Tiptap editor and make changes
+      const editor = page.locator('[contenteditable="true"]').first();
+      await expect(editor).toBeVisible({ timeout: 5000 });
+
+      // Clear existing content and type edited version
+      await editor.click();
+      await editor.fill(
+        "<p>Dear Acme Corp,</p>" +
+        "<p>This is a formal demand regarding the breach of contract dated January 15, 2026. " +
+        "Despite repeated requests, payment of $5,000 remains outstanding.</p>" +
+        "<p>We demand full payment within 30 days.</p>" +
+        "<p>Sincerely,<br/>Jane Doe</p>"
+      );
+      console.log("✓ Attorney edited draft content");
+
+      // Save the edits
+      const saveBtn = page.getByRole("button", { name: /save/i }).first();
+      await expect(saveBtn).toBeVisible({ timeout: 5000 });
+      await saveBtn.click();
+      await page.waitForTimeout(2000);
+      console.log("✓ Attorney saved edits");
+
+      // Click Submit to open approval dialog
+      const submitBtn = page.getByRole("button", { name: /^submit$/i }).first();
       await expect(submitBtn).toBeVisible({ timeout: 10_000 });
       await submitBtn.click();
 
