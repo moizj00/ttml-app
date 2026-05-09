@@ -13,6 +13,11 @@ import postgres from "postgres";
  *   6. Attorney logs in, sees letter in Review Queue
  *   7. Attorney opens modal, clicks "Claim for Review"
  *   8. Verify letter is now under_review with assigned reviewer
+ *   9. Attorney clicks "Submit" → approves letter
+ *  10. Verify status → client_approval_pending
+ *  11. Subscriber logs in, views approved letter
+ *  12. Subscriber clicks "Approve Only"
+ *  13. Verify status → client_approved + PDF generated
  *
  * This is the single most comprehensive test — run it when you
  * need to verify the entire platform works end-to-end.
@@ -46,9 +51,9 @@ async function dismissOnboarding(page: Page): Promise<void> {
   }
 }
 
-base.describe("Full Lifecycle — Submission to Attorney Claim", () => {
+base.describe("Full Lifecycle — Submission to Sent", () => {
   base("complete letter lifecycle end-to-end", async ({ page }) => {
-    base.setTimeout(180_000); // 3 minutes for full lifecycle
+    base.setTimeout(300_000); // 5 minutes for full lifecycle (includes PDF generation)
 
     expect(process.env.DATABASE_URL, "DATABASE_URL must be set").toBeDefined();
     const sql = postgres(process.env.DATABASE_URL!);
@@ -273,11 +278,11 @@ base.describe("Full Lifecycle — Submission to Attorney Claim", () => {
       }
 
       // ════════════════════════════════════════════════════════
-      // PHASE 8: DB VERIFICATION — Final status check
+      // PHASE 8: DB VERIFICATION — under_review
       // ════════════════════════════════════════════════════════
-      console.log("\n═══ PHASE 8: Final DB Verification ═══");
+      console.log("\n═══ PHASE 8: DB Verification (under_review) ═══");
 
-      const finalState = await sql`
+      const claimedState = await sql`
         SELECT lr.id, lr.status, lr.assigned_reviewer_id, lr.last_status_changed_at,
                u.email AS reviewer_email
         FROM letter_requests lr
@@ -285,16 +290,125 @@ base.describe("Full Lifecycle — Submission to Attorney Claim", () => {
         WHERE lr.id = ${letterId}
       `;
 
-      expect(finalState.length).toBe(1);
-      const final = finalState[0];
-      console.log(`  Letter #${final.id}:`);
-      console.log(`    Status: ${final.status}`);
-      console.log(`    Reviewer: ${final.reviewer_email} (id: ${final.assigned_reviewer_id})`);
+      expect(claimedState.length).toBe(1);
+      const claimed = claimedState[0];
+      console.log(`  Letter #${claimed.id}:`);
+      console.log(`    Status: ${claimed.status}`);
+      console.log(`    Reviewer: ${claimed.reviewer_email} (id: ${claimed.assigned_reviewer_id})`);
 
-      expect(final.status).toBe("under_review");
-      expect(final.assigned_reviewer_id).toBeTruthy();
+      expect(claimed.status).toBe("under_review");
+      expect(claimed.assigned_reviewer_id).toBeTruthy();
 
-      console.log("\n✅ FULL LIFECYCLE VERIFIED — submission → AI → paywall → payment → attorney claim");
+      // ════════════════════════════════════════════════════════
+      // PHASE 9: ATTORNEY APPROVAL
+      // ════════════════════════════════════════════════════════
+      console.log("\n═══ PHASE 9: Attorney Approval ═══");
+
+      // Modal is still open after claim. Wait for the action bar to refresh
+      // (Claim button disappears, Submit/Edit/Changes/Reject appear)
+      const submitBtn = page.getByRole("button", { name: /submit/i }).first();
+      await expect(submitBtn).toBeVisible({ timeout: 10_000 });
+      await submitBtn.click();
+
+      // ApproveDialog opens
+      const approveDialog = page.getByTestId("dialog-approve");
+      await expect(approveDialog).toBeVisible({ timeout: 5000 });
+
+      // Confirm approval (no recipient email = goes to client_approval_pending)
+      const confirmBtn = page.getByTestId("button-approve-confirm");
+      await expect(confirmBtn).toBeVisible({ timeout: 5000 });
+      await confirmBtn.click();
+
+      // Wait for dialog to close and approval to complete
+      await expect(approveDialog).toBeHidden({ timeout: 15_000 });
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: "test-results/lifecycle-attorney-approved.png", fullPage: true });
+      console.log("✓ Attorney approved letter");
+
+      // ════════════════════════════════════════════════════════
+      // PHASE 10: DB VERIFICATION — client_approval_pending
+      // ════════════════════════════════════════════════════════
+      console.log("\n═══ PHASE 10: DB Verification (client_approval_pending) ═══");
+
+      let approvedRecord: any;
+      for (let i = 0; i < 15; i++) {
+        await page.waitForTimeout(2000);
+        const rows = await sql`
+          SELECT id, status, pdf_url
+          FROM letter_requests
+          WHERE id = ${letterId}
+        `;
+        if (rows.length > 0) {
+          approvedRecord = rows[0];
+          console.log(`  [Poll ${i + 1}] Letter #${approvedRecord.id} → ${approvedRecord.status}`);
+          if (approvedRecord.status === "client_approval_pending") {
+            break;
+          }
+        }
+      }
+
+      expect(approvedRecord).toBeDefined();
+      expect(approvedRecord.status).toBe("client_approval_pending");
+      console.log("✓ Status is client_approval_pending");
+
+      // ════════════════════════════════════════════════════════
+      // PHASE 11: SUBSCRIBER — View approved letter
+      // ════════════════════════════════════════════════════════
+      console.log("\n═══ PHASE 11: Subscriber Views Approved Letter ═══");
+
+      await page.goto("/login");
+      await page.waitForLoadState("networkidle");
+      await loginAs(page, SUBSCRIBER_EMAIL, SUBSCRIBER_PASSWORD);
+      await dismissOnboarding(page);
+
+      await page.goto(`/letters/${letterId}`);
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(2000);
+
+      await page.screenshot({ path: "test-results/lifecycle-subscriber-approval-view.png", fullPage: true });
+
+      // Verify the approval buttons are visible
+      const approveOnlyBtn = page.getByTestId("button-sticky-approve-only");
+      await expect(approveOnlyBtn).toBeVisible({ timeout: 10_000 });
+      console.log("✓ Subscriber sees 'Approve Only' button");
+
+      // ════════════════════════════════════════════════════════
+      // PHASE 12: SUBSCRIBER APPROVAL
+      // ════════════════════════════════════════════════════════
+      console.log("\n═══ PHASE 12: Subscriber Approval ═══");
+
+      await approveOnlyBtn.click();
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: "test-results/lifecycle-subscriber-approved.png", fullPage: true });
+      console.log("✓ Subscriber clicked 'Approve Only'");
+
+      // ════════════════════════════════════════════════════════
+      // PHASE 13: DB VERIFICATION — client_approved + PDF
+      // ════════════════════════════════════════════════════════
+      console.log("\n═══ PHASE 13: Final DB Verification (client_approved + PDF) ═══");
+
+      let finalRecord: any;
+      for (let i = 0; i < 15; i++) {
+        await page.waitForTimeout(2000);
+        const rows = await sql`
+          SELECT id, status, pdf_url
+          FROM letter_requests
+          WHERE id = ${letterId}
+        `;
+        if (rows.length > 0) {
+          finalRecord = rows[0];
+          console.log(`  [Poll ${i + 1}] Letter #${finalRecord.id} → ${finalRecord.status}, pdf_url: ${finalRecord.pdf_url ? "yes" : "no"}`);
+          if (finalRecord.status === "client_approved" && finalRecord.pdf_url) {
+            break;
+          }
+        }
+      }
+
+      expect(finalRecord).toBeDefined();
+      expect(finalRecord.status).toBe("client_approved");
+      expect(finalRecord.pdf_url).toBeTruthy();
+
+      console.log("\n✅ FULL LIFECYCLE VERIFIED — submission → AI → paywall → payment → attorney claim → attorney approval → subscriber approval → PDF generated");
     } finally {
       await sql.end();
     }
