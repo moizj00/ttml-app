@@ -47,6 +47,7 @@ vi.mock("./db", () => ({
   refundFreeTrialSlot: (...args: unknown[]) => mockRefundFreeTrialSlot(...args),
   decrementLettersUsed: (...args: unknown[]) =>
     mockDecrementLettersUsed(...args),
+  upsertPipelineRecord: vi.fn().mockResolvedValue(undefined),
   getUserById: vi.fn().mockResolvedValue(null),
   getLetterRequestById: vi.fn().mockResolvedValue(null),
   getAllUsers: vi.fn().mockResolvedValue([]),
