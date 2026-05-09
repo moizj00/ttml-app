@@ -97,9 +97,5 @@ EXPOSE ${PORT:-3000}
 # Set PROCESS_TYPE per Railway service. All services share the same image.
 # ────────────────────────────────────────────────────────────────────────────
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider \
-  "http://localhost:${PORT:-3000}/api/health" || exit 1
-
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD []

@@ -14,8 +14,8 @@ x-common: &common
     dockerfile: Dockerfile
   image: ttml:latest
   env_file: .env
-  environment:
-    - NODE_ENV=production
+  environment: &common-env
+    NODE_ENV: production
 
 services:
   # ── Migrations (one-shot job) ────────────────────────────────────────────
@@ -23,14 +23,20 @@ services:
   #   docker compose run --rm migrate
   migrate:
     <<: *common
-    command: ["node", "--dns-result-order=ipv4first", "dist/migrate.js"]
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: migrate
+    healthcheck:
+      disable: true
     profiles: ["ops"]
     restart: "no"
 
   # ── Web server (Express + tRPC + static client) ─────────────────────────
   app:
     <<: *common
-    command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/index.js"]
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: web
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     healthcheck:
@@ -48,7 +54,11 @@ services:
   # ── Pipeline worker (pg-boss consumer) ──────────────────────────────────
   worker:
     <<: *common
-    command: ["node", "--dns-result-order=ipv4first", "--import", "./dist/instrument.js", "dist/worker.js"]
+    environment:
+      <<: *common-env
+      PROCESS_TYPE: worker
+    healthcheck:
+      disable: true
     restart: unless-stopped
     depends_on:
       migrate:

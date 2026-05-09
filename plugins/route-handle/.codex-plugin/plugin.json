@@ -1,0 +1,42 @@
+{
+  "name": "route-handle",
+  "version": "0.1.0",
+  "description": "TTML-aware routing plugin that helps Codex choose the smallest useful repo location, tool set, and verification path while accounting for local system load and running services.",
+  "author": {
+    "name": "TTML Local",
+    "email": "local-only@example.invalid",
+    "url": "https://www.talk-to-my-lawyer.com"
+  },
+  "homepage": "https://www.talk-to-my-lawyer.com",
+  "repository": "https://www.talk-to-my-lawyer.com",
+  "license": "UNLICENSED",
+  "keywords": [
+    "ttml",
+    "routing",
+    "tool-selection",
+    "system-awareness"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Route Handle",
+    "shortDescription": "Route TTML work with system-aware tool selection.",
+    "longDescription": "Chooses the right TTML source area, Codex skill, local command, and verification level for a requested change. It keeps work scoped to the change cut, checks local system pressure before heavy commands, and avoids overloading the workspace with unnecessary context or processes.",
+    "developerName": "TTML Local",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Repository routing",
+      "Tool selection",
+      "System awareness",
+      "Verification planning"
+    ],
+    "websiteURL": "https://www.talk-to-my-lawyer.com",
+    "privacyPolicyURL": "https://www.talk-to-my-lawyer.com/privacy",
+    "termsOfServiceURL": "https://www.talk-to-my-lawyer.com/terms",
+    "defaultPrompt": [
+      "Use $route-handle to route this TTML change before editing.",
+      "Use $route-handle to choose the right TTML files and checks.",
+      "Use $route-handle to inspect local service pressure before running heavy commands."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
