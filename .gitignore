@@ -171,3 +171,8 @@ workers/
 
 # ── Generated lock files in subdirectories ──────────────────────────────────
 artifacts/mockup-sandbox/package-lock.json
+
+# System and Debug artifacts
+core.*
+*-debug*.png
+*-debug*.jpg

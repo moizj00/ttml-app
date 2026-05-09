@@ -1,1 +1,0 @@
-ALTER TABLE "letter_requests" ADD COLUMN "submitted_by_admin" boolean DEFAULT false NOT NULL;
