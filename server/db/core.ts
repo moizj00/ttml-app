@@ -4,22 +4,13 @@ import postgres from "postgres";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { normalizeSupabaseUrlForPooler } from "../_core/supabase-url";
+import { getPostgresSsl } from "../_core/postgresSsl";
 
 const dbLogger = createLogger({ module: "Database" });
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _readDb: ReturnType<typeof drizzle> | null = null;
 let _readDbFailed = false;
-
-function needsSsl(url: string): boolean {
-  return (
-    url.includes("supabase.co") ||
-    url.includes("supabase.com") ||
-    url.includes("amazonaws.com") ||
-    url.includes("neon.tech") ||
-    url.includes("sslmode=require")
-  );
-}
 
 export async function getDb() {
   const rawUrl =
@@ -33,7 +24,7 @@ export async function getDb() {
   if (!_db && dbUrl) {
     try {
       const client = postgres(dbUrl, {
-        ssl: needsSsl(dbUrl) ? "require" : false,
+        ssl: getPostgresSsl(dbUrl),
         // Primary pool: writes + consistency-sensitive reads only.
         // Read-heavy paths (analytics, blog, admin, lessons) use getReadDb() → replica.
         // Keep this small to leave headroom for pg-boss + replica pool.
@@ -65,7 +56,7 @@ export async function getReadDb() {
 
   try {
     const client = postgres(replicaUrl, {
-      ssl: needsSsl(replicaUrl) ? "require" : false,
+      ssl: getPostgresSsl(replicaUrl),
       max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
       idle_timeout: 20,
       connect_timeout: 10,
