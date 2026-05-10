@@ -13,6 +13,29 @@
  */
 
 export const PRICING = {
+  /**
+   * Single Letter — $299 one-time
+   * @deprecated Removed from public plans. Subscription-only for attorney review.
+   * Kept for backward compat with legacy Stripe products and existing customers.
+   */
+  singleLetter: {
+    id: "single_letter",
+    name: "Single Letter",
+    price: 299,
+    priceDisplay: "$299",
+    period: "one-time",
+    lettersIncluded: 1,
+    description:
+      "One California-focused legal-letter draft with optional attorney review. No subscription required.",
+    features: [
+      "California-focused drafting engine",
+      "Structured from curated legal-letter patterns",
+      "Licensed attorney review & approval",
+      "PDF download of approved draft",
+      "Review-friendly output",
+    ],
+  },
+
   /** Monthly — $299/month for 4 letters */
   monthly: {
     id: "monthly",
@@ -73,6 +96,9 @@ export const AFFILIATE_DISCOUNT_PERCENT = 20;
 
 /** Affiliate commission rate in basis points (500 = 5%). Applied to sale amount in cents. */
 export const AFFILIATE_COMMISSION_BASIS_POINTS = 500;
+
+/** @deprecated Single letter removed from public plans. Kept for legacy webhook. */
+export const SINGLE_LETTER_PRICE_CENTS = PRICING.singleLetter.price * 100;
 
 /** Monthly price in cents (for Stripe) */
 export const MONTHLY_PRICE_CENTS = PRICING.monthly.price * 100;
