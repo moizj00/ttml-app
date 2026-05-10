@@ -257,15 +257,14 @@ describe("Pricing page PLANS data integrity", () => {
     expect(PRICING.yearly).toBeDefined();
   });
 
-  it("ALL_PLANS has 3 entries in order", () => {
-    expect(ALL_PLANS).toHaveLength(3);
-    expect(ALL_PLANS[0].id).toBe("single_letter");
-    expect(ALL_PLANS[1].id).toBe("monthly");
-    expect(ALL_PLANS[2].id).toBe("yearly");
+  it("ALL_PLANS has 2 entries in order (subscription-only)", () => {
+    expect(ALL_PLANS).toHaveLength(2);
+    expect(ALL_PLANS[0].id).toBe("monthly");
+    expect(ALL_PLANS[1].id).toBe("yearly");
   });
 
-  it("PAID_PLANS has 3 entries, all paid", () => {
-    expect(PAID_PLANS).toHaveLength(3);
+  it("PAID_PLANS has 2 entries, all paid (subscription-only)", () => {
+    expect(PAID_PLANS).toHaveLength(2);
     expect(PAID_PLANS.every((p) => p.price > 0)).toBe(true);
   });
 

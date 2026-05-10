@@ -100,17 +100,9 @@ export default function Pricing() {
 
   const handleSelectPlan = (planId: string) => {
     if (!isAuthenticated) {
-      if (planId === "single_letter") {
-        navigate(`/signup?next=${encodeURIComponent("/submit")}`);
-      } else {
-        navigate(
-          `/signup${returnTo ? "?next=" + encodeURIComponent(`/pricing?returnTo=${returnTo}`) : ""}`
-        );
-      }
-      return;
-    }
-    if (planId === "single_letter") {
-      navigate("/submit");
+      navigate(
+        `/signup${returnTo ? "?next=" + encodeURIComponent(`/pricing?returnTo=${returnTo}`) : ""}`
+      );
       return;
     }
     checkoutMutation.mutate({
