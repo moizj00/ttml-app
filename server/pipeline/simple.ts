@@ -1,6 +1,7 @@
 import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
+import { OpenAI } from "openai";
 import {
   updateLetterStatus,
   createLetterVersion,
@@ -30,6 +31,72 @@ const logger = createLogger({ module: "simple-pipeline" });
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
+const OPENAI_MODEL = "gpt-4o";
+
+interface GenerationResult {
+  content: string;
+  provider: "anthropic" | "openai";
+  model: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+  };
+}
+
+/**
+ * Try Claude first, then fall back to OpenAI.
+ */
+async function generateLetter(prompt: string): Promise<GenerationResult> {
+  try {
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content =
+      message.content[0]?.type === "text" ? message.content[0].text : "";
+
+    return {
+      content,
+      provider: "anthropic",
+      model: CLAUDE_MODEL,
+      usage: {
+        inputTokens: message.usage?.input_tokens,
+        outputTokens: message.usage?.output_tokens,
+      },
+    };
+  } catch (claudeErr) {
+    logger.warn(
+      { err: claudeErr instanceof Error ? claudeErr.message : String(claudeErr) },
+      "[Simple] Claude failed, falling back to OpenAI"
+    );
+
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_MODEL,
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = completion.choices[0]?.message?.content ?? "";
+
+    return {
+      content,
+      provider: "openai",
+      model: OPENAI_MODEL,
+      usage: {
+        inputTokens: completion.usage?.prompt_tokens,
+        outputTokens: completion.usage?.completion_tokens,
+      },
+    };
+  }
+}
 
 function buildPrompt(intake: IntakeJson): string {
   const {
@@ -91,7 +158,7 @@ export async function runSimplePipeline(
     const job = await createWorkflowJob({
       letterRequestId: letterId,
       jobType: "generation_pipeline",
-      provider: "anthropic",
+      provider: "simple",
       requestPayloadJson: { mode: "simple", letterType: intake.letterType },
     });
     jobId = job?.insertId ?? 0;
@@ -106,51 +173,38 @@ export async function runSimplePipeline(
 
     // Build the prompt
     const prompt = buildPrompt(intake);
-    logger.debug({ letterId }, "[Simple] Prompt built, calling Claude");
+    logger.debug({ letterId }, "[Simple] Prompt built, calling LLM");
 
-    // Call Claude
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
+    // Call LLM (Claude primary, OpenAI fallback)
+    const result = await generateLetter(prompt);
 
-    // Extract the letter content
-    const letterContent =
-      message.content[0]?.type === "text" ? message.content[0].text : "";
-
-    if (!letterContent) {
-      logger.error({ letterId }, "[Simple] Claude returned empty response");
+    if (!result.content) {
+      logger.error({ letterId, provider: result.provider }, "[Simple] LLM returned empty response");
       await updateLetterStatus(letterId, "submitted");
       return {
         success: false,
-        error: "Claude returned empty response",
+        error: `${result.provider} returned empty response`,
       };
     }
 
     logger.info(
-      { letterId, tokenUsage: message.usage },
-      "[Simple] Claude generated letter"
+      { letterId, provider: result.provider, model: result.model, tokenUsage: result.usage },
+      "[Simple] LLM generated letter"
     );
 
     // Save as ai_draft version (this is what the paywall expects)
     const version = await createLetterVersion({
       letterRequestId: letterId,
       versionType: "ai_draft",
-      content: letterContent,
+      content: result.content,
       createdByType: "system",
       createdByUserId: userId,
       metadataJson: {
-        model: "claude-sonnet-4-5-20250929",
-        provider: "anthropic",
+        model: result.model,
+        provider: result.provider,
         mode: "simple",
-        promptTokens: message.usage?.input_tokens,
-        completionTokens: message.usage?.output_tokens,
+        promptTokens: result.usage?.inputTokens,
+        completionTokens: result.usage?.outputTokens,
       },
     });
 
@@ -178,15 +232,15 @@ export async function runSimplePipeline(
     await updateWorkflowJob(jobId, {
       status: "completed",
       completedAt: new Date(),
-      promptTokens: message.usage?.input_tokens,
-      completionTokens: message.usage?.output_tokens,
+      promptTokens: result.usage?.inputTokens,
+      completionTokens: result.usage?.outputTokens,
     });
 
     logger.info({ letterId }, "[Simple] Letter saved and status updated");
 
     return {
       success: true,
-      letter: letterContent,
+      letter: result.content,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

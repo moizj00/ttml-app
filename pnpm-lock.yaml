@@ -55,6 +55,9 @@ importers:
       '@langchain/langgraph':
         specifier: ^1.2.9
         version: 1.2.9(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(zod@4.4.3)
+      '@langchain/langgraph-checkpoint-postgres':
+        specifier: ^1.0.1
+        version: 1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)))
       '@langchain/openai':
         specifier: ^1.4.4
         version: 1.4.4(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(ws@8.20.0)
@@ -165,7 +168,7 @@ importers:
         version: 17.3.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9)
       express:
         specifier: ^4.21.2
         version: 4.22.1
@@ -260,6 +263,9 @@ importers:
       '@types/node':
         specifier: ^24.7.0
         version: 24.12.0
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       '@types/react':
         specifier: ^19.2.1
         version: 19.2.14
@@ -865,6 +871,13 @@ packages:
   '@langchain/core@1.1.41':
     resolution: {integrity: sha512-KdoNEf1YVJ9jnOP+smq4O6teu63tE7GDUryOnZ2lVfooHLrHK/ECUadjOcDSCK/yk/xBw/8nexJ3ZNBMtKnstw==}
     engines: {node: '>=20'}
+
+  '@langchain/langgraph-checkpoint-postgres@1.0.1':
+    resolution: {integrity: sha512-cRXOLYZc0egMjyAQfBblWXdoBS+WKwEbCEuE+/f88XHJ1bq5jVz7aycbpjF/7F5EykG7xmybQOz5eUdg3neRzg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@langchain/core': ^1.0.1
+      '@langchain/langgraph-checkpoint': ^1.0.0
 
   '@langchain/langgraph-checkpoint@1.0.1':
     resolution: {integrity: sha512-HM0cJLRpIsSlWBQ/xuDC67l52SqZ62Bh2Y61DX+Xorqwoh5e1KxYvfCD7GnSTbWWhjBOutvnR0vPhu4orFkZfw==}
@@ -2455,6 +2468,9 @@ packages:
 
   '@types/pg@8.15.6':
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
+
+  '@types/pg@8.20.0':
+    resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
   '@types/qs@6.15.0':
     resolution: {integrity: sha512-JawvT8iBVWpzTrz3EGw9BTQFg3BQNmwERdKE22vlTxawwtbyUSlMppvZYKLZzB5zgACXdXxbD3m1bXaMqP/9ow==}
@@ -5511,6 +5527,14 @@ snapshots:
       - openai
       - ws
 
+  '@langchain/langgraph-checkpoint-postgres@1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))(@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)))':
+    dependencies:
+      '@langchain/core': 1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
+      '@langchain/langgraph-checkpoint': 1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))
+      pg: 8.20.0
+    transitivePeerDependencies:
+      - pg-native
+
   '@langchain/langgraph-checkpoint@1.0.1(@langchain/core@1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0))':
     dependencies:
       '@langchain/core': 1.1.41(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(openai@6.35.0(ws@8.20.0)(zod@4.4.3))(ws@8.20.0)
@@ -7243,9 +7267,15 @@ snapshots:
 
   '@types/pg-pool@2.0.7':
     dependencies:
-      '@types/pg': 8.15.6
+      '@types/pg': 8.20.0
 
   '@types/pg@8.15.6':
+    dependencies:
+      '@types/node': 24.12.0
+      pg-protocol: 1.13.0
+      pg-types: 2.2.0
+
+  '@types/pg@8.20.0':
     dependencies:
       '@types/node': 24.12.0
       pg-protocol: 1.13.0
@@ -7688,10 +7718,10 @@ snapshots:
       esbuild: 0.27.5
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@upstash/redis@1.37.0)(mysql2@3.22.3(@types/node@24.12.0))(pg@8.20.0)(postgres@3.4.9):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
-      '@types/pg': 8.15.6
+      '@types/pg': 8.20.0
       '@upstash/redis': 1.37.0
       mysql2: 3.22.3(@types/node@24.12.0)
       pg: 8.20.0

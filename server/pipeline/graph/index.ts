@@ -1,6 +1,7 @@
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { createLogger } from "../../logger";
 import { PipelineState, type PipelineStateType } from "./state";
+import { getCheckpointer } from "./checkpointer";
 import { initNode } from "./nodes/init";
 import { researchNode } from "./nodes/research";
 import { draftNode } from "./nodes/draft";
@@ -221,7 +222,7 @@ export function withErrorRecovery(
 // ═══════════════════════════════════════════════════════
 
 function buildPipelineGraph() {
-  const graph = new StateGraph(PipelineState)
+  return new StateGraph(PipelineState)
     // ─── Add nodes ───────────────────────────────────────
     // Init runs first: normalizes intake into sharedContext.normalized,
     // creates a workflow_jobs row for admin monitor visibility, and
@@ -253,14 +254,18 @@ function buildPipelineGraph() {
     // ─── Terminal edges ────────────────────────────────────
     .addEdge("finalize", END)
     .addEdge("fail", END);
-
-  return graph.compile();
 }
 
-export const appGraph = buildPipelineGraph();
+export const appGraph = buildPipelineGraph().compile();
 
 function getCompiledGraph() {
   return appGraph;
+}
+
+/** Compile graph with Postgres checkpointer for durable state. */
+async function getGraphWithCheckpointer() {
+  const checkpointer = await getCheckpointer();
+  return buildPipelineGraph().compile({ checkpointer });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -288,7 +293,7 @@ export async function runLangGraphPipeline(
 
   log.info({ letterId, isFreePreview }, "[Graph] Starting LangGraph pipeline");
 
-  const graph = getCompiledGraph();
+  const graph = await getGraphWithCheckpointer();
 
   const initialState: Partial<PipelineStateType> = {
     pipelineId: String(letterId),
@@ -303,7 +308,9 @@ export async function runLangGraphPipeline(
     currentStage: "init",
   };
 
-  const finalState = await graph.invoke(initialState);
+  const finalState = await graph.invoke(initialState, {
+    configurable: { thread_id: `letter_${letterId}` },
+  });
 
   if (finalState.currentStage === "failed") {
     throw new Error(`LangGraph pipeline failed for letter #${letterId}`);
@@ -331,7 +338,7 @@ export async function* streamLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): AsyncGenerator<{ node: string; state: Partial<PipelineStateType> }> {
   const { letterId, userId = 0, intake } = opts;
-  const graph = getCompiledGraph();
+  const graph = await getGraphWithCheckpointer();
 
   const initialState: Partial<PipelineStateType> = {
     pipelineId: String(letterId),
@@ -347,6 +354,7 @@ export async function* streamLangGraphPipeline(
 
   for await (const event of await graph.streamEvents(initialState, {
     version: "v2",
+    configurable: { thread_id: `letter_${letterId}` },
   })) {
     if (event.event === "on_chain_end" && event.name !== "LangGraph") {
       yield {
