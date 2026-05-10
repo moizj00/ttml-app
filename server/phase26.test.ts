@@ -1,24 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { isValidTransition } from "../shared/types";
-import { LETTER_UNLOCK_PRICE_CENTS, PLANS, canSubmitLetter } from "./stripe-products";
+import { PLANS, canSubmitLetter } from "./stripe-products";
 
-describe("Letter unlock pricing", () => {
-  it("LETTER_UNLOCK_PRICE_CENTS is $299 (29900 cents)", () => {
-    expect(LETTER_UNLOCK_PRICE_CENTS).toBe(29900);
-  });
-
-  it("single_letter plan price matches LETTER_UNLOCK_PRICE_CENTS", () => {
-    expect(PLANS.single_letter.price).toBe(LETTER_UNLOCK_PRICE_CENTS);
-  });
-
-  it("single_letter plan allows exactly 1 letter", () => {
-    expect(PLANS.single_letter.lettersAllowed).toBe(1);
-  });
-
-  it("single_letter plan is one_time interval", () => {
-    expect(PLANS.single_letter.interval).toBe("one_time");
-  });
-
+describe("Subscription plan pricing", () => {
   it("monthly plan is $299/month with 4 letters", () => {
     expect(PLANS.monthly.price).toBe(29900);
     expect(PLANS.monthly.lettersAllowed).toBe(4);
