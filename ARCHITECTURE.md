@@ -19,7 +19,7 @@
 
 | Layer                  | Technology                                                                               |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
-| Frontend               | React 19, Vite 7, TypeScript, Tailwind CSS v4 (OKLCH), shadcn/ui, wouter, TanStack Query |
+| Frontend               | React 19, Vite 8, TypeScript, Tailwind CSS v4 (OKLCH), shadcn/ui, wouter, TanStack Query |
 | Backend                | Node.js, Express 4.21, tRPC 11.6, TypeScript                                             |
 | Database               | PostgreSQL on Supabase, Drizzle ORM 0.44                                                 |
 | Auth                   | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security                 |
