@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { normalizeSupabaseUrlForPooler } from "../_core/supabase-url";
-import { getPostgresSsl } from "../_core/postgresSsl";
+import { buildPostgresSslConfig } from "../_core/postgresSsl";
 
 const dbLogger = createLogger({ module: "Database" });
 
@@ -24,7 +24,7 @@ export async function getDb() {
   if (!_db && dbUrl) {
     try {
       const client = postgres(dbUrl, {
-        ssl: getPostgresSsl(dbUrl),
+        ssl: buildPostgresSslConfig(dbUrl),
         // Primary pool: writes + consistency-sensitive reads only.
         // Read-heavy paths (analytics, blog, admin, lessons) use getReadDb() → replica.
         // Keep this small to leave headroom for pg-boss + replica pool.
@@ -56,7 +56,7 @@ export async function getReadDb() {
 
   try {
     const client = postgres(replicaUrl, {
-      ssl: getPostgresSsl(replicaUrl),
+      ssl: buildPostgresSslConfig(replicaUrl),
       max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
       idle_timeout: 20,
       connect_timeout: 10,
