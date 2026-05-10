@@ -22,7 +22,7 @@ import {
 // Single-letter pay-as-you-go removed — subscription-only for attorney review
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useSearch, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -82,7 +82,6 @@ export function LetterPaywall({
   }, [lastStatusChangedAt, isDraftRevealed]);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
-  const [, navigate] = useLocation();
 
   // Subscription-only: no discount codes or one-time checkout
 

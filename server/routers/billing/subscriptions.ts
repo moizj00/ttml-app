@@ -97,12 +97,6 @@ export const billingSubscriptionsRouter = router({
     };
   }),
 
-  // Legacy alias: subscription-only. Always false for non-subscribers.
-  checkFirstLetterFree: subscriberProcedure.query(async ({ ctx }) => {
-    const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
-    return { eligible: isSubscribed };
-  }),
-
   paymentHistory: protectedProcedure.query(async ({ ctx }) => {
     const stripe = getStripe();
     try {

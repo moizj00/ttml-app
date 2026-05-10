@@ -1,8 +1,7 @@
 /**
  * Billing Router — Letter Unlock & Submission Procedures
  *
- * Covers: freeUnlock (deprecated),
- *         subscriptionSubmit, payToUnlock
+ * Covers: subscriptionSubmit only (subscription-only for attorney review)
  */
 
 import { TRPCError } from "@trpc/server";
@@ -24,18 +23,6 @@ import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 // import { createAttorneyReviewCheckoutProcedure } from "../../services/canonicalProcedures";
 
 export const billingLettersRouter = router({
-  // DEPRECATED — always rejects. Kept for backward compatibility.
-  freeUnlock: verifiedSubscriberProcedure
-    .input(z.object({ letterId: z.number() }))
-    .mutation(async () => {
-      return {
-        ok: false as const,
-        nextState: "payment_required" as const,
-        message:
-          "The free first letter offer has ended. Please pay $100 for attorney review or subscribe to a plan.",
-      };
-    }),
-
   // Subscription Submit: active subscribers bypass paywall entirely
   subscriptionSubmit: verifiedSubscriberProcedure
     .input(z.object({ letterId: z.number() }))

@@ -365,7 +365,6 @@ export async function markAttorneyReviewUpsellShownProcedure(
 export async function createAttorneyReviewCheckoutProcedure(
   requestId: number,
   subscriberId: number,
-  _packageType: "ATTORNEY_REVIEW_SUBSCRIPTION",
   origin: string
 ) {
   const user = await getUserById(subscriberId);
