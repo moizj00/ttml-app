@@ -21,7 +21,7 @@ import type { Job } from "pg-boss";
 // the shipped type declarations are incomplete for the admin-dashboard
 // surface (getQueueStats / findJobs / localConcurrency etc.).
 import * as PgBossPkg from "pg-boss";
-import { getPostgresSsl } from "./_core/postgresSsl";
+import { buildNodePostgresSslConfig } from "./_core/postgresSsl";
 // @ts-ignore
 interface PgBossQueueStats {
   queuedCount?: number;
@@ -302,7 +302,7 @@ export async function getBoss(): Promise<PgBossClient> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pgBossOptions: PgBossConstructorOptions = {
       connectionString,
-      ssl: getPostgresSsl(connectionString) as { rejectUnauthorized: boolean; ca?: string },
+      ssl: buildNodePostgresSslConfig(connectionString) as { rejectUnauthorized: boolean; ca?: string },
       schedule: false,
     };
     const boss = new PgBoss(pgBossOptions);
