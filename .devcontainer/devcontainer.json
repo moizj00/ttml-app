@@ -1,0 +1,27 @@
+{
+  "name": "ttml-app",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": "..",
+    "args": {
+      "PNPM_VERSION": "10.4.1"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "esbenp.open-in-github",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  },
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+  "forwardPorts": [3000],
+  "settings": {
+    "terminal.integrated.defaultProfile.linux": "bash"
+  }
+}
