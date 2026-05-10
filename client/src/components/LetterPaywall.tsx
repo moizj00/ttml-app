@@ -19,10 +19,7 @@ import {
   CardTitle,
   CardFooter,
 } from "@/components/ui/card";
-import {
-  DiscountCodeInput,
-  type DiscountCodeResult,
-} from "@/components/DiscountCodeInput";
+// Single-letter pay-as-you-go removed — subscription-only for attorney review
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useSearch, useLocation } from "wouter";
@@ -84,43 +81,15 @@ export function LetterPaywall({
     return Math.max(0, Math.ceil(DRAFT_REVEAL_HOURS - elapsed));
   }, [lastStatusChangedAt, isDraftRevealed]);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [appliedDiscount, setAppliedDiscount] =
-    useState<DiscountCodeResult | null>(null);
-  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [, navigate] = useLocation();
 
-  const searchString = useSearch();
-  const urlCouponCode = useMemo(() => {
-    const params = new URLSearchParams(searchString);
-    return (
-      params.get("coupon") ??
-      params.get("code") ??
-      params.get("ref") ??
-      undefined
-    );
-  }, [searchString]);
+  // Subscription-only: no discount codes or one-time checkout
 
   const paywallStatus = trpc.billing.checkPaywallStatus.useQuery(undefined, {
     staleTime: 30_000,
   });
 
-  const isFreeReviewAvailable =
-    __isFreePreview === true
-      ? false
-      : paywallStatus.data?.state === "free_review_available";
   const isSubscribed = paywallStatus.data?.state === "subscribed";
-
-  const payToUnlock = trpc.billing.payToUnlock.useMutation({
-    onSuccess: ({ checkoutUrl }) => {
-      setIsRedirecting(true);
-      window.location.href = checkoutUrl;
-    },
-    onError: err => {
-      toast.error("Could not create checkout session", {
-        description: err.message,
-      });
-    },
-  });
 
   const subscriptionSubmitMutation =
     trpc.billing.subscriptionSubmit.useMutation({
@@ -137,10 +106,7 @@ export function LetterPaywall({
       },
     });
 
-  const isPending =
-    payToUnlock.isPending ||
-    isRedirecting ||
-    subscriptionSubmitMutation.isPending;
+  const isPending = isRedirecting || subscriptionSubmitMutation.isPending;
 
   // Defensive guard: free-preview lead-magnet letters must NEVER render the
   // paid paywall ($299 CTA). This is caught by the parent but handled here
@@ -148,11 +114,6 @@ export function LetterPaywall({
   if (__isFreePreview) return null;
 
   const hasDraft = !!draftContent && draftContent.length > 0 && isDraftRevealed;
-
-  const basePrice = 299;
-  const discountedPrice = appliedDiscount
-    ? Math.round(basePrice * (1 - appliedDiscount.discountPercent / 100))
-    : null;
 
   const renderPaywallContent = () => {
     if (isSubscribed) {
