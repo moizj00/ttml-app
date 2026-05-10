@@ -263,7 +263,7 @@ function getCompiledGraph() {
 }
 
 /** Compile graph with Postgres checkpointer for durable state. */
-async function getGraphWithCheckpointer() {
+export async function getGraphWithCheckpointer() {
   const checkpointer = await getCheckpointer();
   return buildPipelineGraph().compile({ checkpointer });
 }

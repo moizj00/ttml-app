@@ -26,7 +26,7 @@ import {
   consumeIntermediateContent,
   preflightApiKeyCheck,
 } from "./pipeline";
-import { appGraph } from "./pipeline/graph";
+import { getGraphWithCheckpointer } from "./pipeline/graph";
 import type { PipelineStateType } from "./pipeline/graph/state";
 import {
   parseLangGraphMode,
@@ -114,8 +114,10 @@ async function runQueuedLangGraphPipeline(
   let finalState: PipelineStateType | null = null;
 
   try {
-    for await (const event of await appGraph.streamEvents(initialState, {
+    const graph = await getGraphWithCheckpointer();
+    for await (const event of await graph.streamEvents(initialState, {
       version: "v2",
+      configurable: { thread_id: `letter_${pipelineId}` },
     })) {
       const eventName = getGraphNodeName(event.name);
       if (event.event === "on_chain_start" && eventName) {
