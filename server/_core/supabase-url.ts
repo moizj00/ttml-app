@@ -53,9 +53,8 @@ export function normalizeSupabaseUrlForPooler(rawUrl: string): string {
       url.hostname = POOLER_HOST;
       url.username = `postgres.${projectRef}`;
       // Strip ?sslmode=require — node-postgres treats it as 'verify-full',
-      // which fails on Supabase's CA chain. Callers set
-      // `{ ssl: { rejectUnauthorized: false } }` or `ssl: 'require'` (the
-      // postgres-js form) on their pool instead.
+      // which fails when no CA is provided. getPostgresSsl() now handles
+      // CA cert detection and falls back to 'require' when absent.
       url.searchParams.delete("sslmode");
       const masked = url
         .toString()

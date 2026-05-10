@@ -21,6 +21,7 @@ import type { Job } from "pg-boss";
 // the shipped type declarations are incomplete for the admin-dashboard
 // surface (getQueueStats / findJobs / localConcurrency etc.).
 import * as PgBossPkg from "pg-boss";
+import { getPostgresSsl } from "./_core/postgresSsl";
 // @ts-ignore
 interface PgBossQueueStats {
   queuedCount?: number;
@@ -41,7 +42,7 @@ interface PgBossFoundJob<T = unknown> {
 
 interface PgBossConstructorOptions {
   connectionString: string;
-  ssl?: { rejectUnauthorized: boolean };
+  ssl?: { rejectUnauthorized: boolean; ca?: string };
   schedule?: boolean;
 }
 
@@ -179,7 +180,7 @@ function normalizeSupabaseUrlForPooler(rawUrl: string): string {
       url.hostname = POOLER_HOST;
       url.username = `postgres.${projectRef}`;
       // Strip ?sslmode=require — Node treats it as 'verify-full' which fails
-      // on Supabase's CA chain. pg-boss config sets rejectUnauthorized=false.
+      // when no CA is provided. The ssl config is now managed by getPostgresSsl().
       url.searchParams.delete("sslmode");
       const masked = url.toString().replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
       logger.warn(
@@ -301,7 +302,7 @@ export async function getBoss(): Promise<PgBossClient> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pgBossOptions: PgBossConstructorOptions = {
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: getPostgresSsl(connectionString) as { rejectUnauthorized: boolean; ca?: string },
       schedule: false,
     };
     const boss = new PgBoss(pgBossOptions);
