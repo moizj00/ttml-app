@@ -14,14 +14,15 @@ export async function sendLetterApprovedEmail(opts: {
 
   const ctaUrl = `${opts.appUrl}/dashboard?approved=${opts.letterId}`;
   const pdfLine = opts.pdfUrl
-    ? `<p style="margin-top:12px;">📄 <a href="${opts.pdfUrl}" style="color:${BRAND_DARK};font-weight:bold;">Download your Reviewed PDF</a></p>`
+    ? `<p style="margin-top:16px;font-size:16px;">📄 <a href="${opts.pdfUrl}" style="color:${BRAND_DARK};font-weight:bold;text-decoration:underline;">Download your Attorney-Approved Lawyer Letter PDF</a></p>`
     : "";
   const body = `
     <p>Hello ${opts.name},</p>
-    <p>Great news! Your legal letter request has been <strong style="color:#059669;">approved</strong> by our attorney team.</p>
+    <p>Great news! Your legal letter has been <strong style="color:#059669;">approved</strong> by our attorney team.</p>
     <p><strong>Letter:</strong> ${opts.subject}</p>
-    <p>Your final approved letter is now available for download in your account. Click the button below to view and download it.</p>
+    <p>Here is your Attorney approved Lawyer Letter:</p>
     ${pdfLine}
+    <p style="margin-top:12px;">You can also view and manage your letter in your account at any time.</p>
   `;
   const html = buildEmailHtml({
     preheader: "Your legal letter has been approved and is ready to download.",
