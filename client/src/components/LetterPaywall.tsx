@@ -242,69 +242,7 @@ export function LetterPaywall({
           </div>
         </div>
 
-        <div className="pt-2">
-          {/* Pay-as-you-go option for non-subscribers */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-colors">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex-1">
-                <h4 className="text-lg font-bold text-slate-800 mb-1">
-                  Single Letter Review
-                </h4>
-                <p className="text-sm text-slate-500 mb-4 max-w-md">
-                  One-time attorney review, signature, and PDF delivery without
-                  a subscription.
-                </p>
-                <DiscountCodeInput
-                  className="mb-4 max-w-sm"
-                  initialCode={urlCouponCode}
-                  onCodeChange={result => setAppliedDiscount(result)}
-                />
-                <div className="flex items-end gap-2">
-                  {discountedPrice !== null ? (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-extrabold text-slate-900">
-                        ${discountedPrice}
-                      </span>
-                      <span className="text-sm text-slate-400 line-through">
-                        ${basePrice}
-                      </span>
-                      <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
-                        {appliedDiscount!.discountPercent}% off
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-2xl font-extrabold text-slate-900">
-                      ${basePrice}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Button
-                onClick={() =>
-                  payToUnlock.mutate({
-                    letterId,
-                    discountCode: appliedDiscount?.code ?? undefined,
-                  })
-                }
-                disabled={isPending}
-                size="lg"
-                className="w-full md:w-auto flex-shrink-0 shadow-sm"
-              >
-                {isPending && payToUnlock.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparing checkout...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Pay & Submit
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Subscription-only: no one-time pay-as-you-go option */}
       </div>
     );
   };
@@ -381,13 +319,13 @@ export function LetterPaywall({
       )}
 
       {/* Revealed but no draft content — fallback CTA */}
-      {isDraftRevealed && !hasDraft && !showPaywallModal && (
+      {isDraftRevealed && !hasDraft && (
         <Button
           onClick={() => setShowPaywallModal(true)}
           className="w-full mt-4"
           size="lg"
         >
-          Submit for Attorney Review
+          Subscribe to Submit for Attorney Review
         </Button>
       )}
 
@@ -399,7 +337,7 @@ export function LetterPaywall({
             </DialogTitle>
             <DialogDescription className="text-slate-300 mt-2 text-base font-medium">
               A licensed attorney will review, edit, sign, and deliver your
-              letter. Choose a plan or pay once below.
+              letter. Subscribe to a plan to proceed.
             </DialogDescription>
           </div>
           <div className="p-6 overflow-y-auto bg-slate-50 relative flex-1">
