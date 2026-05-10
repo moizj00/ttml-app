@@ -423,7 +423,7 @@ describe("Entitlement Matrix — Cross-Role", () => {
       const ctx = createMockCtx("employee");
       const caller = appRouter.createCaller(ctx);
       const result = await caller.affiliate.myCode();
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ id: 1, code: "TTML-001" });
     });
 
     it("allows admin", async () => {
@@ -433,7 +433,7 @@ describe("Entitlement Matrix — Cross-Role", () => {
       const ctx = createAdminCtx();
       const caller = appRouter.createCaller(ctx);
       const result = await caller.affiliate.myCode();
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ id: 1, code: "TTML-001" });
     });
 
     it("rejects subscriber", async () => {
