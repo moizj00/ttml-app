@@ -293,10 +293,36 @@ export const reviewActionsRouter = router({
             "Failed to create final approved version — version ID was not returned. Approval aborted.",
         });
       }
-      // PDF generation is deferred to subscriber approval (clientApprove).
-      // Per AGENTS.md §16.11: "PDF generation happens on subscriber approval,
-      // not when the attorney submits."
+      // Generate approved PDF immediately on attorney approval so the
+      // subscriber receives a download link in the approval email.
       let pdfUrl: string | undefined = undefined;
+      try {
+        const { pdfKey, pdfUrl: generatedUrl } =
+          await generateAndUploadApprovedPdf({
+            letterId: input.letterId,
+            letterType: letter.letterType,
+            subject: input.subjectOverride ?? letter.subject,
+            content: input.finalContent,
+            approvedBy: ctx.user.name ?? undefined,
+            approvedAt: new Date().toISOString(),
+            jurisdictionState: letter.jurisdictionState,
+            jurisdictionCountry: letter.jurisdictionCountry,
+            intakeJson: letter.intakeJson as Record<string, unknown> | null,
+          });
+        pdfUrl = generatedUrl;
+        await updateLetterPdfUrl(input.letterId, pdfUrl);
+        await updateLetterStoragePath(input.letterId, pdfKey);
+      } catch (pdfErr) {
+        captureServerException(pdfErr, {
+          tags: { component: "review", error_type: "pdf_generation_failed" },
+          extra: { letterId: input.letterId },
+        });
+        logger.error(
+          { err: pdfErr },
+          `[Approve] PDF generation failed for letter #${input.letterId}:`
+        );
+        // Non-fatal: approval still succeeds; PDF can be regenerated later
+      }
       await updateLetterVersionPointers(input.letterId, {
         currentFinalVersionId: versionId,
       });
