@@ -293,6 +293,10 @@ export const reviewActionsRouter = router({
             "Failed to create final approved version — version ID was not returned. Approval aborted.",
         });
       }
+      // PDF generation is deferred to subscriber approval (clientApprove).
+      // Per AGENTS.md §16.11: "PDF generation happens on subscriber approval,
+      // not when the attorney submits."
+      let pdfUrl: string | undefined = undefined;
       await updateLetterVersionPointers(input.letterId, {
         currentFinalVersionId: versionId,
       });
