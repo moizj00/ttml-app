@@ -1,13 +1,14 @@
 {
   "name": "ttml-app",
-  "build": {
-    "dockerfile": "../Dockerfile.dev",
-    "context": "..",
-    "args": {
-      "PNPM_VERSION": "10.4.1"
-    }
-  },
+  "dockerComposeFile": [
+    "docker-compose.yml"
+  ],
+  "service": "app",
   "workspaceFolder": "/workspace",
+  "runServices": [
+    "app",
+    "worker"
+  ],
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {

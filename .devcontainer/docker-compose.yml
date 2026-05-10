@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+    image: ttml-app-dev
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: development
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - ..:/workspace:cached
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ttml-worker-dev
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PROCESS_TYPE: worker
+    depends_on:
+      - app
