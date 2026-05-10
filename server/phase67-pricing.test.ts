@@ -1,7 +1,6 @@
 /**
  * Pricing Model Tests
  * Verifies the current pricing structure:
- *  - single_letter: $299 one-time (pay-per-letter)
  *  - monthly:       $299/month (4 letters, attorney review included)
  *  - yearly:        $2,400/year (8 letters, attorney review included)
  *
@@ -14,17 +13,12 @@ import {
   PLANS,
   PLAN_LIST,
   getPlanConfig,
-  LETTER_UNLOCK_PRICE_CENTS,
   MONTHLY_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
   LEGACY_PLAN_ALIASES,
 } from "./stripe-products";
 
 describe("Pricing constants", () => {
-  it("LETTER_UNLOCK_PRICE_CENTS is $299 (29900 cents)", () => {
-    expect(LETTER_UNLOCK_PRICE_CENTS).toBe(29900);
-  });
-
   it("MONTHLY_PRICE_CENTS is $299 (29900 cents)", () => {
     expect(MONTHLY_PRICE_CENTS).toBe(29900);
   });
@@ -35,20 +29,11 @@ describe("Pricing constants", () => {
 });
 
 describe("PLANS configuration", () => {
-  it("has exactly 3 plans", () => {
-    expect(Object.keys(PLANS)).toHaveLength(3);
+  it("has exactly 2 plans", () => {
+    expect(Object.keys(PLANS)).toHaveLength(2);
     expect(Object.keys(PLANS)).toEqual(
-      expect.arrayContaining(["single_letter", "monthly", "yearly"])
+      expect.arrayContaining(["monthly", "yearly"])
     );
-  });
-
-  describe("single_letter plan", () => {
-    const plan = PLANS.single_letter;
-
-    it("exists", () => expect(plan).toBeDefined());
-    it("is $299 (29900 cents)", () => expect(plan.price).toBe(29900));
-    it("is one_time interval", () => expect(plan.interval).toBe("one_time"));
-    it("allows 1 letter", () => expect(plan.lettersAllowed).toBe(1));
   });
 
   describe("monthly plan", () => {
@@ -73,12 +58,6 @@ describe("PLANS configuration", () => {
 });
 
 describe("getPlanConfig", () => {
-  it("returns correct plan for single_letter", () => {
-    const plan = getPlanConfig("single_letter");
-    expect(plan?.price).toBe(29900);
-    expect(plan?.lettersAllowed).toBe(1);
-  });
-
   it("returns correct plan for monthly", () => {
     const plan = getPlanConfig("monthly");
     expect(plan?.price).toBe(29900);
@@ -93,7 +72,7 @@ describe("getPlanConfig", () => {
 
   it("resolves legacy plan IDs via aliases", () => {
     const perLetter = getPlanConfig("per_letter");
-    expect(perLetter?.id).toBe("single_letter");
+    expect(perLetter?.id).toBe("monthly");
     expect(perLetter?.price).toBe(29900);
 
     const monthlyBasic = getPlanConfig("monthly_basic");
@@ -110,10 +89,10 @@ describe("getPlanConfig", () => {
     expect(professional?.id).toBe("monthly");
 
     const freeTrial = getPlanConfig("free_trial");
-    expect(freeTrial?.id).toBe("single_letter");
+    expect(freeTrial?.id).toBe("monthly");
 
     const trialReview = getPlanConfig("free_trial_review");
-    expect(trialReview?.id).toBe("single_letter");
+    expect(trialReview?.id).toBe("monthly");
 
     const annual = getPlanConfig("annual");
     expect(annual?.id).toBe("yearly");
@@ -126,19 +105,18 @@ describe("getPlanConfig", () => {
 });
 
 describe("PLAN_LIST", () => {
-  it("has 3 plans", () => expect(PLAN_LIST).toHaveLength(3));
+  it("has 2 plans", () => expect(PLAN_LIST).toHaveLength(2));
 
-  it("includes all 3 plan IDs", () => {
+  it("includes all 2 plan IDs", () => {
     const ids = PLAN_LIST.map((p) => p.id);
-    expect(ids).toContain("single_letter");
     expect(ids).toContain("monthly");
     expect(ids).toContain("yearly");
   });
 });
 
 describe("LEGACY_PLAN_ALIASES", () => {
-  it("maps per_letter to single_letter", () => {
-    expect(LEGACY_PLAN_ALIASES.per_letter).toBe("single_letter");
+  it("maps per_letter to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.per_letter).toBe("monthly");
   });
 
   it("maps monthly_basic to monthly", () => {
@@ -157,12 +135,12 @@ describe("LEGACY_PLAN_ALIASES", () => {
     expect(LEGACY_PLAN_ALIASES.professional).toBe("monthly");
   });
 
-  it("maps free_trial to single_letter", () => {
-    expect(LEGACY_PLAN_ALIASES.free_trial).toBe("single_letter");
+  it("maps free_trial to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.free_trial).toBe("monthly");
   });
 
-  it("maps free_trial_review to single_letter", () => {
-    expect(LEGACY_PLAN_ALIASES.free_trial_review).toBe("single_letter");
+  it("maps free_trial_review to monthly", () => {
+    expect(LEGACY_PLAN_ALIASES.free_trial_review).toBe("monthly");
   });
 
   it("maps annual to yearly", () => {
@@ -174,10 +152,6 @@ describe("Subscription plan recurring check", () => {
   it("monthly and yearly are recurring", () => {
     expect(PLANS.monthly.interval).toBe("month");
     expect(PLANS.yearly.interval).toBe("year");
-  });
-
-  it("single_letter is a one-time payment", () => {
-    expect(PLANS.single_letter.interval).toBe("one_time");
   });
 });
 
