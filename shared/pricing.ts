@@ -5,9 +5,11 @@
  * Import from here — never hardcode prices in components or procedures.
  *
  * Pricing model:
- *  - Single Letter: $299 one-time (1 letter)
  *  - Monthly:       $299/month (4 letters/month)
  *  - Yearly:        $2,400/year (8 letters total)
+ *
+ * Note: Single Letter ($299 one-time) has been removed.
+ * Non-subscribers must subscribe to submit letters for attorney review.
  */
 
 export const PRICING = {
@@ -72,16 +74,14 @@ export const PRICING = {
   },
 } as const;
 
-/** All plans in display order */
+/** All plans in display order (subscription-only) */
 export const ALL_PLANS = [
-  PRICING.singleLetter,
   PRICING.monthly,
   PRICING.yearly,
 ] as const;
 
-/** Plans shown on the public Pricing page */
+/** Plans shown on the public Pricing page (subscription-only) */
 export const PAID_PLANS = [
-  PRICING.singleLetter,
   PRICING.monthly,
   PRICING.yearly,
 ] as const;
@@ -92,7 +92,7 @@ export const AFFILIATE_DISCOUNT_PERCENT = 20;
 /** Affiliate commission rate in basis points (500 = 5%). Applied to sale amount in cents. */
 export const AFFILIATE_COMMISSION_BASIS_POINTS = 500;
 
-/** Single letter price in cents (for Stripe) */
+/** @deprecated Single letter removed — subscription-only */
 export const SINGLE_LETTER_PRICE_CENTS = PRICING.singleLetter.price * 100;
 
 /** Monthly price in cents (for Stripe) */

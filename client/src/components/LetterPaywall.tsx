@@ -81,6 +81,7 @@ export function LetterPaywall({
     return Math.max(0, Math.ceil(DRAFT_REVEAL_HOURS - elapsed));
   }, [lastStatusChangedAt, isDraftRevealed]);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [, navigate] = useLocation();
 
   // Subscription-only: no discount codes or one-time checkout

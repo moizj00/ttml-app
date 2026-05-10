@@ -8,7 +8,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router } from "../../_core/trpc";
-import { checkTrpcRateLimit } from "../../rateLimiter";
+// Single-letter pay-as-you-go removed — subscription-only for attorney review
 import {
   getLetterRequestSafeForSubscriber,
   updateLetterStatus,
@@ -21,7 +21,7 @@ import { captureServerException } from "../../sentry";
 import { hasActiveRecurringSubscription } from "../../stripe";
 import { verifiedSubscriberProcedure, getAppUrl } from "../_shared";
 
-import { createAttorneyReviewCheckoutProcedure } from "../../services/canonicalProcedures";
+// import { createAttorneyReviewCheckoutProcedure } from "../../services/canonicalProcedures";
 
 export const billingLettersRouter = router({
   // DEPRECATED — always rejects. Kept for backward compatibility.
@@ -134,22 +134,6 @@ export const billingLettersRouter = router({
       return { ok: true as const };
     }),
 
-  // Pay-to-unlock: one-time $299 checkout for a specific locked letter (Step 9)
-  payToUnlock: verifiedSubscriberProcedure
-    .input(
-      z.object({ letterId: z.number(), discountCode: z.string().optional() })
-    )
-    .mutation(async ({ ctx, input }) => {
-      await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
-      const origin = getAppUrl(ctx.req);
-
-      const result = await createAttorneyReviewCheckoutProcedure(
-        input.letterId,
-        ctx.user.id,
-        "ONE_TIME_ATTORNEY_REVIEW",
-        origin
-      );
-
-      return { checkoutUrl: result.checkoutUrl };
-    }),
+  // Subscription-only: no pay-to-unlock. Non-subscribers must subscribe.
+  // (payToUnlock removed — see canonicalProcedures.ts for legacy reference)
 });

@@ -358,12 +358,14 @@ export async function markAttorneyReviewUpsellShownProcedure(
 
 /**
  * PROCEDURE 9: createAttorneyReviewCheckoutProcedure
- * Inputs: requestId, subscriberId, packageType.
+ * Inputs: requestId, subscriberId, origin.
+ *
+ * Note: ONE_TIME_ATTORNEY_REVIEW has been removed. Subscription-only.
  */
 export async function createAttorneyReviewCheckoutProcedure(
   requestId: number,
   subscriberId: number,
-  packageType: "ATTORNEY_REVIEW_SUBSCRIPTION" | "ONE_TIME_ATTORNEY_REVIEW",
+  _packageType: "ATTORNEY_REVIEW_SUBSCRIPTION",
   origin: string
 ) {
   const user = await getUserById(subscriberId);
@@ -374,23 +376,13 @@ export async function createAttorneyReviewCheckoutProcedure(
       message: "User email not found",
     });
 
-  let checkout;
-  if (packageType === "ATTORNEY_REVIEW_SUBSCRIPTION") {
-    checkout = await createCheckoutSession({
-      userId: subscriberId,
-      email,
-      planId: "monthly_subscription", // Example default
-      origin,
-      returnTo: `/letters/${requestId}`,
-    });
-  } else {
-    checkout = await createLetterUnlockCheckout({
-      userId: subscriberId,
-      email,
-      letterId: requestId,
-      origin,
-    });
-  }
+  const checkout = await createCheckoutSession({
+    userId: subscriberId,
+    email,
+    planId: "monthly_subscription",
+    origin,
+    returnTo: `/letters/${requestId}`,
+  });
 
   await updateLetterStatus(requestId, "attorney_review_checkout_started");
   return { checkoutUrl: checkout.url };

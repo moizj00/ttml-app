@@ -75,42 +75,32 @@ export const billingSubscriptionsRouter = router({
 
   /**
    * Returns the paywall state for the current user:
-   *   - "free_review_available" — first letter, eligible for $50 attorney review offer
    *   - "subscribed"            — active monthly/annual plan (bypass paywall entirely)
-   *   - "free_trial_used"       — first letter review already used/paid
    *   - "subscription_required" — must subscribe
+   *
+   * Note: one-time pay-as-you-go ($299 single letter) has been removed.
+   * Non-subscribers must subscribe to submit letters for attorney review.
    */
   checkPaywallStatus: subscriberProcedure.query(async ({ ctx }) => {
     const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
     if (isSubscribed)
       return {
         state: "subscribed" as const,
-        eligible: false,
+        eligible: true,
         hasActiveRecurringSubscription: true,
       };
 
-    const { countLettersBeyondPipeline } = await import("../../db/letters");
-    const unlockedCount = await countLettersBeyondPipeline(ctx.user.id);
-    if (unlockedCount === 0)
-      return {
-        state: "free_review_available" as const,
-        eligible: true,
-        hasActiveRecurringSubscription: false,
-      };
     return {
-      state: "free_trial_used" as const,
+      state: "subscription_required" as const,
       eligible: false,
       hasActiveRecurringSubscription: false,
     };
   }),
 
-  // Legacy alias: kept for backward compat (LetterPaywall still calls this)
+  // Legacy alias: subscription-only. Always false for non-subscribers.
   checkFirstLetterFree: subscriberProcedure.query(async ({ ctx }) => {
     const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
-    if (isSubscribed) return { eligible: false };
-    const { countLettersBeyondPipeline } = await import("../../db/letters");
-    const paidCount = await countLettersBeyondPipeline(ctx.user.id);
-    return { eligible: paidCount === 0 };
+    return { eligible: isSubscribed };
   }),
 
   paymentHistory: protectedProcedure.query(async ({ ctx }) => {
