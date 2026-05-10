@@ -48,7 +48,7 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 | **Rate Limiting** | Upstash Redis (`@upstash/ratelimit`) |
 | **File Storage** | Cloudflare R2 (S3-compatible) |
 | **Monitoring** | Sentry (frontend + backend), Pino structured logger |
-| **Deployment** | Railway (Docker multi-stage build), Kubernetes configs in `k8s/` |
+| **Deployment** | Railway (Docker multi-stage build) |
 
 ---
 
@@ -96,8 +96,6 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 ├── e2e/                  # Playwright end-to-end tests
 ├── attached_assets/      # HTML letter templates loaded at runtime (PDF generation)
 ├── docs/                 # Architecture docs, runbooks, feature maps
-├── cloudflare/           # Cloudflare Worker source (affiliate, KV, email, PDF)
-├── k8s/                  # Kubernetes manifests (alternative to Railway)
 └── scripts/              # Utility scripts (seed users, backfill, etc.)
 ```
 

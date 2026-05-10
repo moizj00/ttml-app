@@ -34,7 +34,7 @@ Each row = one external service.
 | 4 | **OpenAI** | Pay-as-you-go | API key | Primary drafting model + lesson embeddings |
 | 5 | **Perplexity** | Pro API | API key | Sole research provider — hard fail if missing |
 | 6 | **Resend** | Pro ($20/mo, needed for `talk-to-my-lawyer.com` sender) | API key, verified domain | Transactional email |
-| 7 | **Cloudflare** | Free → Workers Paid ($5/mo) | R2 bucket + access key/secret, optional Workers | Attachments, optional perf workers |
+| 7 | **Cloudflare** | Free (R2) | R2 bucket + access key/secret | Attachments, optional storage |
 | 8 | **Upstash** | Pay-as-you-go (free tier OK to start) | Redis REST URL + token | Rate limiting (fail-open) |
 | 9 | **Sentry** | Team ($26/mo) — optional | DSN, org slug, project slug | Error monitoring |
 | 10 | **Railway** | Hobby ($5/mo) or Pro ($20/mo) | Project, 3 services (web, worker, migrate), domain attachment | Hosting |
