@@ -161,14 +161,16 @@ describe("Review Queue — only shows attorney-relevant statuses", () => {
   });
 });
 
-describe("Stripe products — per-letter unlock price", () => {
-  it("LETTER_UNLOCK_PRICE_CENTS is $299 (29900 cents)", async () => {
-    const { LETTER_UNLOCK_PRICE_CENTS } = await import("./stripe-products");
-    expect(LETTER_UNLOCK_PRICE_CENTS).toBe(29900);
+describe("Stripe products — subscription plan prices", () => {
+  it("monthly plan price is $299 (29900 cents)", async () => {
+    const { PLANS, MONTHLY_PRICE_CENTS } = await import("./stripe-products");
+    expect(PLANS.monthly.price).toBe(29900);
+    expect(MONTHLY_PRICE_CENTS).toBe(29900);
   });
 
-  it("single_letter plan price is $299", async () => {
-    const { PLANS } = await import("./stripe-products");
-    expect(PLANS.single_letter.price).toBe(29900);
+  it("yearly plan price is $2,400 (240000 cents)", async () => {
+    const { PLANS, YEARLY_PRICE_CENTS } = await import("./stripe-products");
+    expect(PLANS.yearly.price).toBe(240000);
+    expect(YEARLY_PRICE_CENTS).toBe(240000);
   });
 });
