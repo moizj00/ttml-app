@@ -239,7 +239,7 @@ describe("Phase 38: Pipeline Sync + PDF Generation", () => {
         content.indexOf("export async function sendLetterApprovedEmail"),
         content.indexOf("export async function sendNeedsChangesEmail")
       );
-      expect(fnSection).toContain("Download your Reviewed PDF");
+      expect(fnSection).toContain("Download your Attorney-Approved Lawyer Letter PDF");
     });
   });
 
