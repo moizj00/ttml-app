@@ -1,6 +1,7 @@
 version: "3.9"
 
 services:
+  # Single dev container with migrate, app, and worker running as separate processes
   app:
     build:
       context: ..
@@ -14,16 +15,5 @@ services:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
       - ..:/workspace:cached
-
-  worker:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: ttml-worker-dev
-    env_file:
-      - ../.env
-    environment:
-      NODE_ENV: production
-      PROCESS_TYPE: worker
-    depends_on:
-      - app
+    stdin_open: true
+    tty: true

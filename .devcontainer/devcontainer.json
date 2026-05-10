@@ -6,8 +6,7 @@
   "service": "app",
   "workspaceFolder": "/workspace",
   "runServices": [
-    "app",
-    "worker"
+    "app"
   ],
   "remoteUser": "vscode",
   "customizations": {
