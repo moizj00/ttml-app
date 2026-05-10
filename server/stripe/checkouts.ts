@@ -5,7 +5,7 @@ import Stripe from "stripe";
 import { getStripe, getOrCreateStripeCustomer } from "./client";
 import { resolveStripeCoupon } from "./coupons";
 import { logger } from "../logger";
-import { getPlanConfig, LETTER_UNLOCK_PRICE_CENTS } from "../stripe-products";
+import { getPlanConfig } from "../stripe-products";
 
 // ─── Create Checkout Session (subscription/one-time plans) ───────────────────
 export async function createCheckoutSession(params: {
