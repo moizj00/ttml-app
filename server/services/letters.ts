@@ -234,6 +234,14 @@ export async function sendLetterToRecipientFlow(
   if (!letter || letter.userId !== ctx.userId)
     throw new TRPCError({ code: "NOT_FOUND" });
 
+  const SENDABLE_STATUSES = ["client_approved", "approved", "sent"] as const;
+  if (!SENDABLE_STATUSES.includes(letter.status as any)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Letter must be approved before sending. Current status: ${letter.status}`,
+    });
+  }
+
   // Resolve a current PDF URL so the recipient receives the polished
   // attorney-signed PDF (not just inline HTML). Three cases:
   //

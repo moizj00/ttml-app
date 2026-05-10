@@ -320,41 +320,6 @@ export const reviewActionsRouter = router({
           noteVisibility: "user_visible",
         });
       }
-      // ── Generate PDF immediately upon attorney approval ──
-      // Security: store only the R2 key in DB — never a permanent public URL.
-      // Presigned URLs are generated on-demand when serving to the client.
-      let pdfKey: string | undefined;
-      let pdfUrl: string | undefined;
-      try {
-        const pdfResult = await generateAndUploadApprovedPdf({
-          letterId: input.letterId,
-          letterType: letter.letterType,
-          subject: input.subjectOverride ?? letter.subject,
-          content: input.finalContent,
-          approvedBy: ctx.user.name ?? undefined,
-          approvedAt: new Date().toISOString(),
-          jurisdictionState: letter.jurisdictionState,
-          jurisdictionCountry: letter.jurisdictionCountry,
-          intakeJson: letter.intakeJson as Record<string, unknown> | null,
-        });
-        pdfKey = pdfResult.pdfKey;
-        await updateLetterStoragePath(input.letterId, pdfKey);
-        pdfUrl = pdfResult.pdfUrl;
-        await updateLetterPdfUrl(input.letterId, pdfUrl);
-        logger.info(
-          `[Approve] PDF generated for letter #${input.letterId}: key=${pdfKey}`
-        );
-      } catch (pdfErr) {
-        captureServerException(pdfErr, {
-          tags: { component: "review", error_type: "pdf_generation_failed" },
-          extra: { letterId: input.letterId },
-        });
-        logger.error(
-          { err: pdfErr },
-          `[Approve] PDF generation failed for letter #${input.letterId} (non-blocking):`
-        );
-        // Non-blocking: approval still succeeds even if PDF generation fails
-      }
       // ── Auto-advance to client_approval_pending so the subscriber can act ──
       // Without this the letter is stuck at `approved` and the subscriber's
       // /letters/<id> page shows the approved-letter panel but no

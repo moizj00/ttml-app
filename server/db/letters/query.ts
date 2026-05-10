@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 import { letterRequests, letterDeliveryLog } from "../../../drizzle/schema";
 import { getDb } from "../core";
 import { storageGet } from "../../storage";
@@ -117,4 +117,27 @@ export async function getDeliveryLogByLetterId(letterRequestId: number) {
     .from(letterDeliveryLog)
     .where(eq(letterDeliveryLog.letterRequestId, letterRequestId))
     .orderBy(desc(letterDeliveryLog.createdAt));
+}
+
+/** Count how many letters a user has that have progressed beyond the pipeline stage.
+ * Used by billing to determine free-trial / paywall eligibility. */
+export async function countLettersBeyondPipeline(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .select({ id: letterRequests.id })
+    .from(letterRequests)
+    .where(
+      and(
+        eq(letterRequests.userId, userId),
+        notInArray(letterRequests.status, [
+          "submitted",
+          "researching",
+          "drafting",
+          "generated_locked",
+          "pipeline_failed",
+        ])
+      )
+    );
+  return rows.length;
 }

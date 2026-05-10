@@ -89,31 +89,9 @@ export const billingSubscriptionsRouter = router({
         hasActiveRecurringSubscription: true,
       };
 
-    const db = await (await import("../../db")).getDb();
-    if (!db)
-      return {
-        state: "subscription_required" as const,
-        eligible: false,
-        hasActiveRecurringSubscription: false,
-      };
-    const { letterRequests } = await import("../../../drizzle/schema");
-    const { eq, and, notInArray } = await import("drizzle-orm");
-    const unlockedLetters = await db
-      .select({ id: letterRequests.id })
-      .from(letterRequests)
-      .where(
-        and(
-          eq(letterRequests.userId, ctx.user.id),
-          notInArray(letterRequests.status, [
-            "submitted",
-            "researching",
-            "drafting",
-            "generated_locked",
-            "pipeline_failed",
-          ])
-        )
-      );
-    if (unlockedLetters.length === 0)
+    const { countLettersBeyondPipeline } = await import("../../db/letters");
+    const unlockedCount = await countLettersBeyondPipeline(ctx.user.id);
+    if (unlockedCount === 0)
       return {
         state: "free_review_available" as const,
         eligible: true,
@@ -130,26 +108,9 @@ export const billingSubscriptionsRouter = router({
   checkFirstLetterFree: subscriberProcedure.query(async ({ ctx }) => {
     const isSubscribed = await hasActiveRecurringSubscription(ctx.user.id);
     if (isSubscribed) return { eligible: false };
-    const db = await (await import("../../db")).getDb();
-    if (!db) return { eligible: false };
-    const { letterRequests } = await import("../../../drizzle/schema");
-    const { eq, and, notInArray } = await import("drizzle-orm");
-    const paidLetters = await db
-      .select({ id: letterRequests.id })
-      .from(letterRequests)
-      .where(
-        and(
-          eq(letterRequests.userId, ctx.user.id),
-          notInArray(letterRequests.status, [
-            "submitted",
-            "researching",
-            "drafting",
-            "generated_locked",
-            "pipeline_failed",
-          ])
-        )
-      );
-    return { eligible: paidLetters.length === 0 };
+    const { countLettersBeyondPipeline } = await import("../../db/letters");
+    const paidCount = await countLettersBeyondPipeline(ctx.user.id);
+    return { eligible: paidCount === 0 };
   }),
 
   paymentHistory: protectedProcedure.query(async ({ ctx }) => {
