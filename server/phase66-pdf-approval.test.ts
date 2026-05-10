@@ -187,10 +187,10 @@ describe("approval flow", () => {
     expect(routersSource).toContain("pdfUrl");
   });
 
-  it("all letter paths (free, unlocked, subscribed) route through pending_review before approval", () => {
+  it("all letter paths route through pending_review before approval", () => {
     const routersSource = readAllRouters();
     expect(routersSource).toContain('"pending_review"');
-    expect(routersSource).toContain("freeUnlock");
+    expect(routersSource).toContain("subscriptionSubmit");
     expect(routersSource).toContain("Letter must be under_review to approve");
   });
 });
