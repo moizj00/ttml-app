@@ -130,7 +130,10 @@ export async function createCheckoutSession(params: {
  * generated_locked letter. The letter_id is stored in session metadata so
  * the webhook can transition it to pending_review after payment.
  */
-export async function createLetterUnlockCheckout(params: {
+/**
+ * @deprecated Single-letter unlock is no longer supported. Subscription only.
+ */
+export async function createLetterUnlockCheckout(_params: {
   userId: number;
   email: string;
   name?: string | null;
@@ -138,71 +141,9 @@ export async function createLetterUnlockCheckout(params: {
   origin: string;
   discountCode?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  const { userId, email, name, letterId, origin, discountCode } = params;
-  const stripe = getStripe();
-  const customerId = await getOrCreateStripeCustomer(userId, email, name);
-  // Resolve discount code to a Stripe coupon + metadata
-  const resolved = await resolveStripeCoupon(discountCode);
-  const originalPriceCents = LETTER_UNLOCK_PRICE_CENTS;
-  const finalPriceCents = resolved
-    ? Math.round(originalPriceCents * (1 - resolved.discountPercent / 100))
-    : originalPriceCents;
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    client_reference_id: userId.toString(),
-    mode: "payment",
-    payment_method_types: ["card"],
-    ...(resolved
-      ? { discounts: [{ coupon: resolved.stripeCouponId }] }
-      : { allow_promotion_codes: true }),
-    metadata: {
-      user_id: userId.toString(),
-      plan_id: "single_letter",
-      letter_id: letterId.toString(),
-      unlock_type: "letter_unlock",
-      customer_email: email,
-      customer_name: name ?? "",
-      original_price: originalPriceCents.toString(),
-      final_price: finalPriceCents.toString(),
-      ...(discountCode ? { discount_code: discountCode } : {}),
-      ...(resolved
-        ? {
-            discount_code_id: resolved.discountCodeId.toString(),
-            employee_id: resolved.employeeId.toString(),
-          }
-        : {}),
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "Legal Letter — Attorney Review",
-            description:
-              "Unlock your attorney-reviewed letter and send it for licensed attorney review and approval.",
-            metadata: {
-              plan_id: "single_letter",
-              letter_id: letterId.toString(),
-            },
-          },
-          unit_amount: LETTER_UNLOCK_PRICE_CENTS,
-        },
-        quantity: 1,
-      },
-    ],
-    payment_intent_data: {
-      metadata: {
-        user_id: userId.toString(),
-        plan_id: "single_letter",
-        letter_id: letterId.toString(),
-        unlock_type: "letter_unlock",
-      },
-    },
-    success_url: `${origin}/letters/${letterId}?unlocked=true`,
-    cancel_url: `${origin}/letters/${letterId}?canceled=true`,
-  });
-  if (!session.url) throw new Error("Stripe did not return a checkout URL");
-  return { url: session.url, sessionId: session.id };
+  throw new Error(
+    "Single-letter unlock is no longer available. Please subscribe to a plan."
+  );
 }
 
 // ─── First Letter Review Checkout ($50 attorney review gate) ─────────────────
@@ -282,11 +223,10 @@ export async function createRevisionConsultationCheckout(params: {
   return { url: session.url, sessionId: session.id };
 }
 
-// ─── DEPRECATED: Trial Review Checkout ──────────────────────────────────────────────
 /**
- * @deprecated First letter is now fully free. Redirects to createLetterUnlockCheckout.
+ * @deprecated Trial review checkout is no longer supported. Subscription only.
  */
-export async function createTrialReviewCheckout(params: {
+export async function createTrialReviewCheckout(_params: {
   userId: number;
   email: string;
   name?: string | null;
@@ -294,8 +234,7 @@ export async function createTrialReviewCheckout(params: {
   origin: string;
   discountCode?: string;
 }): Promise<{ url: string; sessionId: string }> {
-  logger.warn(
-    "[Stripe] createTrialReviewCheckout is deprecated — first letter is now free"
+  throw new Error(
+    "Trial review checkout is no longer available. Please subscribe to a plan."
   );
-  return createLetterUnlockCheckout({ ...params });
 }
