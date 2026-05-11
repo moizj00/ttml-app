@@ -10,7 +10,7 @@ services:
     environment:
       NODE_ENV: development
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${PORT:-3001}:${PORT:-3001}"
     volumes:
       - ..:/workspace:cached
     stdin_open: true
