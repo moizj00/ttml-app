@@ -26,6 +26,10 @@ import {
   consumeIntermediateContent,
   preflightApiKeyCheck,
 } from "./pipeline";
+import {
+  runSimplePipeline,
+  runOpenAIDirectFallback,
+} from "./pipeline/simple";
 import { getGraphWithCheckpointer } from "./pipeline/graph";
 import type { PipelineStateType } from "./pipeline/graph/state";
 import {

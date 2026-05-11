@@ -297,3 +297,76 @@ export async function runSimplePipeline(
     };
   }
 }
+
+// ═══════════════════════════════════════════════════════
+// OPENAI DIRECT FALLBACK
+// Emergency one-shot OpenAI generation when even the simple pipeline fails.
+// No workflow job, no admin alerts, no Claude attempt — just generate and save.
+// ═══════════════════════════════════════════════════════
+
+export async function runOpenAIDirectFallback(
+  letterId: number,
+  intake: IntakeJson,
+  userId?: number
+): Promise<{ success: boolean; letter?: string; error?: string }> {
+  logger.info({ letterId, userId }, "[OpenAIFallback] Starting direct OpenAI fallback");
+
+  try {
+    await updateLetterStatus(letterId, "researching");
+    await updateLetterStatus(letterId, "drafting");
+
+    const prompt = buildPrompt(intake);
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_MODEL,
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = completion.choices[0]?.message?.content ?? "";
+    if (!content) {
+      logger.error({ letterId }, "[OpenAIFallback] OpenAI returned empty response");
+      return { success: false, error: "OpenAI returned empty response" };
+    }
+
+    logger.info(
+      { letterId, chars: content.length },
+      "[OpenAIFallback] OpenAI generated letter"
+    );
+
+    const version = await createLetterVersion({
+      letterRequestId: letterId,
+      versionType: "ai_draft",
+      content,
+      createdByType: "system",
+      createdByUserId: userId,
+      metadataJson: {
+        model: OPENAI_MODEL,
+        provider: "openai",
+        mode: "openai_direct_fallback",
+        promptTokens: completion.usage?.prompt_tokens,
+        completionTokens: completion.usage?.completion_tokens,
+      },
+    });
+
+    await updateLetterVersionPointers(letterId, {
+      currentAiDraftVersionId: version.insertId,
+    });
+
+    const isPreviewGated = await isLetterPreviewGated(letterId);
+    await finalizeDraftPreviewStatus(letterId, isPreviewGated);
+
+    dispatchFreePreviewIfReady(letterId).catch(err =>
+      logger.warn(
+        { letterId, err: err instanceof Error ? err.message : String(err) },
+        "[OpenAIFallback] dispatchFreePreviewIfReady threw (non-fatal)"
+      )
+    );
+
+    logger.info({ letterId }, "[OpenAIFallback] Letter saved and status updated");
+    return { success: true, letter: content };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logger.error({ err: error, letterId }, "[OpenAIFallback] Direct OpenAI fallback failed");
+    return { success: false, error };
+  }
+}
