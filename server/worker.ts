@@ -231,9 +231,7 @@ export async function processRunPipeline(
   }
 
   // ── New-user / free-trial path: simple pipeline + OpenAI fallback ─────────
-  const isNewUser =
-    usageContext?.isFreeTrialSubmission === true ||
-    usageContext?.isPreviewGatedSubmission === true;
+  const isNewUser = usageContext?.isFreeTrialSubmission === true;
 
   if (isNewUser) {
     logger.info(

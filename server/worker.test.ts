@@ -120,6 +120,7 @@ const {
   bestEffortFallback,
   consumeIntermediateContent,
 } = await import("./pipeline");
+const { runSimplePipeline } = await import("./pipeline/simple");
 const {
   acquirePipelineLock,
   releasePipelineLock,
@@ -444,6 +445,7 @@ describe("processRunPipeline — usage refund paths", () => {
     vi.mocked(bestEffortFallback).mockResolvedValue(false);
     vi.mocked(getAllUsers).mockResolvedValue([] as never);
     vi.mocked(runFullPipeline).mockRejectedValue(new Error("Pipeline failed"));
+    vi.mocked(runSimplePipeline).mockResolvedValue({ success: false, error: "Simple pipeline failed" } as never);
   });
 
   afterEach(() => {
