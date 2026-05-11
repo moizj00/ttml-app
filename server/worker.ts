@@ -26,10 +26,7 @@ import {
   consumeIntermediateContent,
   preflightApiKeyCheck,
 } from "./pipeline";
-import {
-  runSimplePipeline,
-  runOpenAIDirectFallback,
-} from "./pipeline/simple";
+import { runSimplePipeline } from "./pipeline/simple";
 import {
   requiresDraftVisibilityGate,
   resolvePipelineExecutionRoute,
@@ -265,40 +262,15 @@ export async function processRunPipeline(
         return;
       }
 
-      logger.warn(
-        { err: simpleResult.error, letterId },
-        `[Worker] Simple pipeline failed for new user letter #${letterId} — attempting OpenAI direct fallback`
-      );
-
-      const fallbackResult = await runOpenAIDirectFallback(
-        letterId,
-        intake as any,
-        userId
-      );
-      if (fallbackResult.success) {
-        await updatePipelineRecord(letterId, {
-          status: "completed",
-          currentStep: "completed",
-          progress: 100,
-          finalLetter: fallbackResult.letter,
-          completedAt: new Date(),
-        });
-        logger.info(
-          `[Worker] OpenAI direct fallback completed for new user letter #${letterId}`
-        );
-        return;
-      }
-
       logger.error(
-        { err: fallbackResult.error, letterId },
-        `[Worker] Both simple pipeline and OpenAI fallback failed for new user letter #${letterId}`
+        { err: simpleResult.error, letterId },
+        `[Worker] Simple pipeline failed for new user letter #${letterId}`
       );
       await updatePipelineRecord(letterId, {
         status: "failed",
         currentStep: "failed",
         progress: 100,
-        errorMessage:
-          fallbackResult.error ?? "Simple pipeline and OpenAI fallback both failed",
+        errorMessage: simpleResult.error ?? "Simple pipeline failed",
         completedAt: new Date(),
       });
       await updateLetterStatus(

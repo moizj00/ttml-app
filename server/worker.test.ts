@@ -120,7 +120,7 @@ const {
   bestEffortFallback,
   consumeIntermediateContent,
 } = await import("./pipeline");
-const { runSimplePipeline } = await import("./pipeline/simple");
+const { runSimplePipeline, runOpenAIDirectFallback } = await import("./pipeline/simple");
 const {
   acquirePipelineLock,
   releasePipelineLock,
@@ -446,6 +446,7 @@ describe("processRunPipeline — usage refund paths", () => {
     vi.mocked(getAllUsers).mockResolvedValue([] as never);
     vi.mocked(runFullPipeline).mockRejectedValue(new Error("Pipeline failed"));
     vi.mocked(runSimplePipeline).mockResolvedValue({ success: false, error: "Simple pipeline failed" } as never);
+    vi.mocked(runOpenAIDirectFallback).mockResolvedValue({ success: false, error: "OpenAI fallback failed" } as never);
   });
 
   afterEach(() => {
