@@ -6,28 +6,25 @@ set -e
 
 echo "🚀 Starting TTML Dev Container..."
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-pnpm install --frozen-lockfile
+# Build first (needed for dist/migrate.js, dist/index.js, and dist/worker.js)
+echo "🔨 Building server..."
+pnpm build
 
 # Run migrations
 echo "🔄 Running database migrations..."
-node dist/migrate.js || true
+node --dns-result-order=ipv4first dist/migrate.js || true
 
 # Start app and worker in parallel
 echo "✨ Starting app and worker..."
 
-# Build first (needed for dist/index.js and dist/worker.js)
-pnpm build
-
 # Start app in background
 echo "Starting Express app on port ${PORT:-3000}..."
-node --import ./dist/instrument.js dist/index.js &
+node --dns-result-order=ipv4first --import ./dist/instrument.js dist/index.js &
 APP_PID=$!
 
 # Start worker in background
 echo "Starting pipeline worker..."
-node --import ./dist/instrument.js dist/worker.js &
+node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js &
 WORKER_PID=$!
 
 echo "✅ All services started!"
