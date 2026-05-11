@@ -225,6 +225,115 @@ export async function processRunPipeline(
     );
   }
 
+  // ── New-user / free-trial path: simple pipeline + OpenAI fallback ─────────
+  const isNewUser =
+    usageContext?.isFreeTrialSubmission === true ||
+    usageContext?.isPreviewGatedSubmission === true;
+
+  if (isNewUser) {
+    logger.info(
+      `[Worker] Letter #${letterId} is new-user/free-trial — using simple pipeline (bypassing complex pipeline)`
+    );
+    try {
+      await updatePipelineRecord(letterId, {
+        status: "running",
+        currentStep: "drafting",
+        progress: 10,
+        startedAt: new Date(),
+        errorMessage: null,
+      });
+
+      const simpleResult = await runSimplePipeline(
+        letterId,
+        intake as any,
+        userId
+      );
+      if (simpleResult.success) {
+        await updatePipelineRecord(letterId, {
+          status: "completed",
+          currentStep: "completed",
+          progress: 100,
+          finalLetter: simpleResult.letter,
+          completedAt: new Date(),
+        });
+        logger.info(
+          `[Worker] Simple pipeline completed for new user letter #${letterId}`
+        );
+        return;
+      }
+
+      logger.warn(
+        { err: simpleResult.error, letterId },
+        `[Worker] Simple pipeline failed for new user letter #${letterId} — attempting OpenAI direct fallback`
+      );
+
+      const fallbackResult = await runOpenAIDirectFallback(
+        letterId,
+        intake as any,
+        userId
+      );
+      if (fallbackResult.success) {
+        await updatePipelineRecord(letterId, {
+          status: "completed",
+          currentStep: "completed",
+          progress: 100,
+          finalLetter: fallbackResult.letter,
+          completedAt: new Date(),
+        });
+        logger.info(
+          `[Worker] OpenAI direct fallback completed for new user letter #${letterId}`
+        );
+        return;
+      }
+
+      logger.error(
+        { err: fallbackResult.error, letterId },
+        `[Worker] Both simple pipeline and OpenAI fallback failed for new user letter #${letterId}`
+      );
+      await updatePipelineRecord(letterId, {
+        status: "failed",
+        currentStep: "failed",
+        progress: 100,
+        errorMessage:
+          fallbackResult.error ?? "Simple pipeline and OpenAI fallback both failed",
+        completedAt: new Date(),
+      });
+      await updateLetterStatus(
+        letterId,
+        LETTER_STATUS.pipeline_failed,
+        { force: true }
+      );
+      return;
+    } catch (bypassErr) {
+      const msg =
+        bypassErr instanceof Error ? bypassErr.message : String(bypassErr);
+      logger.error(
+        { err: msg, letterId },
+        `[Worker] New-user bypass threw for letter #${letterId}`
+      );
+      await updatePipelineRecord(letterId, {
+        status: "failed",
+        currentStep: "failed",
+        progress: 100,
+        errorMessage: msg,
+        completedAt: new Date(),
+      }).catch(() => {});
+      await updateLetterStatus(
+        letterId,
+        LETTER_STATUS.pipeline_failed,
+        { force: true }
+      ).catch(() => {});
+      return;
+    } finally {
+      await releasePipelineLock(letterId).catch(e =>
+        logger.error(
+          { e },
+          "[Worker] Failed to release pipeline lock after new-user bypass:"
+        )
+      );
+    }
+  }
+
   // ── LangGraph pipeline route — mode-aware ──────────────────────────────────
   // LANGGRAPH_PIPELINE supports four values, parsed by parseLangGraphMode():
   //   off / unset → skip LangGraph entirely (n8n + standard pipeline only)
