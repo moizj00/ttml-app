@@ -16,12 +16,12 @@
         "esbenp.prettier-vscode",
         "esbenp.open-in-github",
         "ms-vscode.vscode-typescript-next"
-      ]
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
     }
   },
   "postCreateCommand": "pnpm install --frozen-lockfile",
-  "forwardPorts": [3000],
-  "settings": {
-    "terminal.integrated.defaultProfile.linux": "bash"
-  }
+  "forwardPorts": [3000]
 }
