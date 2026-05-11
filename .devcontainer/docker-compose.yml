@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # Single dev container with migrate, app, and worker running as separate processes
   app:
