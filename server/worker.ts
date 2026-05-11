@@ -30,7 +30,14 @@ import {
   runSimplePipeline,
   runOpenAIDirectFallback,
 } from "./pipeline/simple";
-import { getGraphWithCheckpointer } from "./pipeline/graph";
+import {
+  requiresDraftVisibilityGate,
+  resolvePipelineExecutionRoute,
+} from "./pipeline/routing";
+import {
+  getGraphWithCheckpointer,
+  runLangGraphPipeline,
+} from "./pipeline/graph";
 import type { PipelineStateType } from "./pipeline/graph/state";
 import {
   parseLangGraphMode,

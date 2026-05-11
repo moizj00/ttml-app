@@ -143,7 +143,7 @@ export async function submitSubscriberIntakeProcedure(
     pipelineId: requestId,
     status: "submitted",
     subscriberVisibleAt,
-    isFreePreview: true,
+    isFreePreview: isFreeTrialSubmission,
   };
 }
 
