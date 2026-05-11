@@ -12,7 +12,10 @@ import { eq } from "drizzle-orm";
 import type { PipelineStateType } from "../state";
 import { dispatchFreePreviewIfReady } from "../../../freePreviewEmailCron";
 import { breadcrumb, totalTokens } from "../memory";
-import { resolveDraftPreviewFinalStatus } from "../../preview-gate";
+import {
+  isLetterPreviewGated,
+  resolveDraftPreviewFinalStatus,
+} from "../../preview-gate";
 import { captureServerException } from "../../../sentry";
 
 const log = createLogger({ module: "LangGraph:FinalizeNode" });
@@ -204,9 +207,11 @@ export async function finalizeNode(
     });
   }
 
-  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
-  // If this is a free preview, set status to ai_generation_completed_hidden (Procedure 4)
-  const finalStatus = resolveDraftPreviewFinalStatus(state.isFreePreview);
+  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS.
+  // The 24h gate is DB-backed; never trust the graph state flag alone because
+  // paid subscribers are also draft-visibility gated.
+  const isDraftVisibilityGated = await isLetterPreviewGated(letterId);
+  const finalStatus = resolveDraftPreviewFinalStatus(isDraftVisibilityGated);
   await updateLetterStatus(letterId, finalStatus);
 
   // Close out the workflow_jobs row so admin monitor shows this run as

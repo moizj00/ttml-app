@@ -285,13 +285,13 @@ export const versionsRouter = router({
         if (version.versionType === "final_approved") return version;
         if (version.versionType === "ai_draft") {
           const letter = await getLetterRequestById(version.letterRequestId);
-          const isFreePreview = letter?.isFreePreview === true;
+          const isDraftVisibilityGated = Boolean(letter?.freePreviewUnlockAt);
           const isLocked =
             !!letter && LOCKED_PREVIEW_STATUSES.has(letter.status);
           if (
             letter &&
             letter.userId === ctx.user.id &&
-            (isFreePreview || isLocked)
+            (isDraftVisibilityGated || isLocked)
           ) {
             const [gatedVersion] = applyFreePreviewGate(
               [version as any],

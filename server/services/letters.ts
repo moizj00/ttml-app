@@ -48,7 +48,7 @@ import { logger } from "../logger";
 
 import {
   submitSubscriberIntakeProcedure,
-  getSubscriberReleasedLetterProcedure as canonicalGetReleasedProcedure,
+  getSubscriberDraftPreviewProcedure as canonicalGetDraftPreviewProcedure,
 } from "./canonicalProcedures";
 
 // ─── Submit Letter (subscriber path) ───────────────────────────────────────
@@ -97,14 +97,14 @@ export async function submitLetter(
 }
 
 /**
- * PROCEDURE 6: getSubscriberReleasedLetterProcedure
+ * PROCEDURE 6: getSubscriberDraftPreviewProcedure
  * Delegates to the canonical implementation.
  */
 export async function getSubscriberReleasedLetterProcedure(
   letterId: number,
   userId: number
 ) {
-  const result = await canonicalGetReleasedProcedure(letterId, userId);
+  const result = await canonicalGetDraftPreviewProcedure(letterId, userId);
   const letter = await getLetterRequestById(letterId);
 
   if (!letter) return null;

@@ -1,0 +1,10 @@
+diff a/server/services/canonicalProcedures.ts b/server/services/canonicalProcedures.ts	(rejected hunks)
+@@ -124,7 +133,7 @@
+     requestId,
+     status: "submitted",
+     subscriberVisibleAt,
+-    isFreePreview: true,
++    isFreePreview: isFreeTrialSubmission,
+   };
+ }
+ 

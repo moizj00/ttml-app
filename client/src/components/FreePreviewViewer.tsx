@@ -6,9 +6,9 @@ import { trpc } from "@/lib/trpc";
 /**
  * FreePreviewViewer — first-letter free-preview lead-magnet renderer.
  *
- * Shown when a subscriber has submitted their first letter via the free-trial
- * path AND the 24-hour cooling-off window has elapsed. Replaces the standard
- * LetterPaywall for these letters.
+ * Shown after the 24-hour draft visibility gate elapses. For free-trial users,
+ * the CTA requires subscription before attorney review. For active paid
+ * subscribers, the CTA submits directly to attorney review.
  *
  * Behavior:
  *   - Renders the FULL ai_draft (no truncation, no PII redaction).
@@ -407,7 +407,7 @@ export function FreePreviewViewer({
             <Button
               className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold h-11 shadow-md"
               size="lg"
-              onClick={() => navigate("/pricing")}
+              onClick={() => navigate(`/pricing?returnTo=/letters/${letterId}`)}
             >
               See plans
               <ArrowRight className="w-4 h-4 ml-2" />

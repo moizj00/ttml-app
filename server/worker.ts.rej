@@ -1,0 +1,13 @@
+diff a/server/worker.ts b/server/worker.ts	(rejected hunks)
+@@ -27,6 +27,11 @@
+   preflightApiKeyCheck,
+ } from "./pipeline";
+ import { runLangGraphPipeline } from "./pipeline/graph";
++import { runSimplePipeline } from "./pipeline/simple";
++import {
++  requiresDraftVisibilityGate,
++  resolvePipelineExecutionRoute,
++} from "./pipeline/routing";
+ import {
+   parseLangGraphMode,
+   useLangGraphForLetter,

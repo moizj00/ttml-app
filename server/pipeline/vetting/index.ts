@@ -64,7 +64,10 @@ import {
 } from "../citations";
 import { runAssemblyStage } from "../assembly";
 import { parseVettingResponse, runPostVetChecks } from "../vetting-parser";
-import { resolveDraftPreviewFinalStatus } from "../preview-gate";
+import {
+  isLetterPreviewGated,
+  resolveDraftPreviewFinalStatus,
+} from "../preview-gate";
 
 // ═══════════════════════════════════════════════════════
 // STAGE 4: CLAUDE VETTING PASS
@@ -695,7 +698,7 @@ export async function finalizeLetterAfterVetting(
   }
 
   const finalStatus = resolveDraftPreviewFinalStatus(
-    pipelineCtx?.isFreePreview
+    await isLetterPreviewGated(letterId)
   );
   const noteText = isDegraded
     ? `Draft ready with quality warnings. Our professional drafting models completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`

@@ -25,6 +25,7 @@ import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
 import { getUserById, isUserFirstLetterEligible } from "./db";
 import { sendPaywallNotificationEmail } from "./email";
+import { hasActiveRecurringSubscription } from "./stripe";
 import { createLogger } from "./logger";
 
 const paywallLogger = createLogger({ module: "PaywallEmails" });
@@ -134,6 +135,16 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
           letterId: letter.id,
           status: "skipped",
           reason: "no subscriber email",
+        });
+        continue;
+      }
+
+      if (await hasActiveRecurringSubscription(letter.userId!)) {
+        result.skipped++;
+        result.details.push({
+          letterId: letter.id,
+          status: "skipped",
+          reason: "active subscriber — no paywall email",
         });
         continue;
       }
