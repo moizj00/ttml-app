@@ -233,7 +233,7 @@ function buildPipelineGraph() {
     .addNode("draft", withErrorRecovery("draft", draftNode))
     .addNode("assembly", withErrorRecovery("assembly", assemblyNode))
     .addNode("vetting", withErrorRecovery("vetting", vettingRouterNode))
-    .addNode("finalize", finalizeNode)
+    .addNode("finalize", withErrorRecovery("finalize", finalizeNode))
     .addNode("fail", failNode)
 
     // ─── Entry point ──────────────────────────────────────
@@ -313,7 +313,9 @@ export async function runLangGraphPipeline(
   });
 
   if (finalState.currentStage === "failed") {
-    throw new Error(`LangGraph pipeline failed for letter #${letterId}`);
+    const errCode = finalState.lastErrorCode ?? "UNKNOWN_ERROR";
+    const errMsg = finalState.lastErrorMessage ?? "LangGraph pipeline failed";
+    throw new Error(`[${errCode}] ${errMsg} (letter #${letterId})`);
   }
 
   log.info(

@@ -162,7 +162,9 @@ async function runQueuedLangGraphPipeline(
     });
 
     if (failed) {
-      throw new Error(`LangGraph pipeline failed for letter #${data.letterId}`);
+      const errCode = finalState.lastErrorCode ?? "UNKNOWN_ERROR";
+      const errMsg = finalState.lastErrorMessage ?? "LangGraph pipeline failed";
+      throw new Error(`[${errCode}] ${errMsg} (letter #${data.letterId})`);
     }
 
     return finalState;

@@ -269,7 +269,7 @@ export default function PipelineProgressModal({
             {isFailed
               ? pipelineRecord?.error_message ?? "The background pipeline could not complete. The team has been notified."
               : isReleasePending
-                ? "Your draft has been generated and saved, but it will stay hidden until the 24-hour preview window ends or an admin releases it early."
+                ? "Your draft has been generated and saved. It will be available shortly."
               : isComplete
               ? "Your professional letter draft is complete. View details for the next steps."
               : `A professional draft is being prepared based on thorough research. This typically takes 1-2 minutes (${formatTime(ESTIMATED_DURATION_SECONDS)}).`}
