@@ -24,9 +24,18 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 # No startCommand needed — docker-entrypoint.sh dispatches via PROCESS_TYPE env var
-# NOTE: healthcheckPath removed because this file is shared by all services
-# (web, worker, migrate). The migrate and worker services are not HTTP servers
-# and will fail healthchecks. Set healthcheckPath = /api/health on the
-# ttml-app (web) service ONLY via the Railway dashboard.
+#
+# NOTE ON HEALTHCHECKS:
+# The web service (PROCESS_TYPE=web) uses Express on /api/health.
+# The worker service (PROCESS_TYPE=worker) uses a shim in instrument.ts on /api/health.
+# The migrate service (PROCESS_TYPE=migrate) is one-shot and HAS NO healthcheck.
+#
+# To avoid healthcheck failures on the migrate service, we OMIT healthcheckPath here.
+# Configure healthcheckPath = /api/health INDIVIDUALLY in the Railway dashboard 
+# for the 'ttml-app' and 'worker' services only.
+
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+healthCheckTimeout = 10
+healthCheckInterval = 30
+serviceName = "ttml-app"

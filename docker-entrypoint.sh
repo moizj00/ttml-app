@@ -23,8 +23,16 @@ case "$PROCESS_TYPE" in
     exec node --dns-result-order=ipv4first --import ./dist/instrument.js dist/worker.js
     ;;
   migrate)
-    echo "[entrypoint] Running database migrations..."
-    exec node --dns-result-order=ipv4first dist/migrate.js
+    echo "[entrypoint] Running database migrations (one-shot)..."
+    # Run migration and capture exit code
+    node --dns-result-order=ipv4first dist/migrate.js
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 0 ]; then
+      echo "[entrypoint] Migrations completed successfully."
+    else
+      echo "[entrypoint] Migrations failed with exit code $EXIT_CODE."
+    fi
+    exit $EXIT_CODE
     ;;
   all)
     echo "[entrypoint] Starting all (legacy single-container mode)..."
