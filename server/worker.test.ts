@@ -57,6 +57,11 @@ vi.mock("./pipeline", () => ({
     }),
 }));
 
+vi.mock("./pipeline/simple", () => ({
+  runSimplePipeline: vi.fn().mockResolvedValue({ success: true, letter: "mock letter" }),
+  runOpenAIDirectFallback: vi.fn().mockResolvedValue({ success: true, letter: "mock fallback letter" }),
+}));
+
 vi.mock("./pipeline/graph", () => ({
   appGraph: {
     streamEvents: vi.fn(),
