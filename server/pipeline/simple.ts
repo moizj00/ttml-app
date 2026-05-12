@@ -22,8 +22,13 @@ const logger = createLogger({ module: "simple-pipeline" });
 /**
  * Ultra-simple letter generation pipeline
  *
- * Single stage: Take user intake → Claude generates letter → Save to DB
+ * Single stage by default: Take user intake → Claude generates letter → Save to DB
  * No research, no vetting, no orchestration complexity.
+ *
+ * If GEMINI_API_KEY is present, simple mode uses a two-stage generation path:
+ * Gemini creates the initial draft, OpenAI finalizes it, and only the OpenAI
+ * final output is saved as the immutable ai_draft. If that path fails, the
+ * pipeline falls back to the existing Claude → OpenAI fallback path.
  *
  * Enable via PIPELINE_MODE=simple
  */
@@ -37,16 +42,31 @@ const openai = new OpenAI({
 });
 
 const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
-const OPENAI_MODEL = "gpt-4o";
+const OPENAI_MODEL = process.env.OPENAI_FINALIZER_MODEL ?? "gpt-4o";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
 
 interface GenerationResult {
   content: string;
-  provider: "anthropic" | "openai";
+  provider: "anthropic" | "openai" | "gemini_openai";
   model: string;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
   };
+  metadata?: Record<string, unknown>;
+}
+
+interface GeminiDraftResult {
+  content: string;
+  model: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+  };
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
@@ -74,7 +94,7 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
     };
   } catch (claudeErr) {
     logger.warn(
-      { err: claudeErr instanceof Error ? claudeErr.message : String(claudeErr) },
+      { err: getErrorMessage(claudeErr) },
       "[Simple] Claude failed, falling back to OpenAI"
     );
 
@@ -95,6 +115,150 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
         outputTokens: completion.usage?.completion_tokens,
       },
     };
+  }
+}
+
+async function generateInitialDraftWithGemini(
+  prompt: string
+): Promise<GeminiDraftResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      GEMINI_MODEL
+    )}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 4096,
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `${prompt}\n\nCreate the initial legal letter draft. Preserve the facts exactly. Output only the draft letter text.`,
+              },
+            ],
+          },
+        ],
+      }),
+    }
+  );
+
+  const rawText = await response.text();
+  let payload: any = null;
+  try {
+    payload = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      payload?.error?.message ??
+      rawText.slice(0, 500) ??
+      `Gemini request failed with ${response.status}`;
+    throw new Error(`Gemini request failed: ${message}`);
+  }
+
+  const content =
+    payload?.candidates?.[0]?.content?.parts
+      ?.map((part: { text?: string }) => part.text ?? "")
+      .join("")
+      .trim() ?? "";
+
+  if (!content) {
+    throw new Error("Gemini returned empty draft");
+  }
+
+  return {
+    content,
+    model: GEMINI_MODEL,
+    usage: {
+      inputTokens: payload?.usageMetadata?.promptTokenCount,
+      outputTokens: payload?.usageMetadata?.candidatesTokenCount,
+    },
+  };
+}
+
+async function finalizeGeminiDraftWithOpenAI(
+  originalPrompt: string,
+  geminiDraft: GeminiDraftResult
+): Promise<GenerationResult> {
+  const completion = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are finalizing a legal letter draft. Preserve all facts from the user intake. Do not invent facts, dates, laws, threats, citations, attorney names, or procedural claims. Improve structure, clarity, tone, formatting, and completeness. Output only the final letter text in plain text.",
+      },
+      {
+        role: "user",
+        content: `Original intake prompt:\n${originalPrompt}\n\nInitial Gemini draft:\n${geminiDraft.content}\n\nFinalize this into a polished legal letter. Output only the final letter text.`,
+      },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content?.trim() ?? "";
+  if (!content) {
+    throw new Error("OpenAI finalizer returned empty response");
+  }
+
+  return {
+    content,
+    provider: "gemini_openai",
+    model: `${geminiDraft.model} -> ${OPENAI_MODEL}`,
+    usage: {
+      inputTokens:
+        (geminiDraft.usage?.inputTokens ?? 0) +
+        (completion.usage?.prompt_tokens ?? 0),
+      outputTokens:
+        (geminiDraft.usage?.outputTokens ?? 0) +
+        (completion.usage?.completion_tokens ?? 0),
+    },
+    metadata: {
+      mode: "simple_gemini_openai_two_stage",
+      initialProvider: "gemini",
+      initialModel: geminiDraft.model,
+      initialPromptTokens: geminiDraft.usage?.inputTokens,
+      initialCompletionTokens: geminiDraft.usage?.outputTokens,
+      finalizerProvider: "openai",
+      finalizerModel: OPENAI_MODEL,
+      finalizerPromptTokens: completion.usage?.prompt_tokens,
+      finalizerCompletionTokens: completion.usage?.completion_tokens,
+    },
+  };
+}
+
+async function generateLetterForSimplePipeline(
+  prompt: string
+): Promise<GenerationResult> {
+  if (!process.env.GEMINI_API_KEY) {
+    return generateLetter(prompt);
+  }
+
+  try {
+    logger.info(
+      { geminiModel: GEMINI_MODEL, finalizerModel: OPENAI_MODEL },
+      "[Simple] GEMINI_API_KEY detected — using Gemini draft with OpenAI finalizer"
+    );
+    const geminiDraft = await generateInitialDraftWithGemini(prompt);
+    return await finalizeGeminiDraftWithOpenAI(prompt, geminiDraft);
+  } catch (err) {
+    logger.warn(
+      { err: getErrorMessage(err) },
+      "[Simple] Gemini→OpenAI generation failed, falling back to Claude/OpenAI"
+    );
+    return generateLetter(prompt);
   }
 }
 
@@ -175,8 +339,9 @@ export async function runSimplePipeline(
     const prompt = buildPrompt(intake);
     logger.debug({ letterId }, "[Simple] Prompt built, calling LLM");
 
-    // Call LLM (Claude primary, OpenAI fallback)
-    const result = await generateLetter(prompt);
+    // Call LLM. If GEMINI_API_KEY is configured, Gemini drafts first and OpenAI
+    // finalizes. If that path fails, fall back to the existing Claude/OpenAI path.
+    const result = await generateLetterForSimplePipeline(prompt);
 
     if (!result.content) {
       logger.error({ letterId, provider: result.provider }, "[Simple] LLM returned empty response");
@@ -202,9 +367,10 @@ export async function runSimplePipeline(
       metadataJson: {
         model: result.model,
         provider: result.provider,
-        mode: "simple",
+        mode: result.metadata?.mode ?? "simple",
         promptTokens: result.usage?.inputTokens,
         completionTokens: result.usage?.outputTokens,
+        ...result.metadata,
       },
     });
 
@@ -223,7 +389,7 @@ export async function runSimplePipeline(
     // Fire-and-forget — must never abort the pipeline.
     dispatchFreePreviewIfReady(letterId).catch(err =>
       logger.warn(
-        { letterId, err: err instanceof Error ? err.message : String(err) },
+        { letterId, err: getErrorMessage(err) },
         "[Simple] dispatchFreePreviewIfReady threw (non-fatal)"
       )
     );
