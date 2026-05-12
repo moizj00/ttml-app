@@ -19,6 +19,7 @@ import { useStaggerReveal } from "@/hooks/useAnimations";
 
 // Sub-components
 import { WelcomeBanner } from "@/components/subscriber/dashboard/WelcomeBanner";
+import { NotificationsPanel } from "@/components/subscriber/dashboard/NotificationsPanel";
 import { SubscriptionBanner } from "@/components/subscriber/dashboard/SubscriptionBanner";
 import { FreeTierBanner } from "@/components/subscriber/dashboard/FreeTierBanner";
 import { DashboardStats } from "@/components/subscriber/dashboard/DashboardStats";
@@ -179,6 +180,7 @@ export default function SubscriberDashboard() {
 
       <div className="space-y-6">
         <WelcomeBanner subscriberId={user?.subscriberId} />
+        <NotificationsPanel />
 
         {subscription && (
           <>
