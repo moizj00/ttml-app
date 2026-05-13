@@ -94,10 +94,13 @@ export async function runPipeline(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error({ letterId, err: msg }, "[LangGraph Shim] Pipeline failed");
+    // Try to extract a structured error code from the message (e.g. "[API_KEY_MISSING] ...")
+    const codeMatch = msg.match(/^\[([A-Z_]+)\]/);
+    const errorCode = codeMatch ? codeMatch[1] : "UNKNOWN_ERROR";
+    log.error({ letterId, err: msg, errorCode }, "[LangGraph Shim] Pipeline failed");
     return {
       success: false,
-      errorCode: "UNKNOWN_ERROR",
+      errorCode,
       error: msg,
     };
   }

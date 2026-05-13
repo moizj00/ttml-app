@@ -109,6 +109,26 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale ap
 
 ---
 
+## Production Diagnosis Notes
+
+### Free-preview notifications vs. pipeline
+
+Current baseline commit: [`e3120277`](https://github.com/moizj00/ttml-app/commit/e31202773b256f7f2c1bf1c64b7da40732cba2e6) (`pipe`).
+
+Strong recommendation: do **not** change the worker or AI pipeline when diagnosing missing subscriber/admin in-app notifications unless there is direct evidence that generation jobs are failing. The pipeline is responsible for generating drafts, saving `ai_draft` versions, and advancing preview-gated letters. Missing `free_preview_ready` notifications are usually part of the web/API notification path, authenticated-user mapping, frontend rendering, or Supabase schema/migration drift.
+
+For the May 2026 production incident, the pipeline was healthy: drafts were generated, versions were saved, preview unlock worked, emails were sent, and the failing subsystem was the notification insert. The concrete drift was the production `notifications.category` check constraint rejecting `category = 'letters'`. Keep production constraints aligned with app-emitted notification categories.
+
+Before touching pipeline code for a notification issue, verify these first:
+
+1. `notifications` contains the expected row for the subscriber user.
+2. `notifications.category` allows categories emitted by code, including `letters`, `users`, and `employee`.
+3. `notifications.list` returns the row for the logged-in `ctx.user.id`.
+4. The subscriber/admin layout actually renders or polls notifications.
+5. Railway web logs do not show `In-app notification failed` errors.
+
+---
+
 ## Validation Gate
 
 After every implementation:

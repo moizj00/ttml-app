@@ -82,8 +82,10 @@ describe("free preview 24-hour delay UX", () => {
       expect.objectContaining({
         usageContext: {
           shouldRefundOnFailure: true,
+          requiresDraftVisibilityGate: true,
           isPreviewGatedSubmission: true,
           isFreeTrialSubmission: true,
+          isPaidSubscriberSubmission: false,
         },
       })
     );
@@ -124,7 +126,7 @@ describe("free preview 24-hour delay UX", () => {
 
   it("subscriber router computes subscriberDisplayStatus=free_preview_waiting while locked", () => {
     const source = read("server", "routers", "letters", "subscriber.ts");
-    expect(source).toContain("const isFreePreviewWaiting =");
+    expect(source).toContain("const isDraftPreviewWaiting =");
     expect(source).toContain('? "free_preview_waiting"');
     expect(source).toContain("letter: { ...letter, subscriberDisplayStatus }");
   });
@@ -171,10 +173,10 @@ describe("free preview 24-hour delay UX", () => {
       "const displayStatus = (letter as any).subscriberDisplayStatus ?? letter.status;"
     );
     expect(source).toMatch(
-      /letter\.isFreePreview === true[\s\S]*aiDraftVersion as any\)\?\.freePreview !== true[\s\S]*<FreePreviewWaiting/
+      /letter\.isFreePreview === true[\s\S]*aiDraftVersion as any\)\?\.freePreview !== true[\s\S]*<DraftPreviewWaiting/
     );
     expect(source).toMatch(
-      /\(aiDraftVersion as any\)\?\.freePreview === true[\s\S]*<FreePreviewViewer/
+      /\(aiDraftVersion as any\)\?\.freePreview === true[\s\S]*<DraftPreviewViewer/
     );
     expect(source).toMatch(/: isGeneratedLocked \? \([\s\S]*<LetterPaywall/);
   });

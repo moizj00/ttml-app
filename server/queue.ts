@@ -109,8 +109,14 @@ export interface RunPipelineJobData {
   label: string;
   usageContext?: {
     shouldRefundOnFailure: true;
+    /** True when the draft must stay hidden until freePreviewUnlockAt/draftVisibleAt. */
+    requiresDraftVisibilityGate?: boolean;
+    /** Backward-compatible alias for requiresDraftVisibilityGate. */
     isPreviewGatedSubmission?: boolean;
+    /** First-letter/free-preview lead-magnet submission: route through simple pipeline. */
     isFreeTrialSubmission: boolean;
+    /** Active paid subscription at submission time: route through LangGraph pipeline. */
+    isPaidSubscriberSubmission?: boolean;
   };
 }
 

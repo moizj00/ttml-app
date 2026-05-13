@@ -1,0 +1,1035 @@
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/client/src/components/DraftPreviewViewer.tsx /mnt/data/ttml_app_corrected/client/src/components/DraftPreviewViewer.tsx
+--- /mnt/data/ttml_app/ttml-app/client/src/components/DraftPreviewViewer.tsx	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/ttml_app_corrected/client/src/components/DraftPreviewViewer.tsx	2026-05-11 17:06:01.986472199 +0000
+@@ -0,0 +1,11 @@
++import FreePreviewViewer, {
++  FreePreviewViewer as DraftPreviewViewer,
++} from "./FreePreviewViewer";
++
++/**
++ * Coherent public name for the generic 24-hour draft visibility renderer.
++ * The underlying implementation is temporarily reused for compatibility while
++ * legacy FreePreview* files/tests still exist.
++ */
++export { DraftPreviewViewer };
++export default FreePreviewViewer;
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/client/src/components/DraftPreviewWaiting.tsx /mnt/data/ttml_app_corrected/client/src/components/DraftPreviewWaiting.tsx
+--- /mnt/data/ttml_app/ttml-app/client/src/components/DraftPreviewWaiting.tsx	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/ttml_app_corrected/client/src/components/DraftPreviewWaiting.tsx	2026-05-11 17:02:07.053725507 +0000
+@@ -0,0 +1,56 @@
++import { Clock, Mail, ShieldCheck } from "lucide-react";
++import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
++
++interface DraftPreviewWaitingProps {
++  subject: string;
++}
++
++export function DraftPreviewWaiting({ subject }: DraftPreviewWaitingProps) {
++  return (
++    <Card
++      className="border-blue-200 bg-blue-50/40"
++      data-testid="draft-preview-waiting"
++    >
++      <CardHeader className="pb-3">
++        <CardTitle className="flex items-center gap-2 text-blue-900">
++          <Clock className="h-5 w-5 text-blue-600" />
++          Your professional draft is being prepared
++        </CardTitle>
++      </CardHeader>
++      <CardContent className="space-y-4">
++        <p className="text-sm text-blue-900/90">
++          Your preview for <span className="font-medium">{subject}</span> will
++          be ready in about 24 hours. We&apos;ll email you when it&apos;s ready.
++        </p>
++
++        <div className="grid gap-3 sm:grid-cols-2">
++          <div className="flex items-start gap-2 rounded-md border border-blue-100 bg-white/70 p-3">
++            <Mail className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
++            <div className="text-xs text-blue-900/80">
++              <div className="font-medium text-blue-900">
++                Email notification
++              </div>
++              We&apos;ll send a link the moment your draft preview unlocks.
++            </div>
++          </div>
++          <div className="flex items-start gap-2 rounded-md border border-blue-100 bg-white/70 p-3">
++            <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
++            <div className="text-xs text-blue-900/80">
++              <div className="font-medium text-blue-900">
++                Professional drafting
++              </div>
++              Our systems are researching and drafting your matter. After
++              previewing the result, you can submit it for licensed attorney
++              review.
++            </div>
++          </div>
++        </div>
++
++        <p className="text-xs text-blue-900/70">
++          You can safely close this page — we&apos;ll email you within 24 hours
++          to view your preview.
++        </p>
++      </CardContent>
++    </Card>
++  );
++}
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/client/src/components/FreePreviewViewer.tsx /mnt/data/ttml_app_corrected/client/src/components/FreePreviewViewer.tsx
+--- /mnt/data/ttml_app/ttml-app/client/src/components/FreePreviewViewer.tsx	2026-05-05 14:33:44.000000000 +0000
++++ /mnt/data/ttml_app_corrected/client/src/components/FreePreviewViewer.tsx	2026-05-11 16:59:13.595848869 +0000
+@@ -6,9 +6,9 @@
+ /**
+  * FreePreviewViewer — first-letter free-preview lead-magnet renderer.
+  *
+- * Shown when a subscriber has submitted their first letter via the free-trial
+- * path AND the 24-hour cooling-off window has elapsed. Replaces the standard
+- * LetterPaywall for these letters.
++ * Shown after the 24-hour draft visibility gate elapses. For free-trial users,
++ * the CTA requires subscription before attorney review. For active paid
++ * subscribers, the CTA submits directly to attorney review.
+  *
+  * Behavior:
+  *   - Renders the FULL ai_draft (no truncation, no PII redaction).
+@@ -407,7 +407,7 @@
+             <Button
+               className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold h-11 shadow-md"
+               size="lg"
+-              onClick={() => navigate("/pricing")}
++              onClick={() => navigate(`/pricing?returnTo=/letters/${letterId}`)}
+             >
+               See plans
+               <ArrowRight className="w-4 h-4 ml-2" />
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/client/src/pages/subscriber/LetterDetail.tsx /mnt/data/ttml_app_corrected/client/src/pages/subscriber/LetterDetail.tsx
+--- /mnt/data/ttml_app/ttml-app/client/src/pages/subscriber/LetterDetail.tsx	2026-05-05 14:33:44.000000000 +0000
++++ /mnt/data/ttml_app_corrected/client/src/pages/subscriber/LetterDetail.tsx	2026-05-11 17:04:44.417681177 +0000
+@@ -1,7 +1,7 @@
+ import AppLayout from "@/components/shared/AppLayout";
+ import { LetterPaywall } from "@/components/LetterPaywall";
+-import { FreePreviewViewer } from "@/components/FreePreviewViewer";
+-import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
++import DraftPreviewViewer from "@/components/DraftPreviewViewer";
++import { DraftPreviewWaiting } from "@/components/DraftPreviewWaiting";
+ import { FreePreviewUpsellBanner } from "@/components/FreePreviewUpsellBanner";
+ import { trpc } from "@/lib/trpc";
+ import { Button } from "@/components/ui/button";
+@@ -122,14 +122,16 @@
+     if (upsellDismissed) return;
+     if (upsellBannerOpen) return;
+ 
++    if (data?.letter?.isFreePreview !== true) return;
++
+     const aiDraftVersion = data?.versions?.find(
+       (v: any) => v.versionType === "ai_draft"
+     );
+-    const freePreviewUnlocked =
+-      data?.letter?.isFreePreview === true &&
+-      (aiDraftVersion as any)?.freePreview === true &&
++    const draftPreviewUnlocked =
++      ((aiDraftVersion as any)?.draftPreview === true ||
++        (aiDraftVersion as any)?.freePreview === true) &&
+       Boolean(aiDraftVersion?.content);
+-    if (!freePreviewUnlocked) return;
++    if (!draftPreviewUnlocked) return;
+ 
+     const status = data?.letter?.status as string | undefined;
+     if (!status || !UPSELL_ELIGIBLE_STATUSES.has(status)) return;
+@@ -352,10 +354,11 @@
+     a => a.noteVisibility === "user_visible" && a.noteText
+   );
+   const isPolling = POLLING_STATUSES.includes(displayStatus);
+-  const freePreviewUnlocked =
+-    letter.isFreePreview === true &&
+-    (aiDraftVersion as any)?.freePreview === true &&
++  const draftPreviewUnlocked =
++    ((aiDraftVersion as any)?.draftPreview === true ||
++      (aiDraftVersion as any)?.freePreview === true) &&
+     Boolean(aiDraftVersion?.content);
++  const freePreviewUnlocked = letter.isFreePreview === true && draftPreviewUnlocked;
+   const isGeneratedLocked =
+     (displayStatus === "generated_locked" ||
+       displayStatus === "generated_unlocked" ||
+@@ -368,19 +371,19 @@
+     letter.status === "sent";
+   const pdfUrl = (letter as any).pdfUrl as string | null | undefined;
+ 
+-  // Free-preview UI (FreePreviewViewer / FreePreviewWaiting) is a pre-payment
++  // Draft-preview UI (DraftPreviewViewer / DraftPreviewWaiting) is a pre-review
+   // lead magnet — it only makes sense BEFORE the letter has been submitted for
+   // attorney review. Once the letter advances to `attorney_review_payment_
+   // confirmed` or beyond (pending_review, under_review, approved, client_*,
+   // sent, etc.), the upsell card and the watermarked draft become irrelevant
+   // — the letter is already in / past the paid review pipeline. Without this
+-  // gate, the FreePreviewViewer keeps rendering on top of the
+-  // ApprovedLetterPanel because `aiDraftVersion.freePreview` is still `true`
++  // gate, the DraftPreviewViewer keeps rendering on top of the
++  // ApprovedLetterPanel because `aiDraftVersion.draftPreview` is still `true`
+   // (the server never clears the flag — the draft itself doesn't change).
+-  // Reproduced when admin force-transitions a free-preview letter through the
++  // Reproduced when admin force-transitions a draft-preview letter through the
+   // payment statuses + attorney approves: subscriber sees the upsell stacked
+   // on top of the approved letter view.
+-  const FREE_PREVIEW_VISIBLE_STATUSES = new Set([
++  const DRAFT_PREVIEW_VISIBLE_STATUSES = new Set([
+     "free_preview_waiting",
+     "ai_generation_completed_hidden",
+     "letter_released_to_subscriber",
+@@ -390,9 +393,9 @@
+     "generated_unlocked",
+     "pipeline_failed",
+   ]);
+-  const isFreePreviewPhase =
+-    letter.isFreePreview === true &&
+-    FREE_PREVIEW_VISIBLE_STATUSES.has(displayStatus as string);
++  const isDraftPreviewPhase =
++    Boolean((letter as any).freePreviewUnlockAt) &&
++    DRAFT_PREVIEW_VISIBLE_STATUSES.has(displayStatus as string);
+ 
+   return (
+     <AppLayout
+@@ -463,12 +466,10 @@
+           freePreviewUnlocked={freePreviewUnlocked}
+         />
+ 
+-        {isFreePreviewPhase &&
+-        (aiDraftVersion as any)?.freePreview !== true ? (
+-          <FreePreviewWaiting subject={letter.subject} />
+-        ) : isFreePreviewPhase &&
+-          (aiDraftVersion as any)?.freePreview === true ? (
+-          <FreePreviewViewer
++        {isDraftPreviewPhase && !draftPreviewUnlocked ? (
++          <DraftPreviewWaiting subject={letter.subject} />
++        ) : isDraftPreviewPhase && draftPreviewUnlocked ? (
++          <DraftPreviewViewer
+             letterId={letterId}
+             subject={letter.subject}
+             draftContent={aiDraftVersion?.content ?? ""}
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/db/letter-versions.ts /mnt/data/ttml_app_corrected/server/db/letter-versions.ts
+--- /mnt/data/ttml_app/ttml-app/server/db/letter-versions.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/db/letter-versions.ts	2026-05-11 17:01:38.026653491 +0000
+@@ -1,6 +1,6 @@
+ import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+ import { captureServerException } from "../sentry";
+-import { isFreePreviewUnlocked } from "../../shared/utils/free-preview";
++import { isDraftPreviewUnlocked } from "../../shared/utils/draft-preview";
+ import {
+   adminVerificationCodes,
+   attachments,
+@@ -58,17 +58,13 @@
+ /**
+  * Return the versions visible to a subscriber for a given letter.
+  *
+- * Free-preview visibility gate:
+- *   - If `letter.isFreePreview === true`, we call `isFreePreviewUnlocked(letter)`
+- *     to decide whether to return the full draft. This is the ONLY place
+- *     timestamp math happens for the free-preview path. Do not re-implement
+- *     it in the caller.
+- *   - Pre-unlock: ai_draft is returned with empty content + `freePreviewWaiting: true`.
+- *     The UI renders <FreePreviewWaiting/> instead of any content.
+- *   - Post-unlock: ai_draft is returned full, un-redacted, stamped with
+- *     `freePreview: true`. The UI renders <FreePreviewViewer/>.
++ * Draft-preview visibility gate:
++ *   - freePreviewUnlockAt is the persisted draftVisibleAt timestamp.
++ *   - Pre-unlock: ai_draft is returned with empty content + draftPreviewWaiting.
++ *   - Post-unlock: ai_draft is returned full, un-redacted, stamped with draftPreview.
+  *
+- * Non-free-preview locked letters still receive the ~20% truncated paywall preview.
++ * isFreePreview remains only as a monetization flag: free-trial users must
++ * subscribe before attorney review; active subscribers can submit directly.
+  */
+ export async function getLetterVersionsByRequestId(
+   letterRequestId: number,
+@@ -100,14 +96,12 @@
+     )
+     .orderBy(desc(letterVersions.createdAt));
+ 
+-  return applyFreePreviewGate(rows, letterStatus, letter ?? null);
++  return applyDraftPreviewGate(rows, letterStatus, letter ?? null);
+ }
+ 
+ /**
+- * Letter statuses during which the paid paywall is active — ai_draft is
+- * visible to the subscriber but must be truncated. Does NOT control
+- * free-preview visibility (that runs whenever `isFreePreview === true`,
+- * independent of status — see `applyFreePreviewGate`).
++ * Letter statuses during which legacy locked previews are active. The generic
++ * 24h draft-preview gate is timestamp-based and handled by applyDraftPreviewGate.
+  *
+  * Exported so router-level access checks (e.g. versions.get) can refuse
+  * ai_draft requests for statuses outside the locked band AND outside the
+@@ -121,29 +115,14 @@
+ ]);
+ 
+ /**
+- * Pure version of the free-preview / paywall gate — no DB, no IO. Exported
+- * for unit tests so the decision branches can be verified directly.
++ * Pure draft-preview / legacy-paywall gate — no DB, no IO.
+  *
+- * The free-preview branch runs whenever `letter.isFreePreview === true`,
+- * INDEPENDENT of `letterStatus`. Two reasons:
+- *
+- *   1. Generation now starts immediately (the 24h window is visibility-only),
+- *      so an ai_draft can exist while status is still `drafting` — gating
+- *      only on locked statuses would leak draft content early.
+- *   2. After payment, status advances past the locked set (`pending_review`,
+- *      `under_review`, …) but the subscriber's client still relies on the
+- *      server stamping `freePreview: true`. Skipping the gate there would
+- *      pin the UI on <FreePreviewWaiting/> indefinitely.
+- *
+- * `LOCKED_PREVIEW_STATUSES` now controls ONLY the non-free-preview paywall
+- * truncation — that path is the only one that needs a status gate.
+- *
+- *   - Free-preview + unlocked → full draft, `freePreview: true`, un-redacted
+- *   - Free-preview + waiting  → empty content, `freePreviewWaiting: true`
+- *   - Non-free-preview + locked status → 20% truncated paywall preview
+- *   - Non-free-preview + other status  → raw rows
++ *   - Draft-gated + unlocked → full draft, draftPreview=true, un-redacted
++ *   - Draft-gated + waiting  → empty content, draftPreviewWaiting=true
++ *   - Legacy locked status   → truncated preview
++ *   - Other status           → raw rows
+  */
+-export function applyFreePreviewGate<
++export function applyDraftPreviewGate<
+   T extends { versionType: string; content?: string | null },
+ >(
+   rows: T[],
+@@ -156,49 +135,59 @@
+   const isFreePreview = letter?.isFreePreview === true;
+   const isLockedStatus =
+     !!letterStatus && LOCKED_PREVIEW_STATUSES.has(letterStatus);
++  const isDraftVisibilityGated = Boolean(letter?.freePreviewUnlockAt);
++  const draftPreviewUnlocked = isDraftPreviewUnlocked({
++    isFreeTrialPreview: letter?.isFreePreview,
++    draftVisibleAt: letter?.freePreviewUnlockAt,
++  });
+ 
+-  const freePreviewUnlocked =
+-    isFreePreview &&
+-    isFreePreviewUnlocked({
+-      isFreePreview: letter?.isFreePreview,
+-      freePreviewUnlockAt: letter?.freePreviewUnlockAt,
+-    });
+-
+-  if (isFreePreview && !freePreviewUnlocked) {
++  // 24h gate applies to both first-letter/free-preview users and paid subscribers.
++  if (isDraftVisibilityGated && !draftPreviewUnlocked) {
+     return rows.map(v => {
+       if (v.versionType === "ai_draft") {
+         return {
+           ...v,
+           content: "",
+           truncated: true,
+-          freePreviewWaiting: true as const,
++          draftPreviewWaiting: true as const,
++          freePreviewWaiting: isFreePreview ? (true as const) : undefined,
+         };
+       }
+       return { ...v, truncated: false };
+     });
+   }
+ 
+-  if (!isFreePreview && !isLockedStatus) {
+-    return rows.map(v => ({ ...v, truncated: false }));
+-  }
+-
+-  return rows.map(v => {
+-    if (v.versionType === "ai_draft" && v.content) {
+-      if (isFreePreview) {
+-        // We already know it's unlocked from the guard above
++  if (isDraftVisibilityGated && draftPreviewUnlocked) {
++    return rows.map(v => {
++      if (v.versionType === "ai_draft" && v.content) {
+         return {
+           ...v,
+           truncated: false,
+-          freePreview: true as const,
++          draftPreview: true as const,
++          freePreview: isFreePreview ? (true as const) : undefined,
+           isRedacted: false,
+         };
+       }
++      return { ...v, truncated: false };
++    });
++  }
++
++  if (!isLockedStatus) {
++    return rows.map(v => ({ ...v, truncated: false }));
++  }
++
++  return rows.map(v => {
++    if (v.versionType === "ai_draft" && v.content) {
+       return { ...v, content: truncateContent(v.content), truncated: true };
+     }
+     return { ...v, truncated: false };
+   });
+ }
+ 
++// Backward-compatible alias for tests/legacy imports. New code should use
++// applyDraftPreviewGate.
++export const applyFreePreviewGate = applyDraftPreviewGate;
++
+ function truncateContent(content: string): string {
+   const lines = content.split("\n");
+   const visibleCount = Math.max(5, Math.floor(lines.length * 0.2));
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/paywallEmailCron.ts /mnt/data/ttml_app_corrected/server/paywallEmailCron.ts
+--- /mnt/data/ttml_app/ttml-app/server/paywallEmailCron.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/paywallEmailCron.ts	2026-05-11 16:58:35.976538883 +0000
+@@ -25,6 +25,7 @@
+ import { letterRequests } from "../drizzle/schema";
+ import { getUserById, isUserFirstLetterEligible } from "./db";
+ import { sendPaywallNotificationEmail } from "./email";
++import { hasActiveRecurringSubscription } from "./stripe";
+ import { createLogger } from "./logger";
+ 
+ const paywallLogger = createLogger({ module: "PaywallEmails" });
+@@ -137,6 +138,16 @@
+         });
+         continue;
+       }
++
++      if (await hasActiveRecurringSubscription(letter.userId!)) {
++        result.skipped++;
++        result.details.push({
++          letterId: letter.id,
++          status: "skipped",
++          reason: "active subscriber — no paywall email",
++        });
++        continue;
++      }
+ 
+       const isFirstLetter = await isUserFirstLetterEligible(letter.userId!);
+ 
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/pipeline/graph/nodes/finalize.ts /mnt/data/ttml_app_corrected/server/pipeline/graph/nodes/finalize.ts
+--- /mnt/data/ttml_app/ttml-app/server/pipeline/graph/nodes/finalize.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/pipeline/graph/nodes/finalize.ts	2026-05-11 16:57:11.835968213 +0000
+@@ -12,7 +12,10 @@
+ import type { PipelineStateType } from "../state";
+ import { dispatchFreePreviewIfReady } from "../../../freePreviewEmailCron";
+ import { breadcrumb, totalTokens } from "../memory";
+-import { resolveDraftPreviewFinalStatus } from "../../preview-gate";
++import {
++  isLetterPreviewGated,
++  resolveDraftPreviewFinalStatus,
++} from "../../preview-gate";
+ import { captureServerException } from "../../../sentry";
+ 
+ const log = createLogger({ module: "LangGraph:FinalizeNode" });
+@@ -204,9 +207,11 @@
+     });
+   }
+ 
+-  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS
+-  // If this is a free preview, set status to ai_generation_completed_hidden (Procedure 4)
+-  const finalStatus = resolveDraftPreviewFinalStatus(state.isFreePreview);
++  // Transition status via updateLetterStatus() — enforces ALLOWED_TRANSITIONS.
++  // The 24h gate is DB-backed; never trust the graph state flag alone because
++  // paid subscribers are also draft-visibility gated.
++  const isDraftVisibilityGated = await isLetterPreviewGated(letterId);
++  const finalStatus = resolveDraftPreviewFinalStatus(isDraftVisibilityGated);
+   await updateLetterStatus(letterId, finalStatus);
+ 
+   // Close out the workflow_jobs row so admin monitor shows this run as
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/pipeline/preview-gate.ts /mnt/data/ttml_app_corrected/server/pipeline/preview-gate.ts
+--- /mnt/data/ttml_app/ttml-app/server/pipeline/preview-gate.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/pipeline/preview-gate.ts	2026-05-11 16:56:49.270993946 +0000
+@@ -9,25 +9,17 @@
+   | "generated_locked";
+ 
+ export function resolveDraftPreviewFinalStatus(
+-  isPreviewGated?: boolean | null
++  isDraftVisibilityGated?: boolean | null
+ ): DraftPreviewFinalStatus {
+-  // v2.1: every pipeline now lands in the new attorney-review funnel
+-  // (ai_generation_completed_hidden -> letter_released_to_subscriber -> ...).
+-  // The legacy generated_locked path is preserved behind PAYWALL_LEGACY=true
+-  // and only fires for non-preview-gated letters (free-preview always uses
+-  // the new funnel, which is what the dispatcher dispatcher expects).
+-  if (isPreviewGated) return "ai_generation_completed_hidden";
+-  const useLegacyPaywall = process.env.PAYWALL_LEGACY === "true";
+-  return useLegacyPaywall ? "generated_locked" : "ai_generation_completed_hidden";
++  // Gated subscriber drafts, whether free-trial or paid subscription, must be
++  // hidden until the 24h draft reveal timestamp. Non-gated legacy/admin flows can
++  // still land in the normal paywall-ready state.
++  return isDraftVisibilityGated ? "ai_generation_completed_hidden" : "generated_locked";
+ }
+ 
+ export async function isLetterPreviewGated(letterId: number): Promise<boolean> {
+   const letter = await getLetterRequestById(letterId);
+-  if (
+-    !letter ||
+-    letter.isFreePreview !== true ||
+-    letter.submittedByAdmin === true
+-  ) {
++  if (!letter || letter.submittedByAdmin === true || !letter.freePreviewUnlockAt) {
+     return false;
+   }
+   return !(await hasLetterBeenPreviouslyUnlocked(letterId));
+@@ -35,10 +27,10 @@
+ 
+ export async function finalizeDraftPreviewStatus(
+   letterId: number,
+-  isPreviewGated?: boolean | null,
++  isDraftVisibilityGated?: boolean | null,
+   options?: { force?: boolean }
+ ): Promise<DraftPreviewFinalStatus> {
+-  const finalStatus = resolveDraftPreviewFinalStatus(isPreviewGated);
++  const finalStatus = resolveDraftPreviewFinalStatus(isDraftVisibilityGated);
+   await updateLetterStatus(
+     letterId,
+     finalStatus,
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/pipeline/routing.ts /mnt/data/ttml_app_corrected/server/pipeline/routing.ts
+--- /mnt/data/ttml_app/ttml-app/server/pipeline/routing.ts	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/pipeline/routing.ts	2026-05-11 16:55:11.046399580 +0000
+@@ -0,0 +1,34 @@
++import type { RunPipelineJobData } from "../queue";
++
++export type PipelineExecutionRoute = "simple" | "langgraph" | "standard";
++
++type UsageContext = RunPipelineJobData["usageContext"];
++
++/**
++ * Product-level pipeline routing belongs in the worker, not in env flags.
++ *
++ * Business rule:
++ *   - New/non-subscriber first-letter preview => simple Claude pipeline.
++ *   - Active paid subscriber submission        => LangGraph pipeline.
++ *   - Legacy/admin/retry jobs                  => standard pipeline path.
++ */
++export function resolvePipelineExecutionRoute(
++  usageContext: UsageContext
++): PipelineExecutionRoute {
++  if (usageContext?.isFreeTrialSubmission === true) return "simple";
++  if (usageContext?.isPaidSubscriberSubmission === true) return "langgraph";
++  return "standard";
++}
++
++/**
++ * The 24-hour draft reveal is independent from payment entitlement.
++ * Non-subscribers and paid subscribers both wait; only the post-reveal CTA differs.
++ */
++export function requiresDraftVisibilityGate(usageContext: UsageContext): boolean {
++  return (
++    usageContext?.requiresDraftVisibilityGate === true ||
++    usageContext?.isPreviewGatedSubmission === true ||
++    usageContext?.isFreeTrialSubmission === true ||
++    usageContext?.isPaidSubscriberSubmission === true
++  );
++}
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/pipeline/vetting/index.ts /mnt/data/ttml_app_corrected/server/pipeline/vetting/index.ts
+--- /mnt/data/ttml_app/ttml-app/server/pipeline/vetting/index.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/pipeline/vetting/index.ts	2026-05-11 16:59:55.047982191 +0000
+@@ -64,7 +64,10 @@
+ } from "../citations";
+ import { runAssemblyStage } from "../assembly";
+ import { parseVettingResponse, runPostVetChecks } from "../vetting-parser";
+-import { resolveDraftPreviewFinalStatus } from "../preview-gate";
++import {
++  isLetterPreviewGated,
++  resolveDraftPreviewFinalStatus,
++} from "../preview-gate";
+ 
+ // ═══════════════════════════════════════════════════════
+ // STAGE 4: CLAUDE VETTING PASS
+@@ -695,7 +698,7 @@
+   }
+ 
+   const finalStatus = resolveDraftPreviewFinalStatus(
+-    pipelineCtx?.isFreePreview
++    await isLetterPreviewGated(letterId)
+   );
+   const noteText = isDegraded
+     ? `Draft ready with quality warnings. Our professional drafting models completed research, drafting, and vetting, but some checks raised flags (see attorney-only notes). Attorney review will address these. ${qualityWarnings.length} quality warning(s) attached.`
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/queue.ts /mnt/data/ttml_app_corrected/server/queue.ts
+--- /mnt/data/ttml_app/ttml-app/server/queue.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/queue.ts	2026-05-11 16:55:01.704073248 +0000
+@@ -108,8 +108,14 @@
+   label: string;
+   usageContext?: {
+     shouldRefundOnFailure: true;
++    /** True when the draft must stay hidden until freePreviewUnlockAt/draftVisibleAt. */
++    requiresDraftVisibilityGate?: boolean;
++    /** Backward-compatible alias for requiresDraftVisibilityGate. */
+     isPreviewGatedSubmission?: boolean;
++    /** First-letter/free-preview lead-magnet submission: route through simple pipeline. */
+     isFreeTrialSubmission: boolean;
++    /** Active paid subscription at submission time: route through LangGraph pipeline. */
++    isPaidSubscriberSubmission?: boolean;
+   };
+ }
+ 
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/routers/letters/subscriber.ts /mnt/data/ttml_app_corrected/server/routers/letters/subscriber.ts
+--- /mnt/data/ttml_app/ttml-app/server/routers/letters/subscriber.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/routers/letters/subscriber.ts	2026-05-11 16:58:51.958531625 +0000
+@@ -54,10 +54,10 @@
+         });
+       const actions = await getReviewActions(input.id, false);
+ 
+-      const isFreePreviewWaiting =
+-        letter.isFreePreview === true && letter.visibilityStatus === "hidden";
++      const isDraftPreviewWaiting =
++        Boolean(letter.freePreviewUnlockAt) && letter.visibilityStatus === "hidden";
+ 
+-      const subscriberDisplayStatus = isFreePreviewWaiting
++      const subscriberDisplayStatus = isDraftPreviewWaiting
+         ? "free_preview_waiting"
+         : letter.status;
+ 
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/routers/versions.ts /mnt/data/ttml_app_corrected/server/routers/versions.ts
+--- /mnt/data/ttml_app/ttml-app/server/routers/versions.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/routers/versions.ts	2026-05-11 16:59:23.521176501 +0000
+@@ -285,13 +285,13 @@
+         if (version.versionType === "final_approved") return version;
+         if (version.versionType === "ai_draft") {
+           const letter = await getLetterRequestById(version.letterRequestId);
+-          const isFreePreview = letter?.isFreePreview === true;
++          const isDraftVisibilityGated = Boolean(letter?.freePreviewUnlockAt);
+           const isLocked =
+             !!letter && LOCKED_PREVIEW_STATUSES.has(letter.status);
+           if (
+             letter &&
+             letter.userId === ctx.user.id &&
+-            (isFreePreview || isLocked)
++            (isDraftVisibilityGated || isLocked)
+           ) {
+             const [gatedVersion] = applyFreePreviewGate(
+               [version as any],
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/services/canonicalProcedures.ts /mnt/data/ttml_app_corrected/server/services/canonicalProcedures.ts
+--- /mnt/data/ttml_app/ttml-app/server/services/canonicalProcedures.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/services/canonicalProcedures.ts	2026-05-11 17:05:05.523540081 +0000
+@@ -78,13 +78,18 @@
+   const subscriberVisibleAt = new Date(
+     submittedAt.getTime() + LETTER_HOLD_HOURS * 60 * 60 * 1000
+   );
++  const isFreeTrialSubmission = entitlement.firstLetterFree === true;
++  const isPaidSubscriberSubmission = Boolean(entitlement.subscription) && !isFreeTrialSubmission;
+ 
+   const result = await createLetterRequest({
+     userId: subscriberId,
+     letterType: letterType as any,
+     subject: intakePayload.matter?.subject || "Legal Matter",
+     intakeJson: intakePayload,
+-    isFreePreview: true,
++    // "Free preview" means the user was not subscribed at submission time.
++    // The unlock timestamp is now the generic draft visibility gate for both
++    // free-preview users and paid subscribers.
++    isFreePreview: isFreeTrialSubmission,
+     freePreviewUnlockAt: subscriberVisibleAt,
+   });
+ 
+@@ -105,11 +110,15 @@
+     intake: intakePayload,
+     userId: subscriberId,
+     appUrl: process.env.APP_URL ?? "",
+-    label: `Free preview draft for #${requestId}`,
++    label: isPaidSubscriberSubmission
++      ? `Paid subscriber draft for #${requestId}`
++      : `Free preview draft for #${requestId}`,
+     usageContext: {
+       shouldRefundOnFailure: true,
++      requiresDraftVisibilityGate: true,
+       isPreviewGatedSubmission: true,
+-      isFreeTrialSubmission: entitlement.firstLetterFree === true,
++      isFreeTrialSubmission,
++      isPaidSubscriberSubmission,
+     },
+   });
+ 
+@@ -124,7 +133,7 @@
+     requestId,
+     status: "submitted",
+     subscriberVisibleAt,
+-    isFreePreview: true,
++    isFreePreview: isFreeTrialSubmission,
+   };
+ }
+ 
+@@ -158,8 +167,10 @@
+       label: `Simple Draft for #${requestId}`,
+       usageContext: {
+         shouldRefundOnFailure: true,
+-        isPreviewGatedSubmission: request.isFreePreview === true,
++        requiresDraftVisibilityGate: Boolean(request.freePreviewUnlockAt),
++        isPreviewGatedSubmission: Boolean(request.freePreviewUnlockAt),
+         isFreeTrialSubmission: usageContext.isFreeTrialSubmission === true,
++        isPaidSubscriberSubmission: usageContext.isFreeTrialSubmission !== true && Boolean(request.freePreviewUnlockAt),
+       },
+     },
+     { startAfter: new Date() }
+@@ -261,17 +272,11 @@
+   if (request.status === "pipeline_failed")
+     return { status: "locked_generation_failed" };
+ 
+-  // Only free preview letters should use the 24-hour visibility logic.
+-  if (request.isFreePreview !== true) {
+-    if (!request.currentAiDraftVersionId || request.status === "drafting") {
+-      return { status: "locked_generation_pending" };
+-    }
+-    return { status: "visible_after_24_hours" };
+-  }
+-
+-  // logic for isFreePreview=true:
+-  // If status is submitted/researching/drafting/ai_generation_completed_hidden and NOW() < freePreviewUnlockAt, return hidden_before_24_hours.
+-  const isEarly = visibleAt && now < visibleAt;
++  // The 24-hour visibility gate applies to BOTH lead-magnet/free-preview users
++  // and already-paid subscribers. Payment entitlement changes the CTA after the
++  // draft is revealed; it must not bypass the reveal window.
++  const isDraftVisibilityGated = Boolean(visibleAt);
++  const isEarly = visibleAt ? now < visibleAt : false;
+   const isProcessingStatus = [
+     "submitted",
+     "researching",
+@@ -279,24 +284,27 @@
+     "ai_generation_completed_hidden",
+   ].includes(request.status);
+ 
+-  if (isEarly && isProcessingStatus) {
+-    return { status: "hidden_before_24_hours" };
++  if (isDraftVisibilityGated) {
++    if (isEarly && isProcessingStatus) {
++      return { status: "hidden_before_24_hours" };
++    }
++    if (!isEarly && request.currentAiDraftVersionId) {
++      return { status: "visible_after_24_hours" };
++    }
++    return { status: "locked_generation_pending" };
+   }
+ 
+-  // If NOW() >= freePreviewUnlockAt and currentAiDraftVersionId exists, return visible_after_24_hours.
+-  if (!isEarly && request.currentAiDraftVersionId) {
+-    return { status: "visible_after_24_hours" };
++  if (!request.currentAiDraftVersionId || request.status === "drafting") {
++    return { status: "locked_generation_pending" };
+   }
+-
+-  // If NOW() >= freePreviewUnlockAt but draft is not ready yet, return locked_generation_pending.
+-  return { status: "locked_generation_pending" };
++  return { status: "visible_after_24_hours" };
+ }
+ 
+ /**
+- * PROCEDURE 6: getSubscriberReleasedLetterProcedure
++ * PROCEDURE 6: getSubscriberDraftPreviewProcedure
+  * Inputs: requestId, subscriberId.
+  */
+-export async function getSubscriberReleasedLetterProcedure(
++export async function getSubscriberDraftPreviewProcedure(
+   requestId: number,
+   subscriberId: number
+ ) {
+@@ -308,18 +316,18 @@
+   if (visibility.status === "visible_after_24_hours") {
+     const request = await getLetterRequestById(requestId);
+ 
+-    // Only transition to letter_released_to_subscriber when:
+-    // - request.isFreePreview === true
+-    // - currentAiDraftVersionId exists
++    // Release any 24h-gated subscriber draft, regardless of whether the user was
++    // a lead-magnet/free-preview user or an already-paid subscriber. The UI will
++    // choose paywall vs subscription-submit based on active subscription state.
+     if (
+-      request?.isFreePreview === true &&
++      request?.freePreviewUnlockAt &&
+       request.currentAiDraftVersionId &&
+       request.status === "ai_generation_completed_hidden"
+     ) {
+       await updateLetterStatus(requestId, "letter_released_to_subscriber");
+       await updateLetterStatus(requestId, "attorney_review_upsell_shown");
+     } else if (
+-      request?.isFreePreview === true &&
++      request?.freePreviewUnlockAt &&
+       request.currentAiDraftVersionId &&
+       request.status === "letter_released_to_subscriber"
+     ) {
+@@ -332,6 +340,10 @@
+   return { status: "hidden", visibility };
+ }
+ 
++// Backward-compatible alias for existing service/router imports.
++export const getSubscriberReleasedLetterProcedure =
++  getSubscriberDraftPreviewProcedure;
++
+ /**
+  * PROCEDURE 7: markAttorneyReviewUpsellShownProcedure
+  * Inputs: requestId, subscriberId.
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/services/letters.ts /mnt/data/ttml_app_corrected/server/services/letters.ts
+--- /mnt/data/ttml_app/ttml-app/server/services/letters.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/services/letters.ts	2026-05-11 17:05:05.524023620 +0000
+@@ -48,7 +48,7 @@
+ 
+ import {
+   submitSubscriberIntakeProcedure,
+-  getSubscriberReleasedLetterProcedure as canonicalGetReleasedProcedure,
++  getSubscriberDraftPreviewProcedure as canonicalGetDraftPreviewProcedure,
+ } from "./canonicalProcedures";
+ 
+ // ─── Submit Letter (subscriber path) ───────────────────────────────────────
+@@ -96,14 +96,14 @@
+ }
+ 
+ /**
+- * PROCEDURE 6: getSubscriberReleasedLetterProcedure
++ * PROCEDURE 6: getSubscriberDraftPreviewProcedure
+  * Delegates to the canonical implementation.
+  */
+ export async function getSubscriberReleasedLetterProcedure(
+   letterId: number,
+   userId: number
+ ) {
+-  const result = await canonicalGetReleasedProcedure(letterId, userId);
++  const result = await canonicalGetDraftPreviewProcedure(letterId, userId);
+   const letter = await getLetterRequestById(letterId);
+ 
+   if (!letter) return null;
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/server/worker.ts /mnt/data/ttml_app_corrected/server/worker.ts
+--- /mnt/data/ttml_app/ttml-app/server/worker.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/server/worker.ts	2026-05-11 17:03:09.266387807 +0000
+@@ -27,6 +27,11 @@
+   preflightApiKeyCheck,
+ } from "./pipeline";
+ import { runLangGraphPipeline } from "./pipeline/graph";
++import { runSimplePipeline } from "./pipeline/simple";
++import {
++  requiresDraftVisibilityGate,
++  resolvePipelineExecutionRoute,
++} from "./pipeline/routing";
+ import {
+   parseLangGraphMode,
+   useLangGraphForLetter,
+@@ -61,10 +66,8 @@
+   data: RunPipelineJobData
+ ): Promise<void> {
+   const { letterId, intake, userId, appUrl, label, usageContext } = data;
+-  const isPreviewGatedSubmission =
+-    usageContext?.isPreviewGatedSubmission ??
+-    usageContext?.isFreeTrialSubmission ??
+-    false;
++  const isPreviewGatedSubmission = requiresDraftVisibilityGate(usageContext);
++  const executionRoute = resolvePipelineExecutionRoute(usageContext);
+ 
+   const lockAcquired = await acquirePipelineLock(letterId);
+   if (!lockAcquired) {
+@@ -120,7 +123,11 @@
+ 
+   // ── Primary/canary path: LangGraph runs BEFORE the standard pipeline ───────
+   // "tier3" intentionally does NOT enter this block — n8n must run first.
+-  if (langGraphMode === "primary" || (langGraphMode === "canary" && langGraphEligible)) {
++  if (
++    executionRoute === "standard" &&
++    (langGraphMode === "primary" ||
++      (langGraphMode === "canary" && langGraphEligible))
++  ) {
+     logger.info(
+       `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph (primary path)`
+     );
+@@ -172,6 +179,53 @@
+ 
+   let lastErr: unknown;
+   try {
++    if (executionRoute === "simple") {
++      logger.info(
++        `[Worker] Product routing: free-trial/non-subscriber draft #${letterId} → simple pipeline`
++      );
++      await markPriorPipelineRunsSuperseded(letterId);
++      const result = await runSimplePipeline(letterId, intake as any, userId);
++      if (!result.success) {
++        lastErr = new PipelineError(
++          "DRAFTING_PROVIDER_FAILED" as any,
++          result.error ?? "Simple pipeline failed",
++          "pipeline"
++        );
++        if (userId && usageContext?.shouldRefundOnFailure) {
++          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
++          else await decrementLettersUsed(userId);
++        }
++        await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
++        throw lastErr;
++      }
++      return;
++    }
++
++    if (executionRoute === "langgraph") {
++      logger.info(
++        `[Worker] Product routing: paid subscriber draft #${letterId} → LangGraph pipeline`
++      );
++      await markPriorPipelineRunsSuperseded(letterId);
++      try {
++        await runLangGraphPipeline({
++          letterId,
++          userId,
++          intake: intake as Record<string, any>,
++          isFreePreview: isPreviewGatedSubmission,
++        });
++        logger.info(`[Worker] Paid subscriber LangGraph pipeline completed for letter #${letterId}`);
++        return;
++      } catch (err) {
++        lastErr = err;
++        if (userId && usageContext?.shouldRefundOnFailure) {
++          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
++          else await decrementLettersUsed(userId);
++        }
++        await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
++        throw err;
++      }
++    }
++
+     await markPriorPipelineRunsSuperseded(letterId);
+ 
+     for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
+@@ -526,14 +580,14 @@
+     return;
+   }
+ 
+-  if (letter.isFreePreview !== true) {
++  if (!letter.freePreviewUnlockAt) {
+     logger.info(
+-      `[Worker] Draft preview release skipped for letter #${data.letterId} — not preview gated`
++      `[Worker] Draft preview release skipped for letter #${data.letterId} — not draft-visibility gated`
+     );
+     return;
+   }
+ 
+-  if (letter.freePreviewEmailSentAt) {
++  if (letter.isFreePreview === true && letter.freePreviewEmailSentAt) {
+     logger.info(
+       `[Worker] Draft preview release skipped for letter #${data.letterId} — already released`
+     );
+@@ -582,23 +636,40 @@
+     return;
+   }
+ 
+-  const result = await dispatchFreePreviewIfReady(data.letterId, {
+-    requireDraft: true,
+-  });
+-  if (result.status === "error") {
+-    const nextAttempt = (data.attempt ?? 0) + 1;
+-    await enqueueDraftPreviewReleaseJob(
+-      data.letterId,
+-      new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
+-      nextAttempt
+-    );
+-    throw new Error(
+-      `Draft preview release failed for letter #${data.letterId}: ${result.reason ?? "unknown error"}`
++  if (letter.isFreePreview === true) {
++    const result = await dispatchFreePreviewIfReady(data.letterId, {
++      requireDraft: true,
++    });
++    if (result.status === "error") {
++      const nextAttempt = (data.attempt ?? 0) + 1;
++      await enqueueDraftPreviewReleaseJob(
++        data.letterId,
++        new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
++        nextAttempt
++      );
++      throw new Error(
++        `Draft preview release failed for letter #${data.letterId}: ${result.reason ?? "unknown error"}`
++      );
++    }
++
++    logger.info(
++      `[Worker] Draft preview release for letter #${data.letterId}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`
+     );
++    return;
++  }
++
++  // Paid subscriber draft: no paywall email. Just move it into the same
++  // subscriber-visible pre-review band so the UI can show the full draft and the
++  // "Submit for Attorney Review" subscription CTA.
++  if (letter.status === LETTER_STATUS.ai_generation_completed_hidden) {
++    await updateLetterStatus(data.letterId, LETTER_STATUS.letter_released_to_subscriber);
++    await updateLetterStatus(data.letterId, LETTER_STATUS.attorney_review_upsell_shown);
++  } else if (letter.status === LETTER_STATUS.letter_released_to_subscriber) {
++    await updateLetterStatus(data.letterId, LETTER_STATUS.attorney_review_upsell_shown);
+   }
+ 
+   logger.info(
+-    `[Worker] Draft preview release for letter #${data.letterId}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`
++    `[Worker] Paid subscriber draft preview released for letter #${data.letterId}`
+   );
+ }
+ 
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/shared/utils/draft-preview.ts /mnt/data/ttml_app_corrected/shared/utils/draft-preview.ts
+--- /mnt/data/ttml_app/ttml-app/shared/utils/draft-preview.ts	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/ttml_app_corrected/shared/utils/draft-preview.ts	2026-05-11 17:01:20.320132200 +0000
+@@ -0,0 +1,29 @@
++export const DEFAULT_DRAFT_PREVIEW_WINDOW_SECONDS = 24 * 60 * 60;
++
++export type DraftPreviewGateInput = {
++  /** True only for first-time/free-trial users. Does not control the 24h gate. */
++  isFreeTrialPreview?: boolean | null | undefined;
++  /** Backward-compatible DB field used as the generic draft visibility timestamp. */
++  draftVisibleAt: Date | string | null | undefined;
++};
++
++/** Returns true once the server-side 24h draft visibility window has elapsed. */
++export function isDraftPreviewUnlocked(gate: DraftPreviewGateInput): boolean {
++  if (!gate.draftVisibleAt) return true;
++
++  const visibleAt = new Date(gate.draftVisibleAt).getTime();
++  if (Number.isNaN(visibleAt)) return false;
++  return visibleAt <= Date.now();
++}
++
++/** Returns whole seconds remaining before draft visibility opens. */
++export function getDraftPreviewRemainingSeconds(
++  gate: DraftPreviewGateInput
++): number {
++  if (!gate.draftVisibleAt) return 0;
++
++  const visibleAt = new Date(gate.draftVisibleAt).getTime();
++  if (Number.isNaN(visibleAt)) return DEFAULT_DRAFT_PREVIEW_WINDOW_SECONDS;
++
++  return Math.max(0, Math.ceil((visibleAt - Date.now()) / 1000));
++}
+diff --strip-trailing-cr -ruN --exclude node_modules --exclude .git --exclude dist --exclude .cache /mnt/data/ttml_app/ttml-app/shared/utils/free-preview.ts /mnt/data/ttml_app_corrected/shared/utils/free-preview.ts
+--- /mnt/data/ttml_app/ttml-app/shared/utils/free-preview.ts	2026-05-05 14:33:46.000000000 +0000
++++ /mnt/data/ttml_app_corrected/shared/utils/free-preview.ts	2026-05-11 17:01:20.328057962 +0000
+@@ -1,27 +1,34 @@
+-const DEFAULT_FREE_PREVIEW_WINDOW_SECONDS = 24 * 60 * 60;
++import {
++  DEFAULT_DRAFT_PREVIEW_WINDOW_SECONDS,
++  getDraftPreviewRemainingSeconds,
++  isDraftPreviewUnlocked,
++} from "./draft-preview";
++
++export const DEFAULT_FREE_PREVIEW_WINDOW_SECONDS =
++  DEFAULT_DRAFT_PREVIEW_WINDOW_SECONDS;
+ 
+ type FreePreviewGateInput = {
+-    isFreePreview: boolean | null | undefined;
+-    freePreviewUnlockAt: Date | string | null | undefined;
++  isFreePreview: boolean | null | undefined;
++  freePreviewUnlockAt: Date | string | null | undefined;
+ };
+ 
++/**
++ * Backward-compatible alias. Prefer isDraftPreviewUnlocked() for new code.
++ * Historical DB field freePreviewUnlockAt is now the generic draftVisibleAt.
++ */
+ export function isFreePreviewUnlocked(letter: FreePreviewGateInput): boolean {
+-    if (letter.isFreePreview !== true) return true;
+-    if (!letter.freePreviewUnlockAt) return false;
+-
+-    const unlockTime = new Date(letter.freePreviewUnlockAt).getTime();
+-    if (Number.isNaN(unlockTime)) return false;
+-    return unlockTime <= Date.now();
++  return isDraftPreviewUnlocked({
++    isFreeTrialPreview: letter.isFreePreview,
++    draftVisibleAt: letter.freePreviewUnlockAt,
++  });
+ }
+ 
++/** Backward-compatible alias. Prefer getDraftPreviewRemainingSeconds(). */
+ export function getFreePreviewRemainingSeconds(
+-    letter: FreePreviewGateInput
++  letter: FreePreviewGateInput
+ ): number {
+-    if (letter.isFreePreview !== true) return 0;
+-    if (!letter.freePreviewUnlockAt) return DEFAULT_FREE_PREVIEW_WINDOW_SECONDS;
+-
+-    const unlockTime = new Date(letter.freePreviewUnlockAt).getTime();
+-    if (Number.isNaN(unlockTime)) return DEFAULT_FREE_PREVIEW_WINDOW_SECONDS;
+-
+-    return Math.max(0, Math.ceil((unlockTime - Date.now()) / 1000));
++  return getDraftPreviewRemainingSeconds({
++    isFreeTrialPreview: letter.isFreePreview,
++    draftVisibleAt: letter.freePreviewUnlockAt,
++  });
+ }

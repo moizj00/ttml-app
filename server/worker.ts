@@ -26,7 +26,15 @@ import {
   consumeIntermediateContent,
   preflightApiKeyCheck,
 } from "./pipeline";
-import { getGraphWithCheckpointer } from "./pipeline/graph";
+import { runSimplePipeline } from "./pipeline/simple";
+import {
+  requiresDraftVisibilityGate,
+  resolvePipelineExecutionRoute,
+} from "./pipeline/routing";
+import {
+  getGraphWithCheckpointer,
+  runLangGraphPipeline,
+} from "./pipeline/graph";
 import type { PipelineStateType } from "./pipeline/graph/state";
 import {
   parseLangGraphMode,
@@ -162,7 +170,9 @@ async function runQueuedLangGraphPipeline(
     });
 
     if (failed) {
-      throw new Error(`LangGraph pipeline failed for letter #${data.letterId}`);
+      const errCode = finalState.lastErrorCode ?? "UNKNOWN_ERROR";
+      const errMsg = finalState.lastErrorMessage ?? "LangGraph pipeline failed";
+      throw new Error(`[${errCode}] ${errMsg} (letter #${data.letterId})`);
     }
 
     return finalState;
@@ -188,10 +198,8 @@ export async function processRunPipeline(
   data: RunPipelineJobData
 ): Promise<void> {
   const { letterId, intake, userId, appUrl, label, usageContext } = data;
-  const isPreviewGatedSubmission =
-    usageContext?.isPreviewGatedSubmission ??
-    usageContext?.isFreeTrialSubmission ??
-    false;
+  const isPreviewGatedSubmission = requiresDraftVisibilityGate(usageContext);
+  const executionRoute = resolvePipelineExecutionRoute(usageContext);
 
   const lockAcquired = await acquirePipelineLock(letterId);
   if (!lockAcquired) {
@@ -217,6 +225,88 @@ export async function processRunPipeline(
       "pipeline",
       "No retries attempted — API keys must be configured first"
     );
+  }
+
+  // ── New-user / free-trial path: simple pipeline + OpenAI fallback ─────────
+  const isNewUser = usageContext?.isFreeTrialSubmission === true;
+
+  if (isNewUser) {
+    logger.info(
+      `[Worker] Letter #${letterId} is new-user/free-trial — using simple pipeline (bypassing complex pipeline)`
+    );
+    try {
+      await updatePipelineRecord(letterId, {
+        status: "running",
+        currentStep: "drafting",
+        progress: 10,
+        startedAt: new Date(),
+        errorMessage: null,
+      });
+
+      const simpleResult = await runSimplePipeline(
+        letterId,
+        intake as any,
+        userId
+      );
+      if (simpleResult.success) {
+        await updatePipelineRecord(letterId, {
+          status: "completed",
+          currentStep: "completed",
+          progress: 100,
+          finalLetter: simpleResult.letter,
+          completedAt: new Date(),
+        });
+        logger.info(
+          `[Worker] Simple pipeline completed for new user letter #${letterId}`
+        );
+        return;
+      }
+
+      logger.error(
+        { err: simpleResult.error, letterId },
+        `[Worker] Simple pipeline failed for new user letter #${letterId}`
+      );
+      await updatePipelineRecord(letterId, {
+        status: "failed",
+        currentStep: "failed",
+        progress: 100,
+        errorMessage: simpleResult.error ?? "Simple pipeline failed",
+        completedAt: new Date(),
+      });
+      await updateLetterStatus(
+        letterId,
+        LETTER_STATUS.pipeline_failed,
+        { force: true }
+      );
+      return;
+    } catch (bypassErr) {
+      const msg =
+        bypassErr instanceof Error ? bypassErr.message : String(bypassErr);
+      logger.error(
+        { err: msg, letterId },
+        `[Worker] New-user bypass threw for letter #${letterId}`
+      );
+      await updatePipelineRecord(letterId, {
+        status: "failed",
+        currentStep: "failed",
+        progress: 100,
+        errorMessage: msg,
+        completedAt: new Date(),
+      }).catch(() => {});
+      await updateLetterStatus(
+        letterId,
+        LETTER_STATUS.pipeline_failed,
+        { force: true }
+      ).catch(() => {});
+      return;
+    } finally {
+      await releasePipelineLock(letterId).catch(e =>
+        logger.error(
+          { e },
+          "[Worker] Failed to release pipeline lock after new-user bypass:"
+        )
+      );
+    }
   }
 
   // ── LangGraph pipeline route — mode-aware ──────────────────────────────────
@@ -247,7 +337,11 @@ export async function processRunPipeline(
 
   // ── Primary/canary path: LangGraph runs BEFORE the standard pipeline ───────
   // "tier3" intentionally does NOT enter this block — n8n must run first.
-  if (langGraphMode === "primary" || (langGraphMode === "canary" && langGraphEligible)) {
+  if (
+    executionRoute === "standard" &&
+    (langGraphMode === "primary" ||
+      (langGraphMode === "canary" && langGraphEligible))
+  ) {
     logger.info(
       `[Worker] LANGGRAPH_PIPELINE=${process.env.LANGGRAPH_PIPELINE ?? "off"} (mode=${langGraphMode}) — routing letter #${letterId} through LangGraph StateGraph (primary path)`
     );
@@ -294,6 +388,53 @@ export async function processRunPipeline(
 
   let lastErr: unknown;
   try {
+    if (executionRoute === "simple") {
+      logger.info(
+        `[Worker] Product routing: free-trial/non-subscriber draft #${letterId} → simple pipeline`
+      );
+      await markPriorPipelineRunsSuperseded(letterId);
+      const result = await runSimplePipeline(letterId, intake as any, userId);
+      if (!result.success) {
+        lastErr = new PipelineError(
+          "DRAFTING_PROVIDER_FAILED" as any,
+          result.error ?? "Simple pipeline failed",
+          "pipeline"
+        );
+        if (userId && usageContext?.shouldRefundOnFailure) {
+          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
+          else await decrementLettersUsed(userId);
+        }
+        await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
+        throw lastErr;
+      }
+      return;
+    }
+
+    if (executionRoute === "langgraph") {
+      logger.info(
+        `[Worker] Product routing: paid subscriber draft #${letterId} → LangGraph pipeline`
+      );
+      await markPriorPipelineRunsSuperseded(letterId);
+      try {
+        await runLangGraphPipeline({
+          letterId,
+          userId,
+          intake: intake as Record<string, any>,
+          isFreePreview: isPreviewGatedSubmission,
+        });
+        logger.info(`[Worker] Paid subscriber LangGraph pipeline completed for letter #${letterId}`);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (userId && usageContext?.shouldRefundOnFailure) {
+          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
+          else await decrementLettersUsed(userId);
+        }
+        await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
+        throw err;
+      }
+    }
+
     await markPriorPipelineRunsSuperseded(letterId);
 
     for (let attempt = 0; attempt <= PIPELINE_MAX_RETRIES; attempt++) {
@@ -643,14 +784,14 @@ export async function processReleaseDraftPreview(
     return;
   }
 
-  if (letter.isFreePreview !== true) {
+  if (!letter.freePreviewUnlockAt) {
     logger.info(
-      `[Worker] Draft preview release skipped for letter #${data.letterId} — not preview gated`
+      `[Worker] Draft preview release skipped for letter #${data.letterId} — not draft-visibility gated`
     );
     return;
   }
 
-  if (letter.freePreviewEmailSentAt) {
+  if (letter.isFreePreview === true && letter.freePreviewEmailSentAt) {
     logger.info(
       `[Worker] Draft preview release skipped for letter #${data.letterId} — already released`
     );
@@ -699,23 +840,40 @@ export async function processReleaseDraftPreview(
     return;
   }
 
-  const result = await dispatchFreePreviewIfReady(data.letterId, {
-    requireDraft: true,
-  });
-  if (result.status === "error") {
-    const nextAttempt = (data.attempt ?? 0) + 1;
-    await enqueueDraftPreviewReleaseJob(
-      data.letterId,
-      new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
-      nextAttempt
+  if (letter.isFreePreview === true) {
+    const result = await dispatchFreePreviewIfReady(data.letterId, {
+      requireDraft: true,
+    });
+    if (result.status === "error") {
+      const nextAttempt = (data.attempt ?? 0) + 1;
+      await enqueueDraftPreviewReleaseJob(
+        data.letterId,
+        new Date(now + DRAFT_PREVIEW_RELEASE_RETRY_MS),
+        nextAttempt
+      );
+      throw new Error(
+        `Draft preview release failed for letter #${data.letterId}: ${result.reason ?? "unknown error"}`
+      );
+    }
+
+    logger.info(
+      `[Worker] Draft preview release for letter #${data.letterId}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`
     );
-    throw new Error(
-      `Draft preview release failed for letter #${data.letterId}: ${result.reason ?? "unknown error"}`
-    );
+    return;
+  }
+
+  // Paid subscriber draft: no paywall email. Just move it into the same
+  // subscriber-visible pre-review band so the UI can show the full draft and the
+  // "Submit for Attorney Review" subscription CTA.
+  if (letter.status === LETTER_STATUS.ai_generation_completed_hidden) {
+    await updateLetterStatus(data.letterId, LETTER_STATUS.letter_released_to_subscriber);
+    await updateLetterStatus(data.letterId, LETTER_STATUS.attorney_review_upsell_shown);
+  } else if (letter.status === LETTER_STATUS.letter_released_to_subscriber) {
+    await updateLetterStatus(data.letterId, LETTER_STATUS.attorney_review_upsell_shown);
   }
 
   logger.info(
-    `[Worker] Draft preview release for letter #${data.letterId}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`
+    `[Worker] Paid subscriber draft preview released for letter #${data.letterId}`
   );
 }
 

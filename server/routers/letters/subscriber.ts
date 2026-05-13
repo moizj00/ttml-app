@@ -54,10 +54,10 @@ export const subscriberProcedures = {
         });
       const actions = await getReviewActions(input.id, false);
 
-      const isFreePreviewWaiting =
-        letter.isFreePreview === true && letter.visibilityStatus === "hidden";
+      const isDraftPreviewWaiting =
+        Boolean(letter.freePreviewUnlockAt) && letter.visibilityStatus === "hidden";
 
-      const subscriberDisplayStatus = isFreePreviewWaiting
+      const subscriberDisplayStatus = isDraftPreviewWaiting
         ? "free_preview_waiting"
         : letter.status;
 

@@ -33,10 +33,10 @@
  *   still surface it to the subscriber.
  */
 
-import { and, isNull, isNotNull, lte, eq, inArray } from "drizzle-orm";
+import { and, isNull, isNotNull, lte, eq, inArray, sql } from "drizzle-orm";
 import type { Express, Request, Response } from "express";
 import { getDb } from "./db";
-import { letterRequests } from "../drizzle/schema";
+import { letterRequests, notifications } from "../drizzle/schema";
 import { createNotification, getUserById } from "./db";
 import { sendFreePreviewReadyEmail } from "./email";
 import { createLogger } from "./logger";
@@ -82,6 +82,10 @@ function getAppBaseUrl(): string {
   return process.env.APP_BASE_URL ?? "https://www.talk-to-my-lawyer.com";
 }
 
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FreePreviewEmailResult {
@@ -99,6 +103,92 @@ export interface FreePreviewEmailResult {
 export interface DispatchFreePreviewResult {
   status: "sent" | "skipped" | "error";
   reason?: string;
+}
+
+export interface EnsureFreePreviewNotificationResult {
+  status: "created" | "exists" | "skipped" | "error";
+  reason?: string;
+}
+
+// ─── Notification Repair Helper ───────────────────────────────────────────────
+
+/**
+ * Idempotently creates the in-app notification for a free-preview release.
+ *
+ * This intentionally lives outside the email atomic claim. If an earlier deploy
+ * sent the email but failed the notification insert because of schema drift,
+ * admin force-unlock and repair paths can safely call this helper later without
+ * resending the email or touching the pipeline.
+ */
+export async function ensureFreePreviewReadyNotification(
+  letterId: number,
+  source = "free_preview_release"
+): Promise<EnsureFreePreviewNotificationResult> {
+  const db = await getDb();
+  if (!db) return { status: "skipped", reason: "database unavailable" };
+
+  try {
+    const [letter] = await db
+      .select()
+      .from(letterRequests)
+      .where(eq(letterRequests.id, letterId))
+      .limit(1);
+
+    if (!letter) return { status: "skipped", reason: "letter not found" };
+    if (!letter.isFreePreview) {
+      return { status: "skipped", reason: "letter is not free preview" };
+    }
+    if (letter.userId == null) {
+      return { status: "skipped", reason: "no user associated" };
+    }
+
+    const existing = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, letter.userId),
+          eq(notifications.type, "free_preview_ready"),
+          sql`${notifications.metadataJson}->>'letterId' = ${String(letter.id)}`
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      return { status: "exists" };
+    }
+
+    const subscriber = await getUserById(letter.userId);
+    if (!subscriber) {
+      return { status: "skipped", reason: "subscriber not found" };
+    }
+
+    await createNotification({
+      userId: subscriber.id,
+      type: "free_preview_ready",
+      category: "letters",
+      title: "Your draft is ready to preview",
+      body: `"${letter.subject}" is ready. You can now review your draft and decide whether to submit it for attorney review.`,
+      link: `/letters/${letter.id}?preview=1`,
+      metadataJson: {
+        letterId: letter.id,
+        source,
+      },
+    });
+
+    freePreviewLogger.info(
+      { letterId, userId: subscriber.id, source },
+      "[FreePreviewEmails] Free-preview in-app notification ensured"
+    );
+    return { status: "created" };
+  } catch (err) {
+    const msg = toErrorMessage(err);
+    freePreviewLogger.error(
+      { letterId, err: msg },
+      `[FreePreviewEmails] Failed to ensure free-preview in-app notification: ${msg}`
+    );
+    return { status: "error", reason: msg };
+  }
 }
 
 // ─── Atomic Dispatcher ────────────────────────────────────────────────────────
@@ -201,30 +291,18 @@ export async function dispatchFreePreviewIfReady(
       jurisdictionState: letter.jurisdictionState ?? undefined,
     });
 
-    try {
-      await createNotification({
-        userId: subscriber.id,
-        type: "free_preview_ready",
-        category: "letters",
-        title: "Your draft is ready to preview",
-        body: `"${letter.subject}" is ready. You can now review your draft and decide whether to submit it for attorney review.`,
-        link: `/letters/${letter.id}?preview=1`,
-        metadataJson: {
-          letterId: letter.id,
-          source: "free_preview_release",
-        },
-      });
-    } catch (notificationErr) {
+    const notificationResult = await ensureFreePreviewReadyNotification(
+      letter.id,
+      "free_preview_release"
+    );
+    if (notificationResult.status === "error") {
       freePreviewLogger.error(
         {
           letterId,
           userId: subscriber.id,
-          err:
-            notificationErr instanceof Error
-              ? notificationErr.message
-              : String(notificationErr),
+          err: notificationResult.reason,
         },
-        "[FreePreviewEmails] In-app notification failed after preview-ready email"
+        `[FreePreviewEmails] In-app notification failed after preview-ready email: ${notificationResult.reason}`
       );
     }
 

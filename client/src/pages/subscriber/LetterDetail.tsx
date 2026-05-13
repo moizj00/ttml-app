@@ -1,7 +1,7 @@
 import AppLayout from "@/components/shared/AppLayout";
 import { LetterPaywall } from "@/components/LetterPaywall";
-import { FreePreviewViewer } from "@/components/FreePreviewViewer";
-import { FreePreviewWaiting } from "@/components/FreePreviewWaiting";
+import DraftPreviewViewer from "@/components/DraftPreviewViewer";
+import { DraftPreviewWaiting } from "@/components/DraftPreviewWaiting";
 import { FreePreviewUpsellBanner } from "@/components/FreePreviewUpsellBanner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -122,14 +122,16 @@ export default function LetterDetail() {
     if (upsellDismissed) return;
     if (upsellBannerOpen) return;
 
+    if (data?.letter?.isFreePreview !== true) return;
+
     const aiDraftVersion = data?.versions?.find(
       (v: any) => v.versionType === "ai_draft"
     );
-    const freePreviewUnlocked =
-      data?.letter?.isFreePreview === true &&
-      (aiDraftVersion as any)?.freePreview === true &&
+    const draftPreviewUnlocked =
+      ((aiDraftVersion as any)?.draftPreview === true ||
+        (aiDraftVersion as any)?.freePreview === true) &&
       Boolean(aiDraftVersion?.content);
-    if (!freePreviewUnlocked) return;
+    if (!draftPreviewUnlocked) return;
 
     const status = data?.letter?.status as string | undefined;
     if (!status || !UPSELL_ELIGIBLE_STATUSES.has(status)) return;
@@ -352,10 +354,11 @@ export default function LetterDetail() {
     a => a.noteVisibility === "user_visible" && a.noteText
   );
   const isPolling = POLLING_STATUSES.includes(displayStatus);
-  const freePreviewUnlocked =
-    letter.isFreePreview === true &&
-    (aiDraftVersion as any)?.freePreview === true &&
+  const draftPreviewUnlocked =
+    ((aiDraftVersion as any)?.draftPreview === true ||
+      (aiDraftVersion as any)?.freePreview === true) &&
     Boolean(aiDraftVersion?.content);
+  const freePreviewUnlocked = letter.isFreePreview === true && draftPreviewUnlocked;
   const isGeneratedLocked =
     (displayStatus === "generated_locked" ||
       displayStatus === "generated_unlocked" ||
@@ -368,19 +371,19 @@ export default function LetterDetail() {
     letter.status === "sent";
   const pdfUrl = (letter as any).pdfUrl as string | null | undefined;
 
-  // Free-preview UI (FreePreviewViewer / FreePreviewWaiting) is a pre-payment
+  // Draft-preview UI (DraftPreviewViewer / DraftPreviewWaiting) is a pre-review
   // lead magnet — it only makes sense BEFORE the letter has been submitted for
   // attorney review. Once the letter advances to `attorney_review_payment_
   // confirmed` or beyond (pending_review, under_review, approved, client_*,
   // sent, etc.), the upsell card and the watermarked draft become irrelevant
   // — the letter is already in / past the paid review pipeline. Without this
-  // gate, the FreePreviewViewer keeps rendering on top of the
-  // ApprovedLetterPanel because `aiDraftVersion.freePreview` is still `true`
+  // gate, the DraftPreviewViewer keeps rendering on top of the
+  // ApprovedLetterPanel because `aiDraftVersion.draftPreview` is still `true`
   // (the server never clears the flag — the draft itself doesn't change).
-  // Reproduced when admin force-transitions a free-preview letter through the
+  // Reproduced when admin force-transitions a draft-preview letter through the
   // payment statuses + attorney approves: subscriber sees the upsell stacked
   // on top of the approved letter view.
-  const FREE_PREVIEW_VISIBLE_STATUSES = new Set([
+  const DRAFT_PREVIEW_VISIBLE_STATUSES = new Set([
     "free_preview_waiting",
     "ai_generation_completed_hidden",
     "letter_released_to_subscriber",
@@ -390,9 +393,9 @@ export default function LetterDetail() {
     "generated_unlocked",
     "pipeline_failed",
   ]);
-  const isFreePreviewPhase =
-    letter.isFreePreview === true &&
-    FREE_PREVIEW_VISIBLE_STATUSES.has(displayStatus as string);
+  const isDraftPreviewPhase =
+    Boolean((letter as any).freePreviewUnlockAt) &&
+    DRAFT_PREVIEW_VISIBLE_STATUSES.has(displayStatus as string);
 
   return (
     <AppLayout
@@ -463,12 +466,10 @@ export default function LetterDetail() {
           freePreviewUnlocked={freePreviewUnlocked}
         />
 
-        {isFreePreviewPhase &&
-        (aiDraftVersion as any)?.freePreview !== true ? (
-          <FreePreviewWaiting subject={letter.subject} />
-        ) : isFreePreviewPhase &&
-          (aiDraftVersion as any)?.freePreview === true ? (
-          <FreePreviewViewer
+        {isDraftPreviewPhase && !draftPreviewUnlocked ? (
+          <DraftPreviewWaiting subject={letter.subject} />
+        ) : isDraftPreviewPhase && draftPreviewUnlocked ? (
+          <DraftPreviewViewer
             letterId={letterId}
             subject={letter.subject}
             draftContent={aiDraftVersion?.content ?? ""}

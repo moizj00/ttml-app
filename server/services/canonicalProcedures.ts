@@ -79,13 +79,18 @@ export async function submitSubscriberIntakeProcedure(
   const subscriberVisibleAt = new Date(
     submittedAt.getTime() + LETTER_HOLD_HOURS * 60 * 60 * 1000
   );
+  const isFreeTrialSubmission = entitlement.firstLetterFree === true;
+  const isPaidSubscriberSubmission = Boolean(entitlement.subscription) && !isFreeTrialSubmission;
 
   const result = await createLetterRequest({
     userId: subscriberId,
     letterType: letterType as any,
     subject: intakePayload.matter?.subject || "Legal Matter",
     intakeJson: intakePayload,
-    isFreePreview: true,
+    // "Free preview" means the user was not subscribed at submission time.
+    // The unlock timestamp is now the generic draft visibility gate for both
+    // free-preview users and paid subscribers.
+    isFreePreview: isFreeTrialSubmission,
     freePreviewUnlockAt: subscriberVisibleAt,
   });
 
@@ -114,11 +119,15 @@ export async function submitSubscriberIntakeProcedure(
     intake: intakePayload,
     userId: subscriberId,
     appUrl: process.env.APP_URL ?? "",
-    label: `Free preview draft for #${requestId}`,
+    label: isPaidSubscriberSubmission
+      ? `Paid subscriber draft for #${requestId}`
+      : `Free preview draft for #${requestId}`,
     usageContext: {
       shouldRefundOnFailure: true,
+      requiresDraftVisibilityGate: true,
       isPreviewGatedSubmission: true,
-      isFreeTrialSubmission: entitlement.firstLetterFree === true,
+      isFreeTrialSubmission,
+      isPaidSubscriberSubmission,
     },
   });
 
@@ -134,7 +143,7 @@ export async function submitSubscriberIntakeProcedure(
     pipelineId: requestId,
     status: "submitted",
     subscriberVisibleAt,
-    isFreePreview: true,
+    isFreePreview: isFreeTrialSubmission,
   };
 }
 
@@ -168,8 +177,10 @@ export async function enqueueLetterGenerationProcedure(
       label: `Simple Draft for #${requestId}`,
       usageContext: {
         shouldRefundOnFailure: true,
-        isPreviewGatedSubmission: request.isFreePreview === true,
+        requiresDraftVisibilityGate: Boolean(request.freePreviewUnlockAt),
+        isPreviewGatedSubmission: Boolean(request.freePreviewUnlockAt),
         isFreeTrialSubmission: usageContext.isFreeTrialSubmission === true,
+        isPaidSubscriberSubmission: usageContext.isFreeTrialSubmission !== true && Boolean(request.freePreviewUnlockAt),
       },
     },
     { startAfter: new Date() }
@@ -271,17 +282,11 @@ export async function resolveLetterVisibilityProcedure(
   if (request.status === "pipeline_failed")
     return { status: "locked_generation_failed" };
 
-  // Only free preview letters should use the 24-hour visibility logic.
-  if (request.isFreePreview !== true) {
-    if (!request.currentAiDraftVersionId || request.status === "drafting") {
-      return { status: "locked_generation_pending" };
-    }
-    return { status: "visible_after_24_hours" };
-  }
-
-  // logic for isFreePreview=true:
-  // If status is submitted/researching/drafting/ai_generation_completed_hidden and NOW() < freePreviewUnlockAt, return hidden_before_24_hours.
-  const isEarly = visibleAt && now < visibleAt;
+  // The 24-hour visibility gate applies to BOTH lead-magnet/free-preview users
+  // and already-paid subscribers. Payment entitlement changes the CTA after the
+  // draft is revealed; it must not bypass the reveal window.
+  const isDraftVisibilityGated = Boolean(visibleAt);
+  const isEarly = visibleAt ? now < visibleAt : false;
   const isProcessingStatus = [
     "submitted",
     "researching",
@@ -289,24 +294,27 @@ export async function resolveLetterVisibilityProcedure(
     "ai_generation_completed_hidden",
   ].includes(request.status);
 
-  if (isEarly && isProcessingStatus) {
-    return { status: "hidden_before_24_hours" };
+  if (isDraftVisibilityGated) {
+    if (isEarly && isProcessingStatus) {
+      return { status: "hidden_before_24_hours" };
+    }
+    if (!isEarly && request.currentAiDraftVersionId) {
+      return { status: "visible_after_24_hours" };
+    }
+    return { status: "locked_generation_pending" };
   }
 
-  // If NOW() >= freePreviewUnlockAt and currentAiDraftVersionId exists, return visible_after_24_hours.
-  if (!isEarly && request.currentAiDraftVersionId) {
-    return { status: "visible_after_24_hours" };
+  if (!request.currentAiDraftVersionId || request.status === "drafting") {
+    return { status: "locked_generation_pending" };
   }
-
-  // If NOW() >= freePreviewUnlockAt but draft is not ready yet, return locked_generation_pending.
-  return { status: "locked_generation_pending" };
+  return { status: "visible_after_24_hours" };
 }
 
 /**
- * PROCEDURE 6: getSubscriberReleasedLetterProcedure
+ * PROCEDURE 6: getSubscriberDraftPreviewProcedure
  * Inputs: requestId, subscriberId.
  */
-export async function getSubscriberReleasedLetterProcedure(
+export async function getSubscriberDraftPreviewProcedure(
   requestId: number,
   subscriberId: number
 ) {
@@ -318,18 +326,18 @@ export async function getSubscriberReleasedLetterProcedure(
   if (visibility.status === "visible_after_24_hours") {
     const request = await getLetterRequestById(requestId);
 
-    // Only transition to letter_released_to_subscriber when:
-    // - request.isFreePreview === true
-    // - currentAiDraftVersionId exists
+    // Release any 24h-gated subscriber draft, regardless of whether the user was
+    // a lead-magnet/free-preview user or an already-paid subscriber. The UI will
+    // choose paywall vs subscription-submit based on active subscription state.
     if (
-      request?.isFreePreview === true &&
+      request?.freePreviewUnlockAt &&
       request.currentAiDraftVersionId &&
       request.status === "ai_generation_completed_hidden"
     ) {
       await updateLetterStatus(requestId, "letter_released_to_subscriber");
       await updateLetterStatus(requestId, "attorney_review_upsell_shown");
     } else if (
-      request?.isFreePreview === true &&
+      request?.freePreviewUnlockAt &&
       request.currentAiDraftVersionId &&
       request.status === "letter_released_to_subscriber"
     ) {
@@ -341,6 +349,10 @@ export async function getSubscriberReleasedLetterProcedure(
 
   return { status: "hidden", visibility };
 }
+
+// Backward-compatible alias for existing service/router imports.
+export const getSubscriberReleasedLetterProcedure =
+  getSubscriberDraftPreviewProcedure;
 
 /**
  * PROCEDURE 7: markAttorneyReviewUpsellShownProcedure

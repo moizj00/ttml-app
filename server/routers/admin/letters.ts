@@ -25,6 +25,7 @@ import { letterRequests } from "../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   dispatchFreePreviewIfReady,
+  ensureFreePreviewReadyNotification,
   FREE_PREVIEW_ELIGIBLE_STATUSES,
 } from "../../freePreviewEmailCron";
 
@@ -300,6 +301,10 @@ export const adminLettersProcedures = {
       // and the pipeline finalize hook will re-invoke the dispatcher once
       // the draft lands in letter_versions.
       const dispatchResult = await dispatchFreePreviewIfReady(input.letterId);
+      const notificationResult = await ensureFreePreviewReadyNotification(
+        input.letterId,
+        "admin_force_unlock"
+      );
 
       logger.info(
         {
@@ -309,6 +314,8 @@ export const adminLettersProcedures = {
           alreadySent,
           dispatchStatus: dispatchResult.status,
           dispatchReason: dispatchResult.reason ?? null,
+          notificationStatus: notificationResult.status,
+          notificationReason: notificationResult.reason ?? null,
         },
         "[Admin] Free-preview force-unlock"
       );
@@ -318,6 +325,8 @@ export const adminLettersProcedures = {
         dispatched: dispatchResult.status === "sent",
         dispatchStatus: dispatchResult.status,
         dispatchReason: dispatchResult.reason ?? null,
+        notificationStatus: notificationResult.status,
+        notificationReason: notificationResult.reason ?? null,
         previousUnlockAt: previousUnlockAt?.toISOString() ?? null,
         alreadySent,
       };

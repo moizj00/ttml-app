@@ -9,25 +9,17 @@ export type DraftPreviewFinalStatus =
   | "generated_locked";
 
 export function resolveDraftPreviewFinalStatus(
-  isPreviewGated?: boolean | null
+  isDraftVisibilityGated?: boolean | null
 ): DraftPreviewFinalStatus {
-  // v2.1: every pipeline now lands in the new attorney-review funnel
-  // (ai_generation_completed_hidden -> letter_released_to_subscriber -> ...).
-  // The legacy generated_locked path is preserved behind PAYWALL_LEGACY=true
-  // and only fires for non-preview-gated letters (free-preview always uses
-  // the new funnel, which is what the dispatcher dispatcher expects).
-  if (isPreviewGated) return "ai_generation_completed_hidden";
-  const useLegacyPaywall = process.env.PAYWALL_LEGACY === "true";
-  return useLegacyPaywall ? "generated_locked" : "ai_generation_completed_hidden";
+  // Gated subscriber drafts, whether free-trial or paid subscription, must be
+  // hidden until the 24h draft reveal timestamp. Non-gated legacy/admin flows can
+  // still land in the normal paywall-ready state.
+  return isDraftVisibilityGated ? "ai_generation_completed_hidden" : "generated_locked";
 }
 
 export async function isLetterPreviewGated(letterId: number): Promise<boolean> {
   const letter = await getLetterRequestById(letterId);
-  if (
-    !letter ||
-    letter.isFreePreview !== true ||
-    letter.submittedByAdmin === true
-  ) {
+  if (!letter || letter.submittedByAdmin === true || !letter.freePreviewUnlockAt) {
     return false;
   }
   return !(await hasLetterBeenPreviouslyUnlocked(letterId));
@@ -35,10 +27,10 @@ export async function isLetterPreviewGated(letterId: number): Promise<boolean> {
 
 export async function finalizeDraftPreviewStatus(
   letterId: number,
-  isPreviewGated?: boolean | null,
+  isDraftVisibilityGated?: boolean | null,
   options?: { force?: boolean }
 ): Promise<DraftPreviewFinalStatus> {
-  const finalStatus = resolveDraftPreviewFinalStatus(isPreviewGated);
+  const finalStatus = resolveDraftPreviewFinalStatus(isDraftVisibilityGated);
   await updateLetterStatus(
     letterId,
     finalStatus,
