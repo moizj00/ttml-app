@@ -1,7 +1,7 @@
 # TTML Citation Scores
 
-Last audit: not yet run — add PERPLEXITY_API_KEY to GitHub Secrets and trigger the citation-audit workflow.
-Engine: Perplexity (sonar, web search enabled)
+Last audit: not yet run — add OPENAI_API_KEY to GitHub Secrets and trigger the citation-audit workflow.
+Engine: OpenAI gpt-4o + web_search_preview
 Domain tracked: talk-to-my-lawyer.com
 
 ---
@@ -38,6 +38,6 @@ Until the first audit runs, use these default priorities:
 To activate the feedback loop:
 
 1. Go to github.com/moizj00/ttml-app → Settings → Secrets → Actions
-2. Add secret: `PERPLEXITY_API_KEY` = your key from perplexity.ai/settings/api
+2. Add secret: `OPENAI_API_KEY` = your key from platform.openai.com/api-keys
 3. Go to Actions → "Weekly Citation Audit" → Run workflow (to trigger immediately)
 4. After ~5 minutes, this file will be updated with real citation data

@@ -34,7 +34,7 @@ jobs:
 
       - name: Run citation audit
         env:
-          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: pnpm tsx scripts/audit-citations.ts
 
       - name: Commit updated citation scores
