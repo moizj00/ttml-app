@@ -63,7 +63,7 @@ export function AffiliateDialogs({
             </DialogTitle>
             <DialogDescription>
               {processingPayout?.action === "completed"
-                ? "Confirm that this payout has been sent to the affiliate. Oldest pending commissions up to the payout amount will be marked as paid."
+                ? "Confirm that this payout has been sent to the affiliate. The commissions reserved for this request will be marked as paid."
                 : "Provide a reason for rejecting this payout request."}
             </DialogDescription>
           </DialogHeader>

@@ -212,11 +212,13 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> 
         discountCode: subMeta.discountCode,
         employeeId: subMeta.employeeId,
         discountCodeId: subMeta.discountCodeId,
+        invoiceId: invoice.id,
         paymentIntentId: getPaymentIntentIdFromInvoice(invoice),
         invoiceAmountCents: invoice.amount_paid ?? 0,
         subscriberId: userId,
         appUrl: FALLBACK_APP_URL,
         planId,
+        incrementDiscountUsage: invoice.billing_reason === "subscription_create",
       });
     } catch (commErr) {
       stripeLogger.error({ err: commErr }, "[StripeWebhook] Recurring commission tracking error");

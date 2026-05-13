@@ -5,6 +5,7 @@ import {
   attachments,
   blogPosts,
   commissionLedger,
+  commissionPayoutAllocations,
   discountCodes,
   emailVerificationTokens,
   letterRequests,
@@ -194,12 +195,30 @@ export async function updateDiscountCode(
 // COMMISSION LEDGER HELPERS
 // ═══════════════════════════════════════════════════════
 
+export class PayoutUnavailableError extends Error {
+  constructor(public readonly available: number) {
+    super("No available commission balance for payout");
+    this.name = "PayoutUnavailableError";
+  }
+}
+
+export class PayoutAmountMismatchError extends Error {
+  constructor(
+    public readonly requested: number,
+    public readonly available: number
+  ) {
+    super("Payout amount must equal the full available balance");
+    this.name = "PayoutAmountMismatchError";
+  }
+}
+
 export async function createCommission(data: {
   employeeId: number;
   letterRequestId?: number;
   subscriberId?: number;
   discountCodeId?: number;
   stripePaymentIntentId?: string;
+  stripeInvoiceId?: string;
   saleAmount: number; // cents
   commissionRate?: number; // basis points, default 500 = 5%
   commissionAmount: number; // cents
@@ -207,7 +226,25 @@ export async function createCommission(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // ─── Idempotency: prevent duplicate commissions for the same Stripe payment ───
+  // ─── Idempotency: prevent duplicate commissions for the same Stripe invoice/payment ───
+  if (data.stripeInvoiceId) {
+    const existing = await db
+      .select({ id: commissionLedger.id })
+      .from(commissionLedger)
+      .where(eq(commissionLedger.stripeInvoiceId, data.stripeInvoiceId))
+      .limit(1);
+    if (existing.length > 0) {
+      logger.info(
+        `[Commission] Duplicate prevented: commission already exists for invoice ${data.stripeInvoiceId}`
+      );
+      return {
+        id: existing[0].id,
+        insertId: existing[0].id,
+        created: false,
+      };
+    }
+  }
+
   if (data.stripePaymentIntentId) {
     const existing = await db
       .select({ id: commissionLedger.id })
@@ -220,25 +257,70 @@ export async function createCommission(data: {
       logger.info(
         `[Commission] Duplicate prevented: commission already exists for PI ${data.stripePaymentIntentId}`
       );
-      return existing[0];
+      return {
+        id: existing[0].id,
+        insertId: existing[0].id,
+        created: false,
+      };
     }
   }
 
-  const result = await db
-    .insert(commissionLedger)
-    .values({
-      employeeId: data.employeeId,
-      letterRequestId: data.letterRequestId,
-      subscriberId: data.subscriberId,
-      discountCodeId: data.discountCodeId,
-      stripePaymentIntentId: data.stripePaymentIntentId,
-      saleAmount: data.saleAmount,
-      commissionRate: data.commissionRate ?? 500,
-      commissionAmount: data.commissionAmount,
-      status: "pending",
-    })
-    .returning({ insertId: commissionLedger.id });
-  return result[0];
+  const values = {
+    employeeId: data.employeeId,
+    letterRequestId: data.letterRequestId,
+    subscriberId: data.subscriberId,
+    discountCodeId: data.discountCodeId,
+    stripePaymentIntentId: data.stripePaymentIntentId,
+    stripeInvoiceId: data.stripeInvoiceId,
+    saleAmount: data.saleAmount,
+    commissionRate: data.commissionRate ?? 500,
+    commissionAmount: data.commissionAmount,
+    status: "pending" as const,
+  };
+
+  const returning = {
+    id: commissionLedger.id,
+    insertId: commissionLedger.id,
+  };
+
+  const result = data.stripeInvoiceId
+    ? await db
+        .insert(commissionLedger)
+        .values(values)
+        .onConflictDoNothing({ target: commissionLedger.stripeInvoiceId })
+        .returning(returning)
+    : data.stripePaymentIntentId
+      ? await db
+          .insert(commissionLedger)
+          .values(values)
+          .onConflictDoNothing({ target: commissionLedger.stripePaymentIntentId })
+          .returning(returning)
+      : await db.insert(commissionLedger).values(values).returning(returning);
+  if (result[0]) {
+    return { ...result[0], created: true };
+  }
+
+  const existing = await db
+    .select({ id: commissionLedger.id })
+    .from(commissionLedger)
+    .where(
+      data.stripeInvoiceId
+        ? eq(commissionLedger.stripeInvoiceId, data.stripeInvoiceId)
+        : eq(
+            commissionLedger.stripePaymentIntentId,
+            data.stripePaymentIntentId ?? ""
+          )
+    )
+    .limit(1);
+  if (existing[0]) {
+    return {
+      id: existing[0].id,
+      insertId: existing[0].id,
+      created: false,
+    };
+  }
+
+  throw new Error("Failed to create commission");
 }
 
 export async function getCommissionsByEmployeeId(employeeId: number) {
@@ -253,25 +335,47 @@ export async function getCommissionsByEmployeeId(employeeId: number) {
 
 export async function getEmployeeEarningsSummary(employeeId: number) {
   const db = await getDb();
-  if (!db) return { totalEarned: 0, pending: 0, paid: 0, referralCount: 0 };
-  const all = await db
-    .select({
-      status: commissionLedger.status,
-      amount: commissionLedger.commissionAmount,
-    })
-    .from(commissionLedger)
-    .where(eq(commissionLedger.employeeId, employeeId));
-  let totalEarned = 0,
-    pending = 0,
-    paid = 0;
-  for (const row of all) {
-    if (row.status === "voided") continue;
-    totalEarned += row.amount;
-    if (row.status === "pending") pending += row.amount;
-    if (row.status === "paid") paid += row.amount;
-  }
-  const referralCount = all.filter(r => r.status !== "voided").length;
-  return { totalEarned, pending, paid, referralCount };
+  if (!db) return { totalEarned: 0, pending: 0, reserved: 0, paid: 0, referralCount: 0 };
+
+  const rows = await db.execute(sql`
+    WITH commission_state AS (
+      SELECT
+        c.status,
+        c.subscriber_id,
+        c.commission_amount,
+        EXISTS (
+          SELECT 1
+          FROM commission_payout_allocations a
+          JOIN payout_requests p ON p.id = a.payout_request_id
+          WHERE a.commission_id = c.id
+            AND p.status IN ('pending', 'processing')
+        ) AS is_reserved
+      FROM commission_ledger c
+      WHERE c.employee_id = ${employeeId}
+    )
+    SELECT
+      COALESCE(SUM(CASE WHEN status <> 'voided' THEN commission_amount ELSE 0 END), 0)::int AS "totalEarned",
+      COALESCE(SUM(CASE WHEN status = 'pending' AND NOT is_reserved THEN commission_amount ELSE 0 END), 0)::int AS "pending",
+      COALESCE(SUM(CASE WHEN status = 'pending' AND is_reserved THEN commission_amount ELSE 0 END), 0)::int AS "reserved",
+      COALESCE(SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END), 0)::int AS "paid",
+      COUNT(DISTINCT CASE WHEN status <> 'voided' AND subscriber_id IS NOT NULL THEN subscriber_id END)::int AS "referralCount"
+    FROM commission_state
+  `) as Array<{
+    totalEarned: number;
+    pending: number;
+    reserved: number;
+    paid: number;
+    referralCount: number;
+  }>;
+
+  const row = rows[0];
+  return {
+    totalEarned: Number(row?.totalEarned ?? 0),
+    pending: Number(row?.pending ?? 0),
+    reserved: Number(row?.reserved ?? 0),
+    paid: Number(row?.paid ?? 0),
+    referralCount: Number(row?.referralCount ?? 0),
+  };
 }
 
 /** Batch version: returns earnings summary for ALL employees in a single query.
@@ -281,48 +385,55 @@ export async function getAllEmployeeEarnings(): Promise<
     employeeId: number;
     totalEarned: number;
     pending: number;
+    reserved: number;
     paid: number;
     referralCount: number;
   }>
 > {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db
-    .select({
-      employeeId: commissionLedger.employeeId,
-      status: commissionLedger.status,
-      amount: commissionLedger.commissionAmount,
-    })
-    .from(commissionLedger);
+  const rows = await db.execute(sql`
+    WITH commission_state AS (
+      SELECT
+        c.employee_id,
+        c.status,
+        c.subscriber_id,
+        c.commission_amount,
+        EXISTS (
+          SELECT 1
+          FROM commission_payout_allocations a
+          JOIN payout_requests p ON p.id = a.payout_request_id
+          WHERE a.commission_id = c.id
+            AND p.status IN ('pending', 'processing')
+        ) AS is_reserved
+      FROM commission_ledger c
+      WHERE c.employee_id IS NOT NULL
+    )
+    SELECT
+      employee_id::int AS "employeeId",
+      COALESCE(SUM(CASE WHEN status <> 'voided' THEN commission_amount ELSE 0 END), 0)::int AS "totalEarned",
+      COALESCE(SUM(CASE WHEN status = 'pending' AND NOT is_reserved THEN commission_amount ELSE 0 END), 0)::int AS "pending",
+      COALESCE(SUM(CASE WHEN status = 'pending' AND is_reserved THEN commission_amount ELSE 0 END), 0)::int AS "reserved",
+      COALESCE(SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END), 0)::int AS "paid",
+      COUNT(DISTINCT CASE WHEN status <> 'voided' AND subscriber_id IS NOT NULL THEN subscriber_id END)::int AS "referralCount"
+    FROM commission_state
+    GROUP BY employee_id
+  `) as Array<{
+    employeeId: number;
+    totalEarned: number;
+    pending: number;
+    reserved: number;
+    paid: number;
+    referralCount: number;
+  }>;
 
-  // Aggregate in memory, grouped by employeeId
-  const map = new Map<
-    number,
-    {
-      totalEarned: number;
-      pending: number;
-      paid: number;
-      referralCount: number;
-    }
-  >();
-  for (const row of rows) {
-    if (row.status === "voided") continue;
-    const empId = row.employeeId;
-    if (empId == null) continue;
-    let entry = map.get(empId);
-    if (!entry) {
-      entry = { totalEarned: 0, pending: 0, paid: 0, referralCount: 0 };
-      map.set(empId, entry);
-    }
-    entry.totalEarned += row.amount;
-    if (row.status === "pending") entry.pending += row.amount;
-    if (row.status === "paid") entry.paid += row.amount;
-    entry.referralCount += 1;
-  }
-
-  return Array.from(map.entries()).map(([employeeId, data]) => ({
-    employeeId,
-    ...data,
+  return rows.map(row => ({
+    employeeId: Number(row.employeeId),
+    totalEarned: Number(row.totalEarned ?? 0),
+    pending: Number(row.pending ?? 0),
+    reserved: Number(row.reserved ?? 0),
+    paid: Number(row.paid ?? 0),
+    referralCount: Number(row.referralCount ?? 0),
   }));
 }
 
@@ -337,6 +448,7 @@ export async function getAllCommissions() {
       subscriberId: commissionLedger.subscriberId,
       discountCodeId: commissionLedger.discountCodeId,
       stripePaymentIntentId: commissionLedger.stripePaymentIntentId,
+      stripeInvoiceId: commissionLedger.stripeInvoiceId,
       saleAmount: commissionLedger.saleAmount,
       commissionRate: commissionLedger.commissionRate,
       commissionAmount: commissionLedger.commissionAmount,
@@ -356,27 +468,45 @@ export async function getAdminReferralDetails(employeeId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  const rows = await db
-    .select({
-      commissionId: commissionLedger.id,
-      subscriberId: commissionLedger.subscriberId,
-      subscriberName: users.name,
-      subscriberEmail: users.email,
-      saleAmount: commissionLedger.saleAmount,
-      commissionAmount: commissionLedger.commissionAmount,
-      commissionStatus: commissionLedger.status,
-      commissionCreatedAt: commissionLedger.createdAt,
-      subscriptionPlan: subscriptions.plan,
-      subscriptionStatus: subscriptions.status,
-      subscriptionCreatedAt: subscriptions.createdAt,
-    })
-    .from(commissionLedger)
-    .leftJoin(users, eq(commissionLedger.subscriberId, users.id))
-    .leftJoin(subscriptions, eq(commissionLedger.subscriberId, subscriptions.userId))
-    .where(eq(commissionLedger.employeeId, employeeId))
-    .orderBy(desc(commissionLedger.createdAt));
-
-  return rows;
+  return db.execute(sql`
+    SELECT
+      MIN(c.id)::int AS "commissionId",
+      c.subscriber_id::int AS "subscriberId",
+      MAX(u.name) AS "subscriberName",
+      MAX(u.email) AS "subscriberEmail",
+      COALESCE(SUM(CASE WHEN c.status <> 'voided' THEN c.sale_amount ELSE 0 END), 0)::int AS "saleAmount",
+      COALESCE(SUM(CASE WHEN c.status <> 'voided' THEN c.commission_amount ELSE 0 END), 0)::int AS "commissionAmount",
+      CASE
+        WHEN BOOL_OR(c.status = 'pending') THEN 'pending'
+        WHEN BOOL_OR(c.status = 'paid') THEN 'paid'
+        ELSE 'voided'
+      END AS "commissionStatus",
+      MIN(c.created_at) AS "commissionCreatedAt",
+      MAX(s.plan::text) AS "subscriptionPlan",
+      MAX(s.status::text) AS "subscriptionStatus",
+      MAX(s.created_at) AS "subscriptionCreatedAt",
+      COUNT(*) FILTER (WHERE c.status <> 'voided')::int AS "commissionCount"
+    FROM commission_ledger c
+    LEFT JOIN users u ON u.id = c.subscriber_id
+    LEFT JOIN subscriptions s ON s.user_id = c.subscriber_id
+    WHERE c.employee_id = ${employeeId}
+      AND c.subscriber_id IS NOT NULL
+    GROUP BY c.subscriber_id
+    ORDER BY MAX(c.created_at) DESC
+  `) as Promise<Array<{
+    commissionId: number;
+    subscriberId: number;
+    subscriberName: string | null;
+    subscriberEmail: string | null;
+    saleAmount: number;
+    commissionAmount: number;
+    commissionStatus: "pending" | "paid" | "voided";
+    commissionCreatedAt: Date;
+    subscriptionPlan: string | null;
+    subscriptionStatus: string | null;
+    subscriptionCreatedAt: Date | null;
+    commissionCount: number;
+  }>>;
 }
 
 export async function markCommissionsPaid(commissionIds: number[]) {
@@ -403,17 +533,64 @@ export async function createPayoutRequest(data: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db
-    .insert(payoutRequests)
-    .values({
-      employeeId: data.employeeId,
+
+  return db.transaction(async tx => {
+    const eligibleCommissions = await tx.execute(sql`
+      SELECT
+        c.id::int AS "id",
+        c.commission_amount::int AS "commissionAmount"
+      FROM commission_ledger c
+      WHERE c.employee_id = ${data.employeeId}
+        AND c.status = 'pending'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM commission_payout_allocations a
+          JOIN payout_requests p ON p.id = a.payout_request_id
+          WHERE a.commission_id = c.id
+            AND p.status IN ('pending', 'processing')
+        )
+      ORDER BY c.created_at ASC, c.id ASC
+      FOR UPDATE
+    `) as Array<{ id: number; commissionAmount: number }>;
+
+    const available = eligibleCommissions.reduce(
+      (sum, row) => sum + Number(row.commissionAmount),
+      0
+    );
+    if (available < 1000) {
+      throw new PayoutUnavailableError(available);
+    }
+    if (available !== data.amount) {
+      throw new PayoutAmountMismatchError(data.amount, available);
+    }
+
+    const result = await tx
+      .insert(payoutRequests)
+      .values({
+        employeeId: data.employeeId,
+        amount: data.amount,
+        paymentMethod: data.paymentMethod ?? "bank_transfer",
+        paymentDetails: data.paymentDetails as any,
+        status: "pending",
+      })
+      .returning({ insertId: payoutRequests.id });
+    const payout = result[0];
+    if (!payout) throw new Error("Failed to create payout request");
+
+    await tx.insert(commissionPayoutAllocations).values(
+      eligibleCommissions.map(row => ({
+        payoutRequestId: payout.insertId,
+        commissionId: Number(row.id),
+        amount: Number(row.commissionAmount),
+      }))
+    );
+
+    return {
+      insertId: payout.insertId,
       amount: data.amount,
-      paymentMethod: data.paymentMethod ?? "bank_transfer",
-      paymentDetails: data.paymentDetails as any,
-      status: "pending",
-    })
-    .returning({ insertId: payoutRequests.id });
-  return result[0];
+      commissionIds: eligibleCommissions.map(row => Number(row.id)),
+    };
+  });
 }
 
 export async function getPayoutRequestsByEmployeeId(employeeId: number) {
@@ -459,19 +636,40 @@ export async function processPayoutRequest(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const updateData: Record<string, unknown> = {
-    status: action,
-    processedAt: new Date(),
-    processedBy,
-    updatedAt: new Date(),
-  };
-  if (action === "rejected" && rejectionReason) {
-    updateData.rejectionReason = rejectionReason;
-  }
-  await db
-    .update(payoutRequests)
-    .set(updateData as any)
-    .where(eq(payoutRequests.id, id));
+  await db.transaction(async tx => {
+    if (action === "completed") {
+      await tx.execute(sql`
+        UPDATE commission_ledger c
+        SET status = 'paid',
+            paid_at = NOW()
+        FROM commission_payout_allocations a
+        WHERE a.commission_id = c.id
+          AND a.payout_request_id = ${id}
+          AND c.status = 'pending'
+      `);
+    }
+
+    const updateData: Record<string, unknown> = {
+      status: action,
+      processedAt: new Date(),
+      processedBy,
+      updatedAt: new Date(),
+    };
+    if (action === "rejected" && rejectionReason) {
+      updateData.rejectionReason = rejectionReason;
+    }
+
+    await tx
+      .update(payoutRequests)
+      .set(updateData as any)
+      .where(eq(payoutRequests.id, id));
+
+    if (action === "rejected") {
+      await tx
+        .delete(commissionPayoutAllocations)
+        .where(eq(commissionPayoutAllocations.payoutRequestId, id));
+    }
+  });
 }
 
 export async function getPayoutRequestById(id: number) {
@@ -577,4 +775,3 @@ export async function getUserByEmail(email: string) {
     .limit(1);
   return result[0];
 }
-

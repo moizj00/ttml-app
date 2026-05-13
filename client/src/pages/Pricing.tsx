@@ -25,20 +25,6 @@ import { PRICING } from "../../../shared/pricing";
 
 const PLANS = [
   {
-    id: PRICING.singleLetter.id,
-    name: PRICING.singleLetter.name,
-    priceDisplay: PRICING.singleLetter.priceDisplay,
-    priceNumeric: PRICING.singleLetter.price,
-    period: PRICING.singleLetter.period,
-    priceSub: null as string | null,
-    description: PRICING.singleLetter.description,
-    badge: null as string | null,
-    features: PRICING.singleLetter.features as readonly string[],
-    cta: "Get this letter",
-    highlight: false,
-    accent: "from-slate-600 to-slate-800",
-  },
-  {
     id: PRICING.monthly.id,
     name: PRICING.monthly.name,
     priceDisplay: PRICING.monthly.priceDisplay,
@@ -130,20 +116,11 @@ export default function Pricing() {
       name: "Talk to My Lawyer",
       url: "https://www.talk-to-my-lawyer.com",
     },
-    description: `Professional attorney-reviewed legal letters. Choose from single letter (${PRICING.singleLetter.priceDisplay}), monthly subscription (${PRICING.monthly.priceDisplay}/month for ${PRICING.monthly.lettersIncluded} letters), or yearly plan (${PRICING.yearly.priceDisplay}/year for ${PRICING.yearly.lettersIncluded} letters).`,
+    description: `Professional attorney-reviewed legal letters. Choose a monthly subscription (${PRICING.monthly.priceDisplay}/month for ${PRICING.monthly.lettersIncluded} letters) or yearly plan (${PRICING.yearly.priceDisplay}/year for ${PRICING.yearly.lettersIncluded} letters).`,
     hasOfferCatalog: {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
       itemListElement: [
-        {
-          "@type": "Offer",
-          name: "Single Letter",
-          price: String(PRICING.singleLetter.price),
-          priceCurrency: "USD",
-          description:
-            "One professionally drafted and attorney-reviewed legal letter. No subscription required.",
-          eligibleQuantity: { "@type": "QuantitativeValue", value: 1 },
-        },
         {
           "@type": "Offer",
           name: "Monthly Plan",
@@ -177,12 +154,12 @@ export default function Pricing() {
       <PublicBreadcrumb items={[{ label: "Pricing" }]} />
       <Helmet>
         <title>
-          Legal Letter Pricing — Single, Monthly &amp; Yearly Plans | Talk to My
+          Legal Letter Pricing — Monthly &amp; Yearly Plans | Talk to My
           Lawyer
         </title>
         <meta
           name="description"
-          content={`Transparent pricing for attorney-reviewed legal letters. Single letter ${PRICING.singleLetter.priceDisplay}, monthly ${PRICING.monthly.priceDisplay}/month (${PRICING.monthly.lettersIncluded} letters), or yearly ${PRICING.yearly.priceDisplay} (${PRICING.yearly.lettersIncluded} letters). All plans include attorney review and PDF delivery.`}
+          content={`Transparent pricing for attorney-reviewed legal letters. Monthly ${PRICING.monthly.priceDisplay}/month (${PRICING.monthly.lettersIncluded} letters) or yearly ${PRICING.yearly.priceDisplay} (${PRICING.yearly.lettersIncluded} letters). All plans include attorney review and PDF delivery.`}
         />
         <link
           rel="canonical"
@@ -194,7 +171,7 @@ export default function Pricing() {
         />
         <meta
           property="og:description"
-          content={`Choose the right plan for your legal needs. Single letter ${PRICING.singleLetter.priceDisplay}, monthly ${PRICING.monthly.priceDisplay}/month, or yearly ${PRICING.yearly.priceDisplay}. Attorney review included in every plan.`}
+          content={`Choose the right plan for your legal needs. Monthly ${PRICING.monthly.priceDisplay}/month or yearly ${PRICING.yearly.priceDisplay}. Attorney review included in every plan.`}
         />
         <meta property="og:type" content="website" />
         <meta
@@ -212,7 +189,7 @@ export default function Pricing() {
         />
         <meta
           name="twitter:description"
-          content="Transparent pricing for attorney-reviewed legal letters. Single, monthly, and yearly plans available."
+          content="Transparent pricing for attorney-reviewed legal letters. Monthly and yearly plans available."
         />
         <meta
           name="twitter:image"
@@ -253,9 +230,9 @@ export default function Pricing() {
 
           <p className="mt-5 text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
             Structured drafting, web-grounded research, and live attorney
-            review — delivered in hours, not weeks. Starting at{" "}
+            review — delivered in hours, not weeks. Plans start at{" "}
             <span className="font-bold text-slate-900">
-              {PRICING.singleLetter.priceDisplay}
+              {PRICING.monthly.priceDisplay}/month
             </span>
             .
           </p>
@@ -277,7 +254,7 @@ export default function Pricing() {
 
       {/* ── Plan cards ── */}
       <main className="max-w-6xl mx-auto px-4 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 lg:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-5 lg:gap-6">
           {PLANS.map(plan => {
             const isPending =
               checkoutMutation.isPending &&
@@ -520,11 +497,6 @@ export default function Pricing() {
               What you actually pay for
             </h2>
             <div className="space-y-3 text-sm text-slate-600 leading-relaxed">
-              <p>
-                <span className="font-semibold text-slate-900">Single letter</span> —
-                pay <strong>${PRICING.singleLetter.price}</strong> once for one
-                attorney-reviewed draft. No recurring charge. No commitment.
-              </p>
               <p>
                 <span className="font-semibold text-slate-900">Monthly</span> —{" "}
                 <strong>${PRICING.monthly.price}/month</strong> for{" "}

@@ -39,7 +39,6 @@ export function useAffiliateDashboard() {
 
   // ─── Payout Request State ───────────────────────────────────
   const [payoutOpen, setPayoutOpen] = useState(false);
-  const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutMethod, setPayoutMethod] = useState("bank_transfer");
   const [paypalEmail, setPaypalEmail] = useState("");
   const [venmoHandle, setVenmoHandle] = useState("");
@@ -50,7 +49,6 @@ export function useAffiliateDashboard() {
         description: "Your payout request has been submitted for admin review.",
       });
       setPayoutOpen(false);
-      setPayoutAmount("");
       utils.affiliate.myPayouts.invalidate();
       utils.affiliate.myEarnings.invalidate();
     },
@@ -65,8 +63,6 @@ export function useAffiliateDashboard() {
   });
 
   // ─── Derived values ─────────────────────────────────────────
-  const availableBalanceDollars = (earnings?.pending ?? 0) / 100;
-
   const referralLink = useMemo(
     () =>
       `${window.location.origin}/pricing?coupon=${discountCode?.code ?? ""}`,
@@ -114,16 +110,10 @@ export function useAffiliateDashboard() {
   };
 
   const handleRequestPayout = () => {
-    const amountCents = Math.round(parseFloat(payoutAmount) * 100);
-    if (isNaN(amountCents) || amountCents < 1000) {
+    const amountCents = earnings?.pending ?? 0;
+    if (amountCents < 1000) {
       toast.error("Below minimum", {
-        description: "The minimum payout amount is $10.00.",
-      });
-      return;
-    }
-    if (amountCents > (earnings?.pending ?? 0)) {
-      toast.error("Exceeds balance", {
-        description: `You can request up to ${formatCurrency(earnings?.pending ?? 0)}.`,
+        description: `You need at least $10.00 available. Current balance: ${formatCurrency(amountCents)}.`,
       });
       return;
     }
@@ -172,8 +162,6 @@ export function useAffiliateDashboard() {
     // Payout dialog state
     payoutOpen,
     setPayoutOpen,
-    payoutAmount,
-    setPayoutAmount,
     payoutMethod,
     setPayoutMethod,
     paypalEmail,
@@ -181,7 +169,6 @@ export function useAffiliateDashboard() {
     venmoHandle,
     setVenmoHandle,
     // Derived
-    availableBalanceDollars,
     referralLink,
     workerReferralLink,
     // Mutation states

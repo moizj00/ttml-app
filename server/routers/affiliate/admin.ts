@@ -15,8 +15,6 @@ import {
   getAllCommissions,
   getAllPayoutRequests,
   updateDiscountCode,
-  getCommissionsByEmployeeId,
-  markCommissionsPaid,
   processPayoutRequest,
   getPayoutRequestById,
   getEmployeesAndAdmins,
@@ -90,25 +88,6 @@ export const affiliateAdminRouter = router({
         });
       }
 
-      if (input.action === "completed") {
-        const commissions = await getCommissionsByEmployeeId(payout.employeeId);
-        const pendingCommissions = commissions
-          .filter(c => c.status === "pending")
-          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-        let cumulative = 0;
-        const idsToMark: number[] = [];
-        for (const c of pendingCommissions) {
-          if (cumulative >= payout.amount) break;
-          idsToMark.push(c.id);
-          cumulative += c.commissionAmount;
-        }
-
-        if (idsToMark.length > 0) {
-          await markCommissionsPaid(idsToMark);
-        }
-      }
-
       await processPayoutRequest(
         input.payoutId,
         ctx.user.id,
@@ -165,6 +144,7 @@ export const affiliateAdminRouter = router({
         usageCount: code?.usageCount ?? 0,
         totalEarned: earnings?.totalEarned ?? 0,
         pending: earnings?.pending ?? 0,
+        reserved: earnings?.reserved ?? 0,
         paid: earnings?.paid ?? 0,
         referralCount: earnings?.referralCount ?? 0,
       };
@@ -200,6 +180,7 @@ export const affiliateAdminRouter = router({
           saleAmount: row.saleAmount,
           commissionStatus: row.commissionStatus,
           commissionCreatedAt: row.commissionCreatedAt,
+          commissionCount: row.commissionCount ?? 0,
         };
       });
 

@@ -14,6 +14,7 @@ interface AffiliateStatsCardsProps {
   isLoading: boolean;
   totalEarned: number;
   pending: number;
+  reserved: number;
   paid: number;
   referralCount: number;
   usageCount: number;
@@ -23,6 +24,7 @@ export function AffiliateStatsCards({
   isLoading,
   totalEarned,
   pending,
+  reserved,
   paid,
   referralCount,
   usageCount,
@@ -70,7 +72,12 @@ export function AffiliateStatsCards({
               formatCurrency(pending)
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Awaiting payout</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Available for payout
+            {!isLoading && reserved > 0
+              ? `; ${formatCurrency(reserved)} reserved`
+              : ""}
+          </p>
         </CardContent>
       </Card>
 

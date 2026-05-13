@@ -34,15 +34,12 @@ export default function AffiliateDashboard() {
     analyticsLoading,
     payoutOpen,
     setPayoutOpen,
-    payoutAmount,
-    setPayoutAmount,
     payoutMethod,
     setPayoutMethod,
     paypalEmail,
     setPaypalEmail,
     venmoHandle,
     setVenmoHandle,
-    availableBalanceDollars,
     workerReferralLink,
     referralLink,
     requestPayoutPending,
@@ -113,6 +110,7 @@ export default function AffiliateDashboard() {
           isLoading={isLoading}
           totalEarned={earnings?.totalEarned ?? 0}
           pending={earnings?.pending ?? 0}
+          reserved={earnings?.reserved ?? 0}
           paid={earnings?.paid ?? 0}
           referralCount={earnings?.referralCount ?? 0}
           usageCount={discountCode?.usageCount ?? 0}
@@ -147,8 +145,6 @@ export default function AffiliateDashboard() {
           <AffiliateEarningsSection
             payoutOpen={payoutOpen}
             setPayoutOpen={setPayoutOpen}
-            payoutAmount={payoutAmount}
-            setPayoutAmount={setPayoutAmount}
             payoutMethod={payoutMethod}
             setPayoutMethod={setPayoutMethod}
             paypalEmail={paypalEmail}
@@ -160,7 +156,6 @@ export default function AffiliateDashboard() {
             payoutsLoading={payoutsLoading}
             commissionsLoading={commissionsLoading}
             pendingBalance={earnings?.pending ?? 0}
-            availableBalanceDollars={availableBalanceDollars}
             requestPayoutPending={requestPayoutPending}
             onRequestPayout={handleRequestPayout}
           />

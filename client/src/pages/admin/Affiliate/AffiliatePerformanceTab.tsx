@@ -23,6 +23,7 @@ interface AffiliatePerformanceTabProps {
     usageCount: number;
     totalEarned: number;
     pending: number;
+    reserved: number;
     paid: number;
     referralCount: number;
   }> | undefined;
@@ -65,6 +66,7 @@ export function AffiliatePerformanceTab({
                   <TableHead className="text-center">Referrals</TableHead>
                   <TableHead className="text-right">Total Earned</TableHead>
                   <TableHead className="text-right">Pending</TableHead>
+                  <TableHead className="text-right">Reserved</TableHead>
                   <TableHead className="text-right">Paid</TableHead>
                 </TableRow>
               </TableHeader>
@@ -108,6 +110,9 @@ export function AffiliatePerformanceTab({
                       <TableCell className="text-right text-amber-600">
                         {formatCurrency(emp.pending)}
                       </TableCell>
+                      <TableCell className="text-right text-blue-600">
+                        {formatCurrency(emp.reserved)}
+                      </TableCell>
                       <TableCell className="text-right text-green-600">
                         {formatCurrency(emp.paid)}
                       </TableCell>
@@ -118,7 +123,7 @@ export function AffiliatePerformanceTab({
                         className="hover:bg-transparent"
                       >
                         <TableCell
-                          colSpan={8}
+                          colSpan={9}
                           className="p-0"
                           data-testid={`referral-details-cell-${emp.employeeId}`}
                         >

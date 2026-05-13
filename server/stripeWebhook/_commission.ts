@@ -5,12 +5,11 @@
  * notifications. Two entry points because the checkout and invoice paths
  * have different pre-conditions:
  *
- *   - trackCheckoutCommission()   — validates the discount code, increments
- *                                   its usage counter, then creates + notifies.
+ *   - trackCheckoutCommission()   — validates the discount code, creates the
+ *                                   one-time commission, increments usage, then notifies.
  *                                   Called from checkout.session.completed.
- *   - trackRecurringCommission()  — skips code validation (the code was
- *                                   already validated + incremented at first
- *                                   checkout). Called from invoice.paid.
+ *   - trackRecurringCommission()  — creates initial/renewal subscription
+ *                                   commissions from invoice.paid only.
  */
 
 import {
@@ -127,13 +126,12 @@ export async function trackCheckoutCommission(
   const discountCodeRow = await getDiscountCodeByCode(params.discountCode);
   if (!discountCodeRow || !discountCodeRow.isActive) return;
 
-  await incrementDiscountCodeUsage(discountCodeRow.id);
   if (params.saleAmountCents <= 0) return;
 
   const commissionAmount = calculateCommissionAmount(params.saleAmountCents);
   const resolvedEmployeeId = params.metadataEmployeeId ?? discountCodeRow.employeeId;
 
-  await createCommission({
+  const commission = await createCommission({
     employeeId: resolvedEmployeeId,
     letterRequestId: params.letterRequestId,
     subscriberId: params.subscriberId,
@@ -143,6 +141,9 @@ export async function trackCheckoutCommission(
     commissionRate: AFFILIATE_COMMISSION_BASIS_POINTS,
     commissionAmount,
   });
+  if (commission?.created === false) return;
+
+  await incrementDiscountCodeUsage(discountCodeRow.id);
 
   stripeLogger.info(
     { commissionAmount, resolvedEmployeeId, saleAmount: params.saleAmountCents },
@@ -167,11 +168,13 @@ export interface TrackRecurringCommissionParams {
   discountCode: string;
   employeeId: number;
   discountCodeId: number | null;
+  invoiceId: string;
   paymentIntentId: string | null;
   invoiceAmountCents: number;
   subscriberId: number;
   appUrl: string;
   planId: string;
+  incrementDiscountUsage?: boolean;
 }
 
 export async function trackRecurringCommission(
@@ -181,16 +184,27 @@ export async function trackRecurringCommission(
 
   const commissionAmount = calculateCommissionAmount(params.invoiceAmountCents);
 
-  await createCommission({
+  const commission = await createCommission({
     employeeId: params.employeeId,
     letterRequestId: undefined,
     subscriberId: params.subscriberId,
     discountCodeId: params.discountCodeId ?? undefined,
     stripePaymentIntentId: params.paymentIntentId ?? undefined,
+    stripeInvoiceId: params.invoiceId,
     saleAmount: params.invoiceAmountCents,
     commissionRate: AFFILIATE_COMMISSION_BASIS_POINTS,
     commissionAmount,
   });
+  if (commission?.created === false) return;
+
+  if (params.incrementDiscountUsage) {
+    const discountCodeId =
+      params.discountCodeId ??
+      (await getDiscountCodeByCode(params.discountCode))?.id;
+    if (discountCodeId) {
+      await incrementDiscountCodeUsage(discountCodeId);
+    }
+  }
 
   stripeLogger.info(
     { commissionAmount, employeeId: params.employeeId, planId: params.planId },

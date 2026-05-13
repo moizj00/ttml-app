@@ -18,6 +18,8 @@ import {
   createPayoutRequest,
   getPayoutRequestsByEmployeeId,
   notifyAdmins,
+  PayoutAmountMismatchError,
+  PayoutUnavailableError,
 } from "../../db";
 import { captureServerException } from "../../sentry";
 import { syncCodeToWorkerAllowlist, employeeProcedure, getAppUrl } from "../_shared";
@@ -96,18 +98,43 @@ export const affiliateEmployeeRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const earnings = await getEmployeeEarningsSummary(ctx.user.id);
-      if (earnings.pending < input.amount) {
+      if (earnings.pending < 1000) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Insufficient pending balance. Available: $${(earnings.pending / 100).toFixed(2)}`,
+          message: "Minimum available balance for payout is $10.00.",
         });
       }
-      const result = await createPayoutRequest({
-        employeeId: ctx.user.id,
-        amount: input.amount,
-        paymentMethod: input.paymentMethod,
-        paymentDetails: input.paymentDetails,
-      });
+      if (earnings.pending !== input.amount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Payout amount must equal your full available balance of $${(earnings.pending / 100).toFixed(2)}.`,
+        });
+      }
+
+      let result: Awaited<ReturnType<typeof createPayoutRequest>>;
+      try {
+        result = await createPayoutRequest({
+          employeeId: ctx.user.id,
+          amount: input.amount,
+          paymentMethod: input.paymentMethod,
+          paymentDetails: input.paymentDetails,
+        });
+      } catch (err) {
+        if (err instanceof PayoutUnavailableError) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Minimum available balance for payout is $10.00.",
+          });
+        }
+        if (err instanceof PayoutAmountMismatchError) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Payout amount must equal your full available balance of $${(err.available / 100).toFixed(2)}.`,
+          });
+        }
+        throw err;
+      }
+
       try {
         const payoutAppUrl = getAppUrl(ctx.req);
         await notifyAdmins({

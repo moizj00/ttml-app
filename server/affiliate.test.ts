@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { signAdmin2FAToken, ADMIN_2FA_COOKIE } from "./_core/admin2fa";
+import * as dbModule from "./db";
 
 // ─── Mock DB helpers ─────────────────────────────────────────────────────────
 
@@ -24,8 +25,9 @@ function getMockEarnings() {
   return {
     totalEarned: 5000,
     pending: 3000,
+    reserved: 0,
     paid: 2000,
-    referralCount: 5,
+    referralCount: 3,
   };
 }
 
@@ -42,6 +44,7 @@ function getMockCommissions() {
       commissionRate: 500,
       commissionAmount: 1000,
       status: "pending",
+      stripeInvoiceId: null,
       paidAt: null,
       createdAt: new Date("2026-02-01"),
     },
@@ -91,6 +94,22 @@ vi.mock("./db", async () => {
     getAllEmployeeEarnings: vi.fn().mockImplementation(async () => [
       { employeeId: 10, ...getMockEarnings() },
     ]),
+    getAdminReferralDetails: vi.fn().mockResolvedValue([
+      {
+        commissionId: 1,
+        subscriberId: 50,
+        subscriberName: "Subscriber One",
+        subscriberEmail: "subscriber@example.com",
+        subscriptionPlan: "monthly",
+        subscriptionStatus: "active",
+        subscriptionCreatedAt: new Date("2026-02-01"),
+        commissionAmount: 2000,
+        saleAmount: 40000,
+        commissionStatus: "pending",
+        commissionCreatedAt: new Date("2026-02-01"),
+        commissionCount: 2,
+      },
+    ]),
     getAllPayoutRequests: vi.fn().mockImplementation(async () => getMockPayoutRequests()),
     getPayoutRequestById: vi.fn().mockImplementation(async () => getMockPayoutRequests()[0]),
     processPayoutRequest: vi.fn().mockResolvedValue(undefined),
@@ -98,11 +117,23 @@ vi.mock("./db", async () => {
     updateDiscountCode: vi.fn().mockResolvedValue(undefined),
     incrementDiscountCodeUsage: vi.fn().mockResolvedValue(undefined),
     createCommission: vi.fn().mockResolvedValue({ insertId: 2 }),
+    notifyAdmins: vi.fn().mockResolvedValue(undefined),
+    getUserById: vi.fn().mockResolvedValue({
+      id: 10,
+      name: "John Doe",
+      email: "john@example.com",
+      role: "employee",
+    }),
     getEmployeesAndAdmins: vi.fn().mockResolvedValue([
       { id: 10, name: "John Doe", email: "john@example.com", role: "employee" },
     ]),
   };
 });
+
+vi.mock("./email", () => ({
+  sendPayoutCompletedEmail: vi.fn().mockResolvedValue(undefined),
+  sendPayoutRejectedEmail: vi.fn().mockResolvedValue(undefined),
+}));
 
 // ─── Context Helpers ─────────────────────────────────────────────────────────
 
@@ -187,8 +218,9 @@ describe("Affiliate System", () => {
       const earnings = await caller.affiliate.myEarnings();
       expect(earnings.totalEarned).toBe(5000);
       expect(earnings.pending).toBe(3000);
+      expect(earnings.reserved).toBe(0);
       expect(earnings.paid).toBe(2000);
-      expect(earnings.referralCount).toBe(5);
+      expect(earnings.referralCount).toBe(3);
     });
   });
 
@@ -203,14 +235,27 @@ describe("Affiliate System", () => {
   });
 
   describe("affiliate.requestPayout", () => {
-    it("creates payout request when balance is sufficient", async () => {
+    it("creates payout request for the full available balance", async () => {
       const caller = appRouter.createCaller(createContext("employee"));
       const result = await caller.affiliate.requestPayout({
-        amount: 2000, // $20.00 — within $30 pending
+        amount: 3000,
         paymentMethod: "bank_transfer",
       });
       expect(result.success).toBe(true);
       expect(result.payoutRequestId).toBe(2);
+      expect(dbModule.createPayoutRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 3000, employeeId: 10 })
+      );
+    });
+
+    it("rejects duplicate/partial payout requests that do not match the full balance", async () => {
+      const caller = appRouter.createCaller(createContext("employee"));
+      await expect(
+        caller.affiliate.requestPayout({
+          amount: 2000,
+          paymentMethod: "bank_transfer",
+        })
+      ).rejects.toThrow(/full available balance/);
     });
 
     it("rejects payout when balance is insufficient", async () => {
@@ -220,7 +265,7 @@ describe("Affiliate System", () => {
           amount: 500000, // $5000 — way over $30 pending
           paymentMethod: "bank_transfer",
         })
-      ).rejects.toThrow(/Insufficient pending balance/);
+      ).rejects.toThrow(/full available balance/);
     });
 
     it("rejects payout below minimum ($10)", async () => {
@@ -302,6 +347,17 @@ describe("Affiliate System", () => {
       expect(perf).toHaveLength(1);
       expect(perf[0].name).toBe("John Doe");
       expect(perf[0].totalEarned).toBe(5000);
+      expect(perf[0].reserved).toBe(0);
+    });
+
+    it("admin referral details groups invoice rows by unique subscriber", async () => {
+      const caller = appRouter.createCaller(createContext("admin"));
+      const details = await caller.affiliate.adminReferralDetails({
+        employeeId: 10,
+      });
+      expect(details.summary.totalReferred).toBe(1);
+      expect(details.referrals[0].commissionAmount).toBe(2000);
+      expect(details.referrals[0].commissionCount).toBe(2);
     });
 
     it("admin can toggle discount code active status", async () => {
@@ -320,6 +376,12 @@ describe("Affiliate System", () => {
         action: "completed",
       });
       expect(result.success).toBe(true);
+      expect(dbModule.processPayoutRequest).toHaveBeenCalledWith(
+        1,
+        10,
+        "completed",
+        undefined
+      );
     });
 
     it("admin can reject a payout with reason", async () => {
@@ -330,6 +392,12 @@ describe("Affiliate System", () => {
         rejectionReason: "Invalid payment details provided",
       });
       expect(result.success).toBe(true);
+      expect(dbModule.processPayoutRequest).toHaveBeenCalledWith(
+        1,
+        10,
+        "rejected",
+        "Invalid payment details provided"
+      );
     });
 
     it("non-admin cannot access admin affiliate procedures", async () => {
