@@ -1,7 +1,15 @@
 import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Clock, Calendar, ArrowLeft, Share2, ChevronRight, ArrowRight, FileText, Shield } from "lucide-react";
+import {
+  Clock,
+  Calendar,
+  ArrowLeft,
+  Share2,
+  ArrowRight,
+  FileText,
+  Shield,
+} from "lucide-react";
 import Footer from "@/components/shared/Footer";
 import PublicNav from "@/components/shared/PublicNav";
 import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
@@ -13,26 +21,50 @@ const CATEGORY_LABELS: Record<string, string> = {
   "demand-letters": "Demand Letters",
   "cease-and-desist": "Cease & Desist",
   "contract-disputes": "Contract Disputes",
+  "eviction-notices": "Eviction Notices",
   "employment-disputes": "Employment",
+  "consumer-complaints": "Consumer Rights",
+  "pre-litigation-settlement": "Pre-Litigation",
+  "debt-collection": "Debt Collection",
+  "estate-probate": "Estate & Probate",
   "landlord-tenant": "Landlord-Tenant",
+  "insurance-disputes": "Insurance Disputes",
   "personal-injury": "Personal Injury",
   "intellectual-property": "IP & Trademark",
+  "family-law": "Family Law",
+  "neighbor-hoa": "Neighbor & HOA",
   "document-analysis": "Document Analysis",
   "pricing-and-roi": "Pricing & ROI",
-  "general": "General",
+  general: "General",
 };
 
 const CATEGORY_CTA: Record<string, { text: string; href: string }> = {
   "demand-letters": { text: "Get Your Demand Letter", href: "/services/demand-letter" },
   "cease-and-desist": { text: "Send a Cease & Desist", href: "/services/cease-and-desist" },
-  "contract-disputes": { text: "Draft a Breach of Contract Letter", href: "/services/breach-of-contract-letter" },
-  "employment-disputes": { text: "File an Employment Dispute Letter", href: "/services/employment-dispute-letter" },
-  "landlord-tenant": { text: "Get Your Security Deposit Back", href: "/services/security-deposit-letter" },
-  "personal-injury": { text: "Send a Personal Injury Demand Letter", href: "/services/personal-injury-demand-letter" },
-  "intellectual-property": { text: "Protect Your IP Rights", href: "/services/intellectual-property-infringement-letter" },
+  "contract-disputes": {
+    text: "Draft a Breach of Contract Letter",
+    href: "/services/breach-of-contract-letter",
+  },
+  "eviction-notices": { text: "Start the Eviction Process", href: "/services/eviction-notice" },
+  "employment-disputes": {
+    text: "File an Employment Dispute Letter",
+    href: "/services/employment-dispute-letter",
+  },
+  "landlord-tenant": {
+    text: "Get Your Security Deposit Back",
+    href: "/services/security-deposit-letter",
+  },
+  "personal-injury": {
+    text: "Send a Personal Injury Demand Letter",
+    href: "/services/personal-injury-demand-letter",
+  },
+  "intellectual-property": {
+    text: "Protect Your IP Rights",
+    href: "/services/intellectual-property-infringement-letter",
+  },
   "document-analysis": { text: "Try the Free Document Analyzer", href: "/analyze" },
   "pricing-and-roi": { text: "View Our Plans", href: "/pricing" },
-  "general": { text: "Get Your First Letter Free", href: "/" },
+  general: { text: "Get Your First Letter Free", href: "/" },
 };
 
 function formatDate(date: string | Date | null) {
@@ -42,15 +74,6 @@ function formatDate(date: string | Date | null) {
     month: "long",
     day: "numeric",
   });
-}
-
-function escapeHtml(str: string) {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function sanitizeUrl(url: string) {
@@ -63,23 +86,218 @@ function sanitizeUrl(url: string) {
   }
 }
 
-function renderMarkdown(content: string) {
-  let html = escapeHtml(content)
-    .replace(/^### (.+)$/gm, '<h3 class="text-xl font-bold text-[#0c2340] mt-8 mb-3">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold text-[#0c2340] mt-10 mb-4">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-3xl font-bold text-[#0c2340] mt-10 mb-4">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, (_m: string, text: string, url: string) =>
-      `<a href="${sanitizeUrl(url)}" class="text-blue-600 hover:underline" rel="noopener noreferrer">${text}</a>`)
-    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-slate-700 mb-1">$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal text-slate-700 mb-1">$1</li>')
-    .replace(/^&gt; (.+)$/gm, '<blockquote class="border-l-4 border-blue-200 pl-4 italic text-slate-600 my-4">$1</blockquote>')
-    .replace(/\n\n/g, '</p><p class="text-slate-700 leading-relaxed mb-4">');
+// ─── Markdown → HTML ──────────────────────────────────────────────────────────
+// Converts the subset of Markdown the content agent produces into safe HTML.
+// Improvements over the previous version:
+//   • List items are properly wrapped in <ul> / <ol> containers
+//   • <p> wrapping no longer swallows headings or list blocks
+//   • Nested bold inside links works correctly
+//   • Blockquote supported
+function renderMarkdown(content: string): string {
+  // 1. Escape HTML entities first so we can safely inject class attributes
+  const escape = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-  return '<p class="text-slate-700 leading-relaxed mb-4">' + html + "</p>";
+  // 2. Split into lines and process block-level elements
+  const lines = content.split("\n");
+  const blocks: string[] = [];
+  let i = 0;
+
+  const inlineFormat = (text: string): string =>
+    text
+      // bold
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      // italic
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      // links  — run after escaping
+      .replace(/\[(.+?)\]\((.+?)\)/g, (_m, linkText, url) => {
+        const safe = sanitizeUrl(url);
+        return `<a href="${safe}" class="text-blue-600 hover:underline" rel="noopener noreferrer">${linkText}</a>`;
+      })
+      // inline code
+      .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded text-sm font-mono">$1</code>');
+
+  while (i < lines.length) {
+    const raw = lines[i];
+    const line = escape(raw.trimEnd());
+
+    // Headings
+    if (/^#{3} /.test(raw)) {
+      blocks.push(
+        `<h3 class="text-xl font-bold text-[#0c2340] mt-8 mb-3">${inlineFormat(escape(raw.slice(4)))}</h3>`
+      );
+      i++;
+      continue;
+    }
+    if (/^#{2} /.test(raw)) {
+      blocks.push(
+        `<h2 class="text-2xl font-bold text-[#0c2340] mt-10 mb-4">${inlineFormat(escape(raw.slice(3)))}</h2>`
+      );
+      i++;
+      continue;
+    }
+    if (/^#{1} /.test(raw)) {
+      // H1 is the article title — skip duplicate from content body
+      i++;
+      continue;
+    }
+
+    // Unordered list — collect consecutive items
+    if (/^[-*] /.test(raw)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(
+          `<li class="ml-5 list-disc text-slate-700 mb-1.5">${inlineFormat(escape(lines[i].slice(2)))}</li>`
+        );
+        i++;
+      }
+      blocks.push(`<ul class="my-4 space-y-1">${items.join("")}</ul>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(raw)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        const text = lines[i].replace(/^\d+\. /, "");
+        items.push(
+          `<li class="ml-5 list-decimal text-slate-700 mb-1.5">${inlineFormat(escape(text))}</li>`
+        );
+        i++;
+      }
+      blocks.push(`<ol class="my-4 space-y-1">${items.join("")}</ol>`);
+      continue;
+    }
+
+    // Blockquote
+    if (/^> /.test(raw)) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && /^> /.test(lines[i])) {
+        quoteLines.push(inlineFormat(escape(lines[i].slice(2))));
+        i++;
+      }
+      blocks.push(
+        `<blockquote class="border-l-4 border-blue-200 pl-4 italic text-slate-600 my-4">${quoteLines.join(" ")}</blockquote>`
+      );
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(raw.trim())) {
+      blocks.push(`<hr class="my-8 border-slate-200" />`);
+      i++;
+      continue;
+    }
+
+    // Empty line → paragraph break (skip)
+    if (raw.trim() === "") {
+      i++;
+      continue;
+    }
+
+    // Regular paragraph — collect until blank line
+    const paraLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !/^#{1,6} /.test(lines[i]) &&
+      !/^[-*] /.test(lines[i]) &&
+      !/^\d+\. /.test(lines[i]) &&
+      !/^> /.test(lines[i]) &&
+      !/^---+$/.test(lines[i].trim())
+    ) {
+      paraLines.push(inlineFormat(escape(lines[i])));
+      i++;
+    }
+    if (paraLines.length > 0) {
+      blocks.push(
+        `<p class="text-slate-700 leading-relaxed mb-4">${paraLines.join(" ")}</p>`
+      );
+    }
+  }
+
+  return blocks.join("\n");
 }
 
+// ─── FAQ Schema Extractor ─────────────────────────────────────────────────────
+// Lifts H2 sections from post content into schema.org/FAQPage structured data
+// so search engines and AI answer engines can cite specific questions directly.
+function extractFaqSchema(
+  content: string,
+  postUrl: string
+): object | null {
+  const sections: { question: string; answer: string }[] = [];
+  const lines = content.split("\n");
+  let currentQuestion: string | null = null;
+  const answerLines: string[] = [];
+
+  for (const line of lines) {
+    if (/^## /.test(line)) {
+      if (currentQuestion && answerLines.length > 0) {
+        const answer = answerLines
+          .join(" ")
+          .replace(/\*\*/g, "")
+          .replace(/\*/g, "")
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+          .trim()
+          .slice(0, 500);
+        if (answer.length > 20) sections.push({ question: currentQuestion, answer });
+      }
+      currentQuestion = line.slice(3).trim();
+      answerLines.length = 0;
+    } else if (currentQuestion && line.trim() !== "" && !/^#/.test(line)) {
+      answerLines.push(line.replace(/^[-*] /, "").trim());
+    }
+  }
+  // flush last section
+  if (currentQuestion && answerLines.length > 0) {
+    const answer = answerLines
+      .join(" ")
+      .replace(/\*\*/g, "")
+      .replace(/\*/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .trim()
+      .slice(0, 500);
+    if (answer.length > 20) sections.push({ question: currentQuestion, answer });
+  }
+
+  if (sections.length < 2) return null;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": sections.map(({ question, answer }) => ({
+      "@type": "Question",
+      "name": question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": answer,
+        "url": postUrl,
+      },
+    })),
+  };
+}
+
+// ─── Quick Answer Detector ────────────────────────────────────────────────────
+// If the first non-heading paragraph is short (≤300 chars), surface it as
+// a styled callout box — this is the format AI citation engines prefer.
+function extractQuickAnswer(content: string): string | null {
+  const lines = content.split("\n");
+  for (const line of lines) {
+    if (!line.trim() || /^#{1,6} /.test(line) || /^[-*>]/.test(line)) continue;
+    const text = line.replace(/\*\*/g, "").replace(/\*/g, "").trim();
+    if (text.length > 20 && text.length <= 300) return text;
+    break;
+  }
+  return null;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function BlogPost() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug ?? "";
@@ -89,14 +307,20 @@ export default function BlogPost() {
     { enabled: !!slug }
   );
 
-  const cta = post ? (CATEGORY_CTA[post.category] ?? CATEGORY_CTA["general"]) : CATEGORY_CTA["general"];
+  const cta = post
+    ? (CATEGORY_CTA[post.category] ?? CATEGORY_CTA["general"])
+    : CATEGORY_CTA["general"];
+
+  const postUrl = `https://www.talk-to-my-lawyer.com/blog/${slug}`;
+
+  const faqSchema = post ? extractFaqSchema(post.content, postUrl) : null;
+  const quickAnswer = post ? extractQuickAnswer(post.content) : null;
 
   const handleShare = () => {
-    const url = `https://www.talk-to-my-lawyer.com/blog/${slug}`;
     if (navigator.share) {
-      navigator.share({ title: post?.title ?? "Blog Post", url });
+      navigator.share({ title: post?.title ?? "Blog Post", url: postUrl });
     } else {
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(postUrl);
     }
   };
 
@@ -106,54 +330,86 @@ export default function BlogPost() {
         <Helmet>
           <title>{post.title} — Talk to My Lawyer Blog</title>
           <meta name="description" content={post.metaDescription ?? post.excerpt} />
-          <link rel="canonical" href={`https://www.talk-to-my-lawyer.com/blog/${post.slug}`} />
+          <link rel="canonical" href={postUrl} />
+
+          {/* Open Graph */}
           <meta property="og:title" content={post.title} />
           <meta property="og:description" content={post.metaDescription ?? post.excerpt} />
           <meta property="og:type" content="article" />
-          <meta property="og:url" content={`https://www.talk-to-my-lawyer.com/blog/${post.slug}`} />
+          <meta property="og:url" content={postUrl} />
           <meta property="og:image" content={post.ogImageUrl ?? "https://www.talk-to-my-lawyer.com/logo-main.png"} />
+          <meta property="article:published_time" content={post.publishedAt?.toString() ?? ""} />
+          <meta property="article:modified_time" content={(post.updatedAt ?? post.publishedAt)?.toString() ?? ""} />
+          <meta property="article:section" content={CATEGORY_LABELS[post.category] ?? "Legal"} />
+
+          {/* Twitter */}
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content={post.title} />
           <meta name="twitter:description" content={post.metaDescription ?? post.excerpt} />
           <meta name="twitter:image" content={post.ogImageUrl ?? "https://www.talk-to-my-lawyer.com/logo-main.png"} />
-          <script type="application/ld+json">{JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": post.title,
-            "description": post.metaDescription ?? post.excerpt,
-            "author": { "@type": "Organization", "name": "Talk to My Lawyer Legal Team" },
-            "publisher": {
-              "@type": "Organization",
-              "name": "Talk to My Lawyer",
-              "url": "https://www.talk-to-my-lawyer.com",
-              "logo": {
-                "@type": "ImageObject",
-                "url": "https://www.talk-to-my-lawyer.com/logo-main.png",
+
+          {/* Article JSON-LD */}
+          <script type="application/ld+json">
+            {JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: post.title,
+              description: post.metaDescription ?? post.excerpt,
+              author: {
+                "@type": "Organization",
+                name: "Talk to My Lawyer Legal Team",
+                url: "https://www.talk-to-my-lawyer.com",
               },
-            },
-            "datePublished": post.publishedAt,
-            "dateModified": post.updatedAt,
-            "url": `https://www.talk-to-my-lawyer.com/blog/${post.slug}`,
-            "mainEntityOfPage": `https://www.talk-to-my-lawyer.com/blog/${post.slug}`,
-          })}</script>
-          <script type="application/ld+json">{JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.talk-to-my-lawyer.com/" },
-              { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.talk-to-my-lawyer.com/blog" },
-              { "@type": "ListItem", "position": 3, "name": post.title, "item": `https://www.talk-to-my-lawyer.com/blog/${post.slug}` },
-            ],
-          })}</script>
+              publisher: {
+                "@type": "Organization",
+                name: "Talk to My Lawyer",
+                url: "https://www.talk-to-my-lawyer.com",
+                logo: {
+                  "@type": "ImageObject",
+                  url: "https://www.talk-to-my-lawyer.com/logo-main.png",
+                },
+              },
+              datePublished: post.publishedAt,
+              dateModified: post.updatedAt ?? post.publishedAt,
+              url: postUrl,
+              mainEntityOfPage: postUrl,
+              keywords: CATEGORY_LABELS[post.category] ?? "legal",
+              about: { "@type": "Thing", name: "Legal Letters" },
+              reviewedBy: {
+                "@type": "Organization",
+                name: "Licensed California Attorneys",
+              },
+            })}
+          </script>
+
+          {/* Breadcrumb JSON-LD */}
+          <script type="application/ld+json">
+            {JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: "https://www.talk-to-my-lawyer.com/" },
+                { "@type": "ListItem", position: 2, name: "Blog", item: "https://www.talk-to-my-lawyer.com/blog" },
+                { "@type": "ListItem", position: 3, name: post.title, item: postUrl },
+              ],
+            })}
+          </script>
+
+          {/* FAQ JSON-LD (when extractable) — improves AI citation pickup */}
+          {faqSchema && (
+            <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
+          )}
         </Helmet>
       )}
 
       <div className="min-h-screen bg-white">
         <PublicNav activeLink="/blog" />
-        <PublicBreadcrumb items={[
-          { label: "Blog", href: "/blog" },
-          ...(post ? [{ label: post.title }] : []),
-        ]} />
+        <PublicBreadcrumb
+          items={[
+            { label: "Blog", href: "/blog" },
+            ...(post ? [{ label: post.title }] : []),
+          ]}
+        />
 
         <main className="pb-20">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
@@ -169,8 +425,12 @@ export default function BlogPost() {
               </div>
             ) : error ? (
               <div className="text-center py-20">
-                <h2 className="text-2xl font-bold text-slate-700 mb-4" data-testid="text-post-not-found">Post Not Found</h2>
-                <p className="text-slate-500 mb-6">The article you're looking for doesn't exist or has been removed.</p>
+                <h2 className="text-2xl font-bold text-slate-700 mb-4" data-testid="text-post-not-found">
+                  Post Not Found
+                </h2>
+                <p className="text-slate-500 mb-6">
+                  The article you're looking for doesn't exist or has been removed.
+                </p>
                 <Link href="/blog" className="text-blue-600 hover:underline font-medium" data-testid="link-back-to-blog">
                   <ArrowLeft className="w-4 h-4 inline mr-1" />
                   Back to Blog
@@ -178,17 +438,30 @@ export default function BlogPost() {
               </div>
             ) : post ? (
               <article>
-                <h1 className="text-3xl sm:text-4xl font-bold text-[#0c2340] mb-4 leading-tight" data-testid="text-post-title">
+                {/* Category badge */}
+                <div className="mb-4">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                    {CATEGORY_LABELS[post.category] ?? post.category}
+                  </span>
+                </div>
+
+                <h1
+                  className="text-3xl sm:text-4xl font-bold text-[#0c2340] mb-4 leading-tight"
+                  data-testid="text-post-title"
+                >
                   {post.title}
                 </h1>
 
+                {/* Byline */}
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mb-8 pb-8 border-b border-slate-100">
                   <div className="flex items-center gap-3" data-testid="text-author">
                     <div className="w-9 h-9 rounded-full bg-[#0c2340] flex items-center justify-center flex-shrink-0">
                       <Shield className="w-4 h-4 text-blue-300" />
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-800 text-sm">Talk to My Lawyer Legal Team</div>
+                      <div className="font-semibold text-slate-800 text-sm">
+                        Talk to My Lawyer Legal Team
+                      </div>
                       <div className="text-xs text-slate-500">Reviewed by licensed attorneys</div>
                     </div>
                   </div>
@@ -203,21 +476,39 @@ export default function BlogPost() {
                     <Clock className="w-3.5 h-3.5" />
                     {post.readingTimeMinutes} min read
                   </span>
-                  <button onClick={handleShare} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors ml-auto" data-testid="button-share">
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors ml-auto"
+                    data-testid="button-share"
+                  >
                     <Share2 className="w-3.5 h-3.5" />
                     Share
                   </button>
                 </div>
 
+                {/* Quick Answer callout — AI citation–optimised summary */}
+                {quickAnswer && (
+                  <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">
+                      Quick Answer
+                    </p>
+                    <p className="text-slate-800 text-sm leading-relaxed">{quickAnswer}</p>
+                  </div>
+                )}
+
+                {/* Body */}
                 <div
                   className="prose prose-slate max-w-none"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(post.content) }}
                   data-testid="content-post-body"
                 />
 
+                {/* CTA block */}
                 <div className="mt-12 p-6 bg-gradient-to-r from-[#0c2340] to-[#1a3f66] rounded-xl text-white text-center">
                   <h3 className="text-xl font-bold mb-2">Ready to Take Action?</h3>
-                  <p className="text-blue-100 mb-4 text-sm">Your first attorney-reviewed letter is free — no credit card required.</p>
+                  <p className="text-blue-100 mb-4 text-sm">
+                    Your first attorney-reviewed letter is free — no credit card required.
+                  </p>
                   <Link
                     href={cta.href}
                     className="inline-block bg-white text-[#0c2340] font-semibold px-6 py-2.5 rounded-lg hover:bg-blue-50 transition-colors"
@@ -231,10 +522,14 @@ export default function BlogPost() {
 
                 {/* Related Services */}
                 {(() => {
-                  const related: ServiceData[] = CATEGORY_TO_SERVICES[post.category] ?? [];
+                  const related: ServiceData[] =
+                    CATEGORY_TO_SERVICES[post.category] ?? [];
                   if (related.length === 0) return null;
                   return (
-                    <div className="mt-12 p-6 bg-slate-50 rounded-xl border border-slate-200" data-testid="related-services">
+                    <div
+                      className="mt-12 p-6 bg-slate-50 rounded-xl border border-slate-200"
+                      data-testid="related-services"
+                    >
                       <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                         <FileText className="w-5 h-5 text-blue-600" />
                         Related Services
@@ -248,8 +543,12 @@ export default function BlogPost() {
                             data-testid={`related-service-${s.slug}`}
                           >
                             <div>
-                              <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors text-sm">{s.title}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">{s.metaDescription.slice(0, 80)}...</div>
+                              <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors text-sm">
+                                {s.title}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {s.metaDescription.slice(0, 80)}...
+                              </div>
                             </div>
                             <ArrowRight className="w-4 h-4 text-blue-500 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </Link>
@@ -260,7 +559,11 @@ export default function BlogPost() {
                 })()}
 
                 <div className="mt-8 pt-6 border-t border-slate-100">
-                  <Link href="/blog" className="text-blue-600 hover:underline font-medium text-sm" data-testid="link-back-to-blog">
+                  <Link
+                    href="/blog"
+                    className="text-blue-600 hover:underline font-medium text-sm"
+                    data-testid="link-back-to-blog"
+                  >
                     <ArrowLeft className="w-4 h-4 inline mr-1" />
                     Back to all posts
                   </Link>
