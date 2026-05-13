@@ -193,3 +193,25 @@ The sync script:
 |---|---|
 | `.claude/repo-conventions.md` | This file. Agent reads at the start of every run. |
 | `.claude/published-topics.md` | Running log of published titles by date. Agent checks this to avoid duplicates. |
+
+---
+
+## Citation Feedback Loop (new — 2026-05-13)
+
+Before writing any post, read `.claude/citation-scores.md`.
+
+This file is updated every Sunday night by GitHub Actions (`citation-audit.yml`).
+It tells you:
+
+- Which queries TTML is currently being cited for by Perplexity and other AI engines
+- Which queries we're losing (content gaps → write these next)
+- Which competitor domains are winning the queries we're losing
+- Which post structures and buckets have the highest citation rates
+
+**Decision rules:**
+- If a query appears in "Content Gaps" and no post exists → write it this week
+- If a post exists but isn't being cited → update it: sharpen the opening paragraph, add more H2 questions, add California statute citations
+- If a bucket has citation rate >60% → write a deeper post in that bucket
+- If a bucket has citation rate 0% → hold off; the posts may be too new (2–6 week citation lag)
+
+The citation rate is the KPI. Not pageviews. Not rankings. Whether AI engines cite us when someone asks our target questions.

@@ -1,0 +1,50 @@
+name: Weekly Citation Audit
+
+# Runs every Sunday at 11pm UTC (so results are ready for Monday's content run)
+on:
+  schedule:
+    - cron: "0 23 * * 0"
+
+  # Manual trigger for on-demand audits
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Measure AI citation frequency → update .claude/citation-scores.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run citation audit
+        env:
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+        run: pnpm tsx scripts/audit-citations.ts
+
+      - name: Commit updated citation scores
+        run: |
+          git config user.name "TTML Citation Bot"
+          git config user.email "bot@talk-to-my-lawyer.com"
+          git add -f .claude/citation-scores.md
+          if git diff --staged --quiet; then
+            echo "No changes to citation-scores.md"
+          else
+            git commit -m "chore: weekly citation audit $(date -u +%Y-%m-%d)"
+            git push
+          fi
