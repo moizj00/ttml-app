@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "week": "2026-W20",
+    "generated_at": "2026-05-13T23:47:32Z",
+    "overall_citation_rate": null,
+    "probe_status": "error_browser_blocked",
+    "note": "First run — all probes blocked. Default uniform weights applied. Real weights will be generated from 2026-W21 onward once browser automation is enabled and ChatGPT/Claude sessions are established."
+  },
+  "weights": {
+    "demand-letters": 1.0,
+    "cease-and-desist": 1.0,
+    "ecommerce-ip": 1.0,
+    "landlord-tenant": 1.0,
+    "contractor": 1.0,
+    "consumer": 1.0,
+    "pricing-comparison": 1.0
+  }
+}
