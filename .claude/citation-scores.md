@@ -1,6 +1,6 @@
 # TTML Citation Scores
 
-Last audit: not yet run — add OPENAI_API_KEY to GitHub Secrets and trigger the citation-audit workflow.
+Last audit: Thu, 14 May 2026 16:46:43 GMT
 Engine: OpenAI gpt-4o + web_search_preview
 Domain tracked: talk-to-my-lawyer.com
 
@@ -10,34 +10,118 @@ Domain tracked: talk-to-my-lawyer.com
 
 | Metric | Value |
 |---|---|
-| Queries tested | 0 |
+| Queries tested | 21 |
 | Queries where TTML is cited | 0 |
-| Overall citation rate | —% |
-| Audit date | pending first run |
+| Overall citation rate | 0% |
+| Audit date | 2026-05-14 |
 
 ---
 
-## Agent Instructions (read before writing)
+## Citation Rate by Category
 
-Until the first audit runs, use these default priorities:
-
-1. **California-specific angle beats generic** — every post should cite at least one California statute (B&P Code §17200, CCP, Labor Code, etc.). AI engines prefer jurisdictionally specific answers.
-
-2. **Direct answer in ≤100 words** — the Quick Answer callout only fires when the first paragraph is ≤300 chars. Keep it punchy. Answer the search query before explaining context.
-
-3. **H2s as questions** — phrase every H2 as a question or a clear decision point. This is what feeds the FAQ JSON-LD schema and gets lifted into AI answer boxes.
-
-4. **Comparison posts win citations** — "X vs Y" and "which is faster/cheaper/better" framing gets cited because AI engines love giving definitive answers. Write at least one comparison post per weekly batch.
-
-5. **Update this file** — after the first audit runs (Sunday night), this file will contain real citation data. Read the "Content Gaps" section before writing each batch to avoid topics we're already losing on and haven't fixed.
+| Category | Queries | Cited | Rate |
+|---|---|---|---|
+| intellectual-property | 5 | 0 | 0% |
+| demand-letters | 5 | 0 | 0% |
+| cease-and-desist | 3 | 0 | 0% |
+| landlord-tenant | 2 | 0 | 0% |
+| eviction-notices | 1 | 0 | 0% |
+| employment-disputes | 1 | 0 | 0% |
+| contract-disputes | 1 | 0 | 0% |
+| consumer-complaints | 1 | 0 | 0% |
+| pricing-and-roi | 1 | 0 | 0% |
+| general | 1 | 0 | 0% |
 
 ---
 
-## Setup Required
+## Queries Where TTML Is Cited ✓
 
-To activate the feedback loop:
+_None yet — keep publishing and wait 2–6 weeks for indexing._
 
-1. Go to github.com/moizj00/ttml-app → Settings → Secrets → Actions
-2. Add secret: `OPENAI_API_KEY` = your key from platform.openai.com/api-keys
-3. Go to Actions → "Weekly Citation Audit" → Run workflow (to trigger immediately)
-4. After ~5 minutes, this file will be updated with real citation data
+---
+
+## Content Gaps — Queries Where TTML Is NOT Cited ✗
+
+Write posts targeting these exact queries. Use the query phrasing as the H1 title and answer it in ≤100 words.
+
+- **"someone is selling knockoffs of my product on amazon what can I do california"** [`intellectual-property`] — post exists (`someone-selling-knockoffs-amazon-california`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"what is a trademark cease and desist letter and when does it work"** [`intellectual-property`] — post exists (`what-is-a-trademark-cease-and-desist-letter`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"how to remove counterfeit listings from amazon seller"** [`intellectual-property`] — **no post yet. Write one.**
+- **"dmca takedown vs cease and desist letter which is faster"** [`intellectual-property`] — post exists (`attorney-letter-vs-dmca-takedown-counterfeit-listings`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"cease and desist letter for ecommerce counterfeit goods"** [`intellectual-property`] — post exists (`cease-and-desist-letters-ecommerce-sellers-counterfeit-goods`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"how to write a demand letter for unpaid invoice california"** [`demand-letters`] — **no post yet. Write one.**
+- **"what is a demand letter and how does it work"** [`demand-letters`] — post exists (`what-is-a-demand-letter`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"demand letter vs lawsuit which is better california"** [`demand-letters`] — post exists (`demand-letter-vs-lawsuit`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"freelancer not paid what to do california"** [`demand-letters`] — **no post yet. Write one.**
+- **"what is a cease and desist letter california"** [`cease-and-desist`] — post exists (`cease-and-desist-letters-explained`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"how much does a cease and desist letter cost"** [`cease-and-desist`] — **no post yet. Write one.**
+- **"common mistakes in legal demand letters"** [`cease-and-desist`] — post exists (`5-common-mistakes-legal-letters`) but not being cited. Update: sharpen opening paragraph, add California statute, strengthen H2 questions.
+- **"can landlord keep security deposit california"** [`landlord-tenant`] — **no post yet. Write one.**
+- **"how to evict a tenant california step by step"** [`eviction-notices`] — **no post yet. Write one.**
+- **"california tenant habitability rights"** [`landlord-tenant`] — **no post yet. Write one.**
+- **"wrongful termination california what to do"** [`employment-disputes`] — **no post yet. Write one.**
+- **"how to recover unpaid wages california demand letter"** [`demand-letters`] — **no post yet. Write one.**
+- **"contractor didn't finish job california legal options"** [`contract-disputes`] — **no post yet. Write one.**
+- **"how to get a refund for a service not rendered"** [`consumer-complaints`] — **no post yet. Write one.**
+- **"how much does it cost to hire a lawyer in california"** [`pricing-and-roi`] — **no post yet. Write one.**
+- **"when do you need a legal demand letter"** [`general`] — **no post yet. Write one.**
+
+---
+
+## Who's Being Cited Instead (Competitors)
+
+Domains winning the queries where TTML isn't cited:
+
+- legalclarity.org (6 queries)
+- courts.ca.gov (5 queries)
+- nolo.com (3 queries)
+- redpoints.com (3 queries)
+- terms.law (3 queries)
+- law.cornell.edu (3 queries)
+- dir.ca.gov (3 queries)
+- brandalignment.com (2 queries)
+
+---
+
+## Agent Instructions
+
+Read this file before writing any post.
+
+1. **Priority order for this week's posts:**
+   - First: queries marked "no post yet" above → write them
+   - Second: posts marked "not being cited" → update them (sharper opening, more H2 questions, California statute)
+   - Third: top-performing buckets → write deeper posts in those areas
+
+2. **Format that gets cited:** direct answer ≤100 words → California statute citation → H2 sections as questions → comparison angle → disclaimer last.
+
+3. **Citation lag is real.** New posts take 2–6 weeks to appear in AI citations. Don't re-write a post that's <4 weeks old. Check `published-topics.md` for dates.
+
+4. **Competitor gap:** study the domains listed above. Find their top-cited post on each losing query. Write a better, more California-specific version.
+
+---
+
+## Raw Results
+
+| Query | Bucket | Cited | Notes |
+|---|---|---|---|
+| someone is selling knockoffs of my product on amazon wh… | intellectual-property | ✗ | — |
+| what is a trademark cease and desist letter and when do… | intellectual-property | ✗ | — |
+| how to remove counterfeit listings from amazon seller | intellectual-property | ✗ | — |
+| dmca takedown vs cease and desist letter which is faste… | intellectual-property | ✗ | — |
+| cease and desist letter for ecommerce counterfeit goods | intellectual-property | ✗ | — |
+| how to write a demand letter for unpaid invoice califor… | demand-letters | ✗ | — |
+| what is a demand letter and how does it work | demand-letters | ✗ | — |
+| demand letter vs lawsuit which is better california | demand-letters | ✗ | — |
+| freelancer not paid what to do california | demand-letters | ✗ | — |
+| what is a cease and desist letter california | cease-and-desist | ✗ | — |
+| how much does a cease and desist letter cost | cease-and-desist | ✗ | — |
+| common mistakes in legal demand letters | cease-and-desist | ✗ | — |
+| can landlord keep security deposit california | landlord-tenant | ✗ | — |
+| how to evict a tenant california step by step | eviction-notices | ✗ | — |
+| california tenant habitability rights | landlord-tenant | ✗ | — |
+| wrongful termination california what to do | employment-disputes | ✗ | — |
+| how to recover unpaid wages california demand letter | demand-letters | ✗ | — |
+| contractor didn't finish job california legal options | contract-disputes | ✗ | — |
+| how to get a refund for a service not rendered | consumer-complaints | ✗ | — |
+| how much does it cost to hire a lawyer in california | pricing-and-roi | ✗ | — |
+| when do you need a legal demand letter | general | ✗ | — |
