@@ -21,7 +21,7 @@ import * as path from "path";
 
 const TTML_DOMAIN = "talk-to-my-lawyer.com";
 const OPENAI_API = "https://api.openai.com/v1/responses";
-const OUTPUT_FILE = path.join(__dirname, "../.claude/citation-scores.md");
+const OUTPUT_FILE = path.join(import.meta.dirname, "../.claude/citation-scores.md");
 
 // ─── Target Queries ───────────────────────────────────────────────────────────
 const TARGET_QUERIES: { query: string; bucket: string; targetSlug?: string }[] = [
