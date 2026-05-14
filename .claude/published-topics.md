@@ -16,3 +16,6 @@ Agent: check this file before writing to avoid duplicate topics.
 - What Is a Demand Letter for Unpaid Invoices and Does It Actually Work?
 - Demand Letters for Freelancers: How to Collect When a Client Won't Pay
 - Small Claims Court vs. Demand Letter: Which Is Faster for Unpaid Invoices in California?
+- How California Independent Contractors Can Collect Overdue Payments Without Going to Court (backfilled — unlogged from earlier run)
+- My Client Hasn't Paid My Invoice in 60 Days — What Can I Do as a California Freelancer? (backfilled — unlogged from earlier run)
+- Demand Letter vs. Small Claims Court: The Smarter Path for Freelancers Owed Under $12,500 in California (backfilled — unlogged from earlier run)
