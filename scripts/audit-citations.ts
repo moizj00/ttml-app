@@ -22,6 +22,9 @@ import * as path from "path";
 const TTML_DOMAIN = "talk-to-my-lawyer.com";
 const OPENAI_API = "https://api.openai.com/v1/responses";
 const OUTPUT_FILE = path.join(import.meta.dirname, "../.claude/citation-scores.md");
+const WEIGHTS_FILE = path.join(import.meta.dirname, "../.claude/theme-weights.json");
+const MIN_OVERALL_RATE_FOR_SIGNAL = 0.10; // below this, weights stay uniform 1.0
+const MIN_BUCKET_QUERIES_FOR_SIGNAL = 2;  // bucket needs ≥2 queries to be weighted
 
 // ─── Target Queries ───────────────────────────────────────────────────────────
 const TARGET_QUERIES: { query: string; bucket: string; targetSlug?: string }[] = [
@@ -142,6 +145,51 @@ function checkCitation(responseText: string, citations: string[], domain: string
 function extractDomain(url: string): string | null {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
   catch { return null; }
+}
+
+// ─── Theme Weights ────────────────────────────────────────────────────────────
+// Maps each bucket's citation rate into a [0.5, 2.0] multiplier used by the
+// daily blog batch agent to bias candidate-title generation toward buckets
+// where TTML is winning. Buckets without enough data, or runs with no overall
+// signal yet (overall rate < MIN_OVERALL_RATE_FOR_SIGNAL), stay at 1.0.
+function bucketWeight(rate: number, overallRate: number): number {
+  if (overallRate < MIN_OVERALL_RATE_FOR_SIGNAL) return 1.0;
+  // rate == 0 → 0.5 ; rate == overall → 1.0 ; rate == 3 * overall → 2.0 (capped)
+  const ratio = rate / overallRate;
+  const raw = 0.5 + Math.min(ratio, 3) * 0.5;
+  return Math.max(0.5, Math.min(2.0, Math.round(raw * 10) / 10));
+}
+
+function getISOWeek(d: Date = new Date()): string {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((date.valueOf() - yearStart.valueOf()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+}
+
+function computeThemeWeights(
+  byBucket: Record<string, { total: number; cited: number }>,
+  overallRate: number,
+): { weights: Record<string, number>; status: string; note: string } {
+  const weights: Record<string, number> = {};
+  const sufficient = overallRate >= MIN_OVERALL_RATE_FOR_SIGNAL;
+
+  for (const [bucket, { total, cited }] of Object.entries(byBucket)) {
+    if (total < MIN_BUCKET_QUERIES_FOR_SIGNAL) {
+      weights[bucket] = 1.0;
+      continue;
+    }
+    const rate = cited / total;
+    weights[bucket] = bucketWeight(rate, overallRate);
+  }
+
+  const status = sufficient ? "ok" : "insufficient_data";
+  const note = sufficient
+    ? `Weights derived from ${Object.keys(byBucket).length} buckets, overall citation rate ${(overallRate * 100).toFixed(0)}%. Buckets we win in (rate > overall) get higher weights; buckets we lose get lower weights. New posts have a 2–6 week citation lag — values for newly-added buckets will stabilize over the next audits.`
+    : `Overall citation rate ${(overallRate * 100).toFixed(0)}% is below the ${(MIN_OVERALL_RATE_FOR_SIGNAL * 100).toFixed(0)}% threshold for actionable signal — likely citation lag (posts <6 weeks old). Weights held uniform at 1.0. Real differentiation will appear once published posts are old enough for AI engines to index.`;
+
+  return { weights, status, note };
 }
 
 function sleep(ms: number) {
@@ -316,10 +364,28 @@ ${results.map((r) =>
   fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
   fs.writeFileSync(OUTPUT_FILE, md, "utf-8");
 
+  // ─── Write theme-weights.json (consumed by daily blog batch agent) ────────
+  const overallRate = citedCount / Math.max(totalQueries, 1);
+  const { weights, status, note } = computeThemeWeights(byBucket, overallRate);
+  const themeWeightsJson = {
+    _meta: {
+      week: getISOWeek(now),
+      generated_at: now.toISOString(),
+      overall_citation_rate: Number(overallRate.toFixed(3)),
+      queries_tested: totalQueries,
+      probe_status: status,
+      probe_engine: "openai-gpt-4o-web-search",
+      note,
+    },
+    weights,
+  };
+  fs.writeFileSync(WEIGHTS_FILE, JSON.stringify(themeWeightsJson, null, 2) + "\n", "utf-8");
+
   console.log(`\n─────────────────────────────────────────`);
   console.log(`Citation rate: ${citedCount}/${totalQueries} (${citationRate}%)`);
   console.log(`Top competitors: ${topCompetitors.slice(0, 3).join(", ") || "none"}`);
   console.log(`Results written → .claude/citation-scores.md`);
+  console.log(`Weights written → .claude/theme-weights.json (status: ${status})`);
   console.log(`─────────────────────────────────────────\n`);
 }
 
