@@ -1,18 +1,23 @@
 {
   "_meta": {
     "week": "2026-W20",
-    "generated_at": "2026-05-13T23:47:32Z",
-    "overall_citation_rate": null,
-    "probe_status": "error_browser_blocked",
-    "note": "First run — all probes blocked. Default uniform weights applied. Real weights will be generated from 2026-W21 onward once browser automation is enabled and ChatGPT/Claude sessions are established."
+    "generated_at": "2026-05-14T16:57:02.068Z",
+    "overall_citation_rate": 0,
+    "queries_tested": 21,
+    "probe_status": "insufficient_data",
+    "probe_engine": "openai-gpt-4o-web-search",
+    "note": "Overall citation rate 0% is below the 10% threshold for actionable signal — likely citation lag (posts <6 weeks old). Weights held uniform at 1.0. Real differentiation will appear once published posts are old enough for AI engines to index."
   },
   "weights": {
-    "demand-letters": 1.0,
-    "cease-and-desist": 1.0,
-    "ecommerce-ip": 1.0,
-    "landlord-tenant": 1.0,
-    "contractor": 1.0,
-    "consumer": 1.0,
-    "pricing-comparison": 1.0
+    "intellectual-property": 1,
+    "demand-letters": 1,
+    "cease-and-desist": 1,
+    "landlord-tenant": 1,
+    "eviction-notices": 1,
+    "employment-disputes": 1,
+    "contract-disputes": 1,
+    "consumer-complaints": 1,
+    "pricing-and-roi": 1,
+    "general": 1
   }
 }

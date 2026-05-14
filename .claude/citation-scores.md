@@ -1,6 +1,6 @@
 # TTML Citation Scores
 
-Last audit: Thu, 14 May 2026 16:46:43 GMT
+Last audit: Thu, 14 May 2026 16:57:02 GMT
 Engine: OpenAI gpt-4o + web_search_preview
 Domain tracked: talk-to-my-lawyer.com
 
@@ -72,14 +72,14 @@ Write posts targeting these exact queries. Use the query phrasing as the H1 titl
 
 Domains winning the queries where TTML isn't cited:
 
+- nolo.com (8 queries)
 - legalclarity.org (6 queries)
+- terms.law (5 queries)
 - courts.ca.gov (5 queries)
-- nolo.com (3 queries)
-- redpoints.com (3 queries)
-- terms.law (3 queries)
-- law.cornell.edu (3 queries)
-- dir.ca.gov (3 queries)
-- brandalignment.com (2 queries)
+- law.cornell.edu (4 queries)
+- selfhelp.courts.ca.gov (4 queries)
+- trademarklawauthority.com (2 queries)
+- reference.com (2 queries)
 
 ---
 
