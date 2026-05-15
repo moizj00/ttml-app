@@ -22,6 +22,13 @@ RUN apk add --no-cache \
       harfbuzz \
       ca-certificates \
       ttf-freefont
+# Fail fast if Alpine's chromium package layout drifts. Without this guard,
+# a missing binary would only surface at `pnpm run _prerender` time as a
+# puppeteer.launch error, where the script gracefully skips and the image
+# ships with no prerender output.
+RUN test -x /usr/bin/chromium-browser \
+    || test -x /usr/bin/chromium \
+    || (echo "FATAL: chromium binary missing after apk install" && exit 1)
 ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
