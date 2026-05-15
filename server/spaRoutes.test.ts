@@ -127,6 +127,22 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).toContain("attorney-reviewed demand letter");
   });
 
+  it("returns 404 (not 500) for malformed percent-encoded blog slugs", async () => {
+    let getBlogPostCalled = false;
+    const route = await resolveSpaRoute("/blog/%E0%A4%A", {
+      getBlogPost: async () => {
+        getBlogPostCalled = true;
+        return null;
+      },
+    });
+
+    expect(route.statusCode).toBe(404);
+    expect(route.knownRoute).toBe(false);
+    // The decode should fail before getBlogPost is ever called — a malformed
+    // URL must not reach the database layer.
+    expect(getBlogPostCalled).toBe(false);
+  });
+
   it("injects service page fallback content for JS-blind crawlers", async () => {
     const route = await resolveSpaRoute("/services/demand-letter");
     const html = injectSeoIntoHtml(template, route);
