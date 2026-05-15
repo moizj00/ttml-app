@@ -131,7 +131,7 @@ describe("trackCheckoutCommission — idempotency & single row", () => {
     vi.clearAllMocks();
     mockGetDiscountCodeByCode.mockResolvedValue(makeDiscountCode());
     mockIncrementDiscountCodeUsage.mockResolvedValue(undefined);
-    mockCreateCommission.mockResolvedValue({ id: 99 });
+    mockCreateCommission.mockResolvedValue({ id: 99, insertId: 99, created: true });
     mockGetUserById.mockResolvedValue({ id: 10, name: "Alice", email: "alice@example.com" });
     mockCreateNotification.mockResolvedValue(undefined);
     mockNotifyAdmins.mockResolvedValue(undefined);
@@ -186,17 +186,17 @@ describe("trackCheckoutCommission — idempotency & single row", () => {
     expect(mockCreateCommission).not.toHaveBeenCalled();
   });
 
-  // Idempotency: replaying the same webhook event must not double-create rows
-  it("does not duplicate commission when called twice with the same payment intent (idempotency concern)", async () => {
-    // Note: idempotency is enforced at the Stripe-event level by only calling
-    // trackCheckoutCommission once per `checkout.session.completed` event.
-    // Here we verify the helper itself would create a second row if called twice
-    // (so callers must gate on idempotency keys).
+  it("skips duplicate checkout side effects when createCommission reports an existing payment intent", async () => {
+    mockCreateCommission
+      .mockResolvedValueOnce({ id: 99, insertId: 99, created: true })
+      .mockResolvedValueOnce({ id: 99, insertId: 99, created: false });
+
     await trackCheckoutCommission(baseParams);
     await trackCheckoutCommission(baseParams);
-    // Two calls → two commission rows: this documents that idempotency is the
-    // webhook handler's responsibility, not trackCheckoutCommission's.
+
     expect(mockCreateCommission).toHaveBeenCalledTimes(2);
+    expect(mockIncrementDiscountCodeUsage).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -204,7 +204,8 @@ describe("trackCheckoutCommission — idempotency & single row", () => {
 describe("trackRecurringCommission — recurring billing path", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateCommission.mockResolvedValue({ id: 100 });
+    mockGetDiscountCodeByCode.mockResolvedValue(makeDiscountCode());
+    mockCreateCommission.mockResolvedValue({ id: 100, insertId: 100, created: true });
     mockGetUserById.mockResolvedValue({ id: 10, name: "Alice", email: "alice@example.com" });
     mockCreateNotification.mockResolvedValue(undefined);
     mockNotifyAdmins.mockResolvedValue(undefined);
@@ -214,6 +215,7 @@ describe("trackRecurringCommission — recurring billing path", () => {
     discountCode: "EMP-TEST",
     employeeId: 10,
     discountCodeId: 7,
+    invoiceId: "in_renewal_xyz",
     paymentIntentId: "pi_renewal_xyz",
     invoiceAmountCents: MONTHLY_PRICE_CENTS, // 29 900
     subscriberId: 50,
@@ -233,6 +235,12 @@ describe("trackRecurringCommission — recurring billing path", () => {
     expect(call.saleAmount).toBe(MONTHLY_PRICE_CENTS);
   });
 
+  it("uses invoice.id as the subscription commission idempotency key", async () => {
+    await trackRecurringCommission(baseParams);
+    const call = mockCreateCommission.mock.calls[0][0] as Record<string, unknown>;
+    expect(call.stripeInvoiceId).toBe("in_renewal_xyz");
+  });
+
   it("does NOT create commission for a $0 renewal invoice", async () => {
     await trackRecurringCommission({ ...baseParams, invoiceAmountCents: 0 });
     expect(mockCreateCommission).not.toHaveBeenCalled();
@@ -241,6 +249,33 @@ describe("trackRecurringCommission — recurring billing path", () => {
   it("does NOT increment discount code usage (already incremented at checkout)", async () => {
     await trackRecurringCommission(baseParams);
     expect(mockIncrementDiscountCodeUsage).not.toHaveBeenCalled();
+  });
+
+  it("increments discount usage for the initial paid subscription invoice only", async () => {
+    await trackRecurringCommission({
+      ...baseParams,
+      invoiceId: "in_initial_xyz",
+      incrementDiscountUsage: true,
+    });
+    expect(mockIncrementDiscountCodeUsage).toHaveBeenCalledOnce();
+    expect(mockIncrementDiscountCodeUsage).toHaveBeenCalledWith(7);
+  });
+
+  it("skips duplicate invoice notifications and usage increments", async () => {
+    mockCreateCommission.mockResolvedValueOnce({
+      id: 100,
+      insertId: 100,
+      created: false,
+    });
+
+    await trackRecurringCommission({
+      ...baseParams,
+      incrementDiscountUsage: true,
+    });
+
+    expect(mockIncrementDiscountCodeUsage).not.toHaveBeenCalled();
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
   it("marks notification as recurring (isRecurring=true path)", async () => {
@@ -259,7 +294,7 @@ describe("commission on yearly plan", () => {
     vi.clearAllMocks();
     mockGetDiscountCodeByCode.mockResolvedValue(makeDiscountCode());
     mockIncrementDiscountCodeUsage.mockResolvedValue(undefined);
-    mockCreateCommission.mockResolvedValue({ id: 101 });
+    mockCreateCommission.mockResolvedValue({ id: 101, insertId: 101, created: true });
     mockGetUserById.mockResolvedValue({ id: 10, name: "Alice", email: "alice@example.com" });
     mockCreateNotification.mockResolvedValue(undefined);
     mockNotifyAdmins.mockResolvedValue(undefined);

@@ -86,6 +86,7 @@ export const commissionLedger = pgTable("commission_ledger", {
   subscriberId: integer("subscriber_id").references(() => users.id, { onDelete: "set null" }),
   discountCodeId: integer("discount_code_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
+  stripeInvoiceId: varchar("stripe_invoice_id", { length: 255 }),
   saleAmount: integer("sale_amount").notNull(), // in cents
   commissionRate: integer("commission_rate").default(500).notNull(), // basis points (500 = 5%)
   commissionAmount: integer("commission_amount").notNull(), // in cents
@@ -97,6 +98,7 @@ export const commissionLedger = pgTable("commission_ledger", {
   statusIdx: index("idx_commission_ledger_status").on(t.status),
   employeeStatusIdx: index("idx_commission_ledger_employee_status").on(t.employeeId, t.status),
   uniquePaymentIntentIdx: uniqueIndex("uq_commission_ledger_stripe_pi").on(t.stripePaymentIntentId),
+  uniqueInvoiceIdx: uniqueIndex("uq_commission_ledger_stripe_invoice").on(t.stripeInvoiceId),
 }));
 
 export type CommissionLedgerEntry = typeof commissionLedger.$inferSelect;
@@ -124,6 +126,24 @@ export const payoutRequests = pgTable("payout_requests", {
 
 export type PayoutRequest = typeof payoutRequests.$inferSelect;
 export type InsertPayoutRequest = typeof payoutRequests.$inferInsert;
+
+// ═══════════════════════════════════════════════════════
+// TABLE: commission_payout_allocations (reserved payout rows)
+// ═══════════════════════════════════════════════════════
+export const commissionPayoutAllocations = pgTable("commission_payout_allocations", {
+  id: serial("id").primaryKey(),
+  payoutRequestId: integer("payout_request_id").notNull().references(() => payoutRequests.id, { onDelete: "cascade" }),
+  commissionId: integer("commission_id").notNull().references(() => commissionLedger.id, { onDelete: "cascade" }),
+  amount: integer("amount").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  payoutIdx: index("idx_commission_payout_allocations_payout").on(t.payoutRequestId),
+  commissionIdx: index("idx_commission_payout_allocations_commission").on(t.commissionId),
+  uniqueCommissionIdx: uniqueIndex("uq_commission_payout_allocations_commission").on(t.commissionId),
+}));
+
+export type CommissionPayoutAllocation = typeof commissionPayoutAllocations.$inferSelect;
+export type InsertCommissionPayoutAllocation = typeof commissionPayoutAllocations.$inferInsert;
 
 // ═══════════════════════════════════════════════════════
 // TABLE: processed_stripe_events (webhook idempotency)

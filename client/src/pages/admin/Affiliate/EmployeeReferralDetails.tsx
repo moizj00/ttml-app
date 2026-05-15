@@ -136,6 +136,7 @@ export function EmployeeReferralDetails({
                 <TableHead className="text-center">Tenure</TableHead>
                 <TableHead className="text-right">Sale</TableHead>
                 <TableHead className="text-right">Commission</TableHead>
+                <TableHead className="text-center">Invoices</TableHead>
                 <TableHead>Com. Status</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
@@ -179,6 +180,9 @@ export function EmployeeReferralDetails({
                   </TableCell>
                   <TableCell className="text-right font-medium text-green-700">
                     {formatCurrency(r.commissionAmount)}
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {r.commissionCount}
                   </TableCell>
                   <TableCell>
                     <CommissionStatusBadge status={r.commissionStatus} />

@@ -251,10 +251,12 @@ describe("Checkout session discount parameter logic", () => {
 
 // ─── 6. Pricing page PLANS data integrity ────────────────────────────────────
 describe("Pricing page PLANS data integrity", () => {
-  it("PRICING has all three plans", () => {
+  it("PRICING keeps the legacy single-letter constant but public lists are subscription-only", () => {
     expect(PRICING.singleLetter).toBeDefined();
     expect(PRICING.monthly).toBeDefined();
     expect(PRICING.yearly).toBeDefined();
+    expect(ALL_PLANS.map((p) => p.id)).not.toContain("single_letter");
+    expect(PAID_PLANS.map((p) => p.id)).not.toContain("single_letter");
   });
 
   it("ALL_PLANS has 2 entries in order (subscription-only)", () => {
@@ -377,16 +379,10 @@ describe("LetterPaywall — UI state determination", () => {
 
 // ─── 9. Stripe products config integrity ─────────────────────────────────────
 describe("Stripe products config (stripe-products.ts)", () => {
-  it("has all 3 plans", () => {
-    expect(PLANS.single_letter).toBeDefined();
+  it("has only subscription plans", () => {
+    expect(PLANS.single_letter).toBeUndefined();
     expect(PLANS.monthly).toBeDefined();
     expect(PLANS.yearly).toBeDefined();
-  });
-
-  it("single_letter is $299 (29900 cents)", () => {
-    expect(PLANS.single_letter.price).toBe(29900);
-    expect(PLANS.single_letter.interval).toBe("one_time");
-    expect(PLANS.single_letter.lettersAllowed).toBe(1);
   });
 
   it("monthly is $299/month (29900 cents)", () => {
@@ -402,7 +398,6 @@ describe("Stripe products config (stripe-products.ts)", () => {
   });
 
   it("getPlanConfig resolves valid plan IDs", () => {
-    expect(getPlanConfig("single_letter")?.price).toBe(29900);
     expect(getPlanConfig("monthly")?.lettersAllowed).toBe(4);
     expect(getPlanConfig("yearly")?.lettersAllowed).toBe(8);
   });
@@ -410,18 +405,23 @@ describe("Stripe products config (stripe-products.ts)", () => {
   it("getPlanConfig resolves legacy aliases", () => {
     expect(getPlanConfig("starter")?.id).toBe("monthly");
     expect(getPlanConfig("professional")?.id).toBe("monthly");
-    expect(getPlanConfig("per_letter")?.id).toBe("single_letter");
+    expect(getPlanConfig("per_letter")?.id).toBe("monthly");
     expect(getPlanConfig("annual")?.id).toBe("yearly");
+  });
+
+  it("does not expose single_letter through server checkout plan config", () => {
+    expect(getPlanConfig("single_letter")).toBeUndefined();
+    expect(LEGACY_PLAN_ALIASES.single_letter).toBeUndefined();
   });
 
   it("getPlanConfig returns undefined for unknown plan", () => {
     expect(getPlanConfig("nonexistent")).toBeUndefined();
   });
 
-  it("PLAN_LIST has 3 plans", () => {
-    expect(PLAN_LIST).toHaveLength(3);
+  it("PLAN_LIST has 2 subscription plans", () => {
+    expect(PLAN_LIST).toHaveLength(2);
     const ids = PLAN_LIST.map((p) => p.id);
-    expect(ids).toContain("single_letter");
+    expect(ids).not.toContain("single_letter");
     expect(ids).toContain("monthly");
     expect(ids).toContain("yearly");
   });

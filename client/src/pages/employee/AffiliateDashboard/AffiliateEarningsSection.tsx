@@ -72,8 +72,6 @@ interface AffiliateEarningsSectionProps {
   // Payout dialog state
   payoutOpen: boolean;
   setPayoutOpen: (open: boolean) => void;
-  payoutAmount: string;
-  setPayoutAmount: (v: string) => void;
   payoutMethod: string;
   setPayoutMethod: (v: string) => void;
   paypalEmail: string;
@@ -86,7 +84,6 @@ interface AffiliateEarningsSectionProps {
   payoutsLoading: boolean;
   commissionsLoading: boolean;
   pendingBalance: number;
-  availableBalanceDollars: number;
   requestPayoutPending: boolean;
   onRequestPayout: () => void;
 }
@@ -94,8 +91,6 @@ interface AffiliateEarningsSectionProps {
 export function AffiliateEarningsSection({
   payoutOpen,
   setPayoutOpen,
-  payoutAmount,
-  setPayoutAmount,
   payoutMethod,
   setPayoutMethod,
   paypalEmail,
@@ -107,7 +102,6 @@ export function AffiliateEarningsSection({
   payoutsLoading,
   commissionsLoading,
   pendingBalance,
-  availableBalanceDollars,
   requestPayoutPending,
   onRequestPayout,
 }: AffiliateEarningsSectionProps) {
@@ -146,25 +140,17 @@ export function AffiliateEarningsSection({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                <div>
-                  <Label htmlFor="amount">Amount ($)</Label>
-                  <Input
-                    id="amount"
-                    data-testid="input-payout-amount"
-                    type="number"
-                    min="10"
-                    max={availableBalanceDollars}
-                    step="0.01"
-                    placeholder="10.00"
-                    value={payoutAmount}
-                    onChange={e => setPayoutAmount(e.target.value)}
-                  />
-                  {payoutAmount && parseFloat(payoutAmount) > availableBalanceDollars && (
-                    <p className="text-xs text-destructive mt-1">
-                      Amount exceeds your available balance of{" "}
-                      {formatCurrency(pendingBalance)}.
-                    </p>
-                  )}
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <Label>Amount</Label>
+                  <div
+                    className="mt-1 text-2xl font-bold"
+                    data-testid="text-payout-full-amount"
+                  >
+                    {formatCurrency(pendingBalance)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Payout requests withdraw the full available balance.
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="method">Payment Method</Label>
