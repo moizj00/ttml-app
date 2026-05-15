@@ -23,22 +23,57 @@
  * routes — Phase 1 behavior is the floor.
  */
 
-import express from "express";
+import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import express from "express";
 import puppeteer, { type Browser } from "puppeteer";
-import { SERVICE_SLUGS } from "../shared/serviceSlugs";
+import { SERVICE_SLUGS } from "@shared/serviceSlugs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT = path.resolve(__dirname, "..");
 const DIST = path.join(ROOT, "dist", "public");
-const OUTPUT_DIR = path.join(DIST, "_prerender");
+// _prerender lives at dist/_prerender/ (sibling of dist/public/) so the
+// generated HTML is NOT directly served by express.static at /_prerender/...
+const OUTPUT_DIR = path.join(ROOT, "dist", "_prerender");
 
 const NAVIGATE_TIMEOUT_MS = 30_000;
 const HELMET_TIMEOUT_MS = 5_000;
+
+/**
+ * Resolve a working Chromium binary. Mirrors server/pdfGenerator.ts so the
+ * prerender step uses the same lookup the runtime PDF generator uses.
+ *
+ * Priority:
+ *   1. PUPPETEER_EXECUTABLE_PATH env var — set in the Dockerfile builder stage
+ *      so the alpine-installed chromium is picked up instead of puppeteer's
+ *      glibc-only bundled download.
+ *   2. System `chromium` / `chromium-browser` binary (via `which`).
+ *   3. Puppeteer's bundled Chrome — works on dev machines where the install
+ *      postinstall succeeded.
+ */
+function resolveChromiumPath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  try {
+    const sysChrm = execSync(
+      "which chromium 2>/dev/null || which chromium-browser 2>/dev/null",
+      { encoding: "utf-8", timeout: 3000 }
+    ).trim();
+    if (sysChrm) return sysChrm;
+  } catch {
+    // fall through to puppeteer's bundled binary
+  }
+  try {
+    return puppeteer.executablePath();
+  } catch {
+    return undefined;
+  }
+}
 
 const STATIC_ROUTES = [
   "/",
@@ -154,15 +189,33 @@ async function main(): Promise<void> {
 
   let browser: Browser | undefined;
   try {
+    const executablePath = resolveChromiumPath();
     try {
       browser = await puppeteer.launch({
         headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        executablePath,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+        ],
       });
     } catch (err) {
+      // Graceful degradation: log loudly, but don't fail the build. The
+      // server falls through to Phase 1's injectSeoIntoHtml for these
+      // routes, which is the SEO floor for non-JS crawlers.
       console.warn(
-        "[prerender] puppeteer.launch failed — build continues without prerender:",
-        (err as Error).message
+        "[prerender] puppeteer.launch failed — Phase 1 SSR-lite still serves these routes."
+      );
+      console.warn(
+        `[prerender]   executablePath tried: ${executablePath ?? "<bundled>"}`
+      );
+      console.warn(
+        `[prerender]   error: ${(err as Error).message}`
+      );
+      console.warn(
+        "[prerender]   To enable prerender in this environment, install chromium and set PUPPETEER_EXECUTABLE_PATH."
       );
       return;
     }

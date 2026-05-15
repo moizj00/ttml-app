@@ -109,10 +109,12 @@ export function serveStatic(app: Express) {
     return cachedTemplate;
   };
 
-  // Prerender cache — populated at startup from dist/public/_prerender/.
-  // Empty map if the prerender step was skipped (e.g. CI without Chromium);
-  // server falls through to injectSeoIntoHtml in that case.
-  const prerenderDir = path.resolve(distPath, "_prerender");
+  // Prerender cache — populated at startup from dist/_prerender/ (sibling of
+  // dist/public/, so the prerendered HTML is NOT directly addressable via the
+  // express.static middleware at e.g. /_prerender/pricing.html). Empty map if
+  // the prerender step was skipped (e.g. build env without Chromium); the
+  // server then falls through to injectSeoIntoHtml.
+  const prerenderDir = path.resolve(distPath, "..", "_prerender");
   let prerenderCache = new Map<string, string>();
   loadPrerenderCache(prerenderDir)
     .then((cache) => {
@@ -141,8 +143,9 @@ export function serveStatic(app: Express) {
         getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
 
-      // Strip query string + hash for the cache key — req.path is already that.
-      const prerendered = prerenderCache.get(req.path);
+      // Use the normalized pathname from resolveSpaRoute so trailing slashes
+      // (e.g. "/pricing/") hit the cache the same way "/pricing" does.
+      const prerendered = prerenderCache.get(route.pathname);
       if (prerendered) {
         res
           .status(route.statusCode)
