@@ -184,6 +184,14 @@ async function main(): Promise<void> {
 
   console.log(`[prerender] Starting prerender for ${ROUTES.length} routes`);
 
+  // Clear stale output from any previous build BEFORE anything else. This has
+  // to happen even when puppeteer.launch fails and we skip the prerender —
+  // otherwise loadPrerenderCache on the next server boot would happily serve
+  // last release's HTML for routes we don't even render anymore. vite build
+  // only clears dist/public, not our sibling dist/_prerender.
+  await fs.rm(OUTPUT_DIR, { recursive: true, force: true });
+  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+
   const server = await bootStaticServer();
   console.log(`[prerender] Static server listening on port ${server.port}`);
 
@@ -204,7 +212,8 @@ async function main(): Promise<void> {
     } catch (err) {
       // Graceful degradation: log loudly, but don't fail the build. The
       // server falls through to Phase 1's injectSeoIntoHtml for these
-      // routes, which is the SEO floor for non-JS crawlers.
+      // routes, which is the SEO floor for non-JS crawlers. The output dir
+      // was already cleared above so we ship a fresh-but-empty _prerender/.
       console.warn(
         "[prerender] puppeteer.launch failed — Phase 1 SSR-lite still serves these routes."
       );
@@ -219,13 +228,6 @@ async function main(): Promise<void> {
       );
       return;
     }
-
-    // Clear stale output from any previous build in this workspace. Without
-    // this, a route that was renamed or removed leaves a stale .html behind
-    // that loadPrerenderCache picks up on next server boot — leaking outdated
-    // marketing/legal copy to crawlers.
-    await fs.rm(OUTPUT_DIR, { recursive: true, force: true });
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
     let okCount = 0;
     const failures: { route: string; error: string }[] = [];
