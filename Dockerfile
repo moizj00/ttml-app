@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
 RUN pnpm run build
 
 # ─── Stage 2: Production ──────────────────────────────────────────────────────
-FROM node:22-alpine AS production
+FROM node:26-alpine AS production
 
 WORKDIR /app
 
