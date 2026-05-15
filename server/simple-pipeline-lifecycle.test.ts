@@ -6,11 +6,14 @@
  * client_approved lifecycle through the real DB, with the LLM SDK clients
  * mocked so the test is deterministic and free of API cost.
  *
- * The test is gated on SUPABASE_DATABASE_URL — without a real Postgres
- * connection it skips, so CI / dev environments without DB access don't
- * see a misleading failure. Run it manually with:
+ * The test is gated on a real Postgres connection string (SUPABASE_DIRECT_URL,
+ * SUPABASE_DATABASE_URL, or DATABASE_URL — anything other than the
+ * vitest.setup.ts stub URL counts). Without one, the suite skips so CI / dev
+ * environments without DB access don't see a misleading failure. Run it
+ * manually with any of:
  *
  *   SUPABASE_DATABASE_URL=postgresql://... pnpm test -- server/simple-pipeline-lifecycle.test.ts
+ *   DATABASE_URL=postgresql://...          pnpm test -- server/simple-pipeline-lifecycle.test.ts
  *
  * Covered behaviours (assertions in order):
  *   1. createLetterRequest places the letter in `submitted`.
@@ -115,11 +118,18 @@ import {
 import { eq } from "drizzle-orm";
 
 // ── Gate the suite on a real DB connection ─────────────────────────────────
-// vitest.setup.ts injects a fake DATABASE_URL ("postgresql://test:test@...")
-// when none is set, so we can't just look at DATABASE_URL alone. We require
-// SUPABASE_DATABASE_URL (or SUPABASE_DIRECT_URL) to be explicitly configured.
+// vitest.setup.ts injects a fake DATABASE_URL ("postgresql://test:test@localhost:5432/test")
+// when none is set, so we can't just check truthiness on DATABASE_URL. Accept
+// any of SUPABASE_DATABASE_URL / SUPABASE_DIRECT_URL / DATABASE_URL, but exclude
+// the vitest.setup.ts stub so the suite isn't run against a fake URL.
+const VITEST_STUB_DATABASE_URL =
+  "postgresql://test:test@localhost:5432/test";
+const databaseUrl =
+  process.env.SUPABASE_DIRECT_URL ||
+  process.env.SUPABASE_DATABASE_URL ||
+  process.env.DATABASE_URL;
 const HAS_REAL_DB = !!(
-  process.env.SUPABASE_DATABASE_URL || process.env.SUPABASE_DIRECT_URL
+  databaseUrl && databaseUrl !== VITEST_STUB_DATABASE_URL
 );
 
 describe.skipIf(!HAS_REAL_DB)(
