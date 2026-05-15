@@ -1,15 +1,25 @@
 /**
  * Canonical list of public service-page slugs.
  *
- * Single source of truth for:
- *   - server/sitemapRoute.ts — sitemap.xml generation
- *   - server/spaRoutes.ts — known route allowlist + per-route SEO
- *   - scripts/prerender.ts — build-time static prerender of /services/<slug>
- *   - client/public/llms.txt — link list for AI engines
+ * Live imports (TypeScript will fail to compile if this list drifts):
+ *   - server/sitemapRoute.ts — iterates SERVICE_SLUGS to emit sitemap entries
+ *   - scripts/prerender.ts — iterates SERVICE_SLUGS to drive puppeteer
+ *   - server/spaRoutes.ts — SERVICE_ROUTE_SEO is typed `Record<ServiceSlug, …>`,
+ *     so adding a slug here forces filling out the per-slug SEO map there
  *
- * When adding a new service: add the slug here AND the matching SEO entry
- * in server/spaRoutes.ts's SERVICE_ROUTE_SEO map AND the user-facing copy
- * in client/src/pages/services/serviceData.ts.
+ * Manually maintained (kept in sync by a test, not by import):
+ *   - client/public/llms.txt — static text file served as-is to AI engines.
+ *     Cannot import TypeScript. server/spaRoutes.test.ts asserts every
+ *     SERVICE_SLUGS entry appears as `/services/<slug>` in llms.txt, so the
+ *     test suite fails if you add a slug and forget to update the file.
+ *   - client/src/pages/services/serviceData.ts — user-facing copy for the
+ *     React service pages. Not test-enforced today; verify manually.
+ *
+ * Workflow for adding a new service slug:
+ *   1. Add the slug to SERVICE_SLUGS below.
+ *   2. tsc will fail until you add a SERVICE_ROUTE_SEO entry in spaRoutes.ts.
+ *   3. The llms.txt test will fail until you add the `/services/<slug>` link.
+ *   4. Add the React content in client/src/pages/services/serviceData.ts.
  */
 export const SERVICE_SLUGS = [
   "demand-letter",
