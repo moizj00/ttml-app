@@ -89,6 +89,8 @@ pipeline_failed → submitted (admin retry)
 - Any pipeline stage can reach `pipeline_failed` (except post-review stages)
 - The `ai_draft` version is immutable — attorney edits always create a new `attorney_edit` version
 
+> **Paywall surface details** (which statuses gate server-side truncation, which modal renders in each UI state, free-trial vs paid CTAs): see [`CLAUDE.md` §5 Payment Gate](CLAUDE.md#core-architectural-invariants) — the canonical home for that story.
+
 ---
 
 ## Module Map

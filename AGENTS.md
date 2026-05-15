@@ -553,5 +553,4 @@ Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-la
 | `docs/PRODUCTION_RUNBOOK.md` | Pre-deployment checklist, account provisioning, env matrix |
 | `docs/FEATURE_MAP.md` | Comprehensive feature inventory (Phases 1–110+) |
 | `docs/ROLE_AREA_MATRIX.md` | Full access matrix by role |
-| `CONTENT-STRATEGY.md` | SEO content strategy, blog calendar |
 | `todo.md` | Feature and bug tracking |

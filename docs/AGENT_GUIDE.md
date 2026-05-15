@@ -41,6 +41,7 @@ The source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
 **GOTCHA:** Current flow uses a 24h hold before subscriber visibility: `drafting` usually transitions to `ai_generation_completed_hidden`, then to `letter_released_to_subscriber` / upsell statuses, then to `pending_review` after checkout/payment. `generated_locked` remains as a compatibility status and can still appear in legacy paths.
 
 > Full status machine: [`AGENTS.md` §11.4](../AGENTS.md#114-letter-status-machine)
+> Canonical paywall-status story (which statuses gate truncation, what each UI surface looks like): [`CLAUDE.md` §5 Payment Gate](../CLAUDE.md#core-architectural-invariants).
 
 ### 1.5 tRPC — NOT REST
 The app uses tRPC v11 for almost all client-server communication. REST is only used for webhooks, streaming, and health checks.
