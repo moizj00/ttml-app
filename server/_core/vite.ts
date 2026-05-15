@@ -3,7 +3,13 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
+import { getCachedBlogPost } from "../blogCache";
 import { logger } from "../logger";
+import {
+  injectSeoIntoHtml,
+  resolveSpaRoute,
+  shouldReturnAsset404,
+} from "../spaRoutes";
 
 export async function setupVite(app: Express, server: Server) {
   // Dynamic import: vite and vite.config are only loaded in development mode.
@@ -12,7 +18,7 @@ export async function setupVite(app: Express, server: Server) {
   // which would crash because import.meta.dirname resolves to /app/dist where
   // package.json does not exist.
   const { createServer: createViteServer } = await import("vite");
-  // We use a dynamic import with a variable to prevent esbuild from 
+  // We use a dynamic import with a variable to prevent esbuild from
   // statically resolving and bundling the vite config file.
   const configPath = "../../vite.config.js";
   const { default: viteConfig } = await import(configPath);
@@ -35,6 +41,11 @@ export async function setupVite(app: Express, server: Server) {
     const url = req.originalUrl;
 
     try {
+      if (shouldReturnAsset404(url)) {
+        res.sendStatus(404);
+        return;
+      }
+
       const clientTemplate = path.resolve(
         import.meta.dirname,
         "../..",
@@ -49,7 +60,17 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      const route = await resolveSpaRoute(url, {
+        getBlogPost: getCachedBlogPost,
+      });
+      const html = injectSeoIntoHtml(page, route);
+      res
+        .status(route.statusCode)
+        .set({
+          "Content-Type": "text/html",
+          "X-Robots-Tag": route.seo.robots,
+        })
+        .end(html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -72,8 +93,32 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  // Fall through to index.html only for known SPA routes. Unknown paths get a
+  // real 404 status while still hydrating the styled NotFound page.
+  app.use("*", async (req, res, next) => {
+    try {
+      if (shouldReturnAsset404(req.originalUrl)) {
+        res.sendStatus(404);
+        return;
+      }
+
+      const route = await resolveSpaRoute(req.originalUrl, {
+        getBlogPost: getCachedBlogPost,
+      });
+      const template = await fs.promises.readFile(
+        path.resolve(distPath, "index.html"),
+        "utf-8"
+      );
+      const html = injectSeoIntoHtml(template, route);
+      res
+        .status(route.statusCode)
+        .set({
+          "Content-Type": "text/html",
+          "X-Robots-Tag": route.seo.robots,
+        })
+        .end(html);
+    } catch (err) {
+      next(err);
+    }
   });
 }
