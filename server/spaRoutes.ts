@@ -644,8 +644,18 @@ export async function resolveSpaRoute(
 
   const blogSlug = pathname.match(/^\/blog\/([^/]+)$/)?.[1];
   if (blogSlug) {
-    const post = options.getBlogPost
-      ? await options.getBlogPost(decodeURIComponent(blogSlug))
+    // Malformed percent-encoded sequences (e.g. `/blog/%E0%A4%A`) cause
+    // decodeURIComponent to throw URIError. Treat those as 404 rather than
+    // letting the error bubble up and surface as a 500 from Express — an
+    // unauthenticated attacker could otherwise generate noise with bad URLs.
+    let decodedSlug: string | null = null;
+    try {
+      decodedSlug = decodeURIComponent(blogSlug);
+    } catch {
+      decodedSlug = null;
+    }
+    const post = decodedSlug && options.getBlogPost
+      ? await options.getBlogPost(decodedSlug)
       : null;
     if (post) {
       return {

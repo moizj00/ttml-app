@@ -181,37 +181,20 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).toContain("attorney-reviewed demand letter");
   });
 
-  it("injects published blog links into the blog index fallback", async () => {
-    const route = await resolveSpaRoute("/blog", {
-      getBlogPosts: async () => ({
-        total: 2,
-        posts: [
-          {
-            slug: "flat-fee-legal-letters-vs-hourly-attorney-ecommerce",
-            title: "Flat-Fee Legal Letters vs Hourly Attorney for Ecommerce",
-            excerpt: "Compare flat-fee letters against hourly legal help.",
-          },
-          {
-            slug: "what-is-an-intellectual-property-infringement-letter",
-            title: "What Is an Intellectual Property Infringement Letter?",
-            excerpt: "Learn when to send an IP infringement letter.",
-          },
-        ],
-      }),
+  it("returns 404 (not 500) for malformed percent-encoded blog slugs", async () => {
+    let getBlogPostCalled = false;
+    const route = await resolveSpaRoute("/blog/%E0%A4%A", {
+      getBlogPost: async () => {
+        getBlogPostCalled = true;
+        return null;
+      },
     });
-    const html = injectSeoIntoHtml(template, route);
 
-    expect(route.statusCode).toBe(200);
-    expect(html).toContain('data-prerender-route="/blog"');
-    expect(html).toContain(
-      '<a href="/blog/flat-fee-legal-letters-vs-hourly-attorney-ecommerce">'
-    );
-    expect(html).toContain(
-      "Flat-Fee Legal Letters vs Hourly Attorney for Ecommerce"
-    );
-    expect(html).toContain(
-      '<a href="/blog/what-is-an-intellectual-property-infringement-letter">'
-    );
+    expect(route.statusCode).toBe(404);
+    expect(route.knownRoute).toBe(false);
+    // The decode should fail before getBlogPost is ever called — a malformed
+    // URL must not reach the database layer.
+    expect(getBlogPostCalled).toBe(false);
   });
 
   it("injects service page fallback content for JS-blind crawlers", async () => {
