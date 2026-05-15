@@ -73,12 +73,17 @@ Auth is a HYBRID system:
 ### 1.8 Pricing — Single Source of Truth
 All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
 
-- Single Letter: $299 one-time (1 letter)
+Active public plans:
 - Monthly: $299/month (4 letters)
 - Yearly: $2,400/year (8 letters total)
+
+Other constants:
 - Paid Revision: $20 (after the first free revision)
 - Affiliate discount: 20% (constant `AFFILIATE_DISCOUNT_PERCENT`)
 - Stripe amounts are in CENTS (multiply by 100)
+- Single Letter ($299 one-time) is `@deprecated` in `shared/pricing.ts` — kept
+  for legacy Stripe products and existing customers, NOT shown on the public
+  pricing page. Do not reintroduce as a new offering.
 
 ### 1.9 Environment Variables
 All env vars are accessed through `server/_core/env.ts` → `ENV` object.
