@@ -73,12 +73,17 @@ Auth is a HYBRID system:
 ### 1.8 Pricing — Single Source of Truth
 All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
 
-- Single Letter: $299 one-time (1 letter)
+Active public plans:
 - Monthly: $299/month (4 letters)
 - Yearly: $2,400/year (8 letters total)
+
+Other constants:
 - Paid Revision: $20 (after the first free revision)
 - Affiliate discount: 20% (constant `AFFILIATE_DISCOUNT_PERCENT`)
 - Stripe amounts are in CENTS (multiply by 100)
+- Single Letter ($299 one-time) is `@deprecated` in `shared/pricing.ts` — kept
+  for legacy Stripe products and existing customers, NOT shown on the public
+  pricing page. Do not reintroduce as a new offering.
 
 ### 1.9 Environment Variables
 All env vars are accessed through `server/_core/env.ts` → `ENV` object.
@@ -236,16 +241,11 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 - Always add `data-testid` to new UI elements for E2E testing
 - Test reports are in `test_reports/`
 
-### Test Credentials (seeded via `scripts/seed-test-users.ts`)
+### Test Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| subscriber | `test-subscriber@ttml.dev` | `TestPass123!` |
-| employee | `test-employee@ttml.dev` | `TestPass123!` |
-| attorney | `test-attorney@ttml.dev` | `TestPass123!` |
-| admin | `test-admin@ttml.dev` | `TestPass123!` |
+Four seeded accounts (subscriber / employee / attorney / admin at `@ttml.dev`) with password `TestPass123!`. Full table: [`AGENTS.md` §12.4](../AGENTS.md#124-test-credentials-seeded-via-scripts).
 
-The seed script is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
+The seed script (`scripts/seed-test-users.ts`) is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
 
 ### Route Protection (ProtectedRoute)
 

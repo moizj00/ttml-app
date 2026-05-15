@@ -13,10 +13,9 @@ AI-powered legal letter drafting with mandatory attorney review.
 | [`AGENTS.md`](AGENTS.md) | **Canonical agent reference** — tech stack, conventions, env vars, deployment |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Architecture — schema, routes, status machine, pipeline, module map |
 | [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Feature inventory (Phases 1–110+) |
-| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: OpenAI Research → Opus × 2 → Sonnet vetting) |
+| [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: OpenAI research → Claude Sonnet 4.5 draft/assembly → Claude Sonnet 4.6 vetting) |
 | [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) | Deployment checklist, account provisioning, env var matrix |
 | [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md) | Role-based access matrix |
-| [`SPEC_COMPLIANCE.md`](SPEC_COMPLIANCE.md) | Spec compliance tracking |
 | [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar |
 | [`todo.md`](todo.md) | Feature and bug tracking |
 
@@ -43,7 +42,7 @@ pnpm check          # TypeScript check (tsc --noEmit)
 - **Auth:** Supabase Auth (JWT)
 - **Payments:** Stripe
 - **Email:** Resend
-- **AI Pipeline:** OpenAI `gpt-4o-search-preview` → Anthropic Claude Opus/Sonnet
+- **AI Pipeline:** OpenAI `gpt-4o-search-preview` → Anthropic Claude Sonnet 4.5 (draft/assembly) → Claude Sonnet 4.6 (vetting)
 
 > Full stack details: [`AGENTS.md` §2](AGENTS.md#2-tech-stack).
 
@@ -136,10 +135,3 @@ After every implementation:
 2. `pnpm test` — all tests pass
 3. `pnpm build` — production build succeeds
 4. Verify no `ALLOWED_TRANSITIONS` regression in `shared/types/letter.ts`
-# Deployment trigger
-# Sun May 10 03:38:59 CST 2026
-# PORT fix Sun May 10 03:42:05 CST 2026
-# deploy fix 1778355976
-# openai fix 1778356241
-# env sync 1778357335
-# openai key update 1778357975

@@ -3,7 +3,7 @@
 > **Single source of truth** for the system's architecture, module boundaries, and ownership map.
 > **For agent conventions & gotchas:** See [`AGENTS.md`](AGENTS.md)  
 > **For deployment & env vars:** See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md)  
-> Last verified: April 2026.
+> Last verified: May 2026.
 
 ---
 
@@ -21,18 +21,18 @@
 | ---------------------- | ---------------------------------------------------------------------------------------- |
 | Frontend               | React 19, Vite 8, TypeScript, Tailwind CSS v4 (OKLCH), shadcn/ui, wouter, TanStack Query |
 | Backend                | Node.js, Express 4.21, tRPC 11.6, TypeScript                                             |
-| Database               | PostgreSQL on Supabase, Drizzle ORM 0.44                                                 |
+| Database               | PostgreSQL on Supabase, Drizzle ORM 0.45                                                 |
 | Auth                   | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security                 |
 | AI — Research          | OpenAI `gpt-4o-search-preview` (web search); Perplexity `sonar-pro` optional failover    |
-| AI — Drafting/Assembly | Anthropic Claude Opus                                                                    |
-| AI — Vetting           | Anthropic Claude Sonnet                                                                  |
+| AI — Drafting/Assembly | Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`)                               |
+| AI — Vetting           | Anthropic Claude Sonnet 4.6 (`claude-sonnet-4-6-20250514`)                               |
 | AI — Doc Analysis      | OpenAI GPT-4o                                                                            |
-| Payments               | Stripe (subscriptions + one-time $299 per-letter unlock)                                 |
+| Payments               | Stripe (Monthly $299, Yearly $2,400 — single-letter $299 deprecated)                     |
 | Email                  | Resend (17 transactional templates)                                                      |
 | Background Jobs        | pg-boss (PostgreSQL-native queue)                                                        |
 | Rate Limiting          | Upstash Redis via @upstash/ratelimit (fail-open for general; fail-closed for auth)       |
 | Rich Text Editing      | Tiptap (attorney review)                                                                 |
-| PDF Generation         | PDFKit (server-side)                                                                     |
+| PDF Generation         | Cloudflare Worker (Browser Rendering API) primary; local Puppeteer fallback              |
 | Monitoring             | Sentry (frontend + backend) + Pino structured logger                                     |
 | Deployment             | Railway (Docker multi-stage build)                                                       |
 
@@ -214,12 +214,12 @@ Root router: `server/routers/index.ts` → `appRouter`. Mounted at `/api/trpc`.
 
 Defined in `server/pipeline/orchestrator.ts`, with modular handlers in `server/pipeline/orchestration/`, `server/pipeline/research/`, and `server/pipeline/vetting/`.
 
-| Stage        | Model                          | Purpose                                                    | Output                |
-| ------------ | ------------------------------ | ---------------------------------------------------------- | --------------------- |
-| 1 — Research | OpenAI `gpt-4o-search-preview` | Web-grounded legal research (with `webSearchPreview` tool) | `ResearchPacket`      |
-| 2 — Drafting | Claude Opus                    | Initial letter draft from research + intake                | `DraftOutput`         |
-| 3 — Assembly | Claude Opus                    | Polish into formal legal letter format                     | Assembled letter text |
-| 4 — Vetting  | Claude Sonnet                  | Anti-hallucination, citation check, bloat removal          | Vetted letter text    |
+| Stage        | Model                              | Purpose                                                    | Output                |
+| ------------ | ---------------------------------- | ---------------------------------------------------------- | --------------------- |
+| 1 — Research | OpenAI `gpt-4o-search-preview`     | Web-grounded legal research (with `webSearchPreview` tool) | `ResearchPacket`      |
+| 2 — Drafting | Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`) | Initial letter draft from research + intake                | `DraftOutput`         |
+| 3 — Assembly | Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`) | Polish into formal legal letter format                     | Assembled letter text |
+| 4 — Vetting  | Claude Sonnet 4.6 (`claude-sonnet-4-6-20250514`) | Anti-hallucination, citation check, bloat removal          | Vetted letter text    |
 
 - **RAG/Recursive Learning:** Attorney-approved letters are embedded (OpenAI `text-embedding-3-small`) and used as reference examples in Stage 2 drafting.
 - **Research failover chain:** OpenAI gpt-4o-search-preview → Perplexity sonar-pro (if key set) → OpenAI stored prompt → Groq Llama 3.3 70B → synthetic fallback.
@@ -255,5 +255,3 @@ Each piece of information lives in **exactly one place**. This table maps every 
 | Feature inventory (all phases)                              | `docs/FEATURE_MAP.md`                | What's been built          |
 | SEO content strategy, blog calendar, keyword map            | `CONTENT-STRATEGY.md`                | Marketing/content          |
 | Complete task and bug tracking (all phases)                 | `todo.md`                            | Historical task log        |
-| Workflow summary (letter lifecycle, end-to-end)             | `docs/workflow_summary.md`           | Business logic walkthrough |
-| Feature inventory (all phases)                              | `docs/FEATURE_MAP.md`                | What's been built          |
