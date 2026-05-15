@@ -1,23 +1,11 @@
 import type { Express } from "express";
+import { SERVICE_SLUGS } from "@shared/serviceSlugs";
 import { getPublishedBlogSlugs } from "./db";
 import { logger } from "./logger";
 
 const BASE = "https://www.talk-to-my-lawyer.com";
 
 const LAST_UPDATED = new Date().toISOString().split("T")[0];
-
-const SERVICE_SLUGS = [
-  "demand-letter",
-  "cease-and-desist",
-  "security-deposit-letter",
-  "breach-of-contract-letter",
-  "employment-dispute-letter",
-  "personal-injury-demand-letter",
-  "landlord-harassment-cease-desist",
-  "non-compete-dispute-letter",
-  "intellectual-property-infringement-letter",
-  "small-claims-demand-letter",
-];
 
 const STATIC_URLS: { loc: string; changefreq: string; priority: string; lastmod: string }[] = [
   { loc: "/", changefreq: "weekly", priority: "1.0", lastmod: LAST_UPDATED },
