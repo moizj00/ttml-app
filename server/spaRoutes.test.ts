@@ -288,4 +288,58 @@ describe("SPA route metadata and 404 handling", () => {
     expect(shouldReturnAsset404("/favicon-32.png")).toBe(true);
     expect(shouldReturnAsset404("/pricing")).toBe(false);
   });
+
+  it("treats common bundler / font / image / probe extensions as asset 404s", () => {
+    for (const url of [
+      "/assets/index-abc123.js",
+      "/assets/index-abc123.css",
+      "/assets/index-abc123.map",
+      "/assets/font.woff2",
+      "/img/hero.webp",
+      "/icon.svg",
+      "/wp-login.php",
+      "/.env",
+      "/db-backup.sql",
+      "/secrets.yml",
+      "/archive.zip",
+    ]) {
+      expect(shouldReturnAsset404(url), url).toBe(true);
+    }
+  });
+
+  it("lets dotted slugs and HTML paths through to route resolution", () => {
+    // Blog/service slugs are editable strings; a slug like "my-post.html",
+    // "v1.2.3", or "report.draft" must NOT be short-circuited as an asset 404.
+    for (const url of [
+      "/blog/my-post.html",
+      "/blog/release-v1.2.3",
+      "/blog/report.draft",
+      "/services/intellectual-property-infringement-letter",
+      "/about.html",
+    ]) {
+      expect(shouldReturnAsset404(url), url).toBe(false);
+    }
+  });
+
+  it("routes /blog/my-post.html through resolveSpaRoute when the slug exists", async () => {
+    // Regression: previously /<anything>.<2-8 chars>/ was 404'd before route
+    // resolution ran, so dotted slugs broke crawlability and deep links.
+    const route = await resolveSpaRoute("/blog/my-post.html", {
+      getBlogPost: async slug => ({
+        slug,
+        title: "Why my-post.html still works",
+        excerpt: "Dotted slugs should resolve normally.",
+        content: "Dotted slugs should resolve.",
+        metaDescription: "Dotted slugs should resolve normally.",
+        publishedAt: new Date("2026-05-15T00:00:00.000Z"),
+        updatedAt: new Date("2026-05-15T00:00:00.000Z"),
+      }),
+    });
+
+    expect(route.statusCode).toBe(200);
+    expect(route.knownRoute).toBe(true);
+    expect(route.seo.canonical).toBe(
+      "https://www.talk-to-my-lawyer.com/blog/my-post.html"
+    );
+  });
 });

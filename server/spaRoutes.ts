@@ -561,10 +561,43 @@ export function isPrivatePath(pathname: string): boolean {
   );
 }
 
+// Extensions that, when seen on the catch-all SPA handler, are almost always
+// requests for static files that don't exist on disk — bundler artifacts that
+// were renamed across deploys, stale font/image references in cached HTML,
+// security probes (`/wp-login.php`, `/.env`, `/admin.sql`, etc.). express.static
+// (or Vite's dev middleware) handles real files BEFORE this catch-all runs,
+// so anything reaching here with one of these extensions is a 404 by definition.
+//
+// We do NOT include `.html` here: blog/service slugs are editable strings, so
+// a legitimate page like `/blog/my-post.html` must reach resolveSpaRoute (which
+// will look up the slug and return either a real page or a proper 404 with the
+// styled NotFound shell).
+const ASSET_404_EXTENSIONS = new Set([
+  // JS bundles, source maps, source files
+  "js", "mjs", "cjs", "ts", "tsx", "jsx", "map",
+  // Stylesheets
+  "css", "scss", "sass", "less",
+  // Fonts
+  "woff", "woff2", "ttf", "otf", "eot",
+  // Images
+  "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "avif", "bmp", "tiff",
+  // Media
+  "mp3", "mp4", "webm", "ogg", "wav", "m4a", "mov", "avi",
+  // Data + structured formats
+  "json", "xml",
+  // Probe targets / leaked configs
+  "php", "asp", "aspx", "jsp", "env", "git", "htaccess",
+  "sql", "bak", "log", "swp", "lock", "yml", "yaml", "ini", "conf",
+  // Archives
+  "tar", "gz", "zip", "rar", "7z",
+]);
+
 export function shouldReturnAsset404(originalUrl: string): boolean {
   const pathname = normalizePathname(originalUrl);
   const lastSegment = pathname.split("/").pop() ?? "";
-  return /\.[a-zA-Z0-9]{2,8}$/.test(lastSegment);
+  const match = lastSegment.match(/\.([a-zA-Z0-9]{1,8})$/);
+  if (!match) return false;
+  return ASSET_404_EXTENSIONS.has(match[1].toLowerCase());
 }
 
 export async function resolveSpaRoute(
