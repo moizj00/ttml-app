@@ -220,10 +220,15 @@ async function main(): Promise<void> {
       return;
     }
 
+    // Clear stale output from any previous build in this workspace. Without
+    // this, a route that was renamed or removed leaves a stale .html behind
+    // that loadPrerenderCache picks up on next server boot — leaking outdated
+    // marketing/legal copy to crawlers.
+    await fs.rm(OUTPUT_DIR, { recursive: true, force: true });
     await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
     let okCount = 0;
-    let failCount = 0;
+    const failures: { route: string; error: string }[] = [];
     for (const route of ROUTES) {
       const result = await prerenderOne(browser, server.port, route);
       if (result.ok) {
@@ -231,12 +236,28 @@ async function main(): Promise<void> {
         okCount++;
       } else {
         console.warn(`[prerender] ✗ ${result.route} — ${result.error}`);
-        failCount++;
+        failures.push({ route: result.route, error: result.error ?? "unknown" });
       }
     }
     console.log(
-      `[prerender] Done: ${okCount} ok, ${failCount} failed, output → ${OUTPUT_DIR}`
+      `[prerender] Done: ${okCount} ok, ${failures.length} failed, output → ${OUTPUT_DIR}`
     );
+
+    // Per-route failure is a real regression — those routes silently fall back
+    // to Phase 1 shell injection while we *thought* we shipped a prerender.
+    // Fail the build so the operator notices.
+    //
+    // This is distinct from puppeteer.launch failing entirely (handled above),
+    // which is an environment problem and stays a graceful skip so dev
+    // machines without Chromium still build.
+    if (failures.length > 0) {
+      const summary = failures
+        .map((f) => `  - ${f.route}: ${f.error}`)
+        .join("\n");
+      throw new Error(
+        `Prerender failed for ${failures.length} route(s):\n${summary}`
+      );
+    }
   } finally {
     if (browser) await browser.close();
     await server.close();
