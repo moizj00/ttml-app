@@ -1,3 +1,5 @@
+import { PRICING } from "@shared/pricing";
+
 const SITE_ORIGIN = "https://www.talk-to-my-lawyer.com";
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/logo-main.png`;
 
@@ -140,35 +142,35 @@ const SERVICE_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
   "demand-letter": {
     title: "Demand Letter Service - Attorney-Reviewed | Talk to My Lawyer",
     description:
-      "Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at $299. Delivered in minutes, not weeks.",
+      `Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at ${PRICING.monthly.priceDisplay}/mo. Delivered in minutes, not weeks.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "cease-and-desist": {
     title: "Cease & Desist Letter Service | Talk to My Lawyer",
     description:
-      "Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at $299.",
+      `Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "security-deposit-letter": {
     title: "Security Deposit Demand Letter | Talk to My Lawyer",
     description:
-      "Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "breach-of-contract-letter": {
     title: "Breach of Contract Letter | Talk to My Lawyer",
     description:
-      "Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "employment-dispute-letter": {
     title: "Employment Dispute Letter | Talk to My Lawyer",
     description:
-      "Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
@@ -182,7 +184,7 @@ const SERVICE_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
   "landlord-harassment-cease-desist": {
     title: "Landlord Harassment Cease & Desist Letter | Talk to My Lawyer",
     description:
-      "Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at $299.",
+      `Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },

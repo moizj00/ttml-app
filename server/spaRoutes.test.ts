@@ -60,9 +60,11 @@ describe("crawler-facing static files", () => {
     );
 
     expect(llms).toContain("# Talk to My Lawyer");
-    expect(llms).toContain("[Pricing](https://talk-to-my-lawyer.com/pricing)");
     expect(llms).toContain(
-      "[Demand letter](https://talk-to-my-lawyer.com/services/demand-letter)"
+      "[Pricing](https://www.talk-to-my-lawyer.com/pricing)"
+    );
+    expect(llms).toContain(
+      "[Demand letter](https://www.talk-to-my-lawyer.com/services/demand-letter)"
     );
   });
 
