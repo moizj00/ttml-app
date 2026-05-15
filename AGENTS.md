@@ -3,7 +3,7 @@
 
 > **Purpose:** Canonical reference for AI coding agents working on this codebase. Read this first before making any changes.
 > **Language:** All code, comments, and documentation are in English.
-> **Last updated:** 2026-05-07
+> **Last updated:** 2026-05-15
 
 ---
 
@@ -553,6 +553,5 @@ Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-la
 | `docs/PRODUCTION_RUNBOOK.md` | Pre-deployment checklist, account provisioning, env matrix |
 | `docs/FEATURE_MAP.md` | Comprehensive feature inventory (Phases 1–110+) |
 | `docs/ROLE_AREA_MATRIX.md` | Full access matrix by role |
-| `SPEC_COMPLIANCE.md` | Spec compliance tracking |
 | `CONTENT-STRATEGY.md` | SEO content strategy, blog calendar |
 | `todo.md` | Feature and bug tracking |
