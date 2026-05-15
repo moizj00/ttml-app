@@ -35,7 +35,7 @@ Detailed enforcement rules live in `skills/architectural-patterns/`. **Never vio
 
 4. **Super Admin Whitelist** — `SUPER_ADMIN_EMAILS` is hard-coded in `server/supabaseAuth.ts`. Cannot be modified via UI or API. Do not generate any endpoint or UI to assign the `admin` role dynamically.
 
-5. **Payment Gate** — Letter content is truncated server-side (~100 chars) in `server/routers/versions.ts` / `server/db/letter-versions.ts` when status is `generated_locked`. Transition to `pending_review` only after confirmed Stripe payment. Frontend blur via `client/src/components/LetterPaywall.tsx`.
+5. **Payment Gate** — Letter content is truncated server-side (~100 chars) in `server/routers/versions.ts` / `server/db/letter-versions.ts` whenever the letter sits in any `LOCKED_PREVIEW_STATUSES` from `shared/types/letter.ts` (24-hour hold `ai_generation_completed_hidden` + the upsell statuses; legacy `generated_locked` is retained for back-compat). Transition to `pending_review` only after confirmed Stripe payment. Frontend blur via `client/src/components/LetterPaywall.tsx`.
    - **Documented exception — first-letter free preview**: If `letter_requests.is_free_preview = TRUE` AND `letter_requests.free_preview_unlock_at <= NOW()` (24h cooling window elapsed), the subscriber router (`server/routers/letters/subscriber.ts`) sets `freePreviewUnlocked = true` and `getLetterVersionsByRequestId` returns the FULL un-truncated, un-redacted `ai_draft` tagged with `freePreview: true`. The client then renders `FreePreviewViewer` (non-selectable + DRAFT watermark) instead of `LetterPaywall`. The 24h window is stamped at submit time and enforced server-side — never trust the client. This is a lead-magnet path; the only CTA inside the viewer is "Submit For Attorney Review" which routes to `/pricing` for subscription. Subsequent letters follow the normal paywall flow.
    - **Admin force-unlock override**: Admins can collapse the 24h cooling window via the `forceFreePreviewUnlock` tRPC mutation (`server/routers/admin/letters.ts`). It sets `free_preview_unlock_at = NOW()`, logs a `free_preview_force_unlock` review action, and invokes the shared dispatcher `dispatchFreePreviewIfReady` in `server/freePreviewEmailCron.ts`. The "your preview is ready" email fires immediately if the draft is already saved; if the pipeline is still running it fires the moment the draft lands (pipeline finalize in `simple.ts` / `graph/nodes/finalize.ts` / `fallback.ts` also calls the dispatcher). The dispatcher uses an atomic `UPDATE ... RETURNING` claim on `free_preview_email_sent_at` so cron, pipeline, and admin paths cannot double-send; a failed send rolls the stamp back so the cron retries. Non-free-preview letters cannot use this path — the mutation rejects with `BAD_REQUEST`.
 
@@ -113,21 +113,13 @@ Almost all client-server calls use tRPC v11. REST is **only** used for:
 
 ### Do Not Modify Without Cause
 
-- `package.json` scripts — ask first
-- `vite.config.ts` — aliases, chunks, plugins are pre-configured, do NOT add a proxy
-- `server/_core/vite.ts` — dev/prod server integration
-- `drizzle.config.ts` — pre-configured for Supabase PostgreSQL
-- `tsconfig.json` — path aliases are set
+`package.json` scripts, `vite.config.ts`, `server/_core/vite.ts`, `drizzle.config.ts`, `tsconfig.json` — full list and rationale in [`AGENTS.md` §16](AGENTS.md#16-critical-gotchas-for-agents).
 
 ---
 
 ## Path Aliases
 
-| Alias | Resolves to |
-| ----- | ----------- |
-| `@/*` | `client/src/*` |
-| `@shared/*` | `shared/*` |
-| `@assets/*` | `attached_assets/*` |
+Canonical table in [`AGENTS.md` §6](AGENTS.md#6-path-aliases) — `@/*` → `client/src/*`, `@shared/*` → `shared/*`, `@assets/*` → `attached_assets/*`.
 
 ---
 
@@ -151,5 +143,4 @@ Test files: `server/*.test.ts` (phase-numbered, e.g. `phase23.test.ts`). Run a s
 pnpm test -- server/phase67-pricing.test.ts
 ```
 
-Test credentials (seeded via `scripts/seed-test-users.ts`, password `TestPass123!`):
-`test-subscriber@ttml.dev` / `test-employee@ttml.dev` / `test-attorney@ttml.dev` / `test-admin@ttml.dev`
+Seeded test credentials (subscriber / employee / attorney / admin at `@ttml.dev`, password `TestPass123!`) — see [`AGENTS.md` §12.4](AGENTS.md#124-test-credentials-seeded-via-scripts) for the full table.
