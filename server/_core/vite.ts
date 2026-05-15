@@ -10,6 +10,7 @@ import {
   resolveSpaRoute,
   shouldReturnAsset404,
 } from "../spaRoutes";
+import { loadPrerenderCache } from "./prerenderCache";
 
 export async function setupVite(app: Express, server: Server) {
   // Dynamic import: vite and vite.config are only loaded in development mode.
@@ -93,7 +94,8 @@ export function serveStatic(app: Express) {
   }
 
   // { index: false } prevents express.static from serving index.html directly
-  // for requests to "/" so that every HTML response goes through injectSeoIntoHtml.
+  // for requests to "/" so that every HTML response goes through the
+  // prerender cache + injectSeoIntoHtml pipeline.
   app.use(express.static(distPath, { index: false }));
 
   // Cache index.html in memory — it is immutable for the lifetime of the process
@@ -106,6 +108,26 @@ export function serveStatic(app: Express) {
     }
     return cachedTemplate;
   };
+
+  // Prerender cache — populated at startup from dist/_prerender/ (sibling of
+  // dist/public/, so the prerendered HTML is NOT directly addressable via the
+  // express.static middleware at e.g. /_prerender/pricing.html). Empty map if
+  // the prerender step was skipped (e.g. build env without Chromium); the
+  // server then falls through to injectSeoIntoHtml.
+  const prerenderDir = path.resolve(distPath, "..", "_prerender");
+  let prerenderCache = new Map<string, string>();
+  loadPrerenderCache(prerenderDir)
+    .then((cache) => {
+      prerenderCache = cache;
+      if (cache.size > 0) {
+        logger.info(
+          `[prerender] Loaded ${cache.size} prerendered routes from ${prerenderDir}`
+        );
+      }
+    })
+    .catch((err) => {
+      logger.warn({ err }, "[prerender] Failed to load prerender cache");
+    });
 
   // Fall through to index.html only for known SPA routes. Unknown paths get a
   // real 404 status while still hydrating the styled NotFound page.
@@ -120,6 +142,22 @@ export function serveStatic(app: Express) {
         getBlogPost: getCachedBlogPost,
         getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
+
+      // Use the normalized pathname from resolveSpaRoute so trailing slashes
+      // (e.g. "/pricing/") hit the cache the same way "/pricing" does.
+      const prerendered = prerenderCache.get(route.pathname);
+      if (prerendered) {
+        res
+          .status(route.statusCode)
+          .set({
+            "Content-Type": "text/html",
+            "X-Robots-Tag": route.seo.robots,
+            "X-Prerender": "1",
+          })
+          .end(prerendered);
+        return;
+      }
+
       const template = await loadTemplate();
       const html = injectSeoIntoHtml(template, route);
       res

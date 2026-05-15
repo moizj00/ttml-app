@@ -9,6 +9,29 @@ WORKDIR /app
 # in Railway's build environment — exit code 137).
 RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
 
+# Install Chromium so scripts/prerender.ts can drive headless rendering of the
+# public marketing + service pages during `pnpm build`. Puppeteer's bundled
+# Chromium is a glibc binary that does not run on Alpine's musl libc, so we
+# point puppeteer at the apk-installed binary instead and skip the broken
+# download. nss / freetype / harfbuzz / ca-certificates / ttf-freefont are the
+# minimum runtime libs Chromium needs to render an HTML page.
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont
+# Fail fast if Alpine's chromium package layout drifts. Without this guard,
+# a missing binary would only surface at `pnpm run _prerender` time as a
+# puppeteer.launch error, where the script gracefully skips and the image
+# ships with no prerender output.
+RUN test -x /usr/bin/chromium-browser \
+    || test -x /usr/bin/chromium \
+    || (echo "FATAL: chromium binary missing after apk install" && exit 1)
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Install dependencies first (layer-cached unless lockfile changes)
 COPY package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/

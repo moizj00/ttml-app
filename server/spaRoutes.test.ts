@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { SERVICE_SLUGS } from "@shared/serviceSlugs";
 import {
   injectSeoIntoHtml,
   resolveSpaRoute,
@@ -66,6 +67,28 @@ describe("crawler-facing static files", () => {
     expect(llms).toContain(
       "[Demand letter](https://www.talk-to-my-lawyer.com/services/demand-letter)"
     );
+  });
+
+  // Drift catch: llms.txt is a static text file that can't import
+  // SERVICE_SLUGS, so we use a test to enforce alignment. If you add a slug
+  // to shared/serviceSlugs.ts without adding a /services/<slug> link to
+  // llms.txt, this test fails.
+  it("llms.txt links every service slug from shared/serviceSlugs.ts", async () => {
+    const llms = await fs.readFile(
+      path.join(repoRoot, "client", "public", "llms.txt"),
+      "utf8"
+    );
+
+    const missing: string[] = [];
+    for (const slug of SERVICE_SLUGS) {
+      const expectedUrl = `https://www.talk-to-my-lawyer.com/services/${slug}`;
+      if (!llms.includes(expectedUrl)) missing.push(slug);
+    }
+
+    expect(
+      missing,
+      `Missing /services/<slug> entries in llms.txt: ${missing.join(", ")}`
+    ).toEqual([]);
   });
 
   it("aligns robots.txt to search=yes and ai-train=no", async () => {

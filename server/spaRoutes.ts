@@ -1,4 +1,5 @@
 import { PRICING } from "@shared/pricing";
+import { type ServiceSlug } from "@shared/serviceSlugs";
 
 const SITE_ORIGIN = "https://www.talk-to-my-lawyer.com";
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/logo-main.png`;
@@ -138,7 +139,11 @@ const PUBLIC_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
   },
 };
 
-const SERVICE_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
+// Typed as Record<ServiceSlug, ...> so adding a slug to shared/serviceSlugs.ts
+// fails TypeScript here until per-slug SEO copy is filled in. This is the
+// structural enforcement that keeps SERVICE_ROUTE_SEO aligned with the
+// canonical slug list.
+const SERVICE_ROUTE_SEO: Record<ServiceSlug, Omit<RouteSeo, "canonical">> = {
   "demand-letter": {
     title: "Demand Letter Service - Attorney-Reviewed | Talk to My Lawyer",
     description:
@@ -650,7 +655,10 @@ export async function resolveSpaRoute(
 
   const serviceSlug = pathname.match(/^\/services\/([^/]+)$/)?.[1];
   if (serviceSlug) {
-    const serviceSeo = SERVICE_ROUTE_SEO[serviceSlug];
+    // SERVICE_ROUTE_SEO is keyed on the ServiceSlug union — narrow the runtime
+    // string by membership instead of casting, so unknown slugs fall through
+    // to the 404 path cleanly.
+    const serviceSeo = (SERVICE_ROUTE_SEO as Record<string, Omit<RouteSeo, "canonical"> | undefined>)[serviceSlug];
     if (serviceSeo) {
       return {
         pathname,
