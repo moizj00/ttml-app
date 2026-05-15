@@ -3,7 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { getCachedBlogPost } from "../blogCache";
+import { getCachedBlogPost, getCachedBlogPosts } from "../blogCache";
 import { logger } from "../logger";
 import {
   injectSeoIntoHtml,
@@ -62,6 +62,7 @@ export async function setupVite(app: Express, server: Server) {
       const page = await vite.transformIndexHtml(url, template);
       const route = await resolveSpaRoute(url, {
         getBlogPost: getCachedBlogPost,
+        getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
       const html = injectSeoIntoHtml(page, route);
       res
@@ -91,7 +92,20 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // { index: false } prevents express.static from serving index.html directly
+  // for requests to "/" so that every HTML response goes through injectSeoIntoHtml.
+  app.use(express.static(distPath, { index: false }));
+
+  // Cache index.html in memory — it is immutable for the lifetime of the process
+  // in production, so there is no need to hit the filesystem on every request.
+  const indexHtmlPath = path.resolve(distPath, "index.html");
+  let cachedTemplate: string | null = null;
+  const loadTemplate = async (): Promise<string> => {
+    if (cachedTemplate === null) {
+      cachedTemplate = await fs.promises.readFile(indexHtmlPath, "utf-8");
+    }
+    return cachedTemplate;
+  };
 
   // Fall through to index.html only for known SPA routes. Unknown paths get a
   // real 404 status while still hydrating the styled NotFound page.
@@ -104,11 +118,9 @@ export function serveStatic(app: Express) {
 
       const route = await resolveSpaRoute(req.originalUrl, {
         getBlogPost: getCachedBlogPost,
+        getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
-      const template = await fs.promises.readFile(
-        path.resolve(distPath, "index.html"),
-        "utf-8"
-      );
+      const template = await loadTemplate();
       const html = injectSeoIntoHtml(template, route);
       res
         .status(route.statusCode)

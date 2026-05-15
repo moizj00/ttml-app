@@ -3,25 +3,25 @@
 > Attorney-drafted legal letters for individuals and small businesses in California. Flat-fee, attorney-reviewed, delivered in minutes. Your first letter is free.
 
 ## Core pages
-- [Pricing](https://talk-to-my-lawyer.com/pricing): Plans and costs.
-- [FAQ](https://talk-to-my-lawyer.com/faq): Common questions.
-- [Services overview](https://talk-to-my-lawyer.com/services): All letter types.
-- [Document analyzer](https://talk-to-my-lawyer.com/analyze): Free legal document analysis.
+- [Pricing](https://www.talk-to-my-lawyer.com/pricing): Plans and costs.
+- [FAQ](https://www.talk-to-my-lawyer.com/faq): Common questions.
+- [Services overview](https://www.talk-to-my-lawyer.com/services): All letter types.
+- [Document analyzer](https://www.talk-to-my-lawyer.com/analyze): Free legal document analysis.
 
 ## Letter services
-- [Demand letter](https://talk-to-my-lawyer.com/services/demand-letter)
-- [Cease and desist](https://talk-to-my-lawyer.com/services/cease-and-desist)
-- [Breach of contract](https://talk-to-my-lawyer.com/services/breach-of-contract-letter)
-- [Security deposit](https://talk-to-my-lawyer.com/services/security-deposit-letter)
-- [Employment dispute](https://talk-to-my-lawyer.com/services/employment-dispute-letter)
-- [Personal injury demand](https://talk-to-my-lawyer.com/services/personal-injury-demand-letter)
-- [Landlord harassment](https://talk-to-my-lawyer.com/services/landlord-harassment-cease-desist)
-- [Non-compete dispute](https://talk-to-my-lawyer.com/services/non-compete-dispute-letter)
-- [IP infringement](https://talk-to-my-lawyer.com/services/intellectual-property-infringement-letter)
-- [Small claims demand](https://talk-to-my-lawyer.com/services/small-claims-demand-letter)
+- [Demand letter](https://www.talk-to-my-lawyer.com/services/demand-letter)
+- [Cease and desist](https://www.talk-to-my-lawyer.com/services/cease-and-desist)
+- [Breach of contract](https://www.talk-to-my-lawyer.com/services/breach-of-contract-letter)
+- [Security deposit](https://www.talk-to-my-lawyer.com/services/security-deposit-letter)
+- [Employment dispute](https://www.talk-to-my-lawyer.com/services/employment-dispute-letter)
+- [Personal injury demand](https://www.talk-to-my-lawyer.com/services/personal-injury-demand-letter)
+- [Landlord harassment](https://www.talk-to-my-lawyer.com/services/landlord-harassment-cease-desist)
+- [Non-compete dispute](https://www.talk-to-my-lawyer.com/services/non-compete-dispute-letter)
+- [IP infringement](https://www.talk-to-my-lawyer.com/services/intellectual-property-infringement-letter)
+- [Small claims demand](https://www.talk-to-my-lawyer.com/services/small-claims-demand-letter)
 
 ## Blog
-- [Competitor selling knockoffs - what to do](https://talk-to-my-lawyer.com/blog/competitor-selling-knockoffs-what-to-do)
-- [Flat-fee vs hourly attorney for ecommerce](https://talk-to-my-lawyer.com/blog/flat-fee-legal-letters-vs-hourly-attorney-ecommerce)
-- [Amazon sellers stopping counterfeits with a legal letter](https://talk-to-my-lawyer.com/blog/amazon-sellers-stop-counterfeit-listings-legal-letter)
-- [What is an IP infringement letter](https://talk-to-my-lawyer.com/blog/what-is-an-intellectual-property-infringement-letter)
+- [Competitor selling knockoffs - what to do](https://www.talk-to-my-lawyer.com/blog/competitor-selling-knockoffs-what-to-do)
+- [Flat-fee vs hourly attorney for ecommerce](https://www.talk-to-my-lawyer.com/blog/flat-fee-legal-letters-vs-hourly-attorney-ecommerce)
+- [Amazon sellers stopping counterfeits with a legal letter](https://www.talk-to-my-lawyer.com/blog/amazon-sellers-stop-counterfeit-listings-legal-letter)
+- [What is an IP infringement letter](https://www.talk-to-my-lawyer.com/blog/what-is-an-intellectual-property-infringement-letter)

@@ -16,7 +16,9 @@ User-agent: CCBot
 User-agent: Bytespider
 Disallow: /
 
-# Search engines and AI retrieval/answer bots: public pages are discoverable.
+# Search engines, AI retrieval/answer bots, social previews, archive bots, and
+# the default crawler group: public pages are discoverable, app/private/API
+# surfaces are not.
 User-agent: Googlebot
 User-agent: Googlebot-Image
 User-agent: Googlebot-News
@@ -38,8 +40,6 @@ User-agent: YouBot
 User-agent: Amazonbot
 User-agent: Diffbot
 User-agent: cohere-ai
-
-# Social link-preview bots.
 User-agent: Twitterbot
 User-agent: facebookexternalhit
 User-agent: facebookcatalog
@@ -51,8 +51,6 @@ User-agent: TelegramBot
 User-agent: WhatsApp
 User-agent: Pinterestbot
 User-agent: redditbot
-
-# Archive and uptime monitoring.
 User-agent: ia_archiver
 User-agent: Wayback
 User-agent: archive.org_bot
@@ -60,10 +58,7 @@ User-agent: UptimeRobot
 User-agent: Pingdom.com_bot
 User-agent: Site24x7
 User-agent: StatusCake
-
-# Default: every other well-behaved crawler may index public pages only.
 User-agent: *
-
 Allow: /
 Allow: /blog
 Allow: /blog/
@@ -86,7 +81,6 @@ Allow: /logo-icon-192.png
 Allow: /logo.png
 Allow: /sitemap.xml
 Allow: /robots.txt
-
 Disallow: /admin
 Disallow: /admin/
 Disallow: /dashboard

@@ -1,3 +1,5 @@
+import { PRICING } from "@shared/pricing";
+
 const SITE_ORIGIN = "https://www.talk-to-my-lawyer.com";
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/logo-main.png`;
 
@@ -8,6 +10,14 @@ export interface SeoBlogPost {
   content?: string | null;
   metaDescription?: string | null;
   ogImageUrl?: string | null;
+  publishedAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+}
+
+export interface SeoBlogListPost {
+  slug: string;
+  title: string;
+  excerpt: string | null;
   publishedAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }
@@ -35,6 +45,7 @@ export interface SpaRouteResolution {
 
 export interface ResolveSpaRouteOptions {
   getBlogPost?: (slug: string) => Promise<SeoBlogPost | null>;
+  getBlogPosts?: () => Promise<{ posts: SeoBlogListPost[]; total: number }>;
 }
 
 const INDEX_ROBOTS = "index, follow, max-image-preview:large";
@@ -131,35 +142,35 @@ const SERVICE_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
   "demand-letter": {
     title: "Demand Letter Service - Attorney-Reviewed | Talk to My Lawyer",
     description:
-      "Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at $299. Delivered in minutes, not weeks.",
+      `Get a professional demand letter drafted and reviewed by a licensed attorney. Starting at ${PRICING.monthly.priceDisplay}/mo. Delivered in minutes, not weeks.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "cease-and-desist": {
     title: "Cease & Desist Letter Service | Talk to My Lawyer",
     description:
-      "Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at $299.",
+      `Send a professional cease and desist letter to stop harassment, IP theft, or defamation. Attorney-reviewed, starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "security-deposit-letter": {
     title: "Security Deposit Demand Letter | Talk to My Lawyer",
     description:
-      "Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Get your security deposit back with a professional demand letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "breach-of-contract-letter": {
     title: "Breach of Contract Letter | Talk to My Lawyer",
     description:
-      "Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Enforce your agreement with a professional breach of contract letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
   "employment-dispute-letter": {
     title: "Employment Dispute Letter | Talk to My Lawyer",
     description:
-      "Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at $299.",
+      `Protect your workplace rights with a professional employment dispute letter. Attorney-reviewed, California-focused. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
@@ -173,7 +184,7 @@ const SERVICE_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
   "landlord-harassment-cease-desist": {
     title: "Landlord Harassment Cease & Desist Letter | Talk to My Lawyer",
     description:
-      "Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at $299.",
+      `Stop landlord harassment with a professional cease and desist letter. Attorney-reviewed, citing California tenant protection laws. Starting at ${PRICING.monthly.priceDisplay}/mo.`,
     robots: INDEX_ROBOTS,
     ogType: "website",
   },
@@ -436,6 +447,34 @@ function buildFallbackHtml(
   ].join("");
 }
 
+function fallbackLinkListHtml(
+  heading: string,
+  links: { href: string; title: string; description?: string | null }[]
+): string {
+  if (links.length === 0) return "";
+
+  const items = links
+    .map(link => {
+      const description = link.description?.trim()
+        ? `<p>${escapeHtmlText(link.description.trim())}</p>`
+        : "";
+      return [
+        "<li>",
+        `<a href="${escapeHtmlAttribute(link.href)}">${escapeHtmlText(link.title)}</a>`,
+        description,
+        "</li>",
+      ].join("");
+    })
+    .join("");
+
+  return [
+    "<section>",
+    `<h2>${escapeHtmlText(heading)}</h2>`,
+    `<ul>${items}</ul>`,
+    "</section>",
+  ].join("");
+}
+
 function formatIsoDate(
   value: Date | string | null | undefined
 ): string | undefined {
@@ -479,16 +518,88 @@ function blogPostFallbackHtml(pathname: string, post: SeoBlogPost): string {
   );
 }
 
+function blogIndexFallbackHtml(
+  pathname: string,
+  seo: Omit<RouteSeo, "canonical">,
+  posts: SeoBlogListPost[]
+): string {
+  return buildFallbackHtml(
+    pathname,
+    titleToHeading(seo.ogTitle ?? seo.title),
+    seo.description,
+    fallbackLinkListHtml(
+      "Recent legal guides",
+      posts.map(post => ({
+        href: `/blog/${post.slug}`,
+        title: post.title,
+        description: post.excerpt,
+      }))
+    )
+  );
+}
+
+function servicesIndexFallbackHtml(
+  pathname: string,
+  seo: Omit<RouteSeo, "canonical">
+): string {
+  return buildFallbackHtml(
+    pathname,
+    titleToHeading(seo.ogTitle ?? seo.title),
+    seo.description,
+    fallbackLinkListHtml(
+      "Letter services",
+      Object.entries(SERVICE_ROUTE_SEO).map(([slug, serviceSeo]) => ({
+        href: `/services/${slug}`,
+        title: titleToHeading(serviceSeo.title),
+        description: serviceSeo.description,
+      }))
+    )
+  );
+}
+
 export function isPrivatePath(pathname: string): boolean {
   return PRIVATE_PATH_PREFIXES.some(
     prefix => pathname === prefix || pathname.startsWith(prefix)
   );
 }
 
+// Extensions that, when seen on the catch-all SPA handler, are almost always
+// requests for static files that don't exist on disk — bundler artifacts that
+// were renamed across deploys, stale font/image references in cached HTML,
+// security probes (`/wp-login.php`, `/.env`, `/admin.sql`, etc.). express.static
+// (or Vite's dev middleware) handles real files BEFORE this catch-all runs,
+// so anything reaching here with one of these extensions is a 404 by definition.
+//
+// We do NOT include `.html` here: blog/service slugs are editable strings, so
+// a legitimate page like `/blog/my-post.html` must reach resolveSpaRoute (which
+// will look up the slug and return either a real page or a proper 404 with the
+// styled NotFound shell).
+const ASSET_404_EXTENSIONS = new Set([
+  // JS bundles, source maps, source files
+  "js", "mjs", "cjs", "ts", "tsx", "jsx", "map",
+  // Stylesheets
+  "css", "scss", "sass", "less",
+  // Fonts
+  "woff", "woff2", "ttf", "otf", "eot",
+  // Images
+  "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "avif", "bmp", "tiff",
+  // Media
+  "mp3", "mp4", "webm", "ogg", "wav", "m4a", "mov", "avi",
+  // Data + structured formats
+  "json", "xml",
+  // Probe targets / leaked configs
+  "php", "asp", "aspx", "jsp", "env", "git", "htaccess",
+  "sql", "bak", "log", "swp", "lock", "yml", "yaml", "ini", "conf",
+  // Archives
+  "tar", "gz", "zip", "rar", "7z",
+]);
+
 export function shouldReturnAsset404(originalUrl: string): boolean {
   const pathname = normalizePathname(originalUrl);
   const lastSegment = pathname.split("/").pop() ?? "";
-  return /\.[a-zA-Z0-9]{2,8}$/.test(lastSegment);
+  const match = lastSegment.match(/\.([a-zA-Z0-9]{1,8})$/);
+  if (!match) return false;
+  return ASSET_404_EXTENSIONS.has(match[1].toLowerCase());
 }
 
 export async function resolveSpaRoute(
@@ -513,16 +624,27 @@ export async function resolveSpaRoute(
 
   const staticSeo = PUBLIC_ROUTE_SEO[pathname];
   if (staticSeo) {
+    const blogPosts =
+      pathname === "/blog" && options.getBlogPosts
+        ? (await options.getBlogPosts()).posts
+        : [];
+    const fallbackHtml =
+      pathname === "/blog"
+        ? blogIndexFallbackHtml(pathname, staticSeo, blogPosts)
+        : pathname === "/services"
+          ? servicesIndexFallbackHtml(pathname, staticSeo)
+          : buildFallbackHtml(
+              pathname,
+              titleToHeading(staticSeo.ogTitle ?? staticSeo.title),
+              staticSeo.description
+            );
+
     return {
       pathname,
       knownRoute: true,
       statusCode: 200,
       seo: withCanonical(pathname, staticSeo),
-      fallbackHtml: buildFallbackHtml(
-        pathname,
-        titleToHeading(staticSeo.ogTitle ?? staticSeo.title),
-        staticSeo.description
-      ),
+      fallbackHtml,
     };
   }
 
