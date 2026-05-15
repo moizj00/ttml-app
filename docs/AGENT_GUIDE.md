@@ -241,16 +241,11 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 - Always add `data-testid` to new UI elements for E2E testing
 - Test reports are in `test_reports/`
 
-### Test Credentials (seeded via `scripts/seed-test-users.ts`)
+### Test Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| subscriber | `test-subscriber@ttml.dev` | `TestPass123!` |
-| employee | `test-employee@ttml.dev` | `TestPass123!` |
-| attorney | `test-attorney@ttml.dev` | `TestPass123!` |
-| admin | `test-admin@ttml.dev` | `TestPass123!` |
+Four seeded accounts (subscriber / employee / attorney / admin at `@ttml.dev`) with password `TestPass123!`. Full table: [`AGENTS.md` §12.4](../AGENTS.md#124-test-credentials-seeded-via-scripts).
 
-The seed script is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
+The seed script (`scripts/seed-test-users.ts`) is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
 
 ### Route Protection (ProtectedRoute)
 
