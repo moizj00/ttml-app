@@ -9,6 +9,40 @@ import {
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
+function parseRobotsGroups(robots: string) {
+  return robots
+    .split(/\n\s*\n/g)
+    .map(group => {
+      const userAgents: string[] = [];
+      const directives: string[] = [];
+
+      for (const line of group.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+
+        const userAgent = trimmed.match(/^User-agent:\s*(.+)$/i)?.[1];
+        if (userAgent) {
+          userAgents.push(userAgent);
+          continue;
+        }
+
+        directives.push(trimmed);
+      }
+
+      return { userAgents, directives };
+    })
+    .filter(group => group.userAgents.length > 0);
+}
+
+function getRobotsDirectivesFor(robots: string, userAgent: string) {
+  const groups = parseRobotsGroups(robots);
+  return (
+    groups.find(group =>
+      group.userAgents.some(agent => agent.toLowerCase() === userAgent.toLowerCase())
+    )?.directives ?? []
+  );
+}
+
 describe("crawler-facing static files", () => {
   it("removes the obsolete meta keywords tag from the raw HTML shell", async () => {
     const html = await fs.readFile(
@@ -53,6 +87,26 @@ describe("crawler-facing static files", () => {
     expect(robots).toMatch(/User-agent:\s*anthropic-ai[\s\S]*?Disallow:\s*\//);
     expect(robots).toMatch(/User-agent:\s*CCBot[\s\S]*?Disallow:\s*\//);
     expect(robots).toMatch(/User-agent:\s*Bytespider[\s\S]*?Disallow:\s*\//);
+  });
+
+  it("keeps named retrieval crawlers in a group with private-path disallows", async () => {
+    const robots = await fs.readFile(
+      path.join(repoRoot, "client", "public", "robots.txt"),
+      "utf8"
+    );
+
+    for (const userAgent of [
+      "OAI-SearchBot",
+      "ChatGPT-User",
+      "PerplexityBot",
+      "ClaudeBot",
+      "Claude-Web",
+    ]) {
+      const directives = getRobotsDirectivesFor(robots, userAgent);
+      expect(directives).toContain("Allow: /");
+      expect(directives).toContain("Disallow: /admin");
+      expect(directives).toContain("Disallow: /api/");
+    }
   });
 });
 
@@ -127,6 +181,39 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).toContain("attorney-reviewed demand letter");
   });
 
+  it("injects published blog links into the blog index fallback", async () => {
+    const route = await resolveSpaRoute("/blog", {
+      getBlogPosts: async () => ({
+        total: 2,
+        posts: [
+          {
+            slug: "flat-fee-legal-letters-vs-hourly-attorney-ecommerce",
+            title: "Flat-Fee Legal Letters vs Hourly Attorney for Ecommerce",
+            excerpt: "Compare flat-fee letters against hourly legal help.",
+          },
+          {
+            slug: "what-is-an-intellectual-property-infringement-letter",
+            title: "What Is an Intellectual Property Infringement Letter?",
+            excerpt: "Learn when to send an IP infringement letter.",
+          },
+        ],
+      }),
+    });
+    const html = injectSeoIntoHtml(template, route);
+
+    expect(route.statusCode).toBe(200);
+    expect(html).toContain('data-prerender-route="/blog"');
+    expect(html).toContain(
+      '<a href="/blog/flat-fee-legal-letters-vs-hourly-attorney-ecommerce">'
+    );
+    expect(html).toContain(
+      "Flat-Fee Legal Letters vs Hourly Attorney for Ecommerce"
+    );
+    expect(html).toContain(
+      '<a href="/blog/what-is-an-intellectual-property-infringement-letter">'
+    );
+  });
+
   it("injects service page fallback content for JS-blind crawlers", async () => {
     const route = await resolveSpaRoute("/services/demand-letter");
     const html = injectSeoIntoHtml(template, route);
@@ -135,6 +222,19 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).toContain('data-prerender-route="/services/demand-letter"');
     expect(html).toContain("<h1>Demand Letter Service</h1>");
     expect(html).toContain("Get a professional demand letter");
+  });
+
+  it("injects service links into the services index fallback", async () => {
+    const route = await resolveSpaRoute("/services");
+    const html = injectSeoIntoHtml(template, route);
+
+    expect(route.statusCode).toBe(200);
+    expect(html).toContain('data-prerender-route="/services"');
+    expect(html).toContain('<a href="/services/demand-letter">');
+    expect(html).toContain('<a href="/services/cease-and-desist">');
+    expect(html).toContain(
+      '<a href="/services/intellectual-property-infringement-letter">'
+    );
   });
 
   it("returns a real 404 shell for unknown routes and noindexes it", async () => {

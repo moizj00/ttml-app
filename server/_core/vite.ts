@@ -3,7 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { getCachedBlogPost } from "../blogCache";
+import { getCachedBlogPost, getCachedBlogPosts } from "../blogCache";
 import { logger } from "../logger";
 import {
   injectSeoIntoHtml,
@@ -62,6 +62,7 @@ export async function setupVite(app: Express, server: Server) {
       const page = await vite.transformIndexHtml(url, template);
       const route = await resolveSpaRoute(url, {
         getBlogPost: getCachedBlogPost,
+        getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
       const html = injectSeoIntoHtml(page, route);
       res
@@ -104,6 +105,7 @@ export function serveStatic(app: Express) {
 
       const route = await resolveSpaRoute(req.originalUrl, {
         getBlogPost: getCachedBlogPost,
+        getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
       });
       const template = await fs.promises.readFile(
         path.resolve(distPath, "index.html"),

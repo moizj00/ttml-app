@@ -12,6 +12,14 @@ export interface SeoBlogPost {
   updatedAt?: Date | string | null;
 }
 
+export interface SeoBlogListPost {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  publishedAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+}
+
 export interface RouteSeo {
   title: string;
   description: string;
@@ -35,6 +43,7 @@ export interface SpaRouteResolution {
 
 export interface ResolveSpaRouteOptions {
   getBlogPost?: (slug: string) => Promise<SeoBlogPost | null>;
+  getBlogPosts?: () => Promise<{ posts: SeoBlogListPost[]; total: number }>;
 }
 
 const INDEX_ROBOTS = "index, follow, max-image-preview:large";
@@ -436,6 +445,34 @@ function buildFallbackHtml(
   ].join("");
 }
 
+function fallbackLinkListHtml(
+  heading: string,
+  links: { href: string; title: string; description?: string | null }[]
+): string {
+  if (links.length === 0) return "";
+
+  const items = links
+    .map(link => {
+      const description = link.description?.trim()
+        ? `<p>${escapeHtmlText(link.description.trim())}</p>`
+        : "";
+      return [
+        "<li>",
+        `<a href="${escapeHtmlAttribute(link.href)}">${escapeHtmlText(link.title)}</a>`,
+        description,
+        "</li>",
+      ].join("");
+    })
+    .join("");
+
+  return [
+    "<section>",
+    `<h2>${escapeHtmlText(heading)}</h2>`,
+    `<ul>${items}</ul>`,
+    "</section>",
+  ].join("");
+}
+
 function formatIsoDate(
   value: Date | string | null | undefined
 ): string | undefined {
@@ -479,6 +516,45 @@ function blogPostFallbackHtml(pathname: string, post: SeoBlogPost): string {
   );
 }
 
+function blogIndexFallbackHtml(
+  pathname: string,
+  seo: Omit<RouteSeo, "canonical">,
+  posts: SeoBlogListPost[]
+): string {
+  return buildFallbackHtml(
+    pathname,
+    titleToHeading(seo.ogTitle ?? seo.title),
+    seo.description,
+    fallbackLinkListHtml(
+      "Recent legal guides",
+      posts.map(post => ({
+        href: `/blog/${post.slug}`,
+        title: post.title,
+        description: post.excerpt,
+      }))
+    )
+  );
+}
+
+function servicesIndexFallbackHtml(
+  pathname: string,
+  seo: Omit<RouteSeo, "canonical">
+): string {
+  return buildFallbackHtml(
+    pathname,
+    titleToHeading(seo.ogTitle ?? seo.title),
+    seo.description,
+    fallbackLinkListHtml(
+      "Letter services",
+      Object.entries(SERVICE_ROUTE_SEO).map(([slug, serviceSeo]) => ({
+        href: `/services/${slug}`,
+        title: titleToHeading(serviceSeo.title),
+        description: serviceSeo.description,
+      }))
+    )
+  );
+}
+
 export function isPrivatePath(pathname: string): boolean {
   return PRIVATE_PATH_PREFIXES.some(
     prefix => pathname === prefix || pathname.startsWith(prefix)
@@ -513,16 +589,27 @@ export async function resolveSpaRoute(
 
   const staticSeo = PUBLIC_ROUTE_SEO[pathname];
   if (staticSeo) {
+    const blogPosts =
+      pathname === "/blog" && options.getBlogPosts
+        ? (await options.getBlogPosts()).posts
+        : [];
+    const fallbackHtml =
+      pathname === "/blog"
+        ? blogIndexFallbackHtml(pathname, staticSeo, blogPosts)
+        : pathname === "/services"
+          ? servicesIndexFallbackHtml(pathname, staticSeo)
+          : buildFallbackHtml(
+              pathname,
+              titleToHeading(staticSeo.ogTitle ?? staticSeo.title),
+              staticSeo.description
+            );
+
     return {
       pathname,
       knownRoute: true,
       statusCode: 200,
       seo: withCanonical(pathname, staticSeo),
-      fallbackHtml: buildFallbackHtml(
-        pathname,
-        titleToHeading(staticSeo.ogTitle ?? staticSeo.title),
-        staticSeo.description
-      ),
+      fallbackHtml,
     };
   }
 
