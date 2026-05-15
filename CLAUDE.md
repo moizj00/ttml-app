@@ -39,8 +39,6 @@ Detailed enforcement rules live in `skills/architectural-patterns/`. **Never vio
    - **Documented exception — first-letter free preview**: If `letter_requests.is_free_preview = TRUE` AND `letter_requests.free_preview_unlock_at <= NOW()` (24h cooling window elapsed), the subscriber router (`server/routers/letters/subscriber.ts`) sets `freePreviewUnlocked = true` and `getLetterVersionsByRequestId` returns the FULL un-truncated, un-redacted `ai_draft` tagged with `freePreview: true`. The client then renders `FreePreviewViewer` (non-selectable + DRAFT watermark) instead of `LetterPaywall`. The 24h window is stamped at submit time and enforced server-side — never trust the client. This is a lead-magnet path; the only CTA inside the viewer is "Submit For Attorney Review" which routes to `/pricing` for subscription. Subsequent letters follow the normal paywall flow.
    - **Admin force-unlock override**: Admins can collapse the 24h cooling window via the `forceFreePreviewUnlock` tRPC mutation (`server/routers/admin/letters.ts`). It sets `free_preview_unlock_at = NOW()`, logs a `free_preview_force_unlock` review action, and invokes the shared dispatcher `dispatchFreePreviewIfReady` in `server/freePreviewEmailCron.ts`. The "your preview is ready" email fires immediately if the draft is already saved; if the pipeline is still running it fires the moment the draft lands (pipeline finalize in `simple.ts` / `graph/nodes/finalize.ts` / `fallback.ts` also calls the dispatcher). The dispatcher uses an atomic `UPDATE ... RETURNING` claim on `free_preview_email_sent_at` so cron, pipeline, and admin paths cannot double-send; a failed send rolls the stamp back so the cron retries. Non-free-preview letters cannot use this path — the mutation rejects with `BAD_REQUEST`.
 
-6. **Session Refresh** — Role changes take effect via `invalidateUserCache()` + frontend `refetchOnWindowFocus`.
-
 ---
 
 ## Pre-Change Checklist
@@ -102,6 +100,7 @@ Almost all client-server calls use tRPC v11. REST is **only** used for:
 - Supabase Auth issues JWTs; server syncs to local `users` table on every request (30s cache).
 - JWTs read from `Authorization` header OR `sb_session` httpOnly cookie.
 - `useAuth` hook lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` path).
+- Role changes take effect via `invalidateUserCache()` server-side + `refetchOnWindowFocus` on the client.
 
 ### Frontend
 
