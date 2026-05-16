@@ -20,9 +20,14 @@ Agent: check this file before writing to avoid duplicate topics.
 - My Client Hasn't Paid My Invoice in 60 Days — What Can I Do as a California Freelancer? (backfilled — unlogged from earlier run)
 - Demand Letter vs. Small Claims Court: The Smarter Path for Freelancers Owed Under $12,500 in California (backfilled — unlogged from earlier run)
 
-
 ## 2026-05-15 (run 1, ~evening)
 - I Paid for a Service That Was Never Completed — What Are My Rights in California?
 - What Is a Consumer Demand Letter and When Should You Send One?
 - Your Rights When a Home Repair Contractor Takes Your Deposit and Disappears in California
 - How Much Does It Cost to Hire a Lawyer in California — and When Is a Demand Letter the Smarter Move?
+
+## 2026-05-15 (run 2, ~late evening)
+- The Company Refuses to Give Me a Refund — What Can I Do in California?
+- What Is a Refund Demand Letter and When Should You Send One?
+- How to Fight a Gym That Won't Cancel Your Membership or Stop Charging You in California
+- Credit Card Chargeback vs. Demand Letter: Which Is Better for Getting Your Money Back?
