@@ -19,3 +19,10 @@ Agent: check this file before writing to avoid duplicate topics.
 - How California Independent Contractors Can Collect Overdue Payments Without Going to Court (backfilled — unlogged from earlier run)
 - My Client Hasn't Paid My Invoice in 60 Days — What Can I Do as a California Freelancer? (backfilled — unlogged from earlier run)
 - Demand Letter vs. Small Claims Court: The Smarter Path for Freelancers Owed Under $12,500 in California (backfilled — unlogged from earlier run)
+
+
+## 2026-05-15 (run 1, ~evening)
+- I Paid for a Service That Was Never Completed — What Are My Rights in California?
+- What Is a Consumer Demand Letter and When Should You Send One?
+- Your Rights When a Home Repair Contractor Takes Your Deposit and Disappears in California
+- How Much Does It Cost to Hire a Lawyer in California — and When Is a Demand Letter the Smarter Move?
